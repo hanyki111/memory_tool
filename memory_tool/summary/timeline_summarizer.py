@@ -19,7 +19,7 @@ class TimelineSummarizer:
             llm_client: LLM client (optional, creates one if not provided)
         """
         self.llm_client = llm_client or LLMClient()
-        self.timeline = Timeline(Path.cwd() / ".memory" / "timeline")
+        self.timeline = Timeline(Path.cwd())
 
     def summarize_today(self) -> str:
         """
@@ -50,9 +50,8 @@ class TimelineSummarizer:
             ValueError: If timeline is empty
         """
         # Get timeline file path
-        year_month = date.strftime("%Y-%m")
-        day = date.strftime("%d")
-        timeline_file = self.timeline.root / year_month / f"{day}.md"
+        dt = datetime.combine(date, datetime.min.time())
+        timeline_file = self.timeline.get_timeline_file(dt)
 
         if not timeline_file.exists():
             raise FileNotFoundError(f"Timeline not found: {timeline_file}")
@@ -102,9 +101,8 @@ class TimelineSummarizer:
         week_content = []
         for i in range(7):
             date = start_date + timedelta(days=i)
-            year_month = date.strftime("%Y-%m")
-            day = date.strftime("%d")
-            timeline_file = self.timeline.root / year_month / f"{day}.md"
+            dt = datetime.combine(date, datetime.min.time())
+            timeline_file = self.timeline.get_timeline_file(dt)
 
             if timeline_file.exists():
                 content = timeline_file.read_text(encoding="utf-8")
@@ -157,9 +155,8 @@ class TimelineSummarizer:
         current_date = start_date
 
         while current_date <= end_date:
-            year_month = current_date.strftime("%Y-%m")
-            day = current_date.strftime("%d")
-            timeline_file = self.timeline.root / year_month / f"{day}.md"
+            dt = datetime.combine(current_date, datetime.min.time())
+            timeline_file = self.timeline.get_timeline_file(dt)
 
             if timeline_file.exists():
                 content = timeline_file.read_text(encoding="utf-8")
