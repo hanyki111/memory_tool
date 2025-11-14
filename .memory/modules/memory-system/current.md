@@ -40,6 +40,13 @@ For Phase 1-4 completed work, see [archive/current-phase1-4.md](./archive/curren
     - [x] Index optimization (FTS5 optimize, vacuum, analyze)
     - [x] CLI 통합 (--no-cache, --cache-ttl, mindex --optimize/--vacuum)
 
+- [x] **성능 최적화 (벡터 검색)** ⭐⭐⭐
+  - [x] 배치 임베딩 (10-50배 속도 향상)
+  - [x] 증분 인덱싱 (파일 수정 시간 추적)
+  - [x] 메모리 최적화 (스트리밍 처리)
+  - [x] preindex_timeline() 메서드
+  - [x] Cache 통계 (get_stats())
+
 - [x] **marchive 명령어 개선** ⭐⭐⭐
   - [x] --up-to N 옵션 (결정 번호 기반)
   - [x] --keep-recent N 옵션 (개수 기반, 기본값)
@@ -72,9 +79,9 @@ For Phase 1-4 completed work, see [archive/current-phase1-4.md](./archive/curren
    - ✅ Phase 2: Hybrid search (text + vector combination)
    - ✅ Phase 3: Performance optimization (caching, parallel, index optimize)
 4. ✅ 자동 요약 고도화 (맥락, 주제 분류)
-5. ⏳ 성능 최적화 (벡터 캐싱, 대용량)
-6. 🎯 테스트 커버리지 (pytest, 안정성) - 다음 작업
-7. ⏳ 사용성 개선 (GUI/TUI, 플래너)
+5. ✅ 성능 최적화 (벡터 배치 임베딩, 증분 인덱싱, 메모리 최적화)
+6. ⏳ 테스트 커버리지 (pytest, 안정성)
+7. 🎯 사용성 개선 (GUI/TUI, 플래너) - 다음 작업
 
 ---
 
@@ -93,6 +100,7 @@ For Phase 1-4 completed work, see [archive/current-phase1-4.md](./archive/curren
 - Timeline capture ✅
 - Search (text + vector + SQLite FTS5) ✅
 - Advanced search (BM25, filters, hybrid, caching) ✅
+- Performance optimization (batch embeddings, incremental indexing) ✅
 - Claude Skill integration ✅
 - LLM summarization (Anthropic + Ollama) ✅
 - Module management ✅
@@ -130,4 +138,4 @@ For Phase 1-4 completed work, see [archive/current-phase1-4.md](./archive/curren
 
 ---
 
-**Last Updated:** 2025-11-15 01:11
+**Last Updated:** 2025-11-15 01:24
