@@ -232,6 +232,12 @@ def search(
     # New formatting options
     show_score: bool = typer.Option(False, "--show-score", help="Show relevance scores"),
     summary: bool = typer.Option(False, "--summary", help="Show summary statistics"),
+    # Phase 2 & 3 options
+    hybrid: bool = typer.Option(False, "--hybrid", help="Hybrid search (text + semantic)"),
+    text_weight: float = typer.Option(0.7, "--text-weight", help="Text weight for hybrid search (default: 0.7)"),
+    semantic_weight: float = typer.Option(0.3, "--semantic-weight", help="Semantic weight for hybrid search (default: 0.3)"),
+    no_cache: bool = typer.Option(False, "--no-cache", help="Disable result caching"),
+    cache_ttl: int = typer.Option(3600, "--cache-ttl", help="Cache TTL in seconds (default: 3600 / 1 hour)"),
 ):
     """Search timeline and modules (ms command).
 
@@ -239,8 +245,194 @@ def search(
         ms "bug fix" --rank bm25 --boost-recent
         ms "feature" --date this-week --type timeline
         ms "decision" --show-score --summary
+        ms "implementation" --hybrid --text-weight 0.5 --semantic-weight 0.5
+        ms "query" --no-cache
     """
-    # Use vector search if --semantic flag is set
+    # Initialize cache if enabled
+    search_cache = None
+    cache_key_params = {
+        "with_kb": with_kb,
+        "all": all,
+        "case_sensitive": case_sensitive,
+        "max_results": max_results,
+        "from_date": from_date,
+        "to_date": to_date,
+        "rank": rank,
+        "boost_recent": boost_recent,
+        "date": date,
+        "file_type": file_type,
+        "tag": tuple(tag) if tag else None,
+        "hybrid": hybrid,
+        "text_weight": text_weight if hybrid else None,
+        "semantic_weight": semantic_weight if hybrid else None,
+    }
+
+    if not no_cache:
+        from memory_tool.search import SearchCache
+        from pathlib import Path
+        cache_dir = Path.home() / ".memory" / ".cache" / "search"
+        search_cache = SearchCache(cache_dir, ttl_seconds=cache_ttl)
+
+        # Try to get cached results
+        cached_results = search_cache.get(query, **cache_key_params)
+        if cached_results:
+            console.print("[dim]Using cached results...[/dim]\n")
+            # Display cached results using formatter
+            if show_score or summary or not no_context:
+                from memory_tool.search import ResultFormatter
+                formatter = ResultFormatter(Path.cwd())
+                formatter.print_results(
+                    cached_results,
+                    query=query,
+                    show_score=show_score,
+                    show_context=not no_context,
+                    context_lines=1,
+                    highlight=True,
+                    show_summary=summary,
+                )
+            else:
+                # Simple display
+                for i, result in enumerate(cached_results, 1):
+                    console.print(f"{i}. {result.file_path}:{result.line_number}")
+            return
+
+    # Hybrid search mode: combine text + semantic
+    if hybrid:
+        try:
+            from memory_tool.core.vector_search import VectorSearcher, VectorSearchNotAvailableError
+            from memory_tool.search import HybridSearcher
+            from memory_tool.core.search import SearchResult
+
+            # Perform text search
+            searcher = MemorySearcher()
+            scope = "all" if all else "local"
+
+            from datetime import datetime
+            parsed_from = None
+            parsed_to = None
+
+            try:
+                if from_date:
+                    parsed_from = datetime.strptime(from_date, "%Y-%m-%d").date()
+                if to_date:
+                    parsed_to = datetime.strptime(to_date, "%Y-%m-%d").date()
+            except ValueError as e:
+                console.print(f"[red]ERROR[/red] Invalid date format: {e}")
+                sys.exit(1)
+
+            # Text search
+            text_results_dict = searcher.search(
+                query,
+                scope=scope,
+                with_kb=with_kb,
+                case_sensitive=case_sensitive,
+                context_lines=1,
+                max_results=max_results or 50,
+                from_date=parsed_from,
+                to_date=parsed_to,
+                use_index=not no_index,
+            )
+
+            text_results = []
+            for source_results in text_results_dict.values():
+                text_results.extend(source_results)
+
+            # Extract dates
+            for result in text_results:
+                date_from_path = searcher._extract_date_from_path(result.file_path)
+                if date_from_path:
+                    result.date = datetime.combine(date_from_path, datetime.min.time())
+
+            # Semantic search
+            try:
+                vector_searcher = VectorSearcher()
+                semantic_results_list = vector_searcher.semantic_search(
+                    query,
+                    top_k=max_results or 50,
+                    threshold=threshold
+                )
+
+                # Convert to SearchResult format
+                semantic_results = []
+                for r in semantic_results_list:
+                    semantic_results.append(SearchResult(
+                        file_path=Path(r['file']),
+                        line_number=r['line'],
+                        line_content=r['content'],
+                        match_context=r['content'],
+                        score=r['similarity'],
+                        date=datetime.fromisoformat(r['date']) if r.get('date') else None,
+                    ))
+
+                # Combine with HybridSearcher
+                hybrid_searcher = HybridSearcher()
+                all_results = hybrid_searcher.combine_results(
+                    text_results,
+                    semantic_results,
+                    text_weight,
+                    semantic_weight,
+                )
+
+                console.print(f"[cyan]Hybrid Search Results[/cyan] (text: {text_weight:.1f}, semantic: {semantic_weight:.1f})\n")
+
+                # Apply filters and ranking
+                if date or file_type or tag:
+                    from memory_tool.search import FilterChain
+                    filter_chain = FilterChain(searcher.base_path)
+                    all_results = filter_chain.apply_filters(
+                        all_results,
+                        date_expr=date,
+                        file_type=file_type,
+                        tags=tag if tag else None,
+                    )
+
+                if rank or boost_recent:
+                    from memory_tool.search import SearchRanker
+                    use_bm25 = (rank == "bm25")
+                    ranker = SearchRanker(
+                        use_bm25=use_bm25,
+                        use_date_weight=boost_recent,
+                        date_decay_days=decay_days,
+                    )
+                    all_results = ranker.rank(query, all_results)
+
+                # Cache results
+                if search_cache:
+                    search_cache.set(query, all_results, **cache_key_params)
+
+                # Display results
+                if all_results:
+                    if show_score or summary or not no_context:
+                        from memory_tool.search import ResultFormatter
+                        formatter = ResultFormatter(searcher.base_path)
+                        formatter.print_results(
+                            all_results,
+                            query=query,
+                            show_score=show_score,
+                            show_context=not no_context,
+                            context_lines=1,
+                            highlight=True,
+                            show_summary=summary,
+                        )
+                    else:
+                        for i, result in enumerate(all_results[:max_results] if max_results else all_results, 1):
+                            console.print(f"{i}. {result.file_path}:{result.line_number}")
+                else:
+                    console.print("[yellow]No results found[/yellow]")
+
+                return
+
+            except VectorSearchNotAvailableError as e:
+                console.print(f"[red]ERROR[/red] {e}")
+                console.print("[dim]Install with: pip install memory-tool[vector][/dim]")
+                sys.exit(1)
+
+        except ImportError:
+            console.print("[red]ERROR[/red] Vector search not available for hybrid mode")
+            console.print("[dim]Install with: pip install memory-tool[vector][/dim]")
+            sys.exit(1)
+
+    # Use vector search if --semantic flag is set (semantic only)
     if semantic:
         try:
             from memory_tool.core.vector_search import VectorSearcher, VectorSearchNotAvailableError
@@ -360,6 +552,10 @@ def search(
         # Limit results if needed
         if max_results and len(all_results) > max_results:
             all_results = all_results[:max_results]
+
+        # Cache results
+        if search_cache:
+            search_cache.set(query, all_results, **cache_key_params)
 
         # Format and display
         if show_score or summary or not no_context:
@@ -1086,6 +1282,8 @@ def index(
     check: bool = typer.Option(False, "--check", help="Check index status"),
     stats: bool = typer.Option(False, "--stats", help="Show index statistics"),
     force: bool = typer.Option(False, "--force", "-f", help="Force full reindex"),
+    optimize: bool = typer.Option(False, "--optimize", help="Optimize index for better performance"),
+    vacuum: bool = typer.Option(False, "--vacuum", help="Vacuum database to reclaim space"),
 ):
     """Manage SQLite search index."""
     try:
@@ -1128,6 +1326,72 @@ def index(
                 console.print("\nEntries by type:")
                 for entry_type, count in stats_data['by_type'].items():
                     console.print(f"  {entry_type}: {count}")
+            return
+
+        # Optimize mode
+        if optimize or vacuum:
+            from memory_tool.search import IndexOptimizer
+
+            db_path = memory_path / ".index" / "search.db"
+            if not db_path.exists():
+                console.print("[red]ERROR[/red] Index database not found")
+                console.print("Run 'mindex' to create index first")
+                sys.exit(1)
+
+            optimizer = IndexOptimizer(db_path)
+
+            if optimize and vacuum:
+                # Full optimization
+                console.print("Running full optimization...")
+                result = optimizer.full_optimize()
+
+                if result.get("overall_success"):
+                    console.print("[green]Optimization complete![/green]")
+
+                    # Show FTS5 results
+                    fts_result = result.get("fts5_optimize", {})
+                    if fts_result.get("success"):
+                        console.print(f"  FTS5: {fts_result.get('entries_indexed', 0)} entries optimized")
+
+                    # Show vacuum results
+                    vacuum_result = result.get("vacuum", {})
+                    if vacuum_result.get("success"):
+                        reduced_mb = vacuum_result.get("size_reduced_mb", 0)
+                        percent = vacuum_result.get("percent_reduced", 0)
+                        console.print(f"  Vacuum: {reduced_mb:.2f} MB reclaimed ({percent:.1f}%)")
+                else:
+                    console.print("[yellow]Optimization completed with errors[/yellow]")
+                    for key, res in result.items():
+                        if res.get("error"):
+                            console.print(f"  {key}: {res['error']}")
+
+            elif optimize:
+                # FTS5 optimize only
+                console.print("Optimizing FTS5 index...")
+                result = optimizer.optimize_fts5()
+
+                if result.get("success"):
+                    console.print(f"[green]OK[/green] {result.get('message')}")
+                    console.print(f"  Entries: {result.get('entries_indexed', 0)}")
+                else:
+                    console.print(f"[red]ERROR[/red] {result.get('error')}")
+                    sys.exit(1)
+
+            elif vacuum:
+                # Vacuum only
+                console.print("Vacuuming database...")
+                result = optimizer.vacuum_database()
+
+                if result.get("success"):
+                    reduced_mb = result.get("size_reduced_mb", 0)
+                    percent = result.get("percent_reduced", 0)
+                    console.print(f"[green]OK[/green] {reduced_mb:.2f} MB reclaimed ({percent:.1f}%)")
+                    console.print(f"  Before: {result.get('size_before_mb', 0):.2f} MB")
+                    console.print(f"  After: {result.get('size_after_mb', 0):.2f} MB")
+                else:
+                    console.print(f"[red]ERROR[/red] {result.get('error')}")
+                    sys.exit(1)
+
             return
 
         # Reindex mode
