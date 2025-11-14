@@ -22,6 +22,8 @@ class SearchResult:
     line_number: int
     line_content: str
     match_context: str  # Surrounding context
+    score: float = 1.0  # Relevance score (default: 1.0)
+    date: Optional[datetime] = None  # Document date (for timeline files)
 
 
 class SearchError(Exception):

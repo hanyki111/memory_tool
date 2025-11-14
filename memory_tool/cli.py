@@ -3,6 +3,7 @@
 import sys
 from datetime import timedelta
 from pathlib import Path
+from typing import List
 
 import typer
 from rich.console import Console
@@ -220,8 +221,25 @@ def search(
     semantic: bool = typer.Option(False, "--semantic", "-s", help="Semantic search using embeddings"),
     threshold: float = typer.Option(0.3, "--threshold", "-t", help="Similarity threshold (0-1, semantic only)"),
     no_index: bool = typer.Option(False, "--no-index", help="Force file-based search (skip SQLite index)"),
+    # New ranking options
+    rank: str = typer.Option(None, "--rank", help="Ranking algorithm: bm25 (default: none)"),
+    boost_recent: bool = typer.Option(False, "--boost-recent", help="Boost recent results"),
+    decay_days: int = typer.Option(30, "--decay-days", help="Date decay days (for --boost-recent)"),
+    # New filter options
+    date: str = typer.Option(None, "--date", help="Date expression: today, yesterday, this-week, last-N-days, YYYY-MM-DD"),
+    file_type: str = typer.Option(None, "--type", help="File type: timeline, modules, decisions, plans, archive"),
+    tag: List[str] = typer.Option(None, "--tag", help="Filter by tags (can use multiple times)"),
+    # New formatting options
+    show_score: bool = typer.Option(False, "--show-score", help="Show relevance scores"),
+    summary: bool = typer.Option(False, "--summary", help="Show summary statistics"),
 ):
-    """Search timeline and modules (ms command)."""
+    """Search timeline and modules (ms command).
+
+    Examples:
+        ms "bug fix" --rank bm25 --boost-recent
+        ms "feature" --date this-week --type timeline
+        ms "decision" --show-score --summary
+    """
     # Use vector search if --semantic flag is set
     if semantic:
         try:
@@ -269,8 +287,8 @@ def search(
     else:
         scope = "local"
 
-    # Parse dates
-    from datetime import datetime, date
+    # Parse dates (legacy --from/--to support)
+    from datetime import datetime
     parsed_from = None
     parsed_to = None
 
@@ -291,7 +309,7 @@ def search(
         sys.exit(1)
 
     try:
-        results = searcher.search(
+        results_dict = searcher.search(
             query,
             scope=scope,
             with_kb=with_kb,
@@ -303,9 +321,68 @@ def search(
             use_index=not no_index,
         )
 
+        # Convert dict results to flat list of SearchResults
+        from memory_tool.core.search import SearchResult
+        all_results = []
+        for source_path, source_results in results_dict.items():
+            all_results.extend(source_results)
+
+        # Extract dates for results from file paths
+        for result in all_results:
+            date_from_path = searcher._extract_date_from_path(result.file_path)
+            if date_from_path:
+                result.date = datetime.combine(date_from_path, datetime.min.time())
+
+        # Apply enhanced filters
+        if date or file_type or tag:
+            from memory_tool.search import FilterChain
+            filter_chain = FilterChain(searcher.base_path)
+            all_results = filter_chain.apply_filters(
+                all_results,
+                date_expr=date,
+                file_type=file_type,
+                tags=tag if tag else None,
+            )
+
+        # Apply ranking
+        if rank or boost_recent:
+            from memory_tool.search import SearchRanker
+
+            use_bm25 = (rank == "bm25")
+            ranker = SearchRanker(
+                use_bm25=use_bm25,
+                use_date_weight=boost_recent,
+                date_decay_days=decay_days,
+            )
+
+            all_results = ranker.rank(query, all_results)
+
+        # Limit results if needed
+        if max_results and len(all_results) > max_results:
+            all_results = all_results[:max_results]
+
         # Format and display
-        formatted = searcher.format_results(results, show_context=not no_context)
-        console.print(formatted)
+        if show_score or summary or not no_context:
+            # Use enhanced formatter
+            from memory_tool.search import ResultFormatter
+            formatter = ResultFormatter(searcher.base_path)
+
+            formatter.print_results(
+                all_results,
+                query=query,
+                show_score=show_score,
+                show_context=not no_context,
+                context_lines=1,
+                highlight=True,
+                show_summary=summary,
+            )
+        else:
+            # Use simple formatter
+            formatted = searcher.format_results(
+                {str(searcher.memory_path): all_results},
+                show_context=not no_context
+            )
+            console.print(formatted)
 
     except SearchError as e:
         console.print(f"[red]ERROR[/red] {e}")
@@ -313,6 +390,8 @@ def search(
 
     except Exception as e:
         console.print(f"[red]ERROR[/red] Unexpected error: {e}")
+        import traceback
+        console.print(f"[dim]{traceback.format_exc()}[/dim]")
         sys.exit(1)
 
 
