@@ -8,6 +8,8 @@ context:
   recent_days: 3
 modules:
   auto_update_current: false
+  # Archive settings
+  archive_keep_recent: 10   # Default number of recent decisions to keep
   # File size warnings (marchive command)
   warn_size_decisions: 500  # lines
   warn_size_current: 300    # lines

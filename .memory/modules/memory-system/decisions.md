@@ -8,39 +8,52 @@ For Phase 1-4 decisions (#1-#23), see [archive/decisions-phase1-4.md](./archive/
 
 ## Recent Decisions (Phase 5)
 
-### 2025-11-14: marchive 명령어 구현 (아카이브 자동화) ⭐⭐
-**결정 #29:** 수동 아카이브 명령어 + 파일 크기 경고 시스템 구현
+### 2025-11-15: marchive 명령어 개선 - 결정 번호 기반 아카이브 ⭐⭐⭐
+**결정 #29:** 결정 번호/개수 기반 아카이브 옵션 추가 (--up-to, --keep-recent)
 
 **배경:**
 - Decision #28에서 PLAN 문서 아카이브 정책 수립
-- decisions.md, current.md도 수동 아카이브 필요
-- LLM이 직접 편집하는 것은 실수 위험
+- 기존 marchive는 Phase 기준만 지원 (--phase)
+- 사용자: "Phase는 잘 사용하지 않음, 결정 번호 기준이 더 직관적"
 
 **문제:**
-- 아카이브 작업이 수동, 반복적
-- Phase 전환 시점 판단 어려움
-- 파일이 언제 "너무 큰지" 알기 어려움
+- Phase 번호를 모르거나 신경 쓰지 않음
+- "최근 10개만 남기고 싶다"는 요구사항에 Phase는 부적합
+- 결정 번호 기준이 훨씬 직관적
 
 **구현 사항:**
 
-**1. marchive 명령어**
+**1. 세 가지 아카이브 모드**
 ```bash
-marchive decisions --phase 5   # Phase 1-5 decisions 아카이브
-marchive current --phase 5     # Phase 5 current.md 아카이브
-marchive plans                 # PLAN-*.md → archive/plans/
-marchive --dry-run --phase 5   # 미리보기 (변경 없음)
+# 모드 A: 개수 기반 (기본값, 가장 편리)
+marchive decisions                    # 최근 10개 유지 (config 기본값)
+marchive decisions --keep-recent 15   # 최근 15개 유지
+
+# 모드 B: 결정 번호 기반 (명확함)
+marchive decisions --up-to 25         # Decision #1-25 아카이브
+
+# 모드 C: Phase 기반 (하위 호환)
+marchive decisions --phase 5          # Phase 1-5 아카이브
+
+# 공통
+marchive --dry-run                    # 미리보기
+marchive current --phase 5            # current.md는 Phase 기준
+marchive plans                        # PLAN 문서 아카이브
 ```
 
-**2. 파일 크기 경고**
+**2. 개선된 파일 크기 경고**
 ```bash
 m "New entry"
-→ ⚠️  decisions.md exceeds 500 lines (current: 610)
-→ 💡 Consider: marchive decisions --phase 6
+→ ⚠️  decisions.md exceeds 500 lines (29 decisions)
+→ 💡 Consider: marchive decisions  # keeps recent 10 (default)
+→    Or: marchive decisions --keep-recent 15
+→    Or: marchive decisions --up-to 19
 ```
 
 **3. Config 설정**
 ```yaml
 modules:
+  archive_keep_recent: 10   # marchive decisions 기본값
   warn_size_decisions: 500  # lines
   warn_size_current: 300    # lines
   warn_on_record: true      # m 명령어 시 경고
@@ -50,33 +63,36 @@ modules:
 ```
 memory_tool/core/
 ├── archiver.py        # Archiver 클래스
-│   - archive_decisions(phase, dry_run)
+│   - archive_decisions(phase, dry_run)              # Phase 기반
+│   - archive_decisions_by_number(up_to, dry_run)   # 번호 기반
+│   - archive_decisions_by_count(keep_recent, ...)  # 개수 기반
 │   - archive_current(phase, dry_run)
 │   - archive_plans(dry_run)
-│   - Decision 파싱 및 Phase 필터링
+│   - _parse_decisions() - Decision 파싱
+│   - _build_archive_content_by_number() - 번호 기반 아카이브
 │
 └── warnings.py        # FileSizeWarning 클래스
     - check_sizes() - threshold 초과 감지
-    - format_warning() - 경고 메시지 생성
-    - Phase 자동 감지
+    - format_warning() - 개선된 경고 메시지 (결정 개수 표시)
+    - _count_decisions() - 결정 개수 카운트
 ```
 
 **Trade-offs:**
 
 **장점:**
-- 안전한 아카이브 (백업 + dry-run)
-- 명시적 제어 (사용자가 타이밍 결정)
-- 파일 크기 자동 감지
-- Phase 전환 시점 제안
+- 직관적 사용성 (Phase 번호 몰라도 됨)
+- 기본값 제공 (`marchive decisions`만 입력)
+- 세 가지 모드로 유연성 확보
+- 하위 호환 (기존 --phase 지원)
 
 **단점:**
-- 여전히 수동 트리거 필요
-- Phase 번호 판단은 사용자 책임
+- 옵션이 많아짐 (3가지 모드)
+- 상호 배타성 검증 필요
 
 **대안 검토:**
-- A: 완전 자동화 - 위험, 의도와 다를 수 있음
-- B: 수동만 (경고 없음) - 시점 판단 어려움
-- **C: 수동 + 경고 (채택)** - 안전 + 편리성
+- A: Phase만 지원 - 사용자 불편
+- B: 번호만 지원 - 기존 사용자 호환성 문제
+- **C: 세 가지 모두 지원 (채택)** - 유연성 + 하위 호환
 
 **테스트 결과:**
 - ✅ marchive plans --dry-run: 미리보기 정상

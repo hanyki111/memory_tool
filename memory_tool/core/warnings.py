@@ -73,17 +73,23 @@ class FileSizeWarning:
         output = []
 
         for filename, lines, threshold in warnings:
-            output.append(f"[yellow]⚠️  {filename} exceeds {threshold} lines (current: {lines})[/yellow]")
-
             if filename == "decisions.md":
-                # Detect current phase
-                current_phase = self._detect_current_phase()
-                if current_phase:
-                    output.append(f"[dim]💡 Consider: marchive decisions --phase {current_phase - 1}[/dim]")
-                else:
-                    output.append(f"[dim]💡 Consider: marchive decisions --phase N[/dim]")
+                # Count decisions
+                num_decisions = self._count_decisions()
+                output.append(f"[yellow]⚠️  {filename} exceeds {threshold} lines ({num_decisions} decisions)[/yellow]")
+
+                # Suggest keep-recent as primary option
+                from ..utils.config import Config
+                config = Config()
+                default_keep = config.get("modules.archive_keep_recent", 10)
+                output.append(f"[dim]💡 Consider: marchive decisions  # keeps recent {default_keep} (default)[/dim]")
+                output.append(f"[dim]   Or: marchive decisions --keep-recent 15[/dim]")
+                if num_decisions > default_keep:
+                    output.append(f"[dim]   Or: marchive decisions --up-to {num_decisions - default_keep}[/dim]")
 
             elif filename == "current.md":
+                output.append(f"[yellow]⚠️  {filename} exceeds {threshold} lines (current: {lines})[/yellow]")
+
                 # Detect current phase
                 current_phase = self._detect_current_phase()
                 if current_phase:
@@ -114,7 +120,7 @@ class FileSizeWarning:
                 return int(match.group(1))
 
             # Look for highest decision number
-            decision_numbers = re.findall(r'\*\*결정 #(\d+)\*\*', content)
+            decision_numbers = re.findall(r'\*\*결정 #(\d+):', content)
             if decision_numbers:
                 max_decision = max(int(n) for n in decision_numbers)
 
@@ -130,3 +136,22 @@ class FileSizeWarning:
             pass
 
         return None
+
+    def _count_decisions(self) -> int:
+        """
+        Count total number of decisions in decisions.md.
+
+        Returns:
+            Number of decisions
+        """
+        decisions_path = self.module_path / "decisions.md"
+
+        if not decisions_path.exists():
+            return 0
+
+        try:
+            content = decisions_path.read_text(encoding="utf-8")
+            decision_numbers = re.findall(r'\*\*결정 #(\d+):', content)
+            return len(decision_numbers)
+        except Exception:
+            return 0

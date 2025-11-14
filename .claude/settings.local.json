@@ -5,7 +5,12 @@
       "Bash(python -m memory_tool:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(git log:*)",
+      "Bash(git ls-tree:*)",
+      "Bash(git checkout:*)",
+      "Bash(python -c:*)",
+      "Bash(git merge:*)"
     ],
     "deny": [],
     "ask": []

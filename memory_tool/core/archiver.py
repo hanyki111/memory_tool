@@ -106,6 +106,150 @@ class Archiver:
 
         return (archive_file, len(to_archive))
 
+    def archive_decisions_by_number(
+        self,
+        up_to: int,
+        dry_run: bool = False,
+    ) -> Tuple[Path, int]:
+        """
+        Archive decisions up to specified decision number.
+
+        Args:
+            up_to: Decision number to archive up to (inclusive, e.g., 25 = archive #1-#25)
+            dry_run: If True, show what would be archived without doing it
+
+        Returns:
+            (archive_file_path, num_decisions_archived)
+
+        Raises:
+            ArchiverError: If archiving fails
+        """
+        decisions_file = self.module_path / "decisions.md"
+
+        if not decisions_file.exists():
+            raise ArchiverError(f"decisions.md not found at {decisions_file}")
+
+        # Read current decisions
+        content = decisions_file.read_text(encoding="utf-8")
+
+        # Parse decisions
+        decisions = self._parse_decisions(content)
+
+        if not decisions:
+            raise ArchiverError("No decisions found in decisions.md")
+
+        # Filter by decision number
+        to_archive = [d for d in decisions if d['number'] <= up_to]
+        to_keep = [d for d in decisions if d['number'] > up_to]
+
+        if not to_archive:
+            raise ArchiverError(f"No decisions to archive up to #{up_to}")
+
+        # Determine archive file name (use decision number range)
+        min_num = min(d['number'] for d in to_archive)
+        max_num = max(d['number'] for d in to_archive)
+        archive_filename = f"decisions-{min_num}-{max_num}.md"
+
+        archive_file = self.archive_path / archive_filename
+
+        if dry_run:
+            return (archive_file, len(to_archive))
+
+        # Ensure archive directory exists
+        self.archive_path.mkdir(parents=True, exist_ok=True)
+
+        # Create backup
+        backup_file = decisions_file.with_suffix(".md.bak")
+        shutil.copy2(decisions_file, backup_file)
+
+        # Create archive file (without phase info)
+        archive_content = self._build_archive_content_by_number(to_archive, min_num, max_num)
+        archive_file.write_text(archive_content, encoding="utf-8")
+
+        # Update decisions.md (keep recent only)
+        new_content = self._build_updated_decisions_by_number(to_keep, archive_filename, min_num, max_num)
+        decisions_file.write_text(new_content, encoding="utf-8")
+
+        # Update decisions-index.md (without phase)
+        self._update_decisions_index_by_number(archive_filename, min_num, max_num)
+
+        return (archive_file, len(to_archive))
+
+    def archive_decisions_by_count(
+        self,
+        keep_recent: int,
+        dry_run: bool = False,
+    ) -> Tuple[Path, int]:
+        """
+        Archive decisions, keeping only the N most recent ones.
+
+        Args:
+            keep_recent: Number of recent decisions to keep (e.g., 10 = keep most recent 10)
+            dry_run: If True, show what would be archived without doing it
+
+        Returns:
+            (archive_file_path, num_decisions_archived)
+
+        Raises:
+            ArchiverError: If archiving fails
+        """
+        decisions_file = self.module_path / "decisions.md"
+
+        if not decisions_file.exists():
+            raise ArchiverError(f"decisions.md not found at {decisions_file}")
+
+        # Read current decisions
+        content = decisions_file.read_text(encoding="utf-8")
+
+        # Parse decisions
+        decisions = self._parse_decisions(content)
+
+        if not decisions:
+            raise ArchiverError("No decisions found in decisions.md")
+
+        total_count = len(decisions)
+
+        if total_count <= keep_recent:
+            raise ArchiverError(f"Only {total_count} decisions exist, cannot archive (keeping {keep_recent})")
+
+        # Sort by decision number (ascending)
+        sorted_decisions = sorted(decisions, key=lambda d: d['number'])
+
+        # Archive oldest, keep most recent
+        num_to_archive = total_count - keep_recent
+        to_archive = sorted_decisions[:num_to_archive]
+        to_keep = sorted_decisions[num_to_archive:]
+
+        # Determine archive file name
+        min_num = min(d['number'] for d in to_archive)
+        max_num = max(d['number'] for d in to_archive)
+        archive_filename = f"decisions-{min_num}-{max_num}.md"
+
+        archive_file = self.archive_path / archive_filename
+
+        if dry_run:
+            return (archive_file, len(to_archive))
+
+        # Ensure archive directory exists
+        self.archive_path.mkdir(parents=True, exist_ok=True)
+
+        # Create backup
+        backup_file = decisions_file.with_suffix(".md.bak")
+        shutil.copy2(decisions_file, backup_file)
+
+        # Create archive file
+        archive_content = self._build_archive_content_by_number(to_archive, min_num, max_num)
+        archive_file.write_text(archive_content, encoding="utf-8")
+
+        # Update decisions.md (keep recent only)
+        new_content = self._build_updated_decisions_by_number(to_keep, archive_filename, min_num, max_num)
+        decisions_file.write_text(new_content, encoding="utf-8")
+
+        # Update decisions-index.md
+        self._update_decisions_index_by_number(archive_filename, min_num, max_num)
+
+        return (archive_file, len(to_archive))
+
     def archive_current(
         self,
         phase: int,
@@ -240,7 +384,7 @@ For Phase {phase} status, see [archive/current-phase{phase}.md](./archive/curren
             date_str, title = header_match.groups()
 
             # Extract decision number from body
-            decision_match = re.search(r'\*\*결정 #(\d+)\*\*', body)
+            decision_match = re.search(r'\*\*결정 #(\d+):', body)
             if not decision_match:
                 continue
 
@@ -380,6 +524,103 @@ For Phase {phase} status, see [archive/current-phase{phase}.md](./archive/curren
 
         # Add archive link to index
         archive_line = f"\n- **Decisions #{min_num}-#{max_num}** (Phase {min_phase}-{max_phase}): [archive/{archive_filename}](./archive/{archive_filename})\n"
+
+        # Insert after header
+        lines = content.split("\n")
+        insert_pos = 0
+        for i, line in enumerate(lines):
+            if line.startswith("## All Decisions") or line.startswith("---"):
+                insert_pos = i + 1
+                break
+
+        if insert_pos > 0:
+            lines.insert(insert_pos, archive_line)
+            index_file.write_text("\n".join(lines), encoding="utf-8")
+
+    def _build_archive_content_by_number(
+        self,
+        decisions: List[Dict],
+        min_num: int,
+        max_num: int,
+    ) -> str:
+        """Build content for archive file (by decision number)."""
+        lines = []
+
+        # Header
+        lines.append(f"# Key Decisions #{min_num}-#{max_num}")
+        lines.append("")
+        lines.append(f"> **Archived decisions #{min_num}-#{max_num}**")
+        lines.append("")
+        lines.append(f"**Archived on:** {datetime.now().strftime('%Y-%m-%d')}")
+        lines.append("")
+        lines.append("---")
+        lines.append("")
+
+        # Decisions
+        for decision in sorted(decisions, key=lambda d: d['number']):
+            lines.append(decision['header'])
+            lines.append(decision['content'])
+            lines.append("")
+            lines.append("---")
+            lines.append("")
+
+        return "\n".join(lines)
+
+    def _build_updated_decisions_by_number(
+        self,
+        remaining_decisions: List[Dict],
+        archive_filename: str,
+        archived_min: int,
+        archived_max: int,
+    ) -> str:
+        """Build updated decisions.md content with recent decisions only (by number)."""
+        lines = []
+
+        # Header
+        lines.append("# Key Decisions")
+        lines.append("")
+        if remaining_decisions:
+            min_remaining = min(d['number'] for d in remaining_decisions)
+            lines.append(f"> **Recent decisions (from #{min_remaining})**")
+        else:
+            lines.append("> **No recent decisions**")
+
+        lines.append("")
+        lines.append(f"For decisions #{archived_min}-#{archived_max}, see [archive/{archive_filename}](./archive/{archive_filename})")
+        lines.append("")
+        lines.append("---")
+        lines.append("")
+
+        # Recent decisions
+        if remaining_decisions:
+            lines.append("## Recent Decisions")
+            lines.append("")
+
+            for decision in sorted(remaining_decisions, key=lambda d: d['number'], reverse=True):
+                lines.append(decision['header'])
+                lines.append(decision['content'])
+                lines.append("")
+                lines.append("---")
+                lines.append("")
+
+        return "\n".join(lines)
+
+    def _update_decisions_index_by_number(
+        self,
+        archive_filename: str,
+        min_num: int,
+        max_num: int,
+    ):
+        """Update decisions-index.md with archive link (by decision number)."""
+        index_file = self.module_path / "decisions-index.md"
+
+        if not index_file.exists():
+            return  # Index file doesn't exist, skip
+
+        content = index_file.read_text(encoding="utf-8")
+
+        # Add archive link to index
+        archive_line = f"\n- **Decisions #{min_num}-#{max_num}**: [archive/{archive_filename}](./archive/{archive_filename})\n"
 
         # Insert after header
         lines = content.split("\n")

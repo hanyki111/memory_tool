@@ -6,6 +6,12 @@
 
 ---
 
+- **Decisions #24-#25**: [archive/decisions-24-25.md](./archive/decisions-24-25.md)
+
+
+- **Decisions #24-#25**: [archive/decisions-24-25.md](./archive/decisions-24-25.md)
+
+
 ## Quick Navigation
 
 - [Recent Decisions (Phase 5)](#phase-5-recent) - Current phase

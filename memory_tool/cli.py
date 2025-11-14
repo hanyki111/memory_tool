@@ -1082,35 +1082,68 @@ def index(
 @app.command()
 def archive(
     target: str = typer.Argument(..., help="Target: 'decisions', 'current', 'plans'"),
-    phase: int = typer.Option(None, "--phase", help="Phase number to archive (required for decisions/current)"),
+    phase: int = typer.Option(None, "--phase", help="Phase number to archive (backwards compat)"),
+    up_to: int = typer.Option(None, "--up-to", help="Archive decisions up to this number (e.g., 25 = #1-#25)"),
+    keep_recent: int = typer.Option(None, "--keep-recent", help="Keep only N most recent decisions"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be archived without doing it"),
 ):
     """Archive completed documentation (marchive command).
 
     Examples:
-        marchive decisions --phase 5   # Archive Phase 1-5 decisions
-        marchive current --phase 5     # Archive Phase 5 current.md
-        marchive plans                 # Move PLAN-*.md to archive
-        marchive decisions --dry-run --phase 5  # Preview
+        marchive decisions                    # Keep recent 10 (default)
+        marchive decisions --keep-recent 15   # Keep recent 15
+        marchive decisions --up-to 25         # Archive #1-25
+        marchive decisions --phase 5          # Archive Phase 1-5 (old style)
+        marchive current --phase 5            # Archive Phase 5 current.md
+        marchive plans                        # Move PLAN-*.md to archive
+        marchive decisions --dry-run          # Preview
     """
     try:
         from memory_tool.core.archiver import Archiver, ArchiverError
+        from memory_tool.utils.config import Config
 
         archiver = Archiver()
 
         if target == "decisions":
-            # Archive decisions
-            if not phase:
-                console.print("[red]ERROR[/red] --phase required for decisions")
-                console.print("[dim]Example: marchive decisions --phase 5[/dim]")
+            # Validate mutually exclusive options
+            options_provided = sum([phase is not None, up_to is not None, keep_recent is not None])
+
+            if options_provided > 1:
+                console.print("[red]ERROR[/red] Only one of --phase, --up-to, or --keep-recent can be specified")
                 sys.exit(1)
 
+            # Determine which mode to use
+            if phase is not None:
+                # Mode: Phase-based (backwards compat)
+                mode = "phase"
+                value = phase
+            elif up_to is not None:
+                # Mode: Decision number-based
+                mode = "up-to"
+                value = up_to
+            else:
+                # Mode: Keep recent (default or explicit)
+                mode = "keep-recent"
+                if keep_recent is None:
+                    # Use default from config
+                    config = Config()
+                    value = config.get("modules.archive_keep_recent", 10)
+                else:
+                    value = keep_recent
+
             try:
-                archive_path, num_archived = archiver.archive_decisions(phase, dry_run)
+                # Call appropriate archiver method
+                if mode == "phase":
+                    archive_path, num_archived = archiver.archive_decisions(value, dry_run)
+                elif mode == "up-to":
+                    archive_path, num_archived = archiver.archive_decisions_by_number(value, dry_run)
+                else:  # keep-recent
+                    archive_path, num_archived = archiver.archive_decisions_by_count(value, dry_run)
 
                 if dry_run:
                     console.print(f"[cyan]Would archive {num_archived} decisions to:[/cyan]")
                     console.print(f"  {archive_path.relative_to(Path.cwd())}")
+                    console.print(f"\n[dim]Mode: {mode}={value}[/dim]")
                 else:
                     console.print(f"[green]OK[/green] Archived {num_archived} decisions")
                     console.print(f"  → {archive_path.relative_to(Path.cwd())}")
