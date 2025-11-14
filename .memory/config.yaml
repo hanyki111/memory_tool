@@ -32,6 +32,22 @@ llm:
   max_tokens: 4096
   temperature: 0.7
 
+  # Output language for summaries: 'ko' (Korean), 'en' (English), 'auto' (detect from content)
+  output_language: ko
+
+  # Custom categories for timeline/module summaries (optional)
+  # If not set, uses default categories
+  custom_categories:
+    - Phase Implementation
+    - Feature Development
+    - Bug Fixes
+    - Refactoring
+    - Architecture Decisions
+    - Testing & Documentation
+
+  # Maximum context tokens to inject into prompts (avoids exceeding LLM limits)
+  max_context_tokens: 2000
+
   # Backwards compatibility (will use anthropic_* if provider is anthropic)
   api_key: null
   model: null

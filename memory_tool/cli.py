@@ -887,6 +887,7 @@ def summary(
     scope: str = typer.Argument("today", help="Scope: 'today', 'week', date (YYYY-MM-DD), or date range (YYYY-MM-DD:YYYY-MM-DD)"),
     output: str = typer.Option(None, "--output", "-o", help="Output file path (optional)"),
     module_name: str = typer.Option(None, "--module", "-m", help="Summarize specific module"),
+    lang: str = typer.Option(None, "--lang", "-l", help="Output language: 'ko' (Korean), 'en' (English), 'auto' (detect)"),
 ):
     """Summarize timeline or module using LLM (msummary command)."""
     # Check if LLM is available
@@ -928,11 +929,11 @@ def summary(
         # Parse scope
         if scope.lower() == "today":
             console.print("[cyan]Summarizing today's timeline...[/cyan]")
-            summary_text = summarizer.summarize_today()
+            summary_text = summarizer.summarize_today(output_language=lang)
 
         elif scope.lower() == "week":
             console.print("[cyan]Summarizing this week's timeline...[/cyan]")
-            summary_text = summarizer.summarize_week()
+            summary_text = summarizer.summarize_week(output_language=lang)
 
         elif ":" in scope:
             # Date range: YYYY-MM-DD:YYYY-MM-DD
@@ -942,7 +943,7 @@ def summary(
                 end_date = datetime.strptime(end_str.strip(), "%Y-%m-%d").date()
 
                 console.print(f"[cyan]Summarizing timeline from {start_date} to {end_date}...[/cyan]")
-                summary_text = summarizer.summarize_range(start_date, end_date)
+                summary_text = summarizer.summarize_range(start_date, end_date, output_language=lang)
 
             except ValueError as e:
                 console.print(f"[red]ERROR[/red] Invalid date range format: {scope}")
@@ -954,7 +955,7 @@ def summary(
             try:
                 target_date = datetime.strptime(scope, "%Y-%m-%d").date()
                 console.print(f"[cyan]Summarizing timeline for {target_date}...[/cyan]")
-                summary_text = summarizer.summarize_date(target_date)
+                summary_text = summarizer.summarize_date(target_date, output_language=lang)
 
             except ValueError:
                 console.print(f"[red]ERROR[/red] Invalid date format: {scope}")

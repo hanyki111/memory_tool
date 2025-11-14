@@ -100,6 +100,100 @@ For Phase 1-4 decisions (#1-#23), see [archive/decisions-phase1-4.md](./archive/
 
 ---
 
+### 2025-11-14: 고급 요약 시스템 구현 (맥락 기반, 다국어, 카테고리) ⭐⭐⭐
+**결정 #27:** Phase 5 #4 - 자동 요약 고도화 구현 (맥락 기반, 주제별 분류, 다국어 지원)
+
+**배경:**
+- Phase 4에서 기본 LLM 요약 구현 완료 (Ollama + Anthropic)
+- 요약 품질 개선 필요: 프로젝트 맥락 부재, 일관성 없는 카테고리, 단일 언어만 지원
+
+**구현 사항:**
+
+**1. 다국어 지원** (사용자 요청)
+- 출력 언어 설정: `llm.output_language` (ko/en/auto)
+- CLI 플래그: `msummary --lang ko/en/auto`
+- 우선순위: CLI flag > config > auto-detect
+- 언어 감지: 한글/영문 문자 비율 기반 (2:1 threshold)
+
+**2. 맥락 기반 요약**
+- **ContextGatherer**: 프로젝트 컨텍스트 수집
+  - `.claude/memory-context.md`: 프로젝트 전체 상태
+  - `decisions.md`: 기간 내 결정사항 (최근 5개)
+  - `current.md`: 현재 모듈 상태
+- **Smart Context Injection**:
+  - today: 최소 컨텍스트 (categories만)
+  - week: 전체 컨텍스트 (context + decisions + state)
+  - range: 기간별 컨텍스트 (해당 기간 decisions)
+
+**3. 카테고리 시스템**
+- 프로젝트 특화 카테고리:
+  - Phase Implementation
+  - Feature Development
+  - Bug Fixes
+  - Refactoring
+  - Architecture Decisions
+  - Testing & Documentation
+- config.yaml에서 커스터마이징 가능
+- 프롬프트에 카테고리 가이드 주입 → 일관된 분류
+
+**4. PromptBuilder**
+- 동적 프롬프트 생성: base prompt + context sections
+- 토큰 제한 관리: `llm.max_context_tokens` (기본 2000)
+- 언어별 프롬프트: TIMELINE_SUMMARY_PROMPT_KO/EN
+- 컨텍스트 truncation (토큰 초과 시)
+
+**구현 구조:**
+```
+memory_tool/
+├── llm/
+│   ├── prompts.py         # 다국어 프롬프트, language detection
+│   └── prompt_builder.py  # 동적 프롬프트 빌더
+├── summary/
+│   ├── context.py         # ContextGatherer
+│   ├── categories.py      # 카테고리 정의
+│   └── timeline_summarizer.py  # 통합
+└── config.yaml            # output_language, custom_categories
+```
+
+**Trade-offs:**
+
+**장점:**
+- 프로젝트 맥락 인식 요약 (결정사항, 현재 상태 반영)
+- 일관된 카테고리 분류 (프로젝트 특화)
+- 다국어 지원 (한국어 사용자 편의)
+- 확장 가능 (custom categories)
+
+**단점:**
+- 복잡도 증가 (3개 신규 모듈)
+- 토큰 사용량 증가 (컨텍스트 주입)
+- 언어 감지 오류 가능성 (단순 휴리스틱)
+
+**대안 검토:**
+- A: LLM만으로 모든 것 처리 - 단순하지만 컨텍스트 부족
+- B: 고정 프롬프트만 사용 - 빠르지만 유연성 없음
+- **C: 동적 프롬프트 + 컨텍스트 (채택)** - 복잡하지만 품질 우수
+
+**테스트 결과:**
+- ✅ `msummary today` (한국어) - 정상 작동
+- ✅ `msummary today --lang en` (영어) - 정상 작동
+- ✅ Context injection - 프로젝트 컨텍스트, 결정사항 반영 확인
+- ✅ Categories - Phase Implementation, Feature Development 등 일관된 분류
+
+**효과:**
+- 요약 품질 향상 (맥락 기반 분석)
+- 한국어 사용자 편의성 (네이티브 언어)
+- 프로젝트 일관성 (커스텀 카테고리)
+- 확장성 (다른 프로젝트 적용 가능)
+
+**교훈:**
+- 사용자 요청 반영 (다국어 지원)
+- 점진적 개선 (기본 → 고급)
+- 실용성 우선 (단순 휴리스틱도 충분)
+
+**컨텍스트:** [[time:2025-11/14#23:36]]
+
+---
+
 ### 2025-11-14: 문서 관리 개선 - 아카이브 전략 ⭐⭐
 **결정 #25:** 비대해진 module 문서를 아카이브로 분리, Recent 항목만 메인 파일 유지
 
