@@ -35,6 +35,10 @@ dev = [
     "black>=23.0",
     "ruff>=0.1.0",
 ]
+vector = [
+    "sentence-transformers>=2.2.0",
+    "torch>=2.0.0",
+]
 
 [project.scripts]
 m = "memory_tool.cli:record"
