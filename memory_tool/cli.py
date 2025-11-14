@@ -205,6 +205,7 @@ def search(
     to_date: str = typer.Option(None, "--to", help="End date (YYYY-MM-DD)"),
     semantic: bool = typer.Option(False, "--semantic", "-s", help="Semantic search using embeddings"),
     threshold: float = typer.Option(0.3, "--threshold", "-t", help="Similarity threshold (0-1, semantic only)"),
+    no_index: bool = typer.Option(False, "--no-index", help="Force file-based search (skip SQLite index)"),
 ):
     """Search timeline and modules (ms command)."""
     # Use vector search if --semantic flag is set
@@ -285,6 +286,7 @@ def search(
             max_results=max_results,
             from_date=parsed_from,
             to_date=parsed_to,
+            use_index=not no_index,
         )
 
         # Format and display
@@ -980,6 +982,83 @@ def summary(
 
     except Exception as e:
         console.print(f"[red]ERROR[/red] Unexpected error: {e}")
+        import traceback
+        console.print(f"[dim]{traceback.format_exc()}[/dim]")
+        sys.exit(1)
+
+
+@app.command()
+def index(
+    check: bool = typer.Option(False, "--check", help="Check index status"),
+    stats: bool = typer.Option(False, "--stats", help="Show index statistics"),
+    force: bool = typer.Option(False, "--force", "-f", help="Force full reindex"),
+):
+    """Manage SQLite search index."""
+    try:
+        from memory_tool.db import IndexManager
+
+        memory_path = Path.cwd() / ".memory"
+
+        if not memory_path.exists():
+            console.print("[red]ERROR[/red] .memory/ not found. Run 'minit' first.")
+            sys.exit(1)
+
+        # Check SQLite availability
+        if not IndexManager.available():
+            console.print("[red]ERROR[/red] SQLite with FTS5 not available")
+            console.print("Indexing requires SQLite 3.9.0+ with FTS5 support")
+            sys.exit(1)
+
+        indexer = IndexManager(memory_path)
+
+        # Check mode
+        if check:
+            is_fresh = indexer.is_index_fresh()
+            if is_fresh:
+                console.print("[green]Index is up to date[/green]")
+            else:
+                console.print("[yellow]Index is stale or missing[/yellow]")
+                console.print("Run 'mindex' to rebuild")
+            return
+
+        # Stats mode
+        if stats:
+            stats_data = indexer.get_stats()
+            if stats_data["status"] == "not_created":
+                console.print("[yellow]Index not created yet[/yellow]")
+                console.print("Run 'mindex' to create index")
+            else:
+                console.print(f"[green]Index Status: OK[/green]")
+                console.print(f"Total entries: {stats_data['total_entries']}")
+                console.print(f"Size: {stats_data['size_mb']} MB")
+                console.print("\nEntries by type:")
+                for entry_type, count in stats_data['by_type'].items():
+                    console.print(f"  {entry_type}: {count}")
+            return
+
+        # Reindex mode
+        console.print("Indexing .memory/ content...")
+
+        # Always ensure database exists
+        if not indexer.index_path.exists():
+            console.print("Creating database...")
+            indexer.create_database()
+        elif force:
+            console.print("Force rebuilding database...")
+            indexer.create_database()
+
+        with console.status("[bold green]Indexing files..."):
+            total_entries = indexer.index_all(exclude_archive=True)
+
+        console.print(f"[green]Indexed {total_entries} entries[/green]")
+        console.print(f"Index location: {indexer.index_path}")
+
+    except ImportError:
+        console.print("[red]ERROR[/red] SQLite indexing module not available")
+        console.print("This feature requires the db module")
+        sys.exit(1)
+    except Exception as e:
+        console.print(f"[red]ERROR[/red] Indexing failed: {e}")
         import traceback
         console.print(f"[dim]{traceback.format_exc()}[/dim]")
         sys.exit(1)

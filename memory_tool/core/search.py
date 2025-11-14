@@ -7,6 +7,13 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from fnmatch import fnmatch
 
+# Import db for SQLite search (optional)
+try:
+    from ..db import SQLiteSearcher, IndexManager
+    SQLITE_AVAILABLE = True
+except Exception:
+    SQLITE_AVAILABLE = False
+
 
 @dataclass
 class SearchResult:
@@ -308,6 +315,7 @@ class MemorySearcher:
         max_results: Optional[int] = None,
         from_date: Optional[date] = None,
         to_date: Optional[date] = None,
+        use_index: bool = True,
     ) -> Dict[str, List[SearchResult]]:
         """Search memory for query.
 
@@ -320,6 +328,7 @@ class MemorySearcher:
             max_results: Maximum number of results (None = unlimited)
             from_date: Start date filter (for timeline files)
             to_date: End date filter (for timeline files)
+            use_index: Whether to use SQLite index (default True)
 
         Returns:
             Dictionary mapping source paths to results
@@ -332,6 +341,77 @@ class MemorySearcher:
                 f".memory/ not found at {self.memory_path}. "
                 f"Run 'minit' to initialize."
             )
+
+        # Try SQLite search first (if enabled and available)
+        if use_index and SQLITE_AVAILABLE and scope == "local" and not with_kb:
+            if SQLiteSearcher.available(self.memory_path):
+                try:
+                    # Check if index is fresh
+                    indexer = IndexManager(self.memory_path)
+                    if not indexer.is_index_fresh():
+                        # Rebuild index if stale
+                        indexer.index_all()
+
+                    # Perform SQLite search
+                    searcher = SQLiteSearcher(self.memory_path)
+
+                    # Convert dates to strings for SQLite
+                    date_from_str = from_date.isoformat() if from_date else None
+                    date_to_str = to_date.isoformat() if to_date else None
+
+                    sql_results = searcher.search(
+                        query,
+                        date_from=date_from_str,
+                        date_to=date_to_str,
+                        max_results=max_results,
+                    )
+
+                    # Convert SQLite results to SearchResult format
+                    if sql_results:
+                        all_results = {}
+                        search_results = []
+
+                        for sql_result in sql_results:
+                            file_path = self.memory_path / sql_result["file_path"]
+
+                            # Parse content to find line number
+                            try:
+                                with open(file_path, "r", encoding="utf-8") as f:
+                                    lines = f.readlines()
+
+                                content = sql_result["content"]
+                                line_number = 1
+
+                                # Find matching line
+                                for i, line in enumerate(lines):
+                                    if content.strip() in line:
+                                        line_number = i + 1
+                                        break
+
+                                # Get context
+                                start = max(0, line_number - 1 - context_lines)
+                                end = min(len(lines), line_number + context_lines)
+                                context = "".join(lines[start:end])
+
+                                search_results.append(
+                                    SearchResult(
+                                        file_path=file_path,
+                                        line_number=line_number,
+                                        line_content=content,
+                                        match_context=context,
+                                    )
+                                )
+                            except Exception:
+                                # Skip files we can't read
+                                continue
+
+                        if search_results:
+                            all_results[str(self.memory_path)] = search_results
+                            return all_results
+
+                except Exception:
+                    # Fall through to file-based search on any error
+                    pass
 
         # Get search paths
         search_paths = self.get_search_paths(scope, with_kb)

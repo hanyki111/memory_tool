@@ -5,6 +5,13 @@ from pathlib import Path
 from typing import Optional, Tuple
 import re
 
+# Import db for indexing (optional dependency)
+try:
+    from ..db import IndexManager
+    INDEXING_AVAILABLE = True
+except Exception:
+    INDEXING_AVAILABLE = False
+
 
 class TimelineError(Exception):
     """Base exception for timeline operations."""
@@ -242,6 +249,15 @@ class Timeline:
 
         # Write back
         self.write_timeline(file_path, header, entries)
+
+        # Index the new entry (if indexing is available)
+        if INDEXING_AVAILABLE and IndexManager.available():
+            try:
+                indexer = IndexManager(self.memory_path)
+                indexer.index_file(file_path)
+            except Exception:
+                # Silent failure - indexing is optional
+                pass
 
         return dt, file_path
 

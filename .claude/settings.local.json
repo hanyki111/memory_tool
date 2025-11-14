@@ -22,7 +22,8 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(git push:*)",
-      "Bash(git merge:*)"
+      "Bash(git merge:*)",
+      "Bash(m \"Timeline.root 버그 수정 완료: get_timeline_file() 메서드 사용으로 변경, 커밋 cb5aa3c\")"
     ],
     "deny": [],
     "ask": []

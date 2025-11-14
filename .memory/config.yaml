@@ -1,4 +1,4 @@
-version: '1.0'
+version: "1.0"
 timeline:
   auto_record: false
   granularity: medium
@@ -11,7 +11,7 @@ modules:
 search:
   default_scope: local
   include_archived: false
-  max_file_size: 10485760  # 10MB in bytes
+  max_file_size: 10485760 # 10MB in bytes
   exclude_patterns:
     - "*.draft.md"
     - "archive/*"
@@ -22,10 +22,10 @@ llm:
 
   # Ollama settings (local LLM)
   ollama_host: http://localhost:11434
-  ollama_model: llama3.2
+  ollama_model: qwen3-vl:8b
 
   # Anthropic settings (cloud API)
-  anthropic_api_key: null  # or set ANTHROPIC_API_KEY environment variable
+  anthropic_api_key: null # or set ANTHROPIC_API_KEY environment variable
   anthropic_model: claude-3-5-sonnet-20241022
 
   # Common settings

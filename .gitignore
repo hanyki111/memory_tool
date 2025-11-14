@@ -1,5 +1,8 @@
 # Memory System - 자동 생성 인덱스 제외
 .memory/.index/
+.memory/.index.db
+.memory/.index.db-shm
+.memory/.index.db-wal
 
 # Python
 __pycache__/
