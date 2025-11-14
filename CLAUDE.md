@@ -85,12 +85,12 @@
 - ✅ --semantic flag for ms command
 - ✅ Embeddings caching for performance
 
-**Phase 4: IN PROGRESS** 🚀
-- ✅ LLM integration (Anthropic API)
+**Phase 4: COMPLETE** 🎉
+- ✅ LLM integration (Anthropic API + Ollama)
 - ✅ Timeline summarization (msummary command)
 - ✅ Module summarization
 - ✅ Conversation summarization infrastructure
-- ⏳ Full testing and validation
+- ✅ Ollama support (local, free, offline)
 
 **Next:**
 - Phase 5: MCP Server integration
@@ -102,10 +102,11 @@
 **Phase 4: Auto-Summary System Implementation** 🚀
 
 **Completed Features (Phase 4):**
-1. **LLM 통합** (Anthropic API) ✅
-   - ✅ llm/ 모듈: LLMClient, prompts
-   - ✅ summary/ 모듈: 3가지 summarizer
-   - ✅ config.yaml LLM 설정
+1. **LLM 통합** (Dual Provider) ✅
+   - ✅ Anthropic API (cloud, Claude 3.5 Sonnet)
+   - ✅ Ollama (local, llama3.2, free)
+   - ✅ Factory pattern for provider selection
+   - ✅ config.yaml provider 설정
 
 2. **msummary 명령어** ✅
    - ✅ Timeline 요약 (today/week/date/range)
@@ -113,21 +114,24 @@
    - ✅ 파일 저장 (--output flag)
    - ✅ LLM 기반 분석 및 정리
 
-3. **Skill 통합** ✅
-   - ✅ msummary 사용 가이드 추가
-   - ✅ LLM availability 체크
-   - ✅ 자동 요약 워크플로우
+3. **Ollama 지원** ✅
+   - ✅ 로컬 LLM (무료, 오프라인)
+   - ✅ API 키 불필요
+   - ✅ 프라이버시 보장
+   - ✅ Loose Coupling 복원
 
-**New Commands:**
-- `msummary today` - 오늘 Timeline 요약
-- `msummary week` - 이번 주 요약
-- `msummary 2025-11-14` - 특정 날짜
-- `msummary 2025-11-01:2025-11-14` - 날짜 범위
-- `msummary --module memory-system` - 모듈 요약
+**Configuration:**
+```yaml
+llm:
+  provider: ollama  # or anthropic
+  ollama_model: llama3.2
+  anthropic_model: claude-3-5-sonnet-20241022
+```
 
-**Testing & Next:**
-- ⏳ Full system testing
-- ⏳ Documentation update
+**Testing & Status:**
+- ✅ Full system testing complete
+- ✅ Provider: ollama, Available: True
+- ✅ Documentation update complete
 - → Phase 5: MCP Server integration
 
 ---

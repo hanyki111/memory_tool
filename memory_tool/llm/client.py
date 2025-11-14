@@ -1,120 +1,108 @@
-"""Anthropic API client for LLM operations."""
+"""LLM client factory for multiple providers."""
 
-import os
-from typing import Optional
-from anthropic import Anthropic, APIError
+from typing import Optional, Literal
 from ..utils.config import Config
 
 
 class LLMClient:
-    """Anthropic API client wrapper."""
+    """
+    LLM client factory that creates appropriate client based on provider.
 
-    def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
+    Supports:
+    - anthropic: Claude API (cloud, requires API key)
+    - ollama: Local LLM (free, requires Ollama running)
+    """
+
+    def __new__(
+        cls,
+        provider: Optional[Literal["anthropic", "ollama"]] = None,
+        **kwargs,
+    ):
         """
-        Initialize LLM client.
+        Create appropriate LLM client based on provider.
 
         Args:
-            api_key: Anthropic API key (optional, reads from config or env)
-            model: Model name (optional, reads from config)
-        """
-        self.config = Config.load()
-
-        # API key priority: argument > config > environment
-        self.api_key = (
-            api_key
-            or self.config.get("llm.api_key")
-            or os.getenv("ANTHROPIC_API_KEY")
-        )
-
-        if not self.api_key:
-            raise ValueError(
-                "Anthropic API key not found. Set ANTHROPIC_API_KEY environment variable "
-                "or add 'llm.api_key' to config.yaml"
-            )
-
-        # Model priority: argument > config > default
-        self.model = (
-            model
-            or self.config.get("llm.model")
-            or "claude-3-5-sonnet-20241022"
-        )
-
-        self.client = Anthropic(api_key=self.api_key)
-
-        # Get settings from config
-        self.max_tokens = self.config.get("llm.max_tokens") or 4096
-        self.temperature = self.config.get("llm.temperature") or 0.7
-
-    def summarize(
-        self,
-        content: str,
-        system_prompt: str,
-        max_tokens: Optional[int] = None,
-        temperature: Optional[float] = None,
-    ) -> str:
-        """
-        Summarize content using Claude API.
-
-        Args:
-            content: Content to summarize
-            system_prompt: System prompt for summarization task
-            max_tokens: Maximum tokens in response (optional)
-            temperature: Temperature for generation (optional)
+            provider: LLM provider ('anthropic' or 'ollama'). If None, reads from config.
+            **kwargs: Provider-specific arguments
 
         Returns:
-            Summary text
+            AnthropicClient or OllamaClient instance
 
         Raises:
-            APIError: If API call fails
-            ValueError: If content is too long
+            ValueError: If provider is invalid or not configured
         """
-        # Use provided values or fall back to instance defaults
-        max_tokens = max_tokens or self.max_tokens
-        temperature = temperature or self.temperature
+        config = Config()
 
-        try:
-            response = self.client.messages.create(
-                model=self.model,
-                max_tokens=max_tokens,
-                temperature=temperature,
-                system=system_prompt,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": content,
-                    }
-                ],
+        # Determine provider
+        if provider is None:
+            provider = config.get("llm.provider") or "anthropic"
+
+        provider = provider.lower()
+
+        # Create appropriate client
+        if provider == "anthropic":
+            from .anthropic_client import AnthropicClient
+
+            return AnthropicClient(**kwargs)
+
+        elif provider == "ollama":
+            from .ollama_client import OllamaClient
+
+            return OllamaClient(**kwargs)
+
+        else:
+            raise ValueError(
+                f"Unknown LLM provider: {provider}. "
+                f"Supported providers: anthropic, ollama"
             )
 
-            # Extract text from response
-            if response.content and len(response.content) > 0:
-                return response.content[0].text
-            else:
-                raise ValueError("Empty response from API")
-
-        except APIError as e:
-            raise APIError(f"Failed to summarize content: {e}")
-
-    def is_available(self) -> bool:
-        """
-        Check if LLM is available (API key configured).
-
-        Returns:
-            True if API key is set
-        """
-        return bool(self.api_key)
-
     @classmethod
-    def check_availability(cls) -> bool:
+    def check_availability(cls, provider: Optional[str] = None) -> bool:
         """
-        Static method to check if LLM is available without instantiation.
+        Check if LLM is available for given provider.
+
+        Args:
+            provider: LLM provider ('anthropic' or 'ollama'). If None, reads from config.
 
         Returns:
-            True if API key is found in config or environment
+            True if provider is configured and available
         """
         try:
-            config = Config.load()
-            api_key = config.get("llm.api_key") or os.getenv("ANTHROPIC_API_KEY")
-            return bool(api_key)
+            config = Config()
+
+            # Determine provider
+            if provider is None:
+                provider = config.get("llm.provider") or "anthropic"
+
+            provider = provider.lower()
+
+            # Check availability
+            if provider == "anthropic":
+                from .anthropic_client import AnthropicClient
+
+                return AnthropicClient.check_availability()
+
+            elif provider == "ollama":
+                from .ollama_client import OllamaClient
+
+                return OllamaClient.check_availability()
+
+            else:
+                return False
+
         except Exception:
             return False
+
+    @classmethod
+    def get_provider(cls) -> str:
+        """
+        Get current LLM provider from config.
+
+        Returns:
+            Provider name ('anthropic' or 'ollama')
+        """
+        try:
+            config = Config()
+            return config.get("llm.provider") or "anthropic"
+        except Exception:
+            return "anthropic"

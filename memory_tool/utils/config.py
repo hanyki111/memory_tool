@@ -43,6 +43,15 @@ class Config:
             "max_file_size": 1048576,  # 1MB
             "exclude_patterns": [],
         },
+        "llm": {
+            "provider": "anthropic",
+            "ollama_host": "http://localhost:11434",
+            "ollama_model": "llama3.2",
+            "anthropic_api_key": None,
+            "anthropic_model": "claude-3-5-sonnet-20241022",
+            "max_tokens": 4096,
+            "temperature": 0.7,
+        },
     }
 
     VALID_GRANULARITIES = {"low", "medium", "high"}

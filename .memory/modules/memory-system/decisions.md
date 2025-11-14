@@ -1085,3 +1085,73 @@ ALIASES = {
 **컨텍스트:** [[time:2025-11/14#21:37]]
 
 ---
+
+## 2025-11-14: Ollama 지원 추가 (API 독립성) ⭐⭐
+**결정:** Ollama를 LLM provider로 추가, Anthropic과 선택 가능
+
+**배경:**
+- Phase 4에서 Anthropic API에 강결합 구현
+- Loose Coupling 원칙 위반 발견
+- API 비용, 인터넷 의존성 문제
+
+**문제점 (현재):**
+- ❌ Anthropic API 필수 (클라우드 전용)
+- ❌ 인터넷 연결 필수
+- ❌ API 비용 발생
+- ❌ 외부 서비스에 강결합
+
+**해결 방안:**
+- Ollama 추가 (로컬 LLM)
+- Provider 선택 가능 (anthropic/ollama)
+- 각 provider별 독립적 구현
+
+**구현:**
+```python
+# config.yaml
+llm:
+  provider: ollama  # anthropic 또는 ollama
+
+  # Ollama 설정 (로컬)
+  ollama_host: http://localhost:11434
+  ollama_model: llama3.2
+
+  # Anthropic 설정 (API)
+  anthropic_api_key: null
+  anthropic_model: claude-3-5-sonnet-20241022
+```
+
+**기술 스택:**
+- ollama-python (공식 Python 클라이언트)
+- llm/ollama_client.py (새 파일)
+- llm/client.py 리팩토링 (factory 패턴)
+
+**장점:**
+- ✅ 로컬 실행 가능 (무료, 오프라인)
+- ✅ 프라이버시 보장 (데이터가 외부로 안 나감)
+- ✅ Loose Coupling 복원
+- ✅ 사용자 선택권 제공
+
+**단점 및 완화:**
+- 단점: Ollama 설치 필요
+  - 완화: 설치 가이드 제공, Anthropic도 여전히 사용 가능
+- 단점: 로컬 모델이 Claude보다 품질 낮을 수 있음
+  - 완화: 사용자가 provider 선택 가능
+
+**설계 원칙 복원:**
+- **Loose Coupling**: 외부 서비스 의존성 분리
+- **선택적 사용**: LLM provider 선택 가능
+- **Local First**: 로컬 우선, 클라우드 선택
+
+**구현 범위:**
+- llm/ollama_client.py (OllamaClient)
+- llm/client.py (LLMClient 리팩토링, factory)
+- config.yaml (provider 설정)
+- 문서 업데이트 (설치 가이드)
+
+**규칙 기반 Fallback은 제외:**
+- 이유: 요약 품질이 너무 낮아질 수 있음
+- 대신: 2개 provider 제공으로 충분
+
+**컨텍스트:** [[time:2025-11/14#21:50]]
+
+---
