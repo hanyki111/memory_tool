@@ -37,6 +37,19 @@ This directory contains completed work from early phases of the project.
 - ~240 lines
 - Archived on: 2025-11-14
 
+### plans/
+**Completed implementation plans** for major features
+
+**Contains:**
+- PLAN-sqlite-indexing.md (Phase 5 #2)
+- PLAN-advanced-summarization.md (Phase 5 #4)
+
+**Purpose:**
+- Detailed implementation roadmaps
+- Design decisions & trade-offs
+- Testing strategies
+- Preserved for reference
+
 ---
 
 ## Why Archive?
@@ -77,16 +90,29 @@ This directory contains completed work from early phases of the project.
 - Phase completion (milestone-based)
 - File exceeds ~500 lines
 - Information becomes historical
+- PLAN documents after implementation complete
 
 **What to keep in main files:**
 - Current phase work only
 - Recent decisions (last phase)
 - Active progress tracking
+- In-progress PLAN documents
 
 **What to archive:**
-- Completed phases
+- Completed phases (decisions, current)
 - Historical decisions
 - Past status snapshots
+- Completed PLAN documents → archive/plans/
+
+**Archive structure:**
+```
+archive/
+├── decisions-phase{N}.md   # Completed phase decisions
+├── current-phase{N}.md     # Completed phase status
+└── plans/                  # Completed implementation plans
+    ├── PLAN-{feature}.md
+    └── ...
+```
 
 ---
 

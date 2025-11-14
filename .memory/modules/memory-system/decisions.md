@@ -194,6 +194,80 @@ memory_tool/
 
 ---
 
+### 2025-11-14: 완료된 PLAN 문서 아카이브 정책 ⭐
+**결정 #28:** 완료된 PLAN 문서를 archive/plans/로 이동하는 정책 수립
+
+**배경:**
+- Phase 5 #2, #4 작업으로 PLAN 문서 2개 생성
+  - PLAN-sqlite-indexing.md (7.3KB)
+  - PLAN-advanced-summarization.md (22.4KB)
+- 작업 완료 후 이 문서들을 어떻게 관리할지 정책 필요
+
+**문제:**
+- PLAN 문서가 module 최상위에 계속 쌓임
+- decisions.md, current.md와 달리 프로젝트별/일회성 문서
+- 완료 후에도 참고 가치 있음 (설계 의도, trade-offs)
+
+**옵션 검토:**
+
+**A. archive/ 직접 이동**
+- 장점: 단순
+- 단점: decisions, current와 성격 다름
+
+**B. archive/plans/ 하위 (채택)**
+- 장점: 타입별 분류, 확장성, 일관성
+- 단점: 디렉토리 깊이 증가
+
+**C. completed-plans/ 별도**
+- 장점: 독립 관리
+- 단점: 최상위 디렉토리 증가
+
+**D. 삭제**
+- 장점: 가장 단순
+- 단점: 세부 계획 손실
+
+**채택한 정책:**
+
+**구조:**
+```
+archive/
+├── decisions-phase{N}.md   # 완료된 Phase 결정사항
+├── current-phase{N}.md     # 완료된 Phase 상태
+└── plans/                  # 완료된 구현 계획서
+    ├── PLAN-sqlite-indexing.md
+    └── PLAN-advanced-summarization.md
+```
+
+**이동 시점:**
+- PLAN 문서: 작업 완료 후 main 머지 시
+- decisions/current: Phase 완료 시
+
+**보존 이유:**
+- 설계 의도 참고
+- Trade-offs 근거
+- 테스트 전략
+- 향후 유사 작업 시 템플릿
+
+**효과:**
+- module 최상위 정리 (진행 중 작업만)
+- 타입별 분류 (decisions, current, plans)
+- 완료 문서 찾기 쉬움
+- 확장성 (archive/docs/, archive/research/ 추가 가능)
+
+**구현:**
+- archive/plans/ 디렉토리 생성
+- 완료된 PLAN 2개 이동
+- archive/README.md 정책 추가
+
+**교훈:**
+- 문서 타입별 lifecycle 고려
+- 일관된 정책으로 확장성 확보
+- 완료 문서도 가치 있음 (삭제 X)
+
+**컨텍스트:** [[time:2025-11/14#23:38]]
+
+---
+
 ### 2025-11-14: 문서 관리 개선 - 아카이브 전략 ⭐⭐
 **결정 #25:** 비대해진 module 문서를 아카이브로 분리, Recent 항목만 메인 파일 유지
 
