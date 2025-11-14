@@ -23,6 +23,7 @@ class AliasManager:
         "mcontext": ("context", "Build Claude Code context"),
         "msort": ("sort", "Sort timeline by time"),
         "msummary": ("summary", "Summarize timeline or module"),
+        "marchive": ("archive", "Archive documentation"),
         "mtoday": ("today", "Show today's timeline"),
         "mweek": ("week", "Show this week's timeline"),
         "mstatus": ("status", "Show statistics"),
