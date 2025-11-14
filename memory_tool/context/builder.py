@@ -1,0 +1,214 @@
+"""Context builder for Claude Code integration."""
+
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Optional, List, Dict
+import yaml
+
+
+class ContextError(Exception):
+    """Base exception for context operations."""
+    pass
+
+
+class ContextBuilder:
+    """Builder for Claude Code context."""
+
+    def __init__(self, base_path: Optional[Path] = None):
+        """Initialize context builder.
+
+        Args:
+            base_path: Base path for project. Defaults to current directory.
+        """
+        if base_path is None:
+            base_path = Path.cwd()
+        self.base_path = Path(base_path)
+        self.memory_path = self.base_path / ".memory"
+        self.claude_path = self.base_path / ".claude"
+
+    def is_initialized(self) -> bool:
+        """Check if .memory/ exists.
+
+        Returns:
+            True if .memory/ exists
+        """
+        return self.memory_path.exists()
+
+    def get_recent_timeline_paths(self, days: int = 3) -> List[Path]:
+        """Get paths to recent timeline files.
+
+        Args:
+            days: Number of recent days to include
+
+        Returns:
+            List of timeline file paths (newest first)
+        """
+        timeline_path = self.memory_path / "timeline"
+        if not timeline_path.exists():
+            return []
+
+        paths = []
+        today = datetime.now().date()
+
+        for i in range(days):
+            date = today - timedelta(days=i)
+            year_month = date.strftime("%Y-%m")
+            day = date.strftime("%d")
+            file_path = timeline_path / year_month / f"{day}.md"
+
+            if file_path.exists():
+                paths.append(file_path)
+
+        return paths
+
+    def get_module_statuses(self) -> Dict[str, Path]:
+        """Get current.md paths for all modules.
+
+        Returns:
+            Dictionary mapping module names to current.md paths
+        """
+        modules_path = self.memory_path / "modules"
+        if not modules_path.exists():
+            return {}
+
+        statuses = {}
+        for module_dir in modules_path.iterdir():
+            if module_dir.is_dir():
+                current_file = module_dir / "current.md"
+                if current_file.exists():
+                    statuses[module_dir.name] = current_file
+
+        return statuses
+
+    def load_config(self) -> dict:
+        """Load config.yaml settings.
+
+        Returns:
+            Configuration dictionary
+        """
+        config_path = self.memory_path / "config.yaml"
+        if not config_path.exists():
+            # Return defaults
+            return {
+                "context": {
+                    "recent_days": 3,
+                }
+            }
+
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                config = yaml.safe_load(f)
+                return config or {}
+        except Exception:
+            return {}
+
+    def build_context_content(self) -> str:
+        """Build context markdown content.
+
+        Returns:
+            Markdown content for memory-context.md
+        """
+        lines = []
+
+        # Header
+        lines.append("# Memory Context")
+        lines.append("")
+        lines.append(f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+        lines.append("")
+        lines.append("---")
+        lines.append("")
+
+        # Recent Timeline
+        config = self.load_config()
+        recent_days = config.get("context", {}).get("recent_days", 3)
+        timeline_paths = self.get_recent_timeline_paths(recent_days)
+
+        if timeline_paths:
+            lines.append("## Recent Timeline")
+            lines.append("")
+            for path in timeline_paths:
+                rel_path = path.relative_to(self.base_path)
+                # Extract date from path
+                date_str = path.parent.name + "-" + path.stem
+                lines.append(f"- **{date_str}**: `./{rel_path}`")
+            lines.append("")
+        else:
+            lines.append("## Recent Timeline")
+            lines.append("")
+            lines.append("*No recent timeline entries found.*")
+            lines.append("")
+
+        lines.append("---")
+        lines.append("")
+
+        # Module Status
+        module_statuses = self.get_module_statuses()
+
+        if module_statuses:
+            lines.append("## Module Status")
+            lines.append("")
+            for module_name, status_path in sorted(module_statuses.items()):
+                rel_path = status_path.relative_to(self.base_path)
+                lines.append(f"- **{module_name}**: `./{rel_path}`")
+            lines.append("")
+        else:
+            lines.append("## Module Status")
+            lines.append("")
+            lines.append("*No modules found.*")
+            lines.append("")
+
+        lines.append("---")
+        lines.append("")
+
+        # Footer
+        lines.append("## Usage")
+        lines.append("")
+        lines.append("This context file is automatically generated by `mcontext` command.")
+        lines.append("Use it to quickly understand the current state of the project.")
+        lines.append("")
+        lines.append("```bash")
+        lines.append("# Update this file")
+        lines.append("python -m memory_tool context")
+        lines.append("```")
+        lines.append("")
+
+        return "\n".join(lines)
+
+    def write_context(
+        self,
+        output_path: Optional[Path] = None,
+    ) -> Path:
+        """Write context to file.
+
+        Args:
+            output_path: Output file path. Defaults to .claude/memory-context.md
+
+        Returns:
+            Path to written file
+
+        Raises:
+            ContextError: If writing fails
+        """
+        if not self.is_initialized():
+            raise ContextError(
+                f".memory/ not found at {self.memory_path}. "
+                f"Run 'minit' to initialize."
+            )
+
+        # Default output path
+        if output_path is None:
+            output_path = self.claude_path / "memory-context.md"
+
+        # Ensure .claude/ directory exists
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Build content
+        content = self.build_context_content()
+
+        # Write file
+        try:
+            output_path.write_text(content, encoding="utf-8")
+        except Exception as e:
+            raise ContextError(f"Failed to write context: {e}")
+
+        return output_path

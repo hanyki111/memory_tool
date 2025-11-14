@@ -1,0 +1,306 @@
+"""Search functionality for timeline and modules."""
+
+import re
+from pathlib import Path
+from typing import Optional, List, Dict
+from dataclasses import dataclass
+
+
+@dataclass
+class SearchResult:
+    """A single search result."""
+    file_path: Path
+    line_number: int
+    line_content: str
+    match_context: str  # Surrounding context
+
+
+class SearchError(Exception):
+    """Base exception for search operations."""
+    pass
+
+
+class MemorySearcher:
+    """Searcher for memory content."""
+
+    def __init__(self, base_path: Optional[Path] = None):
+        """Initialize memory searcher.
+
+        Args:
+            base_path: Base path for project. Defaults to current directory.
+        """
+        if base_path is None:
+            base_path = Path.cwd()
+        self.base_path = Path(base_path)
+        self.memory_path = self.base_path / ".memory"
+
+    def is_initialized(self) -> bool:
+        """Check if .memory/ exists.
+
+        Returns:
+            True if .memory/ exists
+        """
+        return self.memory_path.exists()
+
+    def get_search_paths(
+        self,
+        scope: str = "local",
+        with_kb: bool = False,
+    ) -> List[Path]:
+        """Get paths to search based on scope.
+
+        Args:
+            scope: Search scope ("local", "kb", "all")
+            with_kb: Include KB in local search
+
+        Returns:
+            List of paths to search
+        """
+        paths = []
+
+        # Local .memory/
+        if scope in ("local", "all"):
+            if self.memory_path.exists():
+                paths.append(self.memory_path)
+
+        # Knowledge base
+        if scope == "kb" or with_kb or scope == "all":
+            kb_lock = self.memory_path / "kb.lock"
+            if kb_lock.exists():
+                kb_path = kb_lock.read_text(encoding="utf-8").strip()
+                kb_path_obj = Path(kb_path).expanduser()
+                if kb_path_obj.exists():
+                    paths.append(kb_path_obj)
+
+        return paths
+
+    def search_file(
+        self,
+        file_path: Path,
+        pattern: str,
+        case_sensitive: bool = False,
+        context_lines: int = 0,
+    ) -> List[SearchResult]:
+        """Search a single file for pattern.
+
+        Args:
+            file_path: Path to file to search
+            pattern: Search pattern (regex)
+            case_sensitive: Whether to match case
+            context_lines: Number of context lines to include
+
+        Returns:
+            List of search results
+        """
+        results = []
+
+        try:
+            content = file_path.read_text(encoding="utf-8")
+            lines = content.splitlines()
+        except Exception:
+            # Skip files that can't be read
+            return results
+
+        # Compile regex
+        flags = 0 if case_sensitive else re.IGNORECASE
+        try:
+            regex = re.compile(pattern, flags)
+        except re.error:
+            # If regex is invalid, try literal search
+            regex = re.compile(re.escape(pattern), flags)
+
+        # Search each line
+        for i, line in enumerate(lines):
+            if regex.search(line):
+                # Get context
+                start = max(0, i - context_lines)
+                end = min(len(lines), i + context_lines + 1)
+                context = "\n".join(lines[start:end])
+
+                results.append(
+                    SearchResult(
+                        file_path=file_path,
+                        line_number=i + 1,
+                        line_content=line,
+                        match_context=context,
+                    )
+                )
+
+        return results
+
+    def search_directory(
+        self,
+        directory: Path,
+        pattern: str,
+        case_sensitive: bool = False,
+        context_lines: int = 0,
+    ) -> List[SearchResult]:
+        """Search all markdown files in directory recursively.
+
+        Args:
+            directory: Directory to search
+            pattern: Search pattern
+            case_sensitive: Whether to match case
+            context_lines: Number of context lines
+
+        Returns:
+            List of all search results
+        """
+        results = []
+
+        # Find all .md files
+        for md_file in directory.rglob("*.md"):
+            # Skip .gitkeep and other hidden files
+            if md_file.name.startswith("."):
+                continue
+
+            file_results = self.search_file(
+                md_file,
+                pattern,
+                case_sensitive,
+                context_lines,
+            )
+            results.extend(file_results)
+
+        return results
+
+    def search(
+        self,
+        query: str,
+        scope: str = "local",
+        with_kb: bool = False,
+        case_sensitive: bool = False,
+        context_lines: int = 1,
+        max_results: Optional[int] = None,
+    ) -> Dict[str, List[SearchResult]]:
+        """Search memory for query.
+
+        Args:
+            query: Search query (regex pattern)
+            scope: Search scope ("local", "kb", "all")
+            with_kb: Include KB in local search
+            case_sensitive: Whether to match case
+            context_lines: Number of context lines
+            max_results: Maximum number of results (None = unlimited)
+
+        Returns:
+            Dictionary mapping source paths to results
+
+        Raises:
+            SearchError: If search fails
+        """
+        if not self.is_initialized() and scope != "kb":
+            raise SearchError(
+                f".memory/ not found at {self.memory_path}. "
+                f"Run 'minit' to initialize."
+            )
+
+        # Get search paths
+        search_paths = self.get_search_paths(scope, with_kb)
+
+        if not search_paths:
+            raise SearchError("No search paths available. Check .memory/ and kb.lock.")
+
+        # Search each path
+        all_results = {}
+        total_count = 0
+
+        for path in search_paths:
+            results = self.search_directory(
+                path,
+                query,
+                case_sensitive,
+                context_lines,
+            )
+
+            if results:
+                # Limit results if needed
+                if max_results:
+                    remaining = max_results - total_count
+                    if remaining <= 0:
+                        break
+                    results = results[:remaining]
+
+                all_results[str(path)] = results
+                total_count += len(results)
+
+        return all_results
+
+    def format_results(
+        self,
+        results: Dict[str, List[SearchResult]],
+        show_context: bool = True,
+    ) -> str:
+        """Format search results for display.
+
+        Args:
+            results: Search results by source
+            show_context: Whether to show context
+
+        Returns:
+            Formatted string
+        """
+        if not results:
+            return "No results found."
+
+        lines = []
+        total_count = sum(len(r) for r in results.values())
+
+        lines.append(f"Found {total_count} result(s)\n")
+
+        for source, source_results in results.items():
+            lines.append(f"\n## {source}")
+            lines.append(f"{len(source_results)} match(es)\n")
+
+            for result in source_results:
+                # Relative path
+                try:
+                    rel_path = result.file_path.relative_to(self.base_path)
+                except ValueError:
+                    rel_path = result.file_path
+
+                lines.append(f"  {rel_path}:{result.line_number}")
+
+                if show_context:
+                    # Indent context
+                    context_lines = result.match_context.split("\n")
+                    for ctx_line in context_lines:
+                        # Remove problematic characters for Windows console
+                        safe_line = self._sanitize_output(ctx_line)
+                        lines.append(f"    {safe_line}")
+                else:
+                    safe_line = self._sanitize_output(result.line_content)
+                    lines.append(f"    {safe_line}")
+
+                lines.append("")  # Empty line between results
+
+        return "\n".join(lines)
+
+    def _sanitize_output(self, text: str) -> str:
+        """Remove characters that cause issues with Windows console.
+
+        Args:
+            text: Input text
+
+        Returns:
+            Sanitized text
+        """
+        # Replace common problematic characters
+        replacements = {
+            '⭐': '*',
+            '✅': '[OK]',
+            '❌': '[X]',
+            '⚠': '[!]',
+            '🎯': '[TARGET]',
+            '🚀': '[ROCKET]',
+            '📍': '[PIN]',
+            '📚': '[BOOKS]',
+            '🔄': '[CYCLE]',
+            '⚡': '[BOLT]',
+        }
+
+        result = text
+        for emoji, replacement in replacements.items():
+            result = result.replace(emoji, replacement)
+
+        return result

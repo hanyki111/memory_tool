@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir:*)",
+      "Bash(tree:*)",
+      "WebFetch(domain:www.claude.com)",
+      "mcp__serena__read_memory",
+      "Bash(dir:*)",
+      "Bash(pip install:*)",
+      "Bash(python -m memory_tool:*)",
+      "Bash(cat:*)",
+      "Bash(powershell -Command \"$PROFILE | Format-List -Force\")",
+      "Bash(powershell -Command \"Get-Content $PROFILE -ErrorAction SilentlyContinue | Select-String -Pattern ''m =''\")",
+      "Bash(powershell -NoProfile -Command \"echo $PROFILE\")",
+      "Bash(powershell -Command \". $PROFILE; m ''PowerShell profile test - works in all terminals!''\")",
+      "Bash(powershell -Command \"& { . $PROFILE; m ''PowerShell profile test works'' }\")",
+      "Bash(powershell -Command \". C:\\Users\\shy61\\Documents\\WindowsPowerShell\\profile.ps1; m ''PowerShell profile test works''\")",
+      "Bash(python:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

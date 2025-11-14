@@ -1,0 +1,61 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "memory-tool"
+version = "0.1.0"
+description = "Time-Space Integrated Knowledge System for Claude Code"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Memory Tool Contributors"}
+]
+keywords = ["knowledge-management", "timeline", "claude-code", "productivity"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    "typer>=0.9.0",
+    "pyyaml>=6.0",
+    "rich>=13.0.0",  # For beautiful CLI output
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "black>=23.0",
+    "ruff>=0.1.0",
+]
+
+[project.scripts]
+m = "memory_tool.cli:record"
+minit = "memory_tool.cli:init"
+ms = "memory_tool.cli:search"
+mcontext = "memory_tool.cli:context"
+mtoday = "memory_tool.cli:today"
+mweek = "memory_tool.cli:week"
+mstatus = "memory_tool.cli:status"
+malias = "memory_tool.cli:alias"
+
+[tool.setuptools]
+packages = ["memory_tool"]
+
+[tool.setuptools.package-data]
+memory_tool = ["py.typed"]
+
+[tool.black]
+line-length = 100
+target-version = ['py310']
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
