@@ -8,6 +8,11 @@ context:
   recent_days: 3
 modules:
   auto_update_current: false
+  # File size warnings (marchive command)
+  warn_size_decisions: 500  # lines
+  warn_size_current: 300    # lines
+  warn_on_record: true      # Show warnings on m command
+  warn_on_status: true      # Show warnings on mstatus command
 search:
   default_scope: local
   include_archived: false

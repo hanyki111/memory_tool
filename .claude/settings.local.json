@@ -1,29 +1,7 @@
 {
   "permissions": {
     "allow": [
-      "Bash(mkdir:*)",
-      "Bash(tree:*)",
-      "WebFetch(domain:www.claude.com)",
-      "mcp__serena__read_memory",
-      "Bash(dir:*)",
-      "Bash(pip install:*)",
-      "Bash(python -m memory_tool:*)",
-      "Bash(cat:*)",
-      "Bash(powershell -Command \"$PROFILE | Format-List -Force\")",
-      "Bash(powershell -Command \"Get-Content $PROFILE -ErrorAction SilentlyContinue | Select-String -Pattern ''m =''\")",
-      "Bash(powershell -NoProfile -Command \"echo $PROFILE\")",
-      "Bash(powershell -Command \". $PROFILE; m ''PowerShell profile test - works in all terminals!''\")",
-      "Bash(powershell -Command \"& { . $PROFILE; m ''PowerShell profile test works'' }\")",
-      "Bash(powershell -Command \". C:\\Users\\shy61\\Documents\\WindowsPowerShell\\profile.ps1; m ''PowerShell profile test works''\")",
-      "Bash(python:*)",
-      "WebFetch(domain:code.claude.com)",
-      "Bash(.memory/modules/memory-system/decisions.md)",
-      "Bash(git checkout:*)",
-      "Bash(git add:*)",
-      "Bash(git commit:*)",
-      "Bash(git push:*)",
-      "Bash(git merge:*)",
-      "Bash(m \"Timeline.root 버그 수정 완료: get_timeline_file() 메서드 사용으로 변경, 커밋 cb5aa3c\")"
+      "Bash(git mv:*)"
     ],
     "deny": [],
     "ask": []

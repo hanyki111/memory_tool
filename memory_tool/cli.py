@@ -126,6 +126,20 @@ def record(
             # Don't fail the record if auto-update fails
             console.print(f"[yellow]Warning:[/yellow] Auto-update failed: {e}")
 
+        # Check file sizes and show warnings
+        try:
+            from memory_tool.core.warnings import FileSizeWarning
+
+            warning_system = FileSizeWarning()
+            warnings = warning_system.check_sizes()
+
+            if warnings:
+                console.print()  # Blank line
+                console.print(warning_system.format_warning(warnings))
+        except Exception:
+            # Don't fail the record if warning check fails
+            pass
+
     except FutureTimeError as e:
         console.print(f"[red]ERROR[/red] {e}", style="bold")
         sys.exit(1)
@@ -1060,6 +1074,103 @@ def index(
         sys.exit(1)
     except Exception as e:
         console.print(f"[red]ERROR[/red] Indexing failed: {e}")
+        import traceback
+        console.print(f"[dim]{traceback.format_exc()}[/dim]")
+        sys.exit(1)
+
+
+@app.command()
+def archive(
+    target: str = typer.Argument(..., help="Target: 'decisions', 'current', 'plans'"),
+    phase: int = typer.Option(None, "--phase", help="Phase number to archive (required for decisions/current)"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be archived without doing it"),
+):
+    """Archive completed documentation (marchive command).
+
+    Examples:
+        marchive decisions --phase 5   # Archive Phase 1-5 decisions
+        marchive current --phase 5     # Archive Phase 5 current.md
+        marchive plans                 # Move PLAN-*.md to archive
+        marchive decisions --dry-run --phase 5  # Preview
+    """
+    try:
+        from memory_tool.core.archiver import Archiver, ArchiverError
+
+        archiver = Archiver()
+
+        if target == "decisions":
+            # Archive decisions
+            if not phase:
+                console.print("[red]ERROR[/red] --phase required for decisions")
+                console.print("[dim]Example: marchive decisions --phase 5[/dim]")
+                sys.exit(1)
+
+            try:
+                archive_path, num_archived = archiver.archive_decisions(phase, dry_run)
+
+                if dry_run:
+                    console.print(f"[cyan]Would archive {num_archived} decisions to:[/cyan]")
+                    console.print(f"  {archive_path.relative_to(Path.cwd())}")
+                else:
+                    console.print(f"[green]OK[/green] Archived {num_archived} decisions")
+                    console.print(f"  → {archive_path.relative_to(Path.cwd())}")
+                    console.print(f"\n[dim]Backup: decisions.md.bak[/dim]")
+
+            except ArchiverError as e:
+                console.print(f"[red]ERROR[/red] {e}")
+                sys.exit(1)
+
+        elif target == "current":
+            # Archive current.md
+            if not phase:
+                console.print("[red]ERROR[/red] --phase required for current")
+                console.print("[dim]Example: marchive current --phase 5[/dim]")
+                sys.exit(1)
+
+            try:
+                archive_path = archiver.archive_current(phase, dry_run)
+
+                if dry_run:
+                    console.print(f"[cyan]Would archive current.md to:[/cyan]")
+                    console.print(f"  {archive_path.relative_to(Path.cwd())}")
+                else:
+                    console.print(f"[green]OK[/green] Archived current.md")
+                    console.print(f"  → {archive_path.relative_to(Path.cwd())}")
+                    console.print(f"\n[dim]Backup: current.md.bak[/dim]")
+
+            except ArchiverError as e:
+                console.print(f"[red]ERROR[/red] {e}")
+                sys.exit(1)
+
+        elif target == "plans":
+            # Archive PLAN files
+            try:
+                archived_files = archiver.archive_plans(dry_run)
+
+                if not archived_files:
+                    console.print("[yellow]No PLAN-*.md files found to archive[/yellow]")
+                    return
+
+                if dry_run:
+                    console.print(f"[cyan]Would move {len(archived_files)} PLAN file(s) to archive/plans/:[/cyan]")
+                    for f in archived_files:
+                        console.print(f"  - {f.name}")
+                else:
+                    console.print(f"[green]OK[/green] Moved {len(archived_files)} PLAN file(s) to archive/plans/")
+                    for f in archived_files:
+                        console.print(f"  - {f.name}")
+
+            except ArchiverError as e:
+                console.print(f"[red]ERROR[/red] {e}")
+                sys.exit(1)
+
+        else:
+            console.print(f"[red]ERROR[/red] Unknown target: {target}")
+            console.print("[dim]Valid targets: decisions, current, plans[/dim]")
+            sys.exit(1)
+
+    except Exception as e:
+        console.print(f"[red]ERROR[/red] Unexpected error: {e}")
         import traceback
         console.print(f"[dim]{traceback.format_exc()}[/dim]")
         sys.exit(1)

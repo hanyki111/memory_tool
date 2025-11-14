@@ -8,6 +8,108 @@ For Phase 1-4 decisions (#1-#23), see [archive/decisions-phase1-4.md](./archive/
 
 ## Recent Decisions (Phase 5)
 
+### 2025-11-14: marchive 명령어 구현 (아카이브 자동화) ⭐⭐
+**결정 #29:** 수동 아카이브 명령어 + 파일 크기 경고 시스템 구현
+
+**배경:**
+- Decision #28에서 PLAN 문서 아카이브 정책 수립
+- decisions.md, current.md도 수동 아카이브 필요
+- LLM이 직접 편집하는 것은 실수 위험
+
+**문제:**
+- 아카이브 작업이 수동, 반복적
+- Phase 전환 시점 판단 어려움
+- 파일이 언제 "너무 큰지" 알기 어려움
+
+**구현 사항:**
+
+**1. marchive 명령어**
+```bash
+marchive decisions --phase 5   # Phase 1-5 decisions 아카이브
+marchive current --phase 5     # Phase 5 current.md 아카이브
+marchive plans                 # PLAN-*.md → archive/plans/
+marchive --dry-run --phase 5   # 미리보기 (변경 없음)
+```
+
+**2. 파일 크기 경고**
+```bash
+m "New entry"
+→ ⚠️  decisions.md exceeds 500 lines (current: 610)
+→ 💡 Consider: marchive decisions --phase 6
+```
+
+**3. Config 설정**
+```yaml
+modules:
+  warn_size_decisions: 500  # lines
+  warn_size_current: 300    # lines
+  warn_on_record: true      # m 명령어 시 경고
+```
+
+**구현 구조:**
+```
+memory_tool/core/
+├── archiver.py        # Archiver 클래스
+│   - archive_decisions(phase, dry_run)
+│   - archive_current(phase, dry_run)
+│   - archive_plans(dry_run)
+│   - Decision 파싱 및 Phase 필터링
+│
+└── warnings.py        # FileSizeWarning 클래스
+    - check_sizes() - threshold 초과 감지
+    - format_warning() - 경고 메시지 생성
+    - Phase 자동 감지
+```
+
+**Trade-offs:**
+
+**장점:**
+- 안전한 아카이브 (백업 + dry-run)
+- 명시적 제어 (사용자가 타이밍 결정)
+- 파일 크기 자동 감지
+- Phase 전환 시점 제안
+
+**단점:**
+- 여전히 수동 트리거 필요
+- Phase 번호 판단은 사용자 책임
+
+**대안 검토:**
+- A: 완전 자동화 - 위험, 의도와 다를 수 있음
+- B: 수동만 (경고 없음) - 시점 판단 어려움
+- **C: 수동 + 경고 (채택)** - 안전 + 편리성
+
+**테스트 결과:**
+- ✅ marchive plans --dry-run: 미리보기 정상
+- ✅ marchive plans: 실제 이동 정상
+- ✅ 백업 파일 생성 확인
+- ✅ 경고 시스템 통합 완료
+
+**효과:**
+- 아카이브 작업 간소화 (명령어 한 줄)
+- 실수 방지 (dry-run, 백업)
+- 적절한 시점 알림 (파일 크기 경고)
+- Phase 전환 시 일관된 프로세스
+
+**사용 예시:**
+```bash
+# Phase 6 시작 시
+marchive decisions --phase 5 --dry-run  # 미리보기
+marchive decisions --phase 5            # 실제 아카이브
+marchive current --phase 5              # current.md 아카이브
+
+# 작업 완료 후
+marchive plans                          # PLAN 문서 정리
+```
+
+**교훈:**
+- 자동화 ≠ 완전 자동화
+- 적절한 지점: 수동 트리거 + 자동 감지
+- 안전 장치 중요 (백업, dry-run)
+
+**컨텍스트:** [[time:2025-11/14#23:58]]
+
+---
+
 ### 2025-11-14: MCP 서버 우선순위 하향, 실용 개선 우선 ⭐⭐⭐
 **결정 #24:** Phase 5 MCP 서버 구현을 연기하고, 실사용 가치가 높은 개선에 집중
 
