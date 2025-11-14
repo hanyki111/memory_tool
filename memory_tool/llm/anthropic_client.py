@@ -17,13 +17,13 @@ class AnthropicClient:
             api_key: Anthropic API key (optional, reads from config or env)
             model: Model name (optional, reads from config)
         """
-        self.config = Config().load()
+        config = Config()
 
         # API key priority: argument > config > environment
         self.api_key = (
             api_key
-            or self.config.get("llm.anthropic_api_key")
-            or self.config.get("llm.api_key")  # backwards compatibility
+            or config.get("llm.anthropic_api_key")
+            or config.get("llm.api_key")  # backwards compatibility
             or os.getenv("ANTHROPIC_API_KEY")
         )
 
@@ -36,16 +36,16 @@ class AnthropicClient:
         # Model priority: argument > config > default
         self.model = (
             model
-            or self.config.get("llm.anthropic_model")
-            or self.config.get("llm.model")  # backwards compatibility
+            or config.get("llm.anthropic_model")
+            or config.get("llm.model")  # backwards compatibility
             or "claude-3-5-sonnet-20241022"
         )
 
         self.client = Anthropic(api_key=self.api_key)
 
         # Get settings from config
-        self.max_tokens = self.config.get("llm.max_tokens") or 4096
-        self.temperature = self.config.get("llm.temperature") or 0.7
+        self.max_tokens = config.get("llm.max_tokens") or 4096
+        self.temperature = config.get("llm.temperature") or 0.7
 
     def summarize(
         self,

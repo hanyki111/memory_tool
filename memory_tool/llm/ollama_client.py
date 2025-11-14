@@ -21,15 +21,15 @@ class OllamaClient:
         """
         from ..utils.config import Config
 
-        self.config = Config().load()
+        config = Config()
 
         # Host priority: argument > config > default
         self.host = (
-            host or self.config.get("llm.ollama_host") or "http://localhost:11434"
+            host or config.get("llm.ollama_host") or "http://localhost:11434"
         )
 
         # Model priority: argument > config > default
-        self.model = model or self.config.get("llm.ollama_model") or "llama3.2"
+        self.model = model or config.get("llm.ollama_model") or "llama3.2"
 
         # Create client
         self.client = ollama.Client(host=self.host)
@@ -108,7 +108,7 @@ class OllamaClient:
         try:
             from ..utils.config import Config
 
-            config = Config().load()
+            config = Config()
             host = host or config.get("llm.ollama_host") or "http://localhost:11434"
 
             client = ollama.Client(host=host)
