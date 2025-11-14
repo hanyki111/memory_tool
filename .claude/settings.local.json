@@ -19,7 +19,10 @@
       "WebFetch(domain:code.claude.com)",
       "Bash(.memory/modules/memory-system/decisions.md)",
       "Bash(git checkout:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git merge:*)"
     ],
     "deny": [],
     "ask": []
