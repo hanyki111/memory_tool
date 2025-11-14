@@ -604,3 +604,417 @@ minit
 **컨텍스트:** [[time:2025-11/14#13:42]]
 
 ---
+
+## 2025-11-14: config.yaml 고급 기능 구현 ⭐
+**결정:** utils/config.py 모듈 생성, auto_update 기능 활성화
+
+**구현:**
+- **utils/config.py**: Config 클래스, 설정 로드/검증/기본값
+- **auto_update**: m 명령어 실행 시 자동으로 mcontext 실행
+- **설정 검증**: 잘못된 값 차단 (granularity, recent_days 등)
+- **기본값 우선**: config.yaml 없어도 작동
+
+**기술적 세부사항:**
+```python
+# Config 클래스 주요 기능
+- load(): 설정 로드 (기본값 + 파일 병합)
+- _validate(): 설정 값 검증
+- get(key_path): 점 표기법으로 설정 접근
+- auto_update_enabled: 편의 속성
+```
+
+**통합:**
+- cli.py: record 함수에서 auto_update 확인
+- context/builder.py: Config 사용하도록 리팩토링
+- utils/__init__.py: Config export
+
+**효과:**
+- 매번 mcontext 수동 실행 불필요
+- 설정 중앙화 및 검증
+- 확장 가능한 구조 (Phase 2 기능 추가 용이)
+
+**설정 항목 (config.yaml):**
+```yaml
+context:
+  auto_update: true      # m 실행 시 자동 mcontext
+  recent_days: 3         # memory-context 링크 일수
+
+timeline:
+  granularity: medium    # low/medium/high
+  warn_old_days: 365     # N일 이상 과거 경고
+
+search:
+  max_file_size: 1048576 # 1MB
+  exclude_patterns: []
+```
+
+**테스트 완료:**
+- ✅ auto_update false: 자동 업데이트 없음
+- ✅ auto_update true: .claude/memory-context.md 자동 갱신
+- ✅ recent_days 변경: 7일로 확장 작동
+- ✅ 잘못된 설정: 검증 에러 발생
+
+**컨텍스트:** [[time:2025-11/14#14:49]]
+
+---
+
+## 2025-11-14: Claude Skill 개발 완료 ⭐⭐⭐
+**결정:** 규칙 기반 Claude Skill 구현, Phase 1 Final 완성
+
+**구현:**
+- **.claude/skills/memory-tool/**: Skill 디렉토리 생성
+- **SKILL.md**: 핵심 Skill 정의 (300+ 줄)
+  - 자동 기록 트리거 (명시적 요청, 결정, 마일스톤)
+  - 검색 트리거 (명시적, 과거 작업 질문)
+  - 컨텍스트 업데이트 규칙
+  - 5가지 자동화 규칙
+- **README.md**: 사용 가이드 및 트러블슈팅
+- **TEST_SCENARIOS.md**: 15개 테스트 케이스
+
+**핵심 기능:**
+1. **자동 기록**: 중요한 결정/마일스톤 감지 시 제안
+2. **검색 우선**: 과거 작업 질문 시 자동 검색
+3. **컨텍스트 인식**: 세션 시작 시 최신 상태 확인
+4. **선택적 기록**: 중요한 항목만 (over-recording 방지)
+
+**자동화 규칙 (Rule-based, Phase 1):**
+```
+Rule 1: Proactive Recording
+  - 결정 감지 → 기록 제안 (자동 실행 아님, 투명성)
+
+Rule 2: Search Before Answering
+  - 과거 작업 질문 → ms 실행 → 답변
+
+Rule 3: Context-Aware
+  - 세션 시작 시 context 신선도 확인
+  - 오래되었으면 mcontext 실행
+
+Rule 4: Batch Recording
+  - 여러 항목 → 사용자 확인 후 일괄 기록
+
+Rule 5: Don't Over-Record
+  - 기록 대상: 결정, 완성, 발견, 선택, 리팩토링
+  - 기록 제외: 잡담, 질문, 임시 탐색, 구현 세부사항
+```
+
+**통합 포인트:**
+- config.yaml: auto_update 설정 인식
+- CLI 명령어: m, ms, mcontext, mtoday, mweek 활용
+- 에러 처리: 실패 시 graceful degradation
+
+**테스트 시나리오 (15개):**
+1. 명시적 기록 요청
+2. 결정 기록
+3. 검색 요청
+4. 세션 시작
+5. 세션 종료 요약
+6. 마일스톤 완성
+7. 배치 기록
+8. Over-recording 방지 (negative test)
+9. KB 검색
+10. 오늘 요약
+11. auto_update 설정 테스트
+12. manual context 업데이트
+13. 에러 핸들링
+14. Regex 검색
+15. 주간 요약
+
+**Phase 1 vs Phase 2+:**
+- Phase 1 (현재): 규칙 기반, 명시적 패턴 매칭
+- Phase 2+: LLM 기반 중요도 판단, 의미 기반 검색
+
+**효과:**
+- Claude가 자연스럽게 memory_tool 사용
+- 사용자는 명령어 외우지 않아도 됨
+- 대화 흐름 방해 없이 지식 포착
+- "0.5초 포착" 철학을 대화형 환경에 적용
+
+**검증 방법:**
+- 새 Claude Code 세션에서 테스트
+- TEST_SCENARIOS.md의 15개 케이스 실행
+- Skill 로드 확인 (.claude/skills/ 경로)
+
+**컨텍스트:** [[time:2025-11/14#15:04]]
+
+---
+
+## 2025-11-14: SKILL.md 공식 형식 수정 ⭐
+**결정:** Claude Skills 공식 스펙 준수 (YAML frontmatter + Markdown)
+
+**문제:**
+- 초기 SKILL.md: 순수 Markdown (공식 형식 미준수)
+- 공식 문서 확인: YAML frontmatter 필수
+
+**공식 요구사항:**
+```yaml
+---
+name: skill-name  # lowercase, numbers, hyphens only (max 64 chars)
+description: Brief description  # what + when to use (max 1024 chars)
+---
+```
+
+**수정 내용:**
+1. **YAML frontmatter 추가:**
+   ```yaml
+   name: memory-tool
+   description: Integrates with memory_tool CLI to record important
+                decisions and milestones to timeline, search past work,
+                and maintain project context. Use when user makes decisions,
+                completes features, asks about past work, or at session
+                start/end. Commands are m (record), ms (search),
+                mcontext (update context), mtoday/mweek (view timeline).
+   ```
+
+2. **Markdown 구조 재구성:**
+   - **## Instructions**: 명확한 단계별 지침 (7개 섹션)
+     1. When to Record (A-D 트리거)
+     2. When to Search (명시적/암묵적)
+     3. Context Management (세션 시작/종료)
+     4. Timeline Review (mtoday/mweek)
+     5. Batch Recording (3단계)
+     6. Error Handling (graceful degradation)
+     7. Response Format (일관성)
+
+   - **## Examples**: 8개 구체적 예시
+     1. Decision Recording
+     2. Milestone Recording
+     3. Search Before Answering
+     4. Session Start
+     5. Session End Summary
+     6. Batch Recording
+     7. Don't Over-Record (negative)
+     8. Search with No Results
+
+   - **## Configuration Awareness**: config.yaml 연동
+   - **## Best Practices**: 7가지 원칙
+   - **## Testing**: TEST_SCENARIOS.md 참조
+
+**변경 전 vs 후:**
+- Before: 순수 Markdown (300+ 줄)
+- After: YAML frontmatter + Markdown (327 줄)
+
+**장점:**
+- Claude Code가 Skill을 올바르게 인식
+- description에 명확한 트리거 포함 (discovery 개선)
+- 공식 스펙 준수로 안정성 확보
+- 향후 Claude Code 업데이트 호환성
+
+**참고:**
+- 공식 문서: https://code.claude.com/docs/en/skills
+- allowed-tools 필드: 현재 불필요 (모든 도구 사용)
+
+**컨텍스트:** [[time:2025-11/14#15:20]]
+
+---
+
+## 2025-11-14: Skill 작업 흐름 개선 ⭐⭐
+**결정:** 자연스러운 중단점 후 기록 제안, 세션 종료 시 기록 제거
+
+**문제:**
+- 초기 SKILL.md: 대화 중 즉시 기록 제안 → 작업 흐름 방해
+- 세션 종료 시 기록: 불가능 (세션 이미 종료됨)
+
+**개선:**
+1. **핵심 원칙 추가:**
+   ```
+   Do NOT interrupt workflow with recording.
+   Record at natural breakpoints or when explicitly requested.
+   ```
+
+2. **자연스러운 중단점 정의:**
+   - ✅ 파일 저장 완료 후
+   - ✅ 코드/테스트 실행 완료 후
+   - ✅ 기능 구현 완료 후
+   - ✅ 버그 수정 검증 후
+   - ✅ 리팩토링 완료 후
+
+3. **올바른 패턴:**
+   ```
+   [Complete the work first]
+   → Show results to user
+   → THEN suggest: "Shall I record this?"
+   ```
+
+4. **명시적 요청 시:**
+   - "기록해줘", "record this" → 즉시 기록
+
+5. **제거된 트리거:**
+   - ❌ 세션 종료 시 기록 (불가능)
+   - ❌ 대화 중간 기록 제안 (방해)
+   - ❌ "That's all for today" 패턴
+
+**Before vs After:**
+
+Before (문제):
+```
+User: "Let's use PostgreSQL"
+Claude: [즉시] "Let me record this decision..."  ← 방해
+```
+
+After (개선):
+```
+User: "Add authentication"
+Claude: [구현 → 테스트 → 완료]
+Claude: "I've completed JWT authentication. Tests passing.
+
+         Shall I record this milestone?  ← 완료 후 제안
+         - Feature complete: JWT authentication"
+```
+
+**Best Practices 추가:**
+1. Don't Interrupt Workflow (최우선)
+2. Respect User Focus (flow state 존중)
+
+**효과:**
+- 작업 흐름 방해 없음
+- 자연스러운 대화 흐름 유지
+- 사용자가 집중 상태일 때 방해하지 않음
+- 실제로 작동 가능한 패턴만 포함
+
+**참고:**
+- 사용자 지적으로 발견된 중요한 UX 문제
+- 세션 종료 시 Claude는 이미 작업 불가능
+
+**컨텍스트:** [[time:2025-11/14#16:08]]
+
+---
+
+## 2025-11-14: 모듈 아카이브 구조 결정 (중앙 _index.md) ⭐⭐
+**결정:** 아카이브된 모듈은 `archive/_index.md`에 중앙 집중 방식으로 기록
+
+**배경:**
+- Phase 2 module 명령어 개발 중
+- 아카이브된 모듈 정보를 어디에 기록할지 선택 필요
+
+**고려한 옵션:**
+
+**A. 모듈별 archive.md** (분산)
+```
+archive/
+  ├── memory-system/
+  │   └── archive.md  ← 이 모듈의 아카이브 정보
+  └── load-system/
+      └── archive.md  ← 이 모듈의 아카이브 정보
+```
+- ✅ 각 모듈이 자체 완결적
+- ❌ 전체 아카이브 목록 확인 어려움
+
+**B. 중앙 _index.md** (집중) ← 선택
+```
+archive/
+  ├── _index.md      ← 모든 아카이브 기록
+  ├── memory-system/
+  └── load-system/
+```
+- ✅ 모든 아카이브 이력을 한눈에 확인
+- ✅ Timeline 방식과 일관성 (중앙 집중)
+- ✅ `module list --archived` 구현 쉬움
+- ❌ 모듈별 정보가 분리됨
+
+**C. 둘 다** (중복)
+- ❌ 중복 데이터, 동기화 문제
+
+**최종 선택: 옵션 B**
+
+**근거:**
+1. **일관성:** Timeline도 중앙 집중식 (날짜별 파일)
+2. **사용 패턴:** "어떤 것들이 아카이브되었는지" 목록으로 확인
+3. **단순성:** 정보가 한 곳에, 관리 쉬움
+4. **구현 용이:** 단일 파일 읽기/쓰기만 필요
+
+**구현:**
+```yaml
+# archive/_index.md
+## memory-system
+- **Archived:** 2025-11-20
+- **Reason:** Project completed
+- **Location:** ./memory-system/
+```
+
+**Trade-offs:**
+- 모듈 디렉토리만으로는 아카이브 이유를 모름
+- But: 아카이브 조회는 `module list --archived`로 한 번에
+
+**효과:**
+- 깔끔한 아카이브 관리
+- 빠른 목록 조회
+- 유지보수 간단
+
+**컨텍스트:** [[time:2025-11/14#17:34]]
+
+---
+
+## 2025-11-14: Phase 2 범위 확정 (원 계획 유지) ⭐
+**결정:** Phase 2 원 계획대로 진행 - 고급 검색, msort, 모듈 관리 모두 구현
+
+**배경:**
+- Phase 2 시작 시점에서 범위 재검토
+- 점진적 확장 vs 빅뱅 릴리스 논의
+
+**제안된 대안:**
+1. 고급 검색만 우선 구현 → 실사용 → 다음 결정
+2. 원 계획대로 3가지 모두 구현
+
+**사용자 결정:** "원 계획대로 갑니다"
+
+**근거 (사용자 관점):**
+- msort: 사용자가 사용할 때 중요함
+- module 자동화: 사용자가 사용할 때 중요함
+- 완전한 Phase 2 완성 선호
+
+**결과:**
+- 3가지 기능 모두 구현 및 테스트 완료
+- Phase 2 목표 100% 달성
+- 일관된 릴리스
+
+**효과:**
+- 사용자 요구사항 명확히 반영
+- 완전한 기능 세트 제공
+- Phase 3 준비 완료
+
+**컨텍스트:** [[time:2025-11/14#16:53]]
+
+---
+
+## 2025-11-14: msort alias 추가 ⭐
+**결정:** msort를 malias에 포함, module은 제외
+
+**배경:**
+- Phase 2에서 msort, module 명령어 추가
+- alias 필요성 검토
+
+**결정:**
+- ✅ msort: alias 추가
+- ❌ module: alias 없음
+
+**근거:**
+
+**msort alias 추가:**
+- 단순한 인자 구조 (`msort today`, `msort all`)
+- 자주 사용 가능 (timeline 정리)
+- 명확한 의미
+- 짧고 기억하기 쉬움
+
+**module alias 제외:**
+- 서브커맨드 구조 (`module create`, `module list`, `module archive`)
+- 사용 빈도 낮음 (모듈 관리는 가끔만)
+- 짧은 alias 어려움 (`mmodule` 너무 길고, `mm`/`mod`는 불명확)
+- 풀 커맨드 사용 권장: `python -m memory_tool module ...`
+
+**구현:**
+```python
+ALIASES = {
+    # ...
+    "msort": ("sort", "Sort timeline by time"),  # 추가
+    # ...
+}
+```
+
+**효과:**
+- 자주 쓰는 msort는 빠르게 접근
+- module은 명확성 유지
+- alias 개수 적정 (8개)
+
+**컨텍스트:** [[time:2025-11/14#17:39]]
+
+---

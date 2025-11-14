@@ -4,6 +4,8 @@ import re
 from pathlib import Path
 from typing import Optional, List, Dict
 from dataclasses import dataclass
+from datetime import date, datetime
+from fnmatch import fnmatch
 
 
 @dataclass
@@ -34,6 +36,15 @@ class MemorySearcher:
         self.base_path = Path(base_path)
         self.memory_path = self.base_path / ".memory"
 
+        # Load config
+        from memory_tool.utils.config import Config
+        config_loader = Config()
+        config = config_loader.load()
+
+        # Get search settings
+        self.exclude_patterns = config_loader.get("search.exclude_patterns", [])
+        self.max_file_size = config_loader.get("search.max_file_size", 10 * 1024 * 1024)
+
     def is_initialized(self) -> bool:
         """Check if .memory/ exists.
 
@@ -41,6 +52,109 @@ class MemorySearcher:
             True if .memory/ exists
         """
         return self.memory_path.exists()
+
+    def _extract_date_from_path(self, path: Path) -> Optional[date]:
+        """Extract date from timeline file path.
+
+        Args:
+            path: File path (e.g., .memory/timeline/2025-11/14.md)
+
+        Returns:
+            Date object or None if not a timeline file
+        """
+        # Check if it's in timeline directory
+        parts = path.parts
+        if "timeline" not in parts:
+            return None
+
+        try:
+            # Find timeline index
+            timeline_idx = parts.index("timeline")
+
+            # Next part should be YYYY-MM
+            if timeline_idx + 1 >= len(parts):
+                return None
+            year_month = parts[timeline_idx + 1]
+
+            # File name should be DD.md
+            if timeline_idx + 2 >= len(parts):
+                return None
+            day_file = parts[timeline_idx + 2]
+
+            # Parse YYYY-MM
+            year, month = year_month.split("-")
+
+            # Parse DD from DD.md
+            day = day_file.replace(".md", "")
+
+            return date(int(year), int(month), int(day))
+        except (ValueError, IndexError):
+            return None
+
+    def _is_in_date_range(
+        self,
+        path: Path,
+        from_date: Optional[date],
+        to_date: Optional[date],
+    ) -> bool:
+        """Check if timeline file is within date range.
+
+        Args:
+            path: File path
+            from_date: Start date (inclusive)
+            to_date: End date (inclusive)
+
+        Returns:
+            True if within range or not a timeline file
+        """
+        # If no date filter, include all
+        if from_date is None and to_date is None:
+            return True
+
+        # Extract date from path
+        file_date = self._extract_date_from_path(path)
+
+        # If not a timeline file, include it
+        if file_date is None:
+            return True
+
+        # Check range
+        if from_date and file_date < from_date:
+            return False
+        if to_date and file_date > to_date:
+            return False
+
+        return True
+
+    def _should_exclude(self, path: Path, base_path: Path) -> bool:
+        """Check if path should be excluded based on patterns.
+
+        Args:
+            path: File path to check
+            base_path: Base path for relative matching
+
+        Returns:
+            True if should exclude
+        """
+        if not self.exclude_patterns:
+            return False
+
+        try:
+            # Get relative path for pattern matching
+            rel_path = path.relative_to(base_path)
+            rel_path_str = str(rel_path).replace("\\", "/")  # Unix-style for patterns
+
+            # Check against each pattern
+            for pattern in self.exclude_patterns:
+                if fnmatch(rel_path_str, pattern):
+                    return True
+                # Also check if any parent directory matches
+                if fnmatch(path.name, pattern):
+                    return True
+
+            return False
+        except (ValueError, Exception):
+            return False
 
     def get_search_paths(
         self,
@@ -94,6 +208,14 @@ class MemorySearcher:
         """
         results = []
 
+        # Check file size
+        try:
+            if file_path.stat().st_size > self.max_file_size:
+                # Skip files larger than limit
+                return results
+        except Exception:
+            return results
+
         try:
             content = file_path.read_text(encoding="utf-8")
             lines = content.splitlines()
@@ -134,6 +256,8 @@ class MemorySearcher:
         pattern: str,
         case_sensitive: bool = False,
         context_lines: int = 0,
+        from_date: Optional[date] = None,
+        to_date: Optional[date] = None,
     ) -> List[SearchResult]:
         """Search all markdown files in directory recursively.
 
@@ -142,6 +266,8 @@ class MemorySearcher:
             pattern: Search pattern
             case_sensitive: Whether to match case
             context_lines: Number of context lines
+            from_date: Start date filter (for timeline files)
+            to_date: End date filter (for timeline files)
 
         Returns:
             List of all search results
@@ -152,6 +278,14 @@ class MemorySearcher:
         for md_file in directory.rglob("*.md"):
             # Skip .gitkeep and other hidden files
             if md_file.name.startswith("."):
+                continue
+
+            # Check exclude patterns
+            if self._should_exclude(md_file, directory):
+                continue
+
+            # Check date range (for timeline files)
+            if not self._is_in_date_range(md_file, from_date, to_date):
                 continue
 
             file_results = self.search_file(
@@ -172,6 +306,8 @@ class MemorySearcher:
         case_sensitive: bool = False,
         context_lines: int = 1,
         max_results: Optional[int] = None,
+        from_date: Optional[date] = None,
+        to_date: Optional[date] = None,
     ) -> Dict[str, List[SearchResult]]:
         """Search memory for query.
 
@@ -182,6 +318,8 @@ class MemorySearcher:
             case_sensitive: Whether to match case
             context_lines: Number of context lines
             max_results: Maximum number of results (None = unlimited)
+            from_date: Start date filter (for timeline files)
+            to_date: End date filter (for timeline files)
 
         Returns:
             Dictionary mapping source paths to results
@@ -211,6 +349,8 @@ class MemorySearcher:
                 query,
                 case_sensitive,
                 context_lines,
+                from_date,
+                to_date,
             )
 
             if results:

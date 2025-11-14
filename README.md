@@ -175,6 +175,51 @@ mstatus
 - 모듈 수
 - 전체 크기
 
+### `msort` - Timeline 정렬 ⭐ NEW
+
+```bash
+# 오늘 timeline 정렬
+msort today
+
+# 특정 날짜 정렬
+msort 2025-11-14
+
+# 모든 timeline 정렬
+msort all
+
+# 백업 없이 정렬
+msort today --no-backup
+```
+
+**기능:**
+- Timeline 항목을 시간순으로 자동 재정렬
+- 기존 파일 자동 백업 (.bak)
+- HH:MM, H:MM 형식 모두 지원
+
+### `module` - 모듈 관리 ⭐ NEW
+
+```bash
+# 새 모듈 생성
+python -m memory_tool module create auth-system --desc "인증 시스템"
+
+# 모듈 목록 (활성)
+python -m memory_tool module list
+
+# 모듈 목록 (아카이브 포함)
+python -m memory_tool module list --archived
+
+# 모듈 아카이브
+python -m memory_tool module archive auth-system --reason "프로젝트 완료"
+
+# 모듈 복원
+python -m memory_tool module unarchive auth-system
+```
+
+**기능:**
+- 자동 템플릿 생성 (module.md, current.md, decisions.md, dependencies.md, interface.md)
+- 중앙 아카이브 인덱스 (_index.md)
+- 모듈 생명주기 관리
+
 ### `malias` - 별칭 관리
 
 ```bash
@@ -296,20 +341,25 @@ context:
 - ✅ Windows 이모지 처리
 - ✅ 설정 파일 (config.yaml)
 
-### Phase 1 Final: 진행 중 🚧
+### Phase 1 Final: 완료 ✅✅✅
 
-**남은 작업:**
-- ⏳ config.yaml 고급 기능 (auto_record, auto_update)
-- ⏳ Claude Skill 개발 (규칙 기반 자동화)
-- ⏳ 테스트 스위트
+**완료 작업:**
+- ✅ config.yaml 고급 기능 (auto_update)
+- ✅ Claude Skill 개발 (규칙 기반 자동화, 5가지 규칙)
+- ✅ PowerShell 프로필 통합
+- ✅ README.md 완전 재작성
 
-### Phase 2: 계획 📋
+### Phase 2: 완료 ✅✅✅
 
-**예정:**
-- 고급 검색 (날짜 범위, 필터)
-- msort: Timeline 시간순 재정렬
-- 모듈 관리 명령어
-- 성능 최적화 (필요시 SQLite)
+**완료:**
+- ✅ 고급 검색 (날짜 범위 `--from/--to`, exclude patterns, 파일 크기 제한)
+- ✅ msort: Timeline 시간순 재정렬 (today/date/all)
+- ✅ 모듈 관리 명령어 (create/list/archive/unarchive)
+
+**날짜 검색 예시:**
+```bash
+ms "authentication" --from 2025-11-01 --to 2025-11-14
+```
 
 ### Phase 3: 장기 계획 🔮
 

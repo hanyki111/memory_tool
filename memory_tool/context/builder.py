@@ -3,7 +3,8 @@
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional, List, Dict
-import yaml
+
+from memory_tool.utils.config import Config
 
 
 class ContextError(Exception):
@@ -25,6 +26,7 @@ class ContextBuilder:
         self.base_path = Path(base_path)
         self.memory_path = self.base_path / ".memory"
         self.claude_path = self.base_path / ".claude"
+        self.config = Config(self.memory_path)
 
     def is_initialized(self) -> bool:
         """Check if .memory/ exists.
@@ -86,21 +88,7 @@ class ContextBuilder:
         Returns:
             Configuration dictionary
         """
-        config_path = self.memory_path / "config.yaml"
-        if not config_path.exists():
-            # Return defaults
-            return {
-                "context": {
-                    "recent_days": 3,
-                }
-            }
-
-        try:
-            with open(config_path, "r", encoding="utf-8") as f:
-                config = yaml.safe_load(f)
-                return config or {}
-        except Exception:
-            return {}
+        return self.config.load(strict=False)
 
     def build_context_content(self) -> str:
         """Build context markdown content.

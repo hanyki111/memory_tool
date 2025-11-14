@@ -15,7 +15,9 @@
       "Bash(powershell -Command \". $PROFILE; m ''PowerShell profile test - works in all terminals!''\")",
       "Bash(powershell -Command \"& { . $PROFILE; m ''PowerShell profile test works'' }\")",
       "Bash(powershell -Command \". C:\\Users\\shy61\\Documents\\WindowsPowerShell\\profile.ps1; m ''PowerShell profile test works''\")",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "WebFetch(domain:code.claude.com)",
+      "Bash(.memory/modules/memory-system/decisions.md)"
     ],
     "deny": [],
     "ask": []

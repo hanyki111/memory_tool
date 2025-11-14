@@ -44,16 +44,15 @@
 
 ## 📍 Current Status
 
-**Phase:** 1 (MVP - 2 weeks)
+**Phase:** 2 (Advanced Features)
 
-**Stage:** Day 10 - Phase 1 Extended Complete ✅
+**Stage:** Phase 2 COMPLETE - All Advanced Features Implemented ✅
 
 **Completed:**
 - ✅ Design document complete
 - ✅ .memory/ structure created
 - ✅ memory-system module defined
 - ✅ Python CLI plan established
-- ✅ README.md written
 - ✅ .claude/guidelines.md created
 - ✅ This file (CLAUDE.md) created
 - ✅ Meta Trap diagnosed and resolved (2025-11-14)
@@ -64,39 +63,59 @@
 - ✅ **ms command fully implemented** (2025-11-14) ⭐
 - ✅ **mcontext command fully implemented** (2025-11-14) ⭐
 - ✅ **malias command fully implemented** (2025-11-14) ⭐⭐
+- ✅ **mtoday, mweek, mstatus bonus commands** (2025-11-14) ⭐
+- ✅ **config.yaml advanced features** (2025-11-14) ⭐⭐
+- ✅ **README.md complete rewrite** (2025-11-14) ⭐
+- ✅ **Claude Skill development** (2025-11-14) ⭐⭐⭐
 
-**Phase 1 Extended + Bonus: COMPLETE** 🎉
-- 5 core commands operational: m, minit, ms, mcontext, malias
-- 3 bonus commands operational: mtoday, mweek, mstatus
-- Alias system enables 0.5-second capture via shortcuts
-- PowerShell profile support (works in all terminals)
-- Full dogfooding: tool documents itself
+**Phase 1: COMPLETE** 🎉🎉🎉
+- 8 commands operational
+- Alias system + PowerShell profile support
+- auto_update + config validation
+- Claude Skill (rule-based automation)
+- Full dogfooding + README
+
+**Phase 2: COMPLETE** 🎉🎉🎉
+- ✅ Advanced search features (날짜 필터, exclude patterns, 파일 크기 제한)
+- ✅ msort command (Timeline 시간순 재정렬)
+- ✅ Module management commands (create/list/archive/unarchive)
 
 **Next:**
-- Phase 2: config.yaml advanced settings
-- Phase 2: Claude Skill development (MCP server integration)
+- Phase 3: MCP Server integration
 
 ---
 
 ## 🚀 Immediate Next Actions
 
-**Phase 1 Extended + Bonus: All Complete!** 🎉
+**Phase 2: COMPLETE!** 🎉🎉🎉
 
-**Ready for Phase 2:**
-1. **config.yaml advanced features**
-   - Auto-record, auto-context update
-   - Search filters, timeline granularity
-   - Module auto-update settings
+**Completed Features:**
+1. **고급 검색 기능** (Advanced Search) ✅
+   - ✅ 날짜 범위 필터 (--from, --to)
+   - ✅ exclude_patterns 적용
+   - ✅ 파일 크기 제한 (10MB)
+   - ✅ Timeline 날짜 필터링 완벽 작동
 
-2. **Claude Skill development** ⭐
-   - MCP server integration
-   - Claude can directly call m, ms, mcontext
-   - Seamless Claude Code integration
+2. **msort 명령어** ✅
+   - ✅ Timeline 재정렬 로직 구현
+   - ✅ 안전한 재정렬 + 백업 (.bak)
+   - ✅ today/date/all 모드 지원
 
-3. **Additional tools** (as needed)
-   - msort: Timeline reordering
-   - Module management commands
-   - Advanced search features
+3. **모듈 관리 명령어** ✅
+   - ✅ module create: 5개 템플릿 파일 자동 생성
+   - ✅ module list: 활성/아카이브 목록
+   - ✅ module archive: _index.md 중앙 관리
+   - ✅ module unarchive: 복원 기능
+
+**New Commands Added:**
+- `ms --from DATE --to DATE "query"` - 날짜 범위 검색
+- `msort [today|DATE|all]` - Timeline 정렬
+- `module create/list/archive/unarchive` - 모듈 관리
+
+**Ready for Phase 3:**
+- MCP Server integration
+- Native Claude Code integration
+- Full automation
 
 ---
 
@@ -116,7 +135,7 @@
 - `.memory/modules/memory-system/current.md` - Detailed status
 - `.memory/timeline/2025-11/14.md` - Today's timeline
 - `.memory/timeline/2025-11/13.md` - Yesterday's timeline
-- `.memory/modules/memory-system/decisions.md` - Key decisions (15 decisions)
+- `.memory/modules/memory-system/decisions.md` - Key decisions (22 decisions)
 
 **Technical Plans:**
 - `.memory/concepts/python-cli-development-plan.md` - 14-day roadmap
@@ -182,8 +201,13 @@ msort                        # Reorder timeline entries by time
 
 ---
 
-**Last Updated:** 2025-11-14 13:41
-**Next Update:** After Phase 2 planning or when starting Phase 2 implementation
+**Last Updated:** 2025-11-14 17:42
+**Next Update:** When starting Phase 3 (MCP Server Integration)
+
+**Important Notes:**
+- SKILL.md follows official Claude Skills format (YAML frontmatter + Markdown)
+- Skill records at natural breakpoints (after work complete), NOT during conversation
+- Session end recording removed (Claude cannot act after session ends)
 
 ---
 

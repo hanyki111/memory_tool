@@ -23,6 +23,14 @@ from memory_tool.core.search import (
     MemorySearcher,
     SearchError,
 )
+from memory_tool.core.sort import (
+    TimelineSorter,
+    SortError,
+)
+from memory_tool.core.module import (
+    ModuleManager,
+    ModuleError,
+)
 from memory_tool.context.builder import (
     ContextBuilder,
     ContextError,
@@ -31,6 +39,7 @@ from memory_tool.utils.alias import (
     AliasManager,
     AliasError,
 )
+from memory_tool.utils.config import Config
 
 app = typer.Typer(
     name="memory-tool",
@@ -97,6 +106,19 @@ def record(
 
         console.print(f"[green]OK[/green] Recorded at {date_str} {time_str}")
         console.print(f"[dim]-> {rel_path}[/dim]")
+
+        # Auto-update context if enabled
+        try:
+            config = Config()
+            if config.auto_update_enabled:
+                console.print("[dim]Auto-updating context...[/dim]")
+                builder = ContextBuilder()
+                context_path = builder.write_context()
+                rel_context = context_path.relative_to(Path.cwd())
+                console.print(f"[dim]-> {rel_context} updated[/dim]")
+        except Exception as e:
+            # Don't fail the record if auto-update fails
+            console.print(f"[yellow]Warning:[/yellow] Auto-update failed: {e}")
 
     except FutureTimeError as e:
         console.print(f"[red]ERROR[/red] {e}", style="bold")
@@ -173,6 +195,8 @@ def search(
     case_sensitive: bool = typer.Option(False, "--case", "-c", help="Case sensitive search"),
     no_context: bool = typer.Option(False, "--no-context", help="Hide context lines"),
     max_results: int = typer.Option(None, "--max", "-n", help="Maximum results"),
+    from_date: str = typer.Option(None, "--from", help="Start date (YYYY-MM-DD)"),
+    to_date: str = typer.Option(None, "--to", help="End date (YYYY-MM-DD)"),
 ):
     """Search timeline and modules (ms command)."""
     searcher = MemorySearcher()
@@ -183,6 +207,27 @@ def search(
     else:
         scope = "local"
 
+    # Parse dates
+    from datetime import datetime, date
+    parsed_from = None
+    parsed_to = None
+
+    try:
+        if from_date:
+            parsed_from = datetime.strptime(from_date, "%Y-%m-%d").date()
+        if to_date:
+            parsed_to = datetime.strptime(to_date, "%Y-%m-%d").date()
+
+        # Validate date range
+        if parsed_from and parsed_to and parsed_from > parsed_to:
+            console.print("[red]ERROR[/red] --from date must be before --to date")
+            sys.exit(1)
+
+    except ValueError as e:
+        console.print(f"[red]ERROR[/red] Invalid date format: {e}")
+        console.print("[dim]Use YYYY-MM-DD format (e.g., 2025-11-14)[/dim]")
+        sys.exit(1)
+
     try:
         results = searcher.search(
             query,
@@ -191,6 +236,8 @@ def search(
             case_sensitive=case_sensitive,
             context_lines=1 if not no_context else 0,
             max_results=max_results,
+            from_date=parsed_from,
+            to_date=parsed_to,
         )
 
         # Format and display
@@ -566,6 +613,218 @@ def alias(
             sys.exit(1)
 
     except AliasError as e:
+        console.print(f"[red]ERROR[/red] {e}")
+        sys.exit(1)
+
+    except Exception as e:
+        console.print(f"[red]ERROR[/red] Unexpected error: {e}")
+        sys.exit(1)
+
+
+@app.command()
+def sort(
+    date_or_all: str = typer.Argument("today", help="Date (YYYY-MM-DD), 'today', or 'all'"),
+    no_backup: bool = typer.Option(False, "--no-backup", help="Skip backup creation"),
+):
+    """Sort timeline entries by time (msort command)."""
+    sorter = TimelineSorter()
+
+    # Check if initialized
+    if not sorter.is_initialized():
+        console.print(f"[red]ERROR[/red] Timeline not found at {sorter.timeline_path}")
+        console.print("[dim]Run 'minit' to initialize[/dim]")
+        sys.exit(1)
+
+    try:
+        # Parse date argument
+        from datetime import datetime, date
+
+        if date_or_all.lower() == "all":
+            # Sort all timeline files
+            console.print("[cyan]Sorting all timeline files...[/cyan]")
+            results = sorter.sort_all(create_backup=not no_backup)
+
+            if not results:
+                console.print("[yellow]No timeline files found[/yellow]")
+                sys.exit(0)
+
+            # Display results
+            total_files = len(results)
+            total_entries = sum(r[1] for r in results)
+            total_sorted = sum(r[2] for r in results)
+
+            console.print(f"\n[green]OK[/green] Sorted {total_files} file(s)")
+            console.print(f"  Total entries: {total_entries}")
+            console.print(f"  Sorted entries: {total_sorted}")
+            console.print(f"  Unsorted entries: {total_entries - total_sorted}")
+
+            if not no_backup:
+                console.print(f"\n[dim]Backups created with .bak extension[/dim]")
+
+        elif date_or_all.lower() == "today":
+            # Sort today's file
+            today = date.today()
+            year_month = today.strftime("%Y-%m")
+            day = today.strftime("%d")
+
+            file_path = sorter.timeline_path / year_month / f"{day}.md"
+
+            if not file_path.exists():
+                console.print(f"[yellow]No timeline file for today ({today.strftime('%Y-%m-%d')})[/yellow]")
+                sys.exit(0)
+
+            console.print(f"[cyan]Sorting {today.strftime('%Y-%m-%d')}...[/cyan]")
+            total, sorted_count = sorter.sort_file(file_path, create_backup=not no_backup)
+
+            console.print(f"\n[green]OK[/green] Sorted {file_path.name}")
+            console.print(f"  Total entries: {total}")
+            console.print(f"  Sorted entries: {sorted_count}")
+            console.print(f"  Unsorted entries: {total - sorted_count}")
+
+            if not no_backup:
+                backup_path = file_path.with_suffix(file_path.suffix + ".bak")
+                console.print(f"\n[dim]Backup: {backup_path.name}[/dim]")
+
+        else:
+            # Parse specific date
+            try:
+                target_date = datetime.strptime(date_or_all, "%Y-%m-%d").date()
+            except ValueError:
+                console.print(f"[red]ERROR[/red] Invalid date format: {date_or_all}")
+                console.print("[dim]Use YYYY-MM-DD format (e.g., 2025-11-14)[/dim]")
+                sys.exit(1)
+
+            year_month = target_date.strftime("%Y-%m")
+            day = target_date.strftime("%d")
+
+            file_path = sorter.timeline_path / year_month / f"{day}.md"
+
+            if not file_path.exists():
+                console.print(f"[yellow]No timeline file for {date_or_all}[/yellow]")
+                sys.exit(0)
+
+            console.print(f"[cyan]Sorting {date_or_all}...[/cyan]")
+            total, sorted_count = sorter.sort_file(file_path, create_backup=not no_backup)
+
+            console.print(f"\n[green]OK[/green] Sorted {file_path.name}")
+            console.print(f"  Total entries: {total}")
+            console.print(f"  Sorted entries: {sorted_count}")
+            console.print(f"  Unsorted entries: {total - sorted_count}")
+
+            if not no_backup:
+                backup_path = file_path.with_suffix(file_path.suffix + ".bak")
+                console.print(f"\n[dim]Backup: {backup_path.name}[/dim]")
+
+    except SortError as e:
+        console.print(f"[red]ERROR[/red] {e}")
+        sys.exit(1)
+
+    except Exception as e:
+        console.print(f"[red]ERROR[/red] Unexpected error: {e}")
+        sys.exit(1)
+
+
+@app.command()
+def module(
+    action: str = typer.Argument(..., help="Action: create, list, archive, unarchive"),
+    name: str = typer.Argument(None, help="Module name"),
+    description: str = typer.Option("", "--desc", "-d", help="Module description"),
+    reason: str = typer.Option("", "--reason", "-r", help="Reason for archiving"),
+    tags: str = typer.Option("", "--tags", "-t", help="Module tags (comma-separated)"),
+    archived: bool = typer.Option(False, "--archived", "-a", help="Include archived modules in list"),
+):
+    """Manage modules."""
+    manager = ModuleManager()
+
+    try:
+        if action.lower() == "create":
+            # Create new module
+            if not name:
+                console.print("[red]ERROR[/red] Module name is required for create")
+                console.print("[dim]Usage: module create <name> [--desc \"description\"][/dim]")
+                sys.exit(1)
+
+            # Parse tags
+            tag_list = [t.strip() for t in tags.split(",")] if tags else []
+
+            console.print(f"[cyan]Creating module '{name}'...[/cyan]")
+            module_path = manager.create(name, description, tag_list)
+
+            # Success
+            rel_path = module_path.relative_to(Path.cwd())
+            console.print(f"\n[green]OK[/green] Module created: {name}")
+            console.print(f"[dim]Location: {rel_path}[/dim]")
+            console.print(f"\n[dim]Files created:[/dim]")
+            console.print(f"  - module.md      (module definition)")
+            console.print(f"  - current.md     (current status)")
+            console.print(f"  - decisions.md   (decisions)")
+            console.print(f"  - dependencies.md (dependencies)")
+            console.print(f"  - interface.md   (interface/API)")
+
+        elif action.lower() == "list":
+            # List modules
+            modules = manager.list_modules(include_archived=archived)
+
+            # Display active modules
+            active = modules.get("active", [])
+            console.print(f"[cyan]Active Modules:[/cyan] {len(active)}\n")
+
+            if active:
+                for mod_name in active:
+                    console.print(f"  - {mod_name}")
+            else:
+                console.print("  [dim]No active modules[/dim]")
+
+            # Display archived modules
+            if archived and "archived" in modules:
+                arch = modules["archived"]
+                console.print(f"\n[cyan]Archived Modules:[/cyan] {len(arch)}\n")
+
+                if arch:
+                    for mod_name in arch:
+                        console.print(f"  - {mod_name}")
+                else:
+                    console.print("  [dim]No archived modules[/dim]")
+
+        elif action.lower() == "archive":
+            # Archive module
+            if not name:
+                console.print("[red]ERROR[/red] Module name is required for archive")
+                console.print("[dim]Usage: module archive <name> [--reason \"reason\"][/dim]")
+                sys.exit(1)
+
+            console.print(f"[cyan]Archiving module '{name}'...[/cyan]")
+            archive_path = manager.archive(name, reason)
+
+            # Success
+            rel_path = archive_path.relative_to(Path.cwd())
+            console.print(f"\n[green]OK[/green] Module archived: {name}")
+            console.print(f"[dim]Location: {rel_path}[/dim]")
+
+            if reason:
+                console.print(f"[dim]Reason: {reason}[/dim]")
+
+        elif action.lower() == "unarchive":
+            # Restore module from archive
+            if not name:
+                console.print("[red]ERROR[/red] Module name is required for unarchive")
+                console.print("[dim]Usage: module unarchive <name>[/dim]")
+                sys.exit(1)
+
+            console.print(f"[cyan]Restoring module '{name}' from archive...[/cyan]")
+            module_path = manager.unarchive(name)
+
+            # Success
+            rel_path = module_path.relative_to(Path.cwd())
+            console.print(f"\n[green]OK[/green] Module restored: {name}")
+            console.print(f"[dim]Location: {rel_path}[/dim]")
+
+        else:
+            console.print(f"[red]ERROR[/red] Unknown action: {action}")
+            console.print("Valid actions: create, list, archive, unarchive")
+            sys.exit(1)
+
+    except ModuleError as e:
         console.print(f"[red]ERROR[/red] {e}")
         sys.exit(1)
 

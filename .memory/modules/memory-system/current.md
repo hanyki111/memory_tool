@@ -97,6 +97,20 @@
   - [x] PowerShell 완벽 지원
   - [x] 템플릿 시스템 구축
   - [x] decisions.md 18개 결정 문서화
+- [x] config.yaml 고급 기능 완성 ⭐⭐
+  - [x] utils/config.py 모듈 생성
+  - [x] Config 클래스: 로드/검증/기본값
+  - [x] auto_update 기능 구현 및 테스트
+  - [x] context/builder.py 리팩토링 (Config 사용)
+  - [x] 설정 검증 (granularity, recent_days 등)
+  - [x] 이 프로젝트에 config.yaml 생성 및 적용
+- [x] README.md 재작성 ⭐
+  - [x] 실제 완성된 기능 반영 (8개 명령어)
+  - [x] 상세한 명령어 레퍼런스
+  - [x] PowerShell 통합 가이드
+  - [x] Claude Code 통합 방법
+  - [x] 실사용 예시 및 워크플로우
+  - [x] FAQ 섹션
 
 ## 2025-11-13 수요일
 
@@ -148,34 +162,76 @@
   - [x] 14일 일정 수립
   - [x] CLI(Day 1-10) + config(Day 11) + Skill(Day 12-14)
 
-### In Progress
-없음 (Phase 1 Extended + Bonus 완료)
+- [x] Claude Skill 개발 완료 ⭐⭐⭐ (Day 12)
+  - [x] .claude/skills/memory-tool/ 구조 생성
+  - [x] SKILL.md 작성 (300+ 줄)
+  - [x] README.md (사용 가이드, 트러블슈팅)
+  - [x] TEST_SCENARIOS.md (15개 테스트 케이스)
+  - [x] 규칙 기반 자동화 구현 (5가지 규칙)
+  - [x] 자동 기록/검색/컨텍스트 트리거
+  - [x] Phase 1 Final 완성 🎉
+
+### In Progress (Phase 2 Complete!)
+- [x] Phase 1 Final 완료 확인 ✅
+- [x] Skill 간단 테스트 완료 ✅
+- [x] 고급 검색 기능 개발 ✅✅✅
+  - [x] 날짜 범위 필터 (--from, --to)
+  - [x] exclude_patterns 적용
+  - [x] 파일 크기 제한
+- [x] msort 명령어 개발 ✅✅
+- [x] 모듈 관리 명령어 개발 ✅✅
 
 ### Blocked
 없음
 
-### Next Steps (Phase 2)
-1. **config.yaml 고급 기능**
-   - 자동 기록 (auto_record)
-   - 자동 컨텍스트 업데이트 (auto_update)
-   - 검색 필터 및 timeline 세분화
-   - 설정 로드/적용 최적화
+### Current Focus (Phase 2)
+1. **고급 검색 기능**
+   - 날짜 범위 필터
+   - 제외 패턴 적용
+   - 파일 크기 제한
 
-2. **Claude Skill 개발** ⭐
-   - MCP 서버 통합 연구
-   - Claude가 직접 m, ms, mcontext 호출
-   - 규칙 기반 자동 갱신 로직
-   - SKILL.md 또는 MCP 설정 작성
-
-3. **추가 도구 (as needed)**
+2. **추가 도구**
    - msort: Timeline 시간순 재정렬
    - 모듈 관리 명령어 (module create, update, archive)
-   - 고급 검색 기능 (필터, 날짜 범위)
 
-4. **.memory/ 상태 업데이트**
-   - decisions.md: 18개 결정 완료 ✅
-   - current.md: 업데이트 진행 중
-   - python-cli-development-plan.md: Phase 1 체크 필요
+3. **MCP Server 통합** (Phase 3)
+   - Claude Code 네이티브 통합
+   - 완전 자동화
+
+### Phase 2: COMPLETE ✅✅✅ (2025-11-14)
+
+**완료된 기능:**
+
+1. **고급 검색 기능** ✅
+   - ms --from 2025-11-01 --to 2025-11-14 "query"
+   - exclude_patterns: *.draft.md, archive/*, .templates/*
+   - max_file_size: 10MB 제한
+   - Timeline 날짜 필터 완벽 작동
+
+2. **msort 명령어** ✅
+   - msort today / msort 2025-11-14 / msort all
+   - 시간순 자동 재정렬 (HH:MM 파싱)
+   - 백업 파일 자동 생성 (.bak)
+   - 단일/다중 자릿수 시간 지원 (9:30, 08:45)
+
+3. **모듈 관리 명령어** ✅
+   - module create: 5개 템플릿 파일 자동 생성
+   - module list: 활성/아카이브 모듈 목록
+   - module archive: archive/_index.md 중앙 관리
+   - module unarchive: 복원 + 인덱스 자동 업데이트
+
+**기술적 성과:**
+- core/search.py: 날짜/패턴 필터링 추가
+- core/sort.py: Timeline 정렬 엔진 구현
+- core/module.py: 모듈 생명주기 관리
+- config.yaml: 검색 설정 확장
+
+**테스트 완료:**
+- 모든 명령어 실제 작동 검증
+- 엣지 케이스 처리 확인
+- 백업/복원 안전성 검증
+
+**Next: Phase 3 - MCP Server Integration**
 
 ## Known Issues
 없음 (프로젝트 시작 단계)

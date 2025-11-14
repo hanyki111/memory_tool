@@ -1,6 +1,5 @@
 # 2025-11-13 Timeline
 
-- 15:00 | Test yesterday
 - 21:30 | 프로젝트 생성: memory_tool
 - 21:31 | 시간-공간-통합-지식-체계-v2.0.md 파일 읽기 시작
 - 21:35 | 문서 완독: 시간축(Timeline) + 공간축(Modules/Concepts) 통합 시스템
@@ -46,3 +45,4 @@
 - 23:01 | 다음: 실제 테스트 또는 Python 코드 구현 시작
 - 23:30 | 새 세션: README 정적화 + .claude/guidelines.md 생성 + 주요 설계 결정 (memory-context 링크 전략, 플래너 Phase 2 연기, m 명령어 정책, Timeline 기록 전략)
 - 23:55 | 설정 전략 및 Claude Skills 통합 논의: config.yaml Phase 1 포함, Claude Skill (중간 범위, 규칙 기반 자동 갱신), Phase 1 로드맵 확정 (CLI Day 1-10, config Day 11, Skill Day 12-14)
+- 15:00 | Test yesterday

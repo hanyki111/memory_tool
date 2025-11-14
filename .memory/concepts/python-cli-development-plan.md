@@ -110,12 +110,20 @@ memory_tool/
 - [x] 통계 수집 로직
 - [ ] 테스트 작성
 
-### Day 13-14: 통합 및 문서화
-- [ ] README.md 작성
-- [ ] 설치 가이드
-- [ ] 사용 예시
-- [ ] PowerShell 래퍼 작성
-- [ ] Claude Code 통합 가이드
+### Day 11: config.yaml 고급 기능 ✅
+- [x] utils/config.py: Config 클래스
+- [x] 설정 로드/검증/기본값
+- [x] auto_update 구현
+- [x] context/builder.py 리팩토링
+- [x] 이 프로젝트에 config.yaml 적용
+
+### Day 13-14: README 및 문서화 ✅
+- [x] README.md 재작성 (상세 가이드)
+- [x] 설치 가이드
+- [x] 명령어 레퍼런스
+- [x] 사용 예시 및 워크플로우
+- [x] Claude Code 통합 가이드
+- [x] FAQ 섹션
 
 ## 핵심 클래스 설계
 
@@ -336,33 +344,53 @@ if os.getenv("MEMORY_DEBUG"):
     logger.setLevel(logging.DEBUG)
 ```
 
-## Phase 1 완료 현황 ✅
+## Phase 1 완료 현황 ✅✅✅
 
-**2025-11-14 완료:**
+**2025-11-14 Day 12 완료: PHASE 1 FINAL**
 - ✅ 8개 명령어 작동: m, minit, ms, mcontext, malias, mtoday, mweek, mstatus
 - ✅ PowerShell 프로필 완벽 지원
 - ✅ 템플릿 시스템 (CLAUDE.md.template)
 - ✅ Windows 이모지 처리
-- ✅ 18개 주요 결정 문서화
+- ✅ config.yaml 고급 기능 (utils/config.py, auto_update)
+- ✅ README.md 재작성 (완전한 가이드)
+- ✅ **Claude Skill 완성** (SKILL.md, README, TEST_SCENARIOS)
+- ✅ 20개 주요 결정 문서화
 - ✅ Full dogfooding (프로젝트 자체를 .memory/로 기록)
 
 **성과:**
 - 0.5초 포착 달성 (malias 덕분)
-- Claude Code 통합 준비 완료
+- 자동 컨텍스트 업데이트 (auto_update)
+- **Claude가 자연스럽게 memory_tool 사용** (Skill)
+- Claude Code 완전 통합
 - 모든 Windows 터미널 지원
+- 설정 중앙화 및 검증
+- 규칙 기반 자동화 (5가지 규칙)
+
+**Phase 1 완전 완료:** 2주 목표 달성! 🎉
 
 ---
 
-## Phase 2 계획 (Next)
+## Phase 1 Final (Day 12-14) ✅
 
-### 1. config.yaml 고급 기능
-- [ ] auto_record: m 실행 시 자동 기록
-- [ ] auto_update: timeline 기록 시 mcontext 자동 실행
-- [ ] granularity 설정 (low/medium/high)
-- [ ] 검색 필터 및 제외 패턴
-- [ ] 설정 검증 및 마이그레이션
+### Claude Skill 개발 ⭐⭐⭐ COMPLETE
+- [x] .claude/skills/memory-tool/ 구조 생성
+- [x] SKILL.md 작성 (300+ 줄 - 지침, 트리거, 자동화 규칙)
+- [x] README.md (사용 가이드, 설정, 트러블슈팅)
+- [x] TEST_SCENARIOS.md (15개 테스트 케이스)
+- [x] 규칙 기반 자동화 구현 (5가지 규칙)
+- [x] Phase 1 완전 완료 🎉🎉🎉
 
-### 2. Claude Skill / MCP 통합 ⭐
+---
+
+## Phase 2 계획
+
+### 1. 고급 검색 기능
+- [ ] 날짜 범위 필터
+- [ ] 제외 패턴 적용 (config.yaml의 exclude_patterns)
+- [ ] 파일 크기 제한 적용
+- [ ] 검색 결과 정렬 옵션
+
+### 2. MCP Server 통합 ⭐
 - [ ] MCP 서버 아키텍처 연구
 - [ ] Claude가 직접 m, ms, mcontext 호출
 - [ ] 규칙 기반 자동화 (대화 중 자동 기록)

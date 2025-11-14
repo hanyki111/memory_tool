@@ -1,0 +1,18 @@
+version: '1.0'
+timeline:
+  auto_record: false
+  granularity: medium
+  warn_old_days: 365
+context:
+  auto_update: true
+  recent_days: 3
+modules:
+  auto_update_current: false
+search:
+  default_scope: local
+  include_archived: false
+  max_file_size: 10485760  # 10MB in bytes
+  exclude_patterns:
+    - "*.draft.md"
+    - "archive/*"
+    - ".templates/*"
