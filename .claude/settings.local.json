@@ -17,7 +17,9 @@
       "Bash(powershell -Command \". C:\\Users\\shy61\\Documents\\WindowsPowerShell\\profile.ps1; m ''PowerShell profile test works''\")",
       "Bash(python:*)",
       "WebFetch(domain:code.claude.com)",
-      "Bash(.memory/modules/memory-system/decisions.md)"
+      "Bash(.memory/modules/memory-system/decisions.md)",
+      "Bash(git checkout:*)",
+      "Bash(git add:*)"
     ],
     "deny": [],
     "ask": []

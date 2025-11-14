@@ -189,7 +189,7 @@ def init(
 
 @app.command()
 def search(
-    query: str = typer.Argument(..., help="Search query (regex pattern)"),
+    query: str = typer.Argument(..., help="Search query (regex pattern or semantic)"),
     with_kb: bool = typer.Option(False, "--with-kb", help="Include personal KB"),
     all: bool = typer.Option(False, "--all", help="Search all projects"),
     case_sensitive: bool = typer.Option(False, "--case", "-c", help="Case sensitive search"),
@@ -197,8 +197,49 @@ def search(
     max_results: int = typer.Option(None, "--max", "-n", help="Maximum results"),
     from_date: str = typer.Option(None, "--from", help="Start date (YYYY-MM-DD)"),
     to_date: str = typer.Option(None, "--to", help="End date (YYYY-MM-DD)"),
+    semantic: bool = typer.Option(False, "--semantic", "-s", help="Semantic search using embeddings"),
+    threshold: float = typer.Option(0.3, "--threshold", "-t", help="Similarity threshold (0-1, semantic only)"),
 ):
     """Search timeline and modules (ms command)."""
+    # Use vector search if --semantic flag is set
+    if semantic:
+        try:
+            from memory_tool.core.vector_search import VectorSearcher, VectorSearchNotAvailableError
+
+            try:
+                vector_searcher = VectorSearcher()
+                results_list = vector_searcher.semantic_search(
+                    query,
+                    top_k=max_results or 10,
+                    threshold=threshold
+                )
+
+                # Format results
+                if not results_list:
+                    console.print("[yellow]No results found[/yellow]")
+                    return
+
+                console.print(f"[cyan]Semantic Search Results[/cyan] (similarity >= {threshold})\n")
+                for i, result in enumerate(results_list, 1):
+                    similarity_color = "green" if result['similarity'] > 0.7 else "yellow" if result['similarity'] > 0.5 else "dim"
+                    sanitized_content = sanitize_output(result['content'])
+                    console.print(f"[{similarity_color}]{i}. [{result['similarity']:.2f}][/{similarity_color}] {result['file']}:{result['line']}")
+                    console.print(f"   [dim]{result['date']}[/dim] | {sanitized_content}")
+                    console.print()
+
+                return
+
+            except VectorSearchNotAvailableError as e:
+                console.print(f"[red]ERROR[/red] {e}")
+                console.print("[dim]Install with: pip install memory-tool[vector][/dim]")
+                sys.exit(1)
+
+        except ImportError:
+            console.print("[red]ERROR[/red] Vector search not available")
+            console.print("[dim]Install with: pip install memory-tool[vector][/dim]")
+            sys.exit(1)
+
+    # Regular search
     searcher = MemorySearcher()
 
     # Determine scope
