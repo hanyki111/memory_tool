@@ -39,6 +39,9 @@ vector = [
     "sentence-transformers>=2.2.0",
     "torch>=2.0.0",
 ]
+llm = [
+    "anthropic>=0.18.0",
+]
 
 [project.scripts]
 m = "memory_tool.cli:record"
@@ -49,6 +52,7 @@ mtoday = "memory_tool.cli:today"
 mweek = "memory_tool.cli:week"
 mstatus = "memory_tool.cli:status"
 malias = "memory_tool.cli:alias"
+msummary = "memory_tool.cli:summary"
 
 [tool.setuptools]
 packages = ["memory_tool"]

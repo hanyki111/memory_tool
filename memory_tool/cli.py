@@ -40,6 +40,12 @@ from memory_tool.utils.alias import (
     AliasError,
 )
 from memory_tool.utils.config import Config
+from memory_tool.llm.client import LLMClient
+from memory_tool.summary import (
+    TimelineSummarizer,
+    ConversationSummarizer,
+    ModuleSummarizer,
+)
 
 app = typer.Typer(
     name="memory-tool",
@@ -871,6 +877,111 @@ def module(
 
     except Exception as e:
         console.print(f"[red]ERROR[/red] Unexpected error: {e}")
+        sys.exit(1)
+
+
+@app.command()
+def summary(
+    scope: str = typer.Argument("today", help="Scope: 'today', 'week', date (YYYY-MM-DD), or date range (YYYY-MM-DD:YYYY-MM-DD)"),
+    output: str = typer.Option(None, "--output", "-o", help="Output file path (optional)"),
+    module_name: str = typer.Option(None, "--module", "-m", help="Summarize specific module"),
+):
+    """Summarize timeline or module using LLM (msummary command)."""
+    # Check if LLM is available
+    if not LLMClient.check_availability():
+        console.print("[red]ERROR[/red] LLM not configured")
+        console.print("[dim]Set ANTHROPIC_API_KEY environment variable or add 'llm.api_key' to config.yaml[/dim]")
+        sys.exit(1)
+
+    try:
+        llm_client = LLMClient()
+
+        # Module summarization
+        if module_name:
+            console.print(f"[cyan]Summarizing module '{module_name}'...[/cyan]")
+
+            summarizer = ModuleSummarizer(llm_client)
+            module_path = Path.cwd() / ".memory" / "modules" / module_name
+
+            summary_text = summarizer.summarize_module(module_path)
+
+            # Display summary
+            console.print("\n" + "="*80)
+            console.print(summary_text)
+            console.print("="*80)
+
+            # Save to file if requested
+            if output:
+                output_path = Path(output)
+                output_path.write_text(summary_text, encoding="utf-8")
+                console.print(f"\n[green]OK[/green] Summary saved to: {output}")
+
+            return
+
+        # Timeline summarization
+        from datetime import datetime
+
+        summarizer = TimelineSummarizer(llm_client)
+
+        # Parse scope
+        if scope.lower() == "today":
+            console.print("[cyan]Summarizing today's timeline...[/cyan]")
+            summary_text = summarizer.summarize_today()
+
+        elif scope.lower() == "week":
+            console.print("[cyan]Summarizing this week's timeline...[/cyan]")
+            summary_text = summarizer.summarize_week()
+
+        elif ":" in scope:
+            # Date range: YYYY-MM-DD:YYYY-MM-DD
+            try:
+                start_str, end_str = scope.split(":")
+                start_date = datetime.strptime(start_str.strip(), "%Y-%m-%d").date()
+                end_date = datetime.strptime(end_str.strip(), "%Y-%m-%d").date()
+
+                console.print(f"[cyan]Summarizing timeline from {start_date} to {end_date}...[/cyan]")
+                summary_text = summarizer.summarize_range(start_date, end_date)
+
+            except ValueError as e:
+                console.print(f"[red]ERROR[/red] Invalid date range format: {scope}")
+                console.print("[dim]Use: YYYY-MM-DD:YYYY-MM-DD (e.g., 2025-11-01:2025-11-14)[/dim]")
+                sys.exit(1)
+
+        else:
+            # Specific date: YYYY-MM-DD
+            try:
+                target_date = datetime.strptime(scope, "%Y-%m-%d").date()
+                console.print(f"[cyan]Summarizing timeline for {target_date}...[/cyan]")
+                summary_text = summarizer.summarize_date(target_date)
+
+            except ValueError:
+                console.print(f"[red]ERROR[/red] Invalid date format: {scope}")
+                console.print("[dim]Use YYYY-MM-DD format (e.g., 2025-11-14)[/dim]")
+                sys.exit(1)
+
+        # Display summary
+        console.print("\n" + "="*80)
+        console.print(summary_text)
+        console.print("="*80)
+
+        # Save to file if requested
+        if output:
+            output_path = Path(output)
+            output_path.write_text(summary_text, encoding="utf-8")
+            console.print(f"\n[green]OK[/green] Summary saved to: {output}")
+
+    except FileNotFoundError as e:
+        console.print(f"[yellow]![/yellow] {e}")
+        sys.exit(1)
+
+    except ValueError as e:
+        console.print(f"[red]ERROR[/red] {e}")
+        sys.exit(1)
+
+    except Exception as e:
+        console.print(f"[red]ERROR[/red] Unexpected error: {e}")
+        import traceback
+        console.print(f"[dim]{traceback.format_exc()}[/dim]")
         sys.exit(1)
 
 

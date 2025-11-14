@@ -119,10 +119,51 @@ mcontext
 
 **Note:** If `config.yaml` has `context.auto_update: true`, context updates automatically after `m` command. Don't run `mcontext` manually in this case.
 
-### 4. Timeline Analysis (Complex queries requiring interpretation)
+### 4. Timeline Summary (Use `msummary` command - LLM-powered)
+
+**IMPORTANT:** The `msummary` command requires Anthropic API key. Check if LLM is configured before using.
+
+**When to summarize:**
+- User explicitly requests summary: "오늘 작업 요약해줘", "이번 주 타임라인 요약"
+- Long timeline needs condensing (> 20 entries)
+- End of work session to create compact summary
+
+**Usage:**
+```bash
+# Summarize today's timeline
+python -m memory_tool summary today
+
+# Summarize this week
+python -m memory_tool summary week
+
+# Summarize specific date
+python -m memory_tool summary 2025-11-14
+
+# Summarize date range
+python -m memory_tool summary 2025-11-01:2025-11-14
+
+# Summarize specific module
+python -m memory_tool summary --module memory-system
+
+# Save summary to file
+python -m memory_tool summary today --output summary.md
+```
+
+**What it does:**
+- Analyzes timeline entries using Claude API
+- Identifies key themes, decisions, and milestones
+- Removes noise and duplicates
+- Creates structured summary (10-30% of original length)
+
+**When NOT to use:**
+- LLM not configured (API key missing) → suggest viewing timeline directly
+- Simple timeline view needed → use `mtoday` or `mweek` instead
+- Recent timeline is short (< 5 entries) → direct viewing is faster
+
+### 5. Timeline Analysis (Complex queries requiring interpretation)
 
 **Use Skill when user needs analysis/interpretation:**
-- "오늘 중요한 결정만 요약해줘" → mtoday + filter + summarize
+- "오늘 중요한 결정만 요약해줘" → Use msummary if LLM available, otherwise mtoday + manual filter
 - "이번 주 작업 중 X 관련만 보여줘" → mweek + filter
 
 **DON'T use Skill for simple timeline views:**
@@ -131,7 +172,7 @@ mcontext
 
 Simple timeline display is a one-off task requiring minimal context. The Skill is only needed when interpretation, filtering, or analysis is required.
 
-### 5. Batch Recording (After Work Complete)
+### 6. Batch Recording (After Work Complete)
 
 If multiple items need recording after completing work:
 

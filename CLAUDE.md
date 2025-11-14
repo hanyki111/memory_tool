@@ -80,42 +80,55 @@
 - ✅ msort command (Timeline 시간순 재정렬)
 - ✅ Module management commands (create/list/archive/unarchive)
 
+**Phase 3: COMPLETE** 🎉🎉🎉
+- ✅ Vector search with semantic embeddings (sentence-transformers)
+- ✅ --semantic flag for ms command
+- ✅ Embeddings caching for performance
+
+**Phase 4: IN PROGRESS** 🚀
+- ✅ LLM integration (Anthropic API)
+- ✅ Timeline summarization (msummary command)
+- ✅ Module summarization
+- ✅ Conversation summarization infrastructure
+- ⏳ Full testing and validation
+
 **Next:**
-- Phase 3: MCP Server integration
+- Phase 5: MCP Server integration
 
 ---
 
 ## 🚀 Immediate Next Actions
 
-**Phase 2: COMPLETE!** 🎉🎉🎉
+**Phase 4: Auto-Summary System Implementation** 🚀
 
-**Completed Features:**
-1. **고급 검색 기능** (Advanced Search) ✅
-   - ✅ 날짜 범위 필터 (--from, --to)
-   - ✅ exclude_patterns 적용
-   - ✅ 파일 크기 제한 (10MB)
-   - ✅ Timeline 날짜 필터링 완벽 작동
+**Completed Features (Phase 4):**
+1. **LLM 통합** (Anthropic API) ✅
+   - ✅ llm/ 모듈: LLMClient, prompts
+   - ✅ summary/ 모듈: 3가지 summarizer
+   - ✅ config.yaml LLM 설정
 
-2. **msort 명령어** ✅
-   - ✅ Timeline 재정렬 로직 구현
-   - ✅ 안전한 재정렬 + 백업 (.bak)
-   - ✅ today/date/all 모드 지원
+2. **msummary 명령어** ✅
+   - ✅ Timeline 요약 (today/week/date/range)
+   - ✅ Module 요약 (--module flag)
+   - ✅ 파일 저장 (--output flag)
+   - ✅ LLM 기반 분석 및 정리
 
-3. **모듈 관리 명령어** ✅
-   - ✅ module create: 5개 템플릿 파일 자동 생성
-   - ✅ module list: 활성/아카이브 목록
-   - ✅ module archive: _index.md 중앙 관리
-   - ✅ module unarchive: 복원 기능
+3. **Skill 통합** ✅
+   - ✅ msummary 사용 가이드 추가
+   - ✅ LLM availability 체크
+   - ✅ 자동 요약 워크플로우
 
-**New Commands Added:**
-- `ms --from DATE --to DATE "query"` - 날짜 범위 검색
-- `msort [today|DATE|all]` - Timeline 정렬
-- `module create/list/archive/unarchive` - 모듈 관리
+**New Commands:**
+- `msummary today` - 오늘 Timeline 요약
+- `msummary week` - 이번 주 요약
+- `msummary 2025-11-14` - 특정 날짜
+- `msummary 2025-11-01:2025-11-14` - 날짜 범위
+- `msummary --module memory-system` - 모듈 요약
 
-**Ready for Phase 3:**
-- MCP Server integration
-- Native Claude Code integration
-- Full automation
+**Testing & Next:**
+- ⏳ Full system testing
+- ⏳ Documentation update
+- → Phase 5: MCP Server integration
 
 ---
 
