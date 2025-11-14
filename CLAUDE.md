@@ -79,6 +79,200 @@ Read timeline, manually track changes
 
 ---
 
+## 📋 Development Workflow (MANDATORY)
+
+**ALL feature work MUST follow this workflow. No exceptions.**
+
+### Standard Workflow Steps:
+
+```
+1. Commit & Push   → Save current state
+2. Branch          → Create feature/xxx branch
+3. Plan            → Write work plan (or PLAN document for large features)
+4. Get Approval    → Ask user for confirmation
+5. Record Start    → m "Starting feature X"
+6. Implement       → Write code
+7. Test            → Verify functionality
+8. Complete        → Ensure all works
+9. Record End      → m "Completed feature X: details"
+10. Merge          → Commit, push, merge to main
+```
+
+### Detailed Steps:
+
+#### 1. Commit & Push (현재 상태 저장)
+```bash
+git add -A
+git commit -m "docs: Update before starting new work"
+git push origin main
+```
+
+**Why:** 현재 작업 상태를 안전하게 저장
+
+#### 2. Branch (브랜치 분기)
+```bash
+git checkout -b feature/descriptive-name
+```
+
+**Naming:**
+- `feature/xxx` - New features
+- `fix/xxx` - Bug fixes
+- `refactor/xxx` - Code refactoring
+- `docs/xxx` - Documentation only
+
+**Why:** 독립적인 작업 공간 확보
+
+#### 3. Plan (작업 계획 수립)
+
+**For Large Features (3+ files, complex logic):**
+```bash
+# Create PLAN document in module directory
+Write .memory/modules/memory-system/PLAN-feature-name.md
+```
+
+**For Small Features (1-2 files, simple changes):**
+```
+- Write brief plan in conversation
+- List main steps (3-5 items)
+- Identify affected files
+```
+
+**Why:** 명확한 방향 설정, 사용자와 동의 형성
+
+#### 4. Get Approval (사용자 확인)
+
+**CRITICAL: STOP and ask user:**
+```
+"다음 계획으로 진행하겠습니다:
+[계획 요약]
+
+진행해도 될까요?"
+```
+
+**Why:** 사용자 의도와 일치 확인, 불필요한 작업 방지
+
+#### 5. Record Start (메모리 기록 - 시작)
+```bash
+m "Starting feature X: brief description"
+# or
+m "작업 시작: 기능 X 구현"
+```
+
+**Why:** Timeline에 작업 시작 기록, 컨텍스트 유지
+
+#### 6. Implement (작업 진행)
+
+**During Implementation:**
+- Use TodoWrite tool to track progress
+- Mark todos as in_progress → completed
+- Keep ONE task in_progress at a time
+
+**Code Quality:**
+- Follow existing code style
+- Add comments for complex logic
+- Keep functions focused and testable
+
+**Why:** 체계적 진행, 진행상황 추적
+
+#### 7. Test (테스트)
+
+**Required Tests:**
+```bash
+# Dry-run tests (if applicable)
+python -m memory_tool <command> --dry-run
+
+# Actual execution tests
+python -m memory_tool <command>
+
+# Edge cases
+python -m memory_tool <command> <edge-case-input>
+```
+
+**Why:** 버그 조기 발견, 안정성 확보
+
+#### 8. Complete (작업 완료)
+
+**Checklist:**
+- [ ] All tests pass
+- [ ] No errors or warnings
+- [ ] Code follows project style
+- [ ] Documentation updated (if needed)
+- [ ] User-facing changes noted
+
+**Why:** 완전성 보장
+
+#### 9. Record End (메모리 기록 - 완료)
+```bash
+m "Completed feature X: implementation details, key changes"
+# or
+m "기능 X 완료: 구현 내용, 주요 변경사항"
+```
+
+**Include:**
+- What was implemented
+- Key files changed
+- Important decisions made
+
+**Why:** 작업 완료 기록, 미래 참조
+
+#### 10. Merge (커밋, 푸시, 머지)
+```bash
+# Commit with descriptive message
+git add -A
+git commit -m "feat: Add feature X
+
+- Implementation detail 1
+- Implementation detail 2
+- Fixes #issue (if applicable)"
+
+# Push feature branch
+git push origin feature/xxx
+
+# Merge to main
+git checkout main
+git merge feature/xxx
+git push origin main
+
+# Update timeline
+git add .memory/timeline/
+git add .claude/memory-context.md
+git commit -m "docs: Update timeline after feature X"
+git push origin main
+```
+
+**Commit Message Format:**
+- `feat:` - New feature
+- `fix:` - Bug fix
+- `refactor:` - Code refactoring
+- `docs:` - Documentation only
+- `test:` - Test additions/changes
+
+**Why:** 깔끔한 git history, 추적 가능한 변경 이력
+
+### Emergency Procedures:
+
+**If user requests immediate work without workflow:**
+- Politely remind: "이 작업을 위해 표준 워크플로우를 따르겠습니다"
+- Follow steps 1-10 unless user explicitly overrides
+
+**If work is already in progress:**
+- Complete current workflow before starting new one
+- Or: ask user if they want to abort current work
+
+### Summary:
+
+**Start → Plan → Approve → Record → Work → Test → Record → Merge**
+
+**This workflow ensures:**
+- ✅ Safe experimentation (branches)
+- ✅ Clear direction (planning)
+- ✅ User alignment (approval)
+- ✅ Complete history (timeline)
+- ✅ Quality assurance (testing)
+- ✅ Clean git history (proper commits)
+
+---
+
 ## 🎯 Project Overview
 
 **Name:** memory_tool
