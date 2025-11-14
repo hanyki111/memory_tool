@@ -43,6 +43,12 @@ llm = [
     "anthropic>=0.18.0",
     "ollama>=0.3.0",
 ]
+tui = [
+    "textual>=0.47.0",
+]
+completion = [
+    "shtab>=1.6.0",
+]
 
 [project.scripts]
 m = "memory_tool.cli:record"
@@ -54,6 +60,10 @@ mweek = "memory_tool.cli:week"
 mstatus = "memory_tool.cli:status"
 malias = "memory_tool.cli:alias"
 msummary = "memory_tool.cli:summary"
+mbrowse = "memory_tool.cli:browse"
+mcompletion = "memory_tool.cli:completion"
+mplan = "memory_tool.cli:plan"
+mtutorial = "memory_tool.cli:tutorial"
 
 [tool.setuptools]
 packages = ["memory_tool"]

@@ -1552,6 +1552,430 @@ def archive(
         sys.exit(1)
 
 
+@app.command()
+def completion(
+    action: str = typer.Argument(..., help="Action: generate, install, uninstall, status"),
+    shell: str = typer.Argument(None, help="Shell: bash, zsh, powershell"),
+    output: str = typer.Option(None, "--output", "-o", help="Output file path"),
+    to_profile: bool = typer.Option(False, "--profile", help="Append to shell profile"),
+):
+    """Manage shell completion scripts (mcompletion command).
+
+    Actions:
+        generate: Generate completion script for shell
+        install: Install completion script to default location
+        uninstall: Remove completion script
+        status: Check installation status
+
+    Examples:
+        mcompletion generate bash          # Print bash completion
+        mcompletion install bash           # Install bash completion
+        mcompletion install zsh --profile  # Add to .zshrc
+        mcompletion status bash            # Check if installed
+        mcompletion uninstall bash         # Remove completion
+    """
+    try:
+        from memory_tool.utils.completion import CompletionManager
+
+        manager = CompletionManager()
+
+        # Action: generate
+        if action == "generate":
+            if not shell:
+                console.print("[red]ERROR[/red] Shell type required")
+                console.print("[dim]Usage: mcompletion generate <shell>[/dim]")
+                sys.exit(1)
+
+            try:
+                script = manager.generate_completion(shell)
+                console.print(script)
+            except Exception as e:
+                console.print(f"[red]ERROR[/red] {e}")
+                sys.exit(1)
+
+        # Action: install
+        elif action == "install":
+            if not shell:
+                console.print("[red]ERROR[/red] Shell type required")
+                console.print("[dim]Usage: mcompletion install <shell>[/dim]")
+                sys.exit(1)
+
+            try:
+                output_path = Path(output) if output else None
+                installed_path = manager.install_completion(
+                    shell,
+                    output_file=output_path,
+                    append_to_profile=to_profile
+                )
+
+                console.print(f"[green]OK[/green] Completion installed:")
+                console.print(f"  → {installed_path}")
+
+                if to_profile:
+                    console.print("\n[cyan]Reload your shell or run:[/cyan]")
+                    console.print(f"  source {installed_path}")
+                else:
+                    console.print("\n[cyan]Reload your shell for changes to take effect[/cyan]")
+
+            except Exception as e:
+                console.print(f"[red]ERROR[/red] {e}")
+                sys.exit(1)
+
+        # Action: uninstall
+        elif action == "uninstall":
+            if not shell:
+                console.print("[red]ERROR[/red] Shell type required")
+                console.print("[dim]Usage: mcompletion uninstall <shell>[/dim]")
+                sys.exit(1)
+
+            try:
+                removed = manager.uninstall_completion(shell)
+
+                if removed:
+                    console.print(f"[green]OK[/green] Completion removed for {shell}")
+                    console.print("[cyan]Reload your shell for changes to take effect[/cyan]")
+                else:
+                    console.print(f"[yellow]No completion found for {shell}[/yellow]")
+
+            except Exception as e:
+                console.print(f"[red]ERROR[/red] {e}")
+                sys.exit(1)
+
+        # Action: status
+        elif action == "status":
+            if not shell:
+                # Check all shells
+                shells = ["bash", "zsh", "powershell"]
+                console.print("[bold cyan]Completion Status:[/bold cyan]\n")
+
+                for sh in shells:
+                    installed = manager.check_installation(sh)
+                    status_icon = "[green]OK[/green]" if installed else "[dim]--[/dim]"
+                    status_text = "Installed" if installed else "Not installed"
+                    console.print(f"  {status_icon} {sh:12} {status_text}")
+
+            else:
+                # Check specific shell
+                installed = manager.check_installation(shell)
+
+                if installed:
+                    console.print(f"[green]OK[/green] Completion installed for {shell}")
+                else:
+                    console.print(f"[yellow]Completion not installed for {shell}[/yellow]")
+                    console.print("\n[cyan]To install:[/cyan]")
+                    console.print(f"  mcompletion install {shell}")
+
+        else:
+            console.print(f"[red]ERROR[/red] Unknown action: {action}")
+            console.print("[dim]Valid actions: generate, install, uninstall, status[/dim]")
+            sys.exit(1)
+
+    except ImportError:
+        console.print("[red]ERROR[/red] Completion module not available")
+        sys.exit(1)
+    except Exception as e:
+        console.print(f"[red]ERROR[/red] Unexpected error: {e}")
+        import traceback
+        console.print(f"[dim]{traceback.format_exc()}[/dim]")
+        sys.exit(1)
+
+
+@app.command()
+def browse(
+    query: str = typer.Argument(None, help="Initial search query"),
+):
+    """Interactive TUI search browser (mbrowse command).
+
+    Launch an interactive terminal interface for searching and browsing
+    timeline entries. Provides keyboard navigation, detail view, and
+    vim-style keybindings.
+
+    Keybindings:
+        /: Focus search input
+        Enter: Show detail view
+        Esc: Close detail view
+        q: Quit application
+        j/k: Navigate results (Vim-style)
+
+    Examples:
+        mbrowse                    # Launch browser
+        mbrowse "search query"     # Launch with query
+    """
+    try:
+        # Check if textual is available
+        try:
+            from memory_tool.tui import SearchBrowser
+        except ImportError:
+            console.print("[red]ERROR[/red] TUI feature not available")
+            console.print("Install with: pip install memory-tool[tui]")
+            console.print("Or: pip install textual>=0.47.0")
+            sys.exit(1)
+
+        memory_path = Path.cwd() / ".memory"
+
+        if not memory_path.exists():
+            console.print("[red]ERROR[/red] .memory/ not found. Run 'minit' first.")
+            sys.exit(1)
+
+        # Launch TUI app
+        from memory_tool.tui.search_browser import run_search_browser
+        run_search_browser(base_path=memory_path, initial_query=query)
+
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Browser closed[/yellow]")
+    except Exception as e:
+        console.print(f"[red]ERROR[/red] Browser failed: {e}")
+        import traceback
+        console.print(f"[dim]{traceback.format_exc()}[/dim]")
+        sys.exit(1)
+
+
+@app.command()
+def plan(
+    action: str = typer.Argument(..., help="Action: create, list, show, add, done, delete"),
+    name: str = typer.Argument(None, help="Plan name"),
+    title: str = typer.Argument(None, help="Task title (for 'add' action)"),
+    description: str = typer.Option("", "--desc", "-d", help="Plan description"),
+    due_date: str = typer.Option(None, "--due", help="Due date (YYYY-MM-DD)"),
+    tags: List[str] = typer.Option([], "--tag", "-t", help="Tags"),
+):
+    """Manage plans and tasks (mplan command).
+
+    Actions:
+        create: Create a new plan
+        list: List all plans
+        show: Show plan details
+        add: Add task to plan
+        done: Mark task as completed
+        delete: Delete a plan
+
+    Examples:
+        mplan create "Project Alpha" --desc "Main project plan"
+        mplan list
+        mplan show "Project Alpha"
+        mplan add "Project Alpha" "Implement feature X"
+        mplan done "Project Alpha" "Implement feature X"
+        mplan delete "Project Alpha"
+    """
+    try:
+        from memory_tool.planner import PlanManager, Task, TaskStatus
+        from datetime import datetime
+
+        memory_path = Path.cwd() / ".memory"
+
+        if not memory_path.exists():
+            console.print("[red]ERROR[/red] .memory/ not found. Run 'minit' first.")
+            sys.exit(1)
+
+        manager = PlanManager(base_path=memory_path)
+
+        # Action: create
+        if action == "create":
+            if not name:
+                console.print("[red]ERROR[/red] Plan name required")
+                console.print("[dim]Usage: mplan create <name> [options][/dim]")
+                sys.exit(1)
+
+            # Parse due date
+            due = None
+            if due_date:
+                try:
+                    due = datetime.strptime(due_date, "%Y-%m-%d").date()
+                except ValueError:
+                    console.print(f"[red]ERROR[/red] Invalid date format: {due_date}")
+                    console.print("[dim]Use YYYY-MM-DD format[/dim]")
+                    sys.exit(1)
+
+            # Create plan
+            plan_obj = manager.create_plan(
+                name=name,
+                description=description,
+                due_date=due,
+                tags=tags
+            )
+
+            # Save plan
+            filepath = manager.save_plan(plan_obj)
+            console.print(f"[green]OK[/green] Plan created:")
+            console.print(f"  → {filepath.relative_to(Path.cwd())}")
+
+        # Action: list
+        elif action == "list":
+            plans = manager.list_plans()
+
+            if not plans:
+                console.print("[yellow]No plans found[/yellow]")
+                console.print("[dim]Create a plan with: mplan create <name>[/dim]")
+                return
+
+            console.print("[bold cyan]Plans:[/bold cyan]\n")
+            for plan_info in plans:
+                completion = plan_info['completion']
+                status_color = "green" if completion >= 100 else "yellow" if completion >= 50 else "red"
+                console.print(f"  [{status_color}]{completion:5.1f}%[/{status_color}] {plan_info['name']}")
+                console.print(f"         {plan_info['tasks']} tasks | Modified: {plan_info['modified'].strftime('%Y-%m-%d %H:%M')}")
+
+        # Action: show
+        elif action == "show":
+            if not name:
+                console.print("[red]ERROR[/red] Plan name required")
+                console.print("[dim]Usage: mplan show <name>[/dim]")
+                sys.exit(1)
+
+            # Find plan file
+            plans = manager.list_plans()
+            plan_file = None
+            for plan_info in plans:
+                if plan_info['name'].lower() == name.lower():
+                    plan_file = plan_info['filename']
+                    break
+
+            if not plan_file:
+                console.print(f"[red]ERROR[/red] Plan not found: {name}")
+                sys.exit(1)
+
+            # Load and display plan
+            plan_obj = manager.load_plan(plan_file)
+            console.print(plan_obj.to_markdown())
+
+        # Action: add
+        elif action == "add":
+            if not name or not title:
+                console.print("[red]ERROR[/red] Plan name and task title required")
+                console.print("[dim]Usage: mplan add <plan-name> <task-title>[/dim]")
+                sys.exit(1)
+
+            # Find plan file
+            plans = manager.list_plans()
+            plan_file = None
+            for plan_info in plans:
+                if plan_info['name'].lower() == name.lower():
+                    plan_file = plan_info['filename']
+                    break
+
+            if not plan_file:
+                console.print(f"[red]ERROR[/red] Plan not found: {name}")
+                sys.exit(1)
+
+            # Load plan
+            plan_obj = manager.load_plan(plan_file)
+
+            # Add task
+            task = Task(title=title, tags=tags)
+            plan_obj.add_task(task)
+
+            # Save plan
+            manager.save_plan(plan_obj, filename=plan_file)
+            console.print(f"[green]OK[/green] Task added to '{plan_obj.name}'")
+            console.print(f"  - [ ] {title}")
+
+        # Action: done
+        elif action == "done":
+            if not name or not title:
+                console.print("[red]ERROR[/red] Plan name and task title required")
+                console.print("[dim]Usage: mplan done <plan-name> <task-title>[/dim]")
+                sys.exit(1)
+
+            # Find plan file
+            plans = manager.list_plans()
+            plan_file = None
+            for plan_info in plans:
+                if plan_info['name'].lower() == name.lower():
+                    plan_file = plan_info['filename']
+                    break
+
+            if not plan_file:
+                console.print(f"[red]ERROR[/red] Plan not found: {name}")
+                sys.exit(1)
+
+            # Load plan
+            plan_obj = manager.load_plan(plan_file)
+
+            # Find and mark task as done
+            task_found = False
+            for task in plan_obj.tasks:
+                if task.title.lower() == title.lower():
+                    task.mark_completed()
+                    task_found = True
+                    break
+
+            if not task_found:
+                console.print(f"[red]ERROR[/red] Task not found: {title}")
+                sys.exit(1)
+
+            # Save plan
+            manager.save_plan(plan_obj, filename=plan_file)
+            console.print(f"[green]OK[/green] Task completed in '{plan_obj.name}'")
+            console.print(f"  - [x] {title}")
+
+        # Action: delete
+        elif action == "delete":
+            if not name:
+                console.print("[red]ERROR[/red] Plan name required")
+                console.print("[dim]Usage: mplan delete <name>[/dim]")
+                sys.exit(1)
+
+            # Find plan file
+            plans = manager.list_plans()
+            plan_file = None
+            for plan_info in plans:
+                if plan_info['name'].lower() == name.lower():
+                    plan_file = plan_info['filename']
+                    break
+
+            if not plan_file:
+                console.print(f"[red]ERROR[/red] Plan not found: {name}")
+                sys.exit(1)
+
+            # Delete plan
+            manager.delete_plan(plan_file)
+            console.print(f"[green]OK[/green] Plan deleted: {name}")
+
+        else:
+            console.print(f"[red]ERROR[/red] Unknown action: {action}")
+            console.print("[dim]Valid actions: create, list, show, add, done, delete[/dim]")
+            sys.exit(1)
+
+    except Exception as e:
+        console.print(f"[red]ERROR[/red] Unexpected error: {e}")
+        import traceback
+        console.print(f"[dim]{traceback.format_exc()}[/dim]")
+        sys.exit(1)
+
+
+@app.command()
+def tutorial(
+    lesson: str = typer.Argument(None, help="Lesson ID to show (optional)"),
+    list_lessons: bool = typer.Option(False, "--list", "-l", help="List available lessons"),
+):
+    """Interactive tutorial for memory_tool (mtutorial command).
+
+    Learn how to use memory_tool commands with step-by-step tutorials.
+
+    Examples:
+        mtutorial                  # Show interactive menu
+        mtutorial basics           # Show basics lesson
+        mtutorial --list           # List all lessons
+    """
+    try:
+        from memory_tool.utils.tutorial import Tutorial
+
+        tut = Tutorial()
+
+        if list_lessons:
+            tut.list_lessons()
+        else:
+            tut.run(lesson_id=lesson)
+
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Tutorial closed[/yellow]")
+    except Exception as e:
+        console.print(f"[red]ERROR[/red] Tutorial failed: {e}")
+        import traceback
+        console.print(f"[dim]{traceback.format_exc()}[/dim]")
+        sys.exit(1)
+
+
 @app.callback(invoke_without_command=True)
 def main(
     ctx: typer.Context,
