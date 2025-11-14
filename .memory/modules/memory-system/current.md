@@ -20,15 +20,25 @@ For Phase 1-4 completed work, see [archive/current-phase1-4.md](./archive/curren
 
 ### Completed Today
 
-- [x] **검색 개선 Phase 1** ⭐⭐⭐
-  - [x] BM25 랭킹 알고리즘 (관련성 점수)
-  - [x] 날짜 기반 가중치 (exponential decay)
-  - [x] 고급 날짜 필터 (today, yesterday, this-week, last-N-days, ranges)
-  - [x] 파일 타입 필터 (timeline, modules, decisions, plans, archive)
-  - [x] 태그 필터 (#hashtags, **Category:** patterns)
-  - [x] 결과 포매팅 (scores, context, highlighting, summary)
-  - [x] CLI 통합 (11개 새 옵션)
-  - [x] Windows 인코딩 이슈 수정
+- [x] **검색 개선 Phase 1, 2, 3** ⭐⭐⭐⭐
+  - [x] **Phase 1: Ranking + Filters + Formatting**
+    - [x] BM25 랭킹 알고리즘 (관련성 점수)
+    - [x] 날짜 기반 가중치 (exponential decay)
+    - [x] 고급 날짜 필터 (today, yesterday, this-week, last-N-days, ranges)
+    - [x] 파일 타입 필터 (timeline, modules, decisions, plans, archive)
+    - [x] 태그 필터 (#hashtags, **Category:** patterns)
+    - [x] 결과 포매팅 (scores, context, highlighting, summary)
+    - [x] CLI 통합 (11개 새 옵션)
+    - [x] Windows 인코딩 이슈 수정
+  - [x] **Phase 2: Hybrid Search**
+    - [x] 텍스트 + 벡터 검색 조합
+    - [x] 가중치 조정 가능 (--text-weight, --semantic-weight)
+    - [x] 결과 병합 및 재정렬
+  - [x] **Phase 3: Performance Optimization**
+    - [x] Result caching (TTL 기반, 통계)
+    - [x] Parallel search processing
+    - [x] Index optimization (FTS5 optimize, vacuum, analyze)
+    - [x] CLI 통합 (--no-cache, --cache-ttl, mindex --optimize/--vacuum)
 
 - [x] **marchive 명령어 개선** ⭐⭐⭐
   - [x] --up-to N 옵션 (결정 번호 기반)
@@ -57,13 +67,13 @@ For Phase 1-4 completed work, see [archive/current-phase1-4.md](./archive/curren
 
 1. ✅ 문서 관리 개선
 2. ✅ SQLite 인덱싱 (검색 속도 10-100배)
-3. 🎯 검색 개선 (Phase 1 완료: BM25, 날짜 가중치, 필터, 포매팅)
+3. ✅ 검색 개선 (Phase 1, 2, 3 완료)
    - ✅ Phase 1: Ranking + Filters + Formatting
-   - ⏳ Phase 2: Hybrid search (text + vector combination)
-   - ⏳ Phase 3: Performance optimization (caching, parallel)
+   - ✅ Phase 2: Hybrid search (text + vector combination)
+   - ✅ Phase 3: Performance optimization (caching, parallel, index optimize)
 4. ✅ 자동 요약 고도화 (맥락, 주제 분류)
 5. ⏳ 성능 최적화 (벡터 캐싱, 대용량)
-6. ⏳ 테스트 커버리지 (pytest, 안정성)
+6. 🎯 테스트 커버리지 (pytest, 안정성) - 다음 작업
 7. ⏳ 사용성 개선 (GUI/TUI, 플래너)
 
 ---
@@ -82,10 +92,12 @@ For Phase 1-4 completed work, see [archive/current-phase1-4.md](./archive/curren
 
 - Timeline capture ✅
 - Search (text + vector + SQLite FTS5) ✅
+- Advanced search (BM25, filters, hybrid, caching) ✅
 - Claude Skill integration ✅
 - LLM summarization (Anthropic + Ollama) ✅
 - Module management ✅
 - Archive automation (3 modes) ✅
+- Index optimization (FTS5 optimize, vacuum) ✅
 
 **Documentation:**
 
@@ -118,4 +130,4 @@ For Phase 1-4 completed work, see [archive/current-phase1-4.md](./archive/curren
 
 ---
 
-**Last Updated:** 2025-11-15 01:02
+**Last Updated:** 2025-11-15 01:11
