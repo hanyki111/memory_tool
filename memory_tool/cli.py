@@ -1717,9 +1717,9 @@ def browse(
             console.print("[red]ERROR[/red] .memory/ not found. Run 'minit' first.")
             sys.exit(1)
 
-        # Launch TUI app
+        # Launch TUI app (pass project root, not .memory path)
         from memory_tool.tui.search_browser import run_search_browser
-        run_search_browser(base_path=memory_path, initial_query=query)
+        run_search_browser(base_path=Path.cwd(), initial_query=query)
 
     except KeyboardInterrupt:
         console.print("\n[yellow]Browser closed[/yellow]")

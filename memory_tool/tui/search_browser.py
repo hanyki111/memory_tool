@@ -133,26 +133,26 @@ class SearchBrowser(App):
         """Initialize search browser.
 
         Args:
-            base_path: Base path for .memory/ directory
+            base_path: Base path for project (parent of .memory/)
             initial_query: Initial search query to execute
         """
         super().__init__(**kwargs)
-        self.base_path = base_path or self._find_memory_root()
+        self.base_path = base_path or self._find_project_root()
         self.initial_query = initial_query
         self.current_results: List[dict] = []
         self.title = "Memory Tool - Search Browser"
 
-    def _find_memory_root(self) -> Path:
-        """Find .memory/ directory in current or parent directories."""
+    def _find_project_root(self) -> Path:
+        """Find project root (parent of .memory/) directory."""
         current = Path.cwd()
         while current != current.parent:
             memory_path = current / ".memory"
             if memory_path.exists() and memory_path.is_dir():
-                return memory_path
+                return current  # Return project root, not .memory
             current = current.parent
 
-        # Default to ~/.memory if not found
-        return Path.home() / ".memory"
+        # Default to current directory
+        return Path.cwd()
 
     def compose(self) -> ComposeResult:
         """Create child widgets."""
@@ -326,7 +326,7 @@ def run_search_browser(
     """Run the search browser TUI application.
 
     Args:
-        base_path: Base path for .memory/ directory
+        base_path: Base path for project (parent of .memory/)
         initial_query: Initial search query to execute
     """
     app = SearchBrowser(base_path=base_path, initial_query=initial_query)
