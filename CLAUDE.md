@@ -29,6 +29,40 @@
 
 ---
 
+## 📦 CRITICAL: Module Organization Principles
+
+**When creating or modifying modules, follow these principles:**
+
+```
+1. Read .memory/docs/MODULE-ORGANIZATION-PRINCIPLES.md
+2. Use .memory/docs/QUICK-REFERENCE-MODULE-ORGANIZATION.md for decisions
+```
+
+**Key Rules:**
+- **Split modules when:** current.md > 300 lines, >20 decisions, >3 distinct topics
+- **Use hierarchy when:** Clear parent-child relationship, shared context
+- **Use flat when:** Independent concerns, different lifecycles
+- **Single responsibility:** Each module = one clear purpose
+- **Check before creating:** Can describe in 1-2 sentences? Size >100 lines? Clear boundaries?
+
+**Quick Decision:**
+```
+Small enhancement (<100 lines)  → Add to existing module
+New feature (>500 lines)        → Create new module
+Unrelated topic                 → Create new module
+Part of existing project        → Create child module (projects/parent/child)
+New project                     → Create new project (projects/new-project)
+```
+
+**Before any module operation:**
+1. Check module size: `wc -l .memory/modules/[module]/*.md`
+2. Review principles: See MODULE-ORGANIZATION-PRINCIPLES.md
+3. Use checklist: See QUICK-REFERENCE
+
+**You MUST follow these principles when working with modules.**
+
+---
+
 ## 🛠️ CRITICAL: Use This Project's Tools (Dogfooding)
 
 **This project IS a tool for knowledge capture. Claude MUST use it while working on it.**
@@ -460,7 +494,7 @@ msort                        # Reorder timeline entries by time
 
 ---
 
-**Last Updated:** 2025-11-14 23:45
+**Last Updated:** 2025-11-15
 **Next Update:** After 문서 관리 개선 완료
 
 **Important Notes:**

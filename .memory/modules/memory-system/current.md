@@ -12,13 +12,98 @@ For Phase 1-4 completed work, see [archive/current-phase1-4.md](./archive/curren
 - ✅ **Phase 2:** Complete (Advanced search + msort + module management)
 - ✅ **Phase 3:** Complete (Vector search + semantic embeddings)
 - ✅ **Phase 4:** Complete (LLM integration + Ollama + msummary)
-- 🎯 **Phase 5 Revised:** In Progress (Practical improvements over MCP)
+- ✅ **Phase 5:** Complete (Search improvements + performance optimization + archive automation)
+- ✅ **Phase 6:** Complete (Hierarchical modules + wiki connections + AI suggestions + graph versioning)
+- ✅ **Phase 7:** Complete (Enhanced TUI with multi-mode browser)
 
 ---
 
 ## Current Work (2025-11-15)
 
 ### Completed Today
+
+- [x] **Enhanced TUI 브라우저 (Phase 7)** ⭐⭐⭐⭐⭐
+  - [x] **멀티 모드 탭 인터페이스**
+    - [x] 4개 모드: Search, Timeline, Modules, Graph
+    - [x] Tab 키로 모드 전환
+    - [x] CLI `--mode` 옵션 추가
+  - [x] **Search 모드 개선**
+    - [x] 필터 토글 (Timeline/Modules/Decisions)
+    - [x] 향상된 결과 테이블 (타입 컬럼 추가)
+    - [x] vim 스타일 네비게이션 (j/k)
+    - [x] 상세 뷰 패널
+  - [x] **Timeline 모드 (신규)**
+    - [x] 날짜별 엔트리 리스트
+    - [x] 날짜 선택으로 엔트리 표시
+    - [x] n/p 키로 일간 네비게이션
+    - [x] 엔트리 통계 표시
+  - [x] **Modules 모드 (신규)**
+    - [x] 계층적 모듈 트리 뷰
+    - [x] 모듈 상세정보 패널
+    - [x] 연결된 모듈 표시 (outgoing/incoming)
+    - [x] r 키로 새로고침
+  - [x] **Graph 모드 (신규)**
+    - [x] 연결 수 기준 모듈 정렬
+    - [x] 선택한 모듈의 연결 시각화
+    - [x] 그래프 통계 (total/connected/orphaned)
+    - [x] s 키로 정렬 전환
+  - [x] **새 파일 생성**
+    - [x] `tui/browser.py` (메인 브라우저)
+    - [x] `tui/search_mode.py` (검색 모드)
+    - [x] `tui/timeline_mode.py` (타임라인 모드)
+    - [x] `tui/modules_mode.py` (모듈 모드)
+    - [x] `tui/graph_mode.py` (그래프 모드)
+  - [x] **테스트 완료** ✅
+    - [x] 모든 모드 임포트 확인
+    - [x] CLI 통합 확인
+
+- [x] **계층적 모듈 시스템 + Wiki 스타일 연결 (Phase 6)** ⭐⭐⭐⭐⭐
+  - [x] **계층 구조 (Hierarchical Modules)**
+    - [x] 디렉토리 기반 계층 (`projects/website`)
+    - [x] `current.md` 마커 패턴
+    - [x] `discover_all_modules()`, `build_module_tree()` 구현
+    - [x] CLI: `module tree` 명령어
+  - [x] **Wiki 스타일 연결 (Wiki-style Connections)**
+    - [x] `[[module-name]]` 링크 문법
+    - [x] SQLite 기반 연결 그래프 (`.memory/.connections.db`)
+    - [x] `ConnectionParser`, `ConnectionGraph` 클래스
+    - [x] CLI: `connections`, `graph`, `rebuild-graph`, `check-links`, `suggest-links`
+  - [x] **그래프 시각화**
+    - [x] Mermaid 다이어그램 내보내기
+    - [x] Graphviz DOT 형식 내보내기
+    - [x] CLI: `graph --format mermaid/graphviz --output file`
+  - [x] **링크 검증**
+    - [x] 깨진 링크 감지 (`check_broken_links()`)
+    - [x] 고립된 모듈 찾기 (`get_orphaned_modules()`)
+    - [x] CLI: `check-links`
+  - [x] **역링크 제안**
+    - [x] 3가지 전략 (경로 유사도, 카테고리, 공통 대상)
+    - [x] CLI: `suggest-links <module>`
+  - [x] **Git 훅 통합**
+    - [x] Pre-commit/post-checkout 훅 자동 생성
+    - [x] `GitHookManager` 클래스
+    - [x] CLI: `hooks install/uninstall/list`
+  - [x] **AI 기반 제안 (Phase 4 확장)** ⭐⭐⭐
+    - [x] `AIConnectionSuggester` 클래스
+    - [x] LLM 기반 콘텐츠 유사도 분석
+    - [x] 연결 제안 with 신뢰도 점수
+    - [x] 자동 태그 생성
+    - [x] CLI: `suggest-ai <module>`, `auto-tag <module>`
+  - [x] **그래프 버전 관리** ⭐⭐⭐
+    - [x] `GraphVersionManager` 클래스
+    - [x] SQLite 기반 스냅샷 시스템
+    - [x] 버전 비교 및 diff
+    - [x] 자동 버전 관리 (rebuild-graph 후)
+    - [x] CLI: `graph-snapshot`, `graph-history`, `graph-diff`
+  - [x] **별칭 업데이트**
+    - [x] `mmodule` 별칭 추가
+    - [x] `mhooks` 별칭 추가
+    - [x] PowerShell 프로필 업데이트
+  - [x] **테스트 완료** ✅
+    - [x] 모든 명령어 테스트
+    - [x] 버전 생성/조회/비교
+    - [x] AI 제안 동작 확인
+    - [x] 별칭 설치 확인
 
 - [x] **검색 개선 Phase 1, 2, 3** ⭐⭐⭐⭐
   - [x] **Phase 1: Ranking + Filters + Formatting**
@@ -93,7 +178,9 @@ For Phase 1-4 completed work, see [archive/current-phase1-4.md](./archive/curren
 
 ## Key Metrics
 
-**Commands:** 10 operational (m, minit, ms, mcontext, malias, marchive, msummary, mtoday, mweek, mstatus)
+**Commands:** 12 operational (m, minit, ms, mcontext, malias, marchive, msummary, mtoday, mweek, mstatus, mmodule, mhooks)
+
+**Module Actions:** 14 actions (create, list, tree, archive, unarchive, connections, graph, rebuild-graph, check-links, suggest-links, suggest-ai, auto-tag, graph-snapshot, graph-history, graph-diff)
 
 **Features:**
 
@@ -103,9 +190,15 @@ For Phase 1-4 completed work, see [archive/current-phase1-4.md](./archive/curren
 - Performance optimization (batch embeddings, incremental indexing) ✅
 - Claude Skill integration ✅
 - LLM summarization (Anthropic + Ollama) ✅
-- Module management ✅
+- Hierarchical module system ✅
+- Wiki-style connections ([[links]]) ✅
+- Graph visualization (Mermaid/Graphviz) ✅
+- AI-based connection suggestions ✅
+- Graph version management ✅
+- Git hooks integration ✅
 - Archive automation (3 modes) ✅
 - Index optimization (FTS5 optimize, vacuum) ✅
+- Enhanced TUI browser (4 modes) ✅
 
 **Documentation:**
 
@@ -138,4 +231,4 @@ For Phase 1-4 completed work, see [archive/current-phase1-4.md](./archive/curren
 
 ---
 
-**Last Updated:** 2025-11-15 01:24
+**Last Updated:** 2025-11-15 10:28

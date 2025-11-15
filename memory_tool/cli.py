@@ -228,6 +228,7 @@ def search(
     # New filter options
     date: str = typer.Option(None, "--date", help="Date expression: today, yesterday, this-week, last-N-days, YYYY-MM-DD"),
     file_type: str = typer.Option(None, "--type", help="File type: timeline, modules, decisions, plans, archive"),
+    module_filter: str = typer.Option(None, "--module", help="Filter by module path (e.g., 'projects' or 'projects/website')"),
     tag: List[str] = typer.Option(None, "--tag", help="Filter by tags (can use multiple times)"),
     # New formatting options
     show_score: bool = typer.Option(False, "--show-score", help="Show relevance scores"),
@@ -261,6 +262,7 @@ def search(
         "boost_recent": boost_recent,
         "date": date,
         "file_type": file_type,
+        "module_filter": module_filter,
         "tag": tuple(tag) if tag else None,
         "hybrid": hybrid,
         "text_weight": text_weight if hybrid else None,
@@ -526,7 +528,7 @@ def search(
                 result.date = datetime.combine(date_from_path, datetime.min.time())
 
         # Apply enhanced filters
-        if date or file_type or tag:
+        if date or file_type or tag or module_filter:
             from memory_tool.search import FilterChain
             filter_chain = FilterChain(searcher.base_path)
             all_results = filter_chain.apply_filters(
@@ -535,6 +537,28 @@ def search(
                 file_type=file_type,
                 tags=tag if tag else None,
             )
+
+            # Apply module filter separately
+            if module_filter:
+                # Filter results by module path
+                modules_path = searcher.base_path / ".memory" / "modules"
+                module_filter_path = modules_path / module_filter
+
+                filtered_results = []
+                for result in all_results:
+                    # Check if result file is under the module path
+                    try:
+                        result_path = Path(result.file_path)
+                        if result_path.is_relative_to(module_filter_path):
+                            filtered_results.append(result)
+                    except (ValueError, AttributeError):
+                        # is_relative_to not available in older Python, fallback
+                        result_str = str(result.file_path)
+                        filter_str = str(module_filter_path)
+                        if result_str.startswith(filter_str):
+                            filtered_results.append(result)
+
+                all_results = filtered_results
 
         # Apply ranking
         if rank or boost_recent:
@@ -1064,14 +1088,21 @@ def sort(
 
 @app.command()
 def module(
-    action: str = typer.Argument(..., help="Action: create, list, archive, unarchive"),
-    name: str = typer.Argument(None, help="Module name"),
+    action: str = typer.Argument(..., help="Action: create, list, tree, archive, unarchive, connections, graph, rebuild-graph, check-links, suggest-links, suggest-ai, auto-tag, graph-history, graph-diff, graph-snapshot"),
+    name: str = typer.Argument(None, help="Module name or path (e.g., 'projects/website')"),
     description: str = typer.Option("", "--desc", "-d", help="Module description"),
     reason: str = typer.Option("", "--reason", "-r", help="Reason for archiving"),
     tags: str = typer.Option("", "--tags", "-t", help="Module tags (comma-separated)"),
     archived: bool = typer.Option(False, "--archived", "-a", help="Include archived modules in list"),
+    format: str = typer.Option(None, "--format", "-f", help="Export format: mermaid, graphviz (for graph action)"),
+    output: str = typer.Option(None, "--output", "-o", help="Output file path (for graph action)"),
+    quiet: bool = typer.Option(False, "--quiet", "-q", help="Suppress output (for rebuild-graph in hooks)"),
+    version1: int = typer.Option(None, "--v1", help="First version ID (for graph-diff)"),
+    version2: int = typer.Option(None, "--v2", help="Second version ID (for graph-diff)"),
+    notes: str = typer.Option("", "--notes", "-n", help="Notes for graph snapshot"),
+    limit: int = typer.Option(10, "--limit", "-l", help="Limit number of results"),
 ):
-    """Manage modules."""
+    """Manage modules (supports hierarchical paths, wiki-style [[connections]], and AI suggestions)."""
     manager = ModuleManager()
 
     try:
@@ -1142,6 +1173,475 @@ def module(
             if reason:
                 console.print(f"[dim]Reason: {reason}[/dim]")
 
+        elif action.lower() == "tree":
+            # Display module hierarchy as tree
+            tree = manager.build_module_tree()
+
+            if not tree:
+                console.print("[dim]No modules found[/dim]")
+                return
+
+            console.print("[cyan]Module Hierarchy:[/cyan]\n")
+
+            def print_tree(node_dict, prefix="", is_last=True):
+                """Recursively print tree structure."""
+                items = list(node_dict.items())
+                for i, (name, children) in enumerate(items):
+                    is_last_item = (i == len(items) - 1)
+
+                    # Print current node
+                    connector = "└── " if is_last_item else "├── "
+                    console.print(f"{prefix}{connector}{name}")
+
+                    # Print children
+                    if children:
+                        extension = "    " if is_last_item else "│   "
+                        print_tree(children, prefix + extension, is_last_item)
+
+            print_tree(tree)
+
+        elif action.lower() == "connections":
+            # Show connections for a module
+            if not name:
+                console.print("[red]ERROR[/red] Module name is required for connections")
+                console.print("[dim]Usage: module connections <name>[/dim]")
+                sys.exit(1)
+
+            from memory_tool.core.connections import ConnectionGraph
+
+            graph = ConnectionGraph()
+
+            # Get outgoing and incoming connections
+            outgoing = graph.get_outgoing_connections(name)
+            incoming = graph.get_incoming_connections(name)
+
+            console.print(f"[cyan]Connections for module:[/cyan] {name}\n")
+
+            # Display outgoing connections
+            if outgoing:
+                console.print(f"[green]Outgoing ({len(outgoing)}):[/green]")
+                for conn in outgoing:
+                    console.print(f"  → {conn.target}")
+                    console.print(f"    [dim]{conn.source_file}:{conn.line_number}[/dim]")
+            else:
+                console.print("[dim]No outgoing connections[/dim]")
+
+            console.print()
+
+            # Display incoming connections
+            if incoming:
+                console.print(f"[green]Incoming ({len(incoming)}):[/green]")
+                for conn in incoming:
+                    console.print(f"  ← {conn.source}")
+                    console.print(f"    [dim]{conn.source_file}:{conn.line_number}[/dim]")
+            else:
+                console.print("[dim]No incoming connections[/dim]")
+
+        elif action.lower() == "graph":
+            # Display connection graph overview or export
+            from memory_tool.core.connections import ConnectionGraph
+
+            graph = ConnectionGraph()
+
+            # Handle export formats
+            if format:
+                if format.lower() == "mermaid":
+                    diagram = graph.export_mermaid()
+
+                    if output:
+                        # Save to file
+                        output_path = Path(output)
+                        output_path.write_text(diagram, encoding="utf-8")
+                        console.print(f"[green]OK[/green] Mermaid diagram saved to: {output}")
+                    else:
+                        # Print to console
+                        console.print("[cyan]Mermaid Diagram:[/cyan]\n")
+                        console.print(diagram)
+
+                elif format.lower() == "graphviz":
+                    dot = graph.export_graphviz()
+
+                    if output:
+                        # Save to file
+                        output_path = Path(output)
+                        output_path.write_text(dot, encoding="utf-8")
+                        console.print(f"[green]OK[/green] Graphviz DOT saved to: {output}")
+                    else:
+                        # Print to console
+                        console.print("[cyan]Graphviz DOT:[/cyan]\n")
+                        console.print(dot)
+
+                else:
+                    console.print(f"[red]ERROR[/red] Unknown format: {format}")
+                    console.print("Valid formats: mermaid, graphviz")
+                    sys.exit(1)
+
+                return
+
+            # Default: show stats and overview
+            stats = graph.get_graph_stats()
+
+            console.print("[cyan]Module Connection Graph[/cyan]\n")
+
+            console.print(f"Total connections: {stats['total_connections']}")
+            console.print(f"Connected modules: {stats['connected_modules']}")
+            console.print(f"Orphaned modules: {stats['orphaned_modules']}")
+
+            # Show all modules with their connection counts
+            all_modules = graph.get_all_modules()
+
+            if all_modules:
+                console.print(f"\n[cyan]Module Connections:[/cyan]\n")
+
+                for module in sorted(all_modules):
+                    outgoing = graph.get_outgoing_connections(module)
+                    incoming = graph.get_incoming_connections(module)
+
+                    out_count = len(outgoing)
+                    in_count = len(incoming)
+
+                    console.print(f"  {module}")
+                    console.print(f"    [dim]→ {out_count} outgoing, ← {in_count} incoming[/dim]")
+            else:
+                console.print("\n[dim]No connections found. Run 'module rebuild-graph' to build the graph.[/dim]")
+
+        elif action.lower() == "check-links":
+            # Check for broken links
+            from memory_tool.core.connections import ConnectionGraph
+
+            graph = ConnectionGraph()
+
+            console.print("[cyan]Checking module links...[/cyan]\n")
+
+            # Check broken links
+            broken = graph.check_broken_links()
+
+            if broken:
+                console.print(f"[yellow]Found {len(broken)} module(s) with broken links:[/yellow]\n")
+
+                for source, targets in sorted(broken.items()):
+                    console.print(f"  {source}:")
+                    for target in targets:
+                        console.print(f"    [red]x[/red] [[{target}]] -> module not found")
+
+                console.print()
+            else:
+                console.print("[green]OK[/green] No broken links found\n")
+
+            # Check orphaned modules
+            orphaned = graph.get_orphaned_modules()
+
+            if orphaned:
+                console.print(f"[yellow]Found {len(orphaned)} orphaned module(s) (no connections):[/yellow]\n")
+
+                for module in sorted(orphaned):
+                    console.print(f"  [dim]{module}[/dim]")
+
+                console.print()
+            else:
+                console.print("[green]OK[/green] No orphaned modules")
+
+        elif action.lower() == "suggest-links":
+            # Suggest backlinks for a module
+            if not name:
+                console.print("[red]ERROR[/red] Module name is required for suggest-links")
+                console.print("[dim]Usage: module suggest-links <name>[/dim]")
+                sys.exit(1)
+
+            from memory_tool.core.connections import ConnectionGraph
+
+            graph = ConnectionGraph()
+
+            console.print(f"[cyan]Suggesting links for:[/cyan] {name}\n")
+
+            suggestions = graph.suggest_backlinks(name, max_suggestions=10)
+
+            if suggestions:
+                console.print(f"[green]Suggested connections ({len(suggestions)}):[/green]\n")
+
+                for module, reason in suggestions:
+                    console.print(f"  → [[{module}]]")
+                    console.print(f"    [dim]{reason}[/dim]")
+                    console.print()
+
+                console.print("[dim]Add these links to your module's .md files to create connections.[/dim]")
+            else:
+                console.print("[dim]No suggestions found.[/dim]")
+                console.print("[dim]This module may already be well-connected, or there are no related modules.[/dim]")
+
+        elif action.lower() == "rebuild-graph":
+            # Rebuild connection graph from all modules
+            from memory_tool.core.connections import ConnectionGraph
+            from memory_tool.core.graph_versions import GraphVersionManager
+
+            if not quiet:
+                console.print("[cyan]Rebuilding connection graph...[/cyan]")
+
+            graph = ConnectionGraph()
+
+            try:
+                total = graph.rebuild_from_modules()
+
+                if not quiet:
+                    console.print(f"\n[green]OK[/green] Connection graph rebuilt")
+                    console.print(f"Found {total} connections")
+
+                    # Show stats
+                    stats = graph.get_graph_stats()
+                    console.print(f"Connected modules: {stats['connected_modules']}")
+                    console.print(f"Orphaned modules: {stats['orphaned_modules']}")
+
+                # Auto-versioning: Create snapshot after rebuild
+                try:
+                    version_manager = GraphVersionManager()
+                    version_id = version_manager.create_snapshot(notes="Auto-snapshot after rebuild-graph")
+
+                    if not quiet:
+                        console.print(f"\n[dim]Auto-snapshot created (version {version_id})[/dim]")
+                except Exception:
+                    # Don't fail rebuild if snapshot fails
+                    pass
+
+            except Exception as e:
+                if not quiet:
+                    console.print(f"[red]ERROR[/red] Failed to rebuild graph: {e}")
+                sys.exit(1)
+
+        elif action.lower() == "suggest-ai":
+            # AI-based connection suggestions
+            if not name:
+                console.print("[red]ERROR[/red] Module name is required for suggest-ai")
+                console.print("[dim]Usage: module suggest-ai <name>[/dim]")
+                sys.exit(1)
+
+            # Check if LLM is available
+            if not LLMClient.check_availability():
+                console.print("[red]ERROR[/red] LLM not configured")
+                console.print("[dim]Set ANTHROPIC_API_KEY environment variable or configure Ollama[/dim]")
+                console.print("[dim]See config.yaml for LLM configuration[/dim]")
+                sys.exit(1)
+
+            from memory_tool.core.ai_suggester import AIConnectionSuggester
+
+            console.print(f"[cyan]Analyzing module content for AI suggestions:[/cyan] {name}\n")
+            console.print("[dim]Using LLM to analyze content similarity...[/dim]\n")
+
+            # Get module path
+            mod_manager = ModuleManager()
+            module_path = mod_manager.modules_path / name
+
+            if not module_path.exists():
+                console.print(f"[red]ERROR[/red] Module not found: {name}")
+                sys.exit(1)
+
+            # Get all candidate modules
+            all_modules = mod_manager.discover_all_modules()
+            candidates = [
+                (str(mod), mod_manager.modules_path / mod)
+                for mod in all_modules
+                if str(mod) != name
+            ]
+
+            # Get AI suggestions
+            suggester = AIConnectionSuggester()
+            try:
+                suggestions = suggester.suggest_connections(
+                    module_path,
+                    candidates,
+                    max_suggestions=5
+                )
+
+                if suggestions:
+                    console.print(f"[green]AI-suggested connections ({len(suggestions)}):[/green]\n")
+
+                    for module_name, reason, confidence in suggestions:
+                        confidence_pct = int(confidence * 100)
+                        color = "green" if confidence >= 0.7 else "yellow" if confidence >= 0.5 else "dim"
+
+                        console.print(f"  → [[{module_name}]] [{color}]({confidence_pct}%)[/{color}]")
+                        console.print(f"    [dim]{reason}[/dim]")
+                        console.print()
+
+                    console.print("[dim]Add these links to your module's .md files to create connections.[/dim]")
+                else:
+                    console.print("[dim]No strong connections suggested by AI.[/dim]")
+                    console.print("[dim]The module content may be too unique or general.[/dim]")
+
+            except Exception as e:
+                console.print(f"[red]ERROR[/red] AI suggestion failed: {e}")
+                sys.exit(1)
+
+        elif action.lower() == "auto-tag":
+            # AI-based tag suggestions
+            if not name:
+                console.print("[red]ERROR[/red] Module name is required for auto-tag")
+                console.print("[dim]Usage: module auto-tag <name>[/dim]")
+                sys.exit(1)
+
+            # Check if LLM is available
+            if not LLMClient.check_availability():
+                console.print("[red]ERROR[/red] LLM not configured")
+                console.print("[dim]Set ANTHROPIC_API_KEY environment variable or configure Ollama[/dim]")
+                console.print("[dim]See config.yaml for LLM configuration[/dim]")
+                sys.exit(1)
+
+            from memory_tool.core.ai_suggester import AIConnectionSuggester
+
+            console.print(f"[cyan]Analyzing module content for tags:[/cyan] {name}\n")
+            console.print("[dim]Using LLM to generate relevant tags...[/dim]\n")
+
+            # Get module path
+            mod_manager = ModuleManager()
+            module_path = mod_manager.modules_path / name
+
+            if not module_path.exists():
+                console.print(f"[red]ERROR[/red] Module not found: {name}")
+                sys.exit(1)
+
+            # Get AI tag suggestions
+            suggester = AIConnectionSuggester()
+            try:
+                tags = suggester.suggest_tags(module_path, max_tags=5)
+
+                if tags:
+                    console.print(f"[green]Suggested tags ({len(tags)}):[/green]\n")
+
+                    for tag in tags:
+                        console.print(f"  • {tag}")
+
+                    console.print(f"\n[dim]Add these tags to your module's metadata or use them for organization.[/dim]")
+                else:
+                    console.print("[dim]No tags suggested by AI.[/dim]")
+                    console.print("[dim]The module may need more content for tag generation.[/dim]")
+
+            except Exception as e:
+                console.print(f"[red]ERROR[/red] Tag generation failed: {e}")
+                sys.exit(1)
+
+        elif action.lower() == "graph-snapshot":
+            # Create a snapshot of current graph state
+            from memory_tool.core.graph_versions import GraphVersionManager
+
+            console.print("[cyan]Creating graph snapshot...[/cyan]")
+
+            manager_ver = GraphVersionManager()
+
+            try:
+                version_id = manager_ver.create_snapshot(notes=notes or "")
+
+                console.print(f"\n[green]OK[/green] Snapshot created")
+                console.print(f"Version ID: {version_id}")
+                if notes:
+                    console.print(f"Notes: {notes}")
+
+                # Show current stats
+                version = manager_ver.get_version(version_id)
+                if version:
+                    console.print(f"Connections: {version.total_connections}")
+                    console.print(f"Modules: {version.total_modules}")
+                    console.print(f"Timestamp: {version.timestamp.strftime('%Y-%m-%d %H:%M:%S')}")
+
+            except Exception as e:
+                console.print(f"[red]ERROR[/red] Failed to create snapshot: {e}")
+                sys.exit(1)
+
+        elif action.lower() == "graph-history":
+            # List graph version history
+            from memory_tool.core.graph_versions import GraphVersionManager
+
+            console.print("[cyan]Graph Version History[/cyan]\n")
+
+            manager_ver = GraphVersionManager()
+
+            try:
+                versions = manager_ver.list_versions(limit=limit or 10)
+
+                if versions:
+                    console.print(f"[green]Recent versions ({len(versions)}):[/green]\n")
+
+                    for ver in versions:
+                        timestamp_str = ver.timestamp.strftime('%Y-%m-%d %H:%M:%S')
+                        console.print(f"  Version {ver.version_id} - {timestamp_str}")
+                        console.print(f"    Connections: {ver.total_connections}, Modules: {ver.total_modules}")
+                        if ver.notes:
+                            console.print(f"    Notes: [dim]{ver.notes}[/dim]")
+                        console.print()
+
+                    total_count = manager_ver.get_version_count()
+                    if total_count > len(versions):
+                        console.print(f"[dim]Showing {len(versions)} of {total_count} total versions[/dim]")
+                        console.print(f"[dim]Use --limit to see more versions[/dim]")
+                else:
+                    console.print("[dim]No versions found.[/dim]")
+                    console.print("[dim]Create a snapshot with: module graph-snapshot[/dim]")
+
+            except Exception as e:
+                console.print(f"[red]ERROR[/red] Failed to list versions: {e}")
+                sys.exit(1)
+
+        elif action.lower() == "graph-diff":
+            # Compare two graph versions
+            if not version1 or not version2:
+                console.print("[red]ERROR[/red] Two version IDs required for graph-diff")
+                console.print("[dim]Usage: module graph-diff --version1 <id> --version2 <id>[/dim]")
+                sys.exit(1)
+
+            from memory_tool.core.graph_versions import GraphVersionManager
+
+            console.print(f"[cyan]Comparing graph versions {version1} → {version2}[/cyan]\n")
+
+            manager_ver = GraphVersionManager()
+
+            try:
+                # Get version info
+                v1 = manager_ver.get_version(version1)
+                v2 = manager_ver.get_version(version2)
+
+                if not v1:
+                    console.print(f"[red]ERROR[/red] Version {version1} not found")
+                    sys.exit(1)
+                if not v2:
+                    console.print(f"[red]ERROR[/red] Version {version2} not found")
+                    sys.exit(1)
+
+                # Show version details
+                console.print(f"[dim]Version {version1}:[/dim] {v1.timestamp.strftime('%Y-%m-%d %H:%M:%S')}")
+                console.print(f"  Connections: {v1.total_connections}, Modules: {v1.total_modules}")
+                console.print()
+                console.print(f"[dim]Version {version2}:[/dim] {v2.timestamp.strftime('%Y-%m-%d %H:%M:%S')}")
+                console.print(f"  Connections: {v2.total_connections}, Modules: {v2.total_modules}")
+                console.print()
+
+                # Get diff
+                diff = manager_ver.diff_versions(version1, version2)
+
+                # Show changes
+                if diff["added"]:
+                    console.print(f"[green]Added connections ({len(diff['added'])}):[/green]")
+                    for source, target in diff["added"][:10]:
+                        console.print(f"  + {source} → {target}")
+                    if len(diff["added"]) > 10:
+                        console.print(f"  [dim]... and {len(diff['added']) - 10} more[/dim]")
+                    console.print()
+
+                if diff["removed"]:
+                    console.print(f"[red]Removed connections ({len(diff['removed'])}):[/red]")
+                    for source, target in diff["removed"][:10]:
+                        console.print(f"  - {source} → {target}")
+                    if len(diff["removed"]) > 10:
+                        console.print(f"  [dim]... and {len(diff['removed']) - 10} more[/dim]")
+                    console.print()
+
+                if not diff["added"] and not diff["removed"]:
+                    console.print("[dim]No changes between versions[/dim]")
+
+                # Summary
+                console.print(f"[dim]Summary: +{len(diff['added'])} -{len(diff['removed'])} ={len(diff['unchanged'])}[/dim]")
+
+            except Exception as e:
+                console.print(f"[red]ERROR[/red] Failed to compare versions: {e}")
+                sys.exit(1)
+
         elif action.lower() == "unarchive":
             # Restore module from archive
             if not name:
@@ -1159,7 +1659,8 @@ def module(
 
         else:
             console.print(f"[red]ERROR[/red] Unknown action: {action}")
-            console.print("Valid actions: create, list, archive, unarchive")
+            console.print("Valid actions: create, list, tree, archive, unarchive, connections, graph, rebuild-graph,")
+            console.print("  check-links, suggest-links, suggest-ai, auto-tag, graph-snapshot, graph-history, graph-diff")
             sys.exit(1)
 
     except ModuleError as e:
@@ -1429,23 +1930,25 @@ def archive(
     up_to: int = typer.Option(None, "--up-to", help="Archive decisions up to this number (e.g., 25 = #1-#25)"),
     keep_recent: int = typer.Option(None, "--keep-recent", help="Keep only N most recent decisions"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be archived without doing it"),
+    module_name: str = typer.Option(None, "--module", "-m", help="Module name or path (default: memory-system)"),
 ):
     """Archive completed documentation (marchive command).
 
     Examples:
-        marchive decisions                    # Keep recent 10 (default)
-        marchive decisions --keep-recent 15   # Keep recent 15
-        marchive decisions --up-to 25         # Archive #1-25
-        marchive decisions --phase 5          # Archive Phase 1-5 (old style)
-        marchive current --phase 5            # Archive Phase 5 current.md
-        marchive plans                        # Move PLAN-*.md to archive
-        marchive decisions --dry-run          # Preview
+        marchive decisions                              # Keep recent 10 (default)
+        marchive decisions --keep-recent 15             # Keep recent 15
+        marchive decisions --up-to 25                   # Archive #1-25
+        marchive decisions --phase 5                    # Archive Phase 1-5 (old style)
+        marchive current --phase 5                      # Archive Phase 5 current.md
+        marchive plans                                  # Move PLAN-*.md to archive
+        marchive decisions --dry-run                    # Preview
+        marchive decisions --module projects/website    # Archive for specific module
     """
     try:
         from memory_tool.core.archiver import Archiver, ArchiverError
         from memory_tool.utils.config import Config
 
-        archiver = Archiver()
+        archiver = Archiver(module_name=module_name)
 
         if target == "decisions":
             # Validate mutually exclusive options
@@ -1683,28 +2186,37 @@ def completion(
 @app.command()
 def browse(
     query: str = typer.Argument(None, help="Initial search query"),
+    mode: str = typer.Option("search", "--mode", "-m", help="Initial mode: search, timeline, modules, graph"),
 ):
-    """Interactive TUI search browser (mbrowse command).
+    """Interactive TUI browser (mbrowse command).
 
-    Launch an interactive terminal interface for searching and browsing
-    timeline entries. Provides keyboard navigation, detail view, and
-    vim-style keybindings.
+    Launch an enhanced terminal interface with multiple modes:
+    - Search: Interactive search with filters
+    - Timeline: Date-based timeline explorer
+    - Modules: Hierarchical module browser
+    - Graph: Module connection graph viewer
 
     Keybindings:
-        /: Focus search input
-        Enter: Show detail view
-        Esc: Close detail view
+        Tab: Switch between modes
+        /: Focus search (in search mode)
+        Enter: Show details
+        Esc: Close details
         q: Quit application
-        j/k: Navigate results (Vim-style)
+        j/k: Navigate (Vim-style)
+        n/p: Next/Previous (in timeline)
+        r: Refresh
+        ?: Help
 
     Examples:
-        mbrowse                    # Launch browser
-        mbrowse "search query"     # Launch with query
+        mbrowse                       # Launch browser (search mode)
+        mbrowse "search query"        # Launch with query
+        mbrowse --mode timeline       # Launch in timeline mode
+        mbrowse --mode graph          # Launch in graph mode
     """
     try:
         # Check if textual is available
         try:
-            from memory_tool.tui import SearchBrowser
+            from memory_tool.tui import run_browser
         except ImportError:
             console.print("[red]ERROR[/red] TUI feature not available")
             console.print("Install with: pip install memory-tool[tui]")
@@ -1717,9 +2229,15 @@ def browse(
             console.print("[red]ERROR[/red] .memory/ not found. Run 'minit' first.")
             sys.exit(1)
 
-        # Launch TUI app (pass project root, not .memory path)
-        from memory_tool.tui.search_browser import run_search_browser
-        run_search_browser(base_path=Path.cwd(), initial_query=query)
+        # Validate mode
+        valid_modes = ["search", "timeline", "modules", "graph"]
+        if mode not in valid_modes:
+            console.print(f"[red]ERROR[/red] Invalid mode: {mode}")
+            console.print(f"Valid modes: {', '.join(valid_modes)}")
+            sys.exit(1)
+
+        # Launch enhanced TUI browser
+        run_browser(base_path=Path.cwd(), mode=mode, query=query)
 
     except KeyboardInterrupt:
         console.print("\n[yellow]Browser closed[/yellow]")
@@ -1971,6 +2489,111 @@ def tutorial(
         console.print("\n[yellow]Tutorial closed[/yellow]")
     except Exception as e:
         console.print(f"[red]ERROR[/red] Tutorial failed: {e}")
+        import traceback
+        console.print(f"[dim]{traceback.format_exc()}[/dim]")
+        sys.exit(1)
+
+
+@app.command()
+def hooks(
+    action: str = typer.Argument(..., help="Action: install, uninstall, list"),
+    hook_type: str = typer.Argument(None, help="Hook type: pre-commit, post-checkout"),
+    force: bool = typer.Option(False, "--force", "-f", help="Overwrite existing hook"),
+):
+    """Manage git hooks for automatic graph updates.
+
+    Examples:
+        mhooks install pre-commit    # Install pre-commit hook
+        mhooks install post-checkout # Install post-checkout hook
+        mhooks list                  # List installed hooks
+        mhooks uninstall pre-commit  # Remove hook
+    """
+    try:
+        from memory_tool.utils.git_hooks import GitHookManager, GitHookError
+
+        manager = GitHookManager()
+
+        if action.lower() == "install":
+            if not hook_type:
+                console.print("[red]ERROR[/red] Hook type required for install")
+                console.print("[dim]Usage: hooks install <pre-commit|post-checkout>[/dim]")
+                sys.exit(1)
+
+            # Check if git repo
+            if not manager.is_git_repo():
+                console.print("[red]ERROR[/red] Not a git repository")
+                console.print("[dim]Run 'git init' first or navigate to a git repository[/dim]")
+                sys.exit(1)
+
+            console.print(f"[cyan]Installing {hook_type} hook...[/cyan]")
+
+            try:
+                if hook_type == "pre-commit":
+                    hook_path = manager.install_pre_commit_hook(force=force)
+                elif hook_type == "post-checkout":
+                    hook_path = manager.install_post_checkout_hook(force=force)
+                else:
+                    console.print(f"[red]ERROR[/red] Unknown hook type: {hook_type}")
+                    console.print("Valid types: pre-commit, post-checkout")
+                    sys.exit(1)
+
+                console.print(f"\n[green]OK[/green] Hook installed: {hook_path.relative_to(Path.cwd())}")
+                console.print("\n[dim]This hook will automatically rebuild the connection graph.")
+                console.print("You can disable it by removing the hook file.[/dim]")
+
+            except GitHookError as e:
+                console.print(f"[red]ERROR[/red] {e}")
+                sys.exit(1)
+
+        elif action.lower() == "uninstall":
+            if not hook_type:
+                console.print("[red]ERROR[/red] Hook type required for uninstall")
+                console.print("[dim]Usage: hooks uninstall <pre-commit|post-checkout>[/dim]")
+                sys.exit(1)
+
+            if not manager.is_git_repo():
+                console.print("[red]ERROR[/red] Not a git repository")
+                sys.exit(1)
+
+            console.print(f"[cyan]Uninstalling {hook_type} hook...[/cyan]")
+
+            try:
+                removed = manager.uninstall_hook(hook_type)
+
+                if removed:
+                    console.print(f"\n[green]OK[/green] Hook removed")
+                else:
+                    console.print(f"\n[yellow]![/yellow] Hook not found: {hook_type}")
+
+            except GitHookError as e:
+                console.print(f"[red]ERROR[/red] {e}")
+                sys.exit(1)
+
+        elif action.lower() == "list":
+            if not manager.is_git_repo():
+                console.print("[yellow]![/yellow] Not a git repository")
+                return
+
+            hooks_status = manager.list_installed_hooks()
+
+            console.print("[cyan]Git Hooks Status:[/cyan]\n")
+
+            for hook_name, installed in hooks_status.items():
+                if installed:
+                    console.print(f"  [green]OK[/green] {hook_name}")
+                else:
+                    console.print(f"  [dim]-- {hook_name} (not installed)[/dim]")
+
+            console.print()
+            console.print("[dim]Use 'hooks install <type>' to install a hook[/dim]")
+
+        else:
+            console.print(f"[red]ERROR[/red] Unknown action: {action}")
+            console.print("Valid actions: install, uninstall, list")
+            sys.exit(1)
+
+    except Exception as e:
+        console.print(f"[red]ERROR[/red] Unexpected error: {e}")
         import traceback
         console.print(f"[dim]{traceback.format_exc()}[/dim]")
         sys.exit(1)

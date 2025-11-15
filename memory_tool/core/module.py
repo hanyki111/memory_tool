@@ -36,25 +36,35 @@ class ModuleManager:
         return self.modules_path.exists()
 
     def _validate_module_name(self, name: str) -> None:
-        """Validate module name.
+        """Validate module name or path.
 
         Args:
-            name: Module name to validate
+            name: Module name or path to validate (e.g., 'module' or 'projects/website')
 
         Raises:
             ModuleError: If name is invalid
         """
-        # Check for valid characters (alphanumeric, dash, underscore)
-        if not re.match(r'^[a-zA-Z0-9_-]+$', name):
-            raise ModuleError(
-                f"Invalid module name: {name}. "
-                f"Use only alphanumeric characters, dashes, and underscores."
-            )
+        # Split path components
+        parts = name.split('/')
 
         # Check for reserved names
         reserved = ["archive", "templates", ".git"]
-        if name.lower() in reserved:
-            raise ModuleError(f"Reserved name: {name}")
+
+        # Validate each path component
+        for part in parts:
+            if not part:
+                raise ModuleError(f"Invalid module path: {name}. Empty path component.")
+
+            # Check for valid characters (alphanumeric, dash, underscore)
+            if not re.match(r'^[a-zA-Z0-9_-]+$', part):
+                raise ModuleError(
+                    f"Invalid module path component: {part}. "
+                    f"Use only alphanumeric characters, dashes, and underscores."
+                )
+
+            # Check for reserved names
+            if part.lower() in reserved:
+                raise ModuleError(f"Reserved name in path: {part}")
 
     def module_exists(self, name: str) -> bool:
         """Check if module exists.
@@ -237,28 +247,53 @@ TODO: Add usage examples
 
         return module_path
 
+    def discover_all_modules(self) -> List[Path]:
+        """Discover all modules recursively by finding current.md files.
+
+        Returns:
+            List of module paths relative to modules_path
+        """
+        if not self.modules_path.exists():
+            return []
+
+        modules = []
+        for current_file in self.modules_path.rglob("current.md"):
+            module_dir = current_file.parent
+
+            # Skip archive directories
+            if "archive" in module_dir.parts:
+                continue
+
+            # Get relative path from modules_path
+            try:
+                rel_path = module_dir.relative_to(self.modules_path)
+                modules.append(rel_path)
+            except ValueError:
+                continue
+
+        # Sort by path
+        modules.sort(key=lambda p: str(p))
+        return modules
+
     def list_modules(self, include_archived: bool = False) -> Dict[str, List[str]]:
-        """List all modules.
+        """List all modules (hierarchical paths).
 
         Args:
             include_archived: Whether to include archived modules
 
         Returns:
-            Dictionary with 'active' and optionally 'archived' lists
+            Dictionary with 'active' (list of paths) and optionally 'archived' lists
         """
         result = {"active": []}
 
         if not self.modules_path.exists():
             return result
 
-        # List active modules
-        for item in self.modules_path.iterdir():
-            if item.is_dir() and not item.name.startswith(".") and item.name != "archive":
-                result["active"].append(item.name)
+        # List active modules (find all current.md files)
+        discovered = self.discover_all_modules()
+        result["active"] = [str(p) for p in discovered]
 
-        result["active"].sort()
-
-        # List archived modules
+        # List archived modules (flat structure in archive/)
         if include_archived and self.archive_path.exists():
             archived = []
             for item in self.archive_path.iterdir():
@@ -268,6 +303,69 @@ TODO: Add usage examples
             result["archived"] = archived
 
         return result
+
+    def build_module_tree(self) -> Dict:
+        """Build hierarchical tree structure of modules.
+
+        Returns:
+            Nested dictionary representing module hierarchy
+            Example: {'projects': {'website': {}, 'app': {}}, 'areas': {}}
+        """
+        modules = self.discover_all_modules()
+        tree = {}
+
+        for module_path in modules:
+            parts = module_path.parts
+            current = tree
+
+            # Build nested structure
+            for i, part in enumerate(parts):
+                if part not in current:
+                    current[part] = {}
+                current = current[part]
+
+        return tree
+
+    def get_module_info(self, name: str) -> Dict:
+        """Get information about a module.
+
+        Args:
+            name: Module name or path
+
+        Returns:
+            Dictionary with module information (path, parent, children)
+        """
+        module_path = self.modules_path / name
+
+        if not module_path.exists():
+            raise ModuleError(f"Module not found: {name}")
+
+        # Check if it's actually a module (has current.md)
+        if not (module_path / "current.md").exists():
+            raise ModuleError(f"Not a valid module (missing current.md): {name}")
+
+        # Get parent
+        rel_path = Path(name)
+        parent = str(rel_path.parent) if rel_path.parent != Path(".") else None
+
+        # Get children (direct subdirectories with current.md)
+        children = []
+        for item in module_path.iterdir():
+            if item.is_dir() and (item / "current.md").exists():
+                # Skip archive
+                if item.name == "archive":
+                    continue
+                child_path = f"{name}/{item.name}" if name != "." else item.name
+                children.append(child_path)
+
+        children.sort()
+
+        return {
+            "name": name,
+            "path": module_path,
+            "parent": parent,
+            "children": children,
+        }
 
     def archive(self, name: str, reason: str = "") -> Path:
         """Archive a module.

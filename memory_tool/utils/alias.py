@@ -27,6 +27,8 @@ class AliasManager:
         "mtoday": ("today", "Show today's timeline"),
         "mweek": ("week", "Show this week's timeline"),
         "mstatus": ("status", "Show statistics"),
+        "mmodule": ("module", "Manage modules and connections"),
+        "mhooks": ("hooks", "Manage git hooks"),
         "mbrowse": ("browse", "Interactive search browser"),
         "mcompletion": ("completion", "Manage shell completions"),
         "mplan": ("plan", "Manage plans and tasks"),

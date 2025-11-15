@@ -6,7 +6,163 @@ For Phase 1-4 decisions (#1-#23), see [archive/decisions-phase1-4.md](./archive/
 
 ---
 
-## Recent Decisions (Phase 5)
+## Recent Decisions (Phase 5+)
+
+### 2025-11-15: 모듈 조직화 원칙 수립 ⭐⭐⭐⭐⭐
+**결정 #30:** Module Organization Principles 확립 및 문서화
+
+**배경:**
+- memory-system이 2000줄, 29개 결정, 7개 Phase로 성장
+- 계층적 모듈 시스템 도입 (Phase 6) 이후 조직화 원칙 필요
+- 언제 모듈을 분리하고, 계층을 사용하고, 명명하는지 기준 부재
+- Claude가 일관되게 따를 수 있는 원칙 필요
+
+**문제:**
+- 모듈 분리 시점 불명확 (언제 나눌까?)
+- 계층 vs 평면 선택 기준 없음
+- 크기/복잡도 임계값 미정의
+- God Module 위험 (모든 것을 하나에)
+
+**구현 사항:**
+
+**1. 핵심 원칙 문서 생성**
+```
+.memory/modules/
+├── MODULE-ORGANIZATION-PRINCIPLES.md  # 상세 원칙
+├── QUICK-REFERENCE-MODULE-ORGANIZATION.md  # 빠른 참조
+└── memory-system/MIGRATION-PLAN.md    # memory-system 분리 계획
+```
+
+**2. 분리 기준 (정량적)**
+```
+🔴 반드시 분리 (High Priority):
+  - current.md > 300줄
+  - 전체 파일 > 3000줄
+  - 결정사항 > 30개
+  - 독립 토픽 > 5개
+
+🟡 분리 고려 (Medium Priority):
+  - current.md > 200줄
+  - 전체 파일 > 2000줄
+  - 결정사항 > 20개
+  - 독립 토픽 > 3개
+
+🟢 유지 (Low Priority):
+  - current.md < 200줄
+  - 전체 파일 < 2000줄
+  - 결정사항 < 20개
+  - 단일 토픽
+```
+
+**3. 분리 기준 (정성적)**
+- 인지 부하: 이해하는데 >20분
+- 변경 영향: 한 변경이 여러 무관한 부분 영향
+- 재사용성: 일부만 독립 참조 필요
+- 팀 경계: 다른 사람/팀이 다른 부분 소유
+
+**4. 계층 vs 평면 결정**
+```
+계층 사용 (projects/parent/child):
+  ✅ 명확한 포함 관계 (IS-PART-OF)
+  ✅ 공통 컨텍스트/프로젝트
+  ✅ 동일한 생명주기
+  ✅ 점진적 상세화
+
+평면 사용 (projects/module-a):
+  ✅ 독립적 관심사
+  ✅ 다른 생명주기
+  ✅ 교차 참조 관계
+  ✅ 여러 잠재적 부모
+```
+
+**5. 모듈 크기 가이드**
+- **Small** (권장): 100-500줄, 1-5개 결정, 단일 관심사
+- **Medium**: 500-1500줄, 5-15개 결정, 2-3개 관련 관심사
+- **Large** (분리 고려): 1500-3000줄, 15-30개 결정
+- **Too Large** (반드시 분리): >3000줄, >30개 결정
+
+**6. 명명 규칙**
+```
+projects/[project-name]/[feature]   # 프로젝트 하위 기능
+areas/[area-name]                   # 관심 영역
+resources/[resource-type]           # 재사용 가능 리소스
+archive/[YYYY-MM]/[archived-name]   # 완료된 프로젝트
+```
+
+**7. Claude 통합**
+- **CLAUDE.md**: Module Organization Principles 섹션 추가
+- **.claude/guidelines.md**: 모듈 조직화 원칙 섹션 추가
+- 모듈 작업 시 자동으로 크기 확인 및 분리 제안
+
+**memory-system 분석 결과:**
+```
+현재 상태:
+  - 크기: ~2000줄 (Large, 분리 고려 단계)
+  - 결정: 29개 (곧 30개 도달)
+  - 토픽: 7개 (명확히 >5개)
+  - 인지 부하: 25분+ (>20분)
+
+→ 결론: 분리 필요 (모든 기준 충족)
+```
+
+**제안 구조:**
+```
+projects/memory-tool/
+├── core-system/          # Timeline, init (안정적)
+├── search-system/        # Text, vector, SQLite (독립적)
+├── module-system/        # Hierarchy, connections, graph (Phase 6)
+├── ui-system/            # CLI, TUI, aliases (프레젠테이션)
+├── llm-integration/      # Summarization, AI (외부 통합)
+└── project-management/   # Decisions, architecture (거버넌스)
+```
+
+**마이그레이션 계획:**
+- 7단계, 11시간 예상
+- 3세션으로 분할 가능 (4h + 4h + 3h)
+- 점진적 접근도 가능 (5주)
+- 롤백 계획 포함
+
+**Trade-offs:**
+
+**장점:**
+- ✅ 명확한 분리 기준
+- ✅ 일관된 모듈 구조
+- ✅ 확장성 향상
+- ✅ 인지 부하 감소
+- ✅ 독립적 발전 가능
+- ✅ Claude가 자동으로 적용 가능
+
+**단점:**
+- ⚠️ 초기 마이그레이션 노력 필요 (11시간)
+- ⚠️ 기존 [[링크]] 업데이트 필요
+- ⚠️ 학습 곡선 (새 구조 이해)
+
+**대안 검토:**
+- **A**: 원칙 없이 계속 (채택 안 함) - God Module 위험
+- **B**: 크기만 고려 (채택 안 함) - 응집도 무시
+- **C**: 정량+정성 기준 (채택) - 균형잡힌 접근
+- **D**: 즉시 분리 vs 점진적 - 두 옵션 모두 제공
+
+**실천 방법:**
+1. 모듈 작업 전 `wc -l .memory/modules/[module]/*.md` 확인
+2. MODULE-ORGANIZATION-PRINCIPLES.md 참조
+3. QUICK-REFERENCE 체크리스트 사용
+4. 분리 기준 충족 시 Claude가 자동 제안
+
+**영향:**
+- ✅ 향후 모든 모듈 작업에 적용
+- ✅ Claude가 일관되게 따를 수 있는 기준
+- ✅ 프로젝트 확장성 크게 향상
+- ✅ 새 기여자 온보딩 용이
+
+**참조:**
+- MODULE-ORGANIZATION-PRINCIPLES.md (상세 원칙)
+- QUICK-REFERENCE-MODULE-ORGANIZATION.md (빠른 참조)
+- memory-system/MIGRATION-PLAN.md (구체적 실행 계획)
+- CLAUDE.md (통합됨)
+- .claude/guidelines.md (통합됨)
+
+---
 
 ### 2025-11-15: marchive 명령어 개선 - 결정 번호 기반 아카이브 ⭐⭐⭐
 **결정 #29:** 결정 번호/개수 기반 아카이브 옵션 추가 (--up-to, --keep-recent)

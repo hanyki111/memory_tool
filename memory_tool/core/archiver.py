@@ -15,18 +15,26 @@ class ArchiverError(Exception):
 class Archiver:
     """Handle archiving of module documentation."""
 
-    def __init__(self, base_path: Optional[Path] = None):
+    def __init__(self, base_path: Optional[Path] = None, module_name: Optional[str] = None):
         """
         Initialize archiver.
 
         Args:
             base_path: Base path for project. Defaults to current directory.
+            module_name: Module name or path (e.g., 'memory-system' or 'projects/website').
+                        Defaults to 'memory-system' for backwards compatibility.
         """
         if base_path is None:
             base_path = Path.cwd()
         self.base_path = Path(base_path)
         self.memory_path = self.base_path / ".memory"
-        self.module_path = self.memory_path / "modules" / "memory-system"
+
+        # Default to memory-system for backwards compatibility
+        if module_name is None:
+            module_name = "memory-system"
+
+        self.module_name = module_name
+        self.module_path = self.memory_path / "modules" / module_name
         self.archive_path = self.module_path / "archive"
 
     def archive_decisions(

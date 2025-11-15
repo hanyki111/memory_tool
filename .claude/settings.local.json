@@ -10,7 +10,14 @@
       "Bash(git ls-tree:*)",
       "Bash(git checkout:*)",
       "Bash(python -c:*)",
-      "Bash(git merge:*)"
+      "Bash(git merge:*)",
+      "Bash(pip install:*)",
+      "Bash(powershell -Command \"(Get-Content ''memory_tool\\cli.py'' | Measure-Object -Line).Lines\")",
+      "Bash(.memory/modules/projects/test-website/current.md)",
+      "Bash(powershell -Command \"(Get-Content ''.memory\\modules\\memory-system\\current.md'' | Measure-Object -Line).Lines\")",
+      "Bash(move .memorymodulesMODULE-ORGANIZATION-PRINCIPLES.md .memorydocs )",
+      "Bash(move .memorymodulesQUICK-REFERENCE-MODULE-ORGANIZATION.md .memorydocs)",
+      "Bash(powershell -Command \"(Get-Content ''.memory\\modules\\memory-system\\decisions.md'' | Measure-Object -Line).Lines\")"
     ],
     "deny": [],
     "ask": []
