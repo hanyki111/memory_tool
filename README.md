@@ -265,6 +265,19 @@ malias uninstall --powershell
 
 ## Claude Code 통합
 
+### 초기 설정
+
+**CLAUDE.md 생성 (선택사항, 권장):**
+```bash
+# 템플릿 복사
+cp CLAUDE.md.template CLAUDE.md
+
+# 프로젝트에 맞게 수정
+# - 프로젝트 개요, 현재 상태, 중요 파일 등 기입
+```
+
+📚 **자세한 가이드:** [docs/CLAUDE_SETUP.md](docs/CLAUDE_SETUP.md)
+
 ### 자동 컨텍스트 제공
 
 **1단계: 작업 종료 시**
@@ -274,7 +287,9 @@ mcontext
 
 **2단계: Claude Code 시작 시**
 
-Claude Code가 자동으로 `CLAUDE.md`를 읽고, `.claude/memory-context.md`를 통해 최근 작업을 파악합니다.
+Claude Code가 자동으로 다음을 읽습니다:
+- `CLAUDE.md` - 프로젝트 가이드라인 및 현재 상태 (사용자 생성)
+- `.claude/memory-context.md` - 최근 timeline 자동 요약 (mcontext 생성)
 
 ### 수동 업데이트
 
@@ -407,20 +422,16 @@ ms "authentication" --from 2025-11-01 --to 2025-11-14
 
 ## 참고 문서
 
-**프로젝트:**
-- `CLAUDE.md` - Claude Code 진입점 ⭐
-- `시간-공간-통합-지식-체계-v2.0.md` - 전체 설계 문서 (2476줄)
+**사용자 문서:**
+- [docs/INSTALLATION.md](docs/INSTALLATION.md) - 설치 가이드
+- [docs/QUICKSTART.md](docs/QUICKSTART.md) - 5분 시작 가이드
+- [docs/USER_GUIDE.md](docs/USER_GUIDE.md) - 완전한 사용자 가이드 (3168줄)
+- [docs/FAQ.md](docs/FAQ.md) - 자주 묻는 질문 (1107줄)
+- [docs/CLAUDE_SETUP.md](docs/CLAUDE_SETUP.md) - CLAUDE.md 설정 가이드 ⭐
 
-**개발 기록 (.memory/):**
-- `.memory/timeline/2025-11/` - 개발 과정 전체 기록
-- `.memory/modules/projects/memory-tool/` - 6개 feature-based 모듈:
-  - `core-system/`, `search-system/`, `module-system/`
-  - `ui-system/`, `llm-integration/`, `project-management/`
-- `.memory/concepts/python-cli-development-plan.md` - 개발 계획
-
-**Claude Code 통합 (.claude/):**
-- `.claude/guidelines.md` - Claude 사고 원칙 (정직성, 심층 사고, 비판적 검증)
-- `.claude/memory-context.md` - 자동 생성 컨텍스트
+**Claude Code 통합:**
+- `CLAUDE.md.template` - Claude Code 프로젝트 설정 템플릿
+- `.claude/memory-context.md` - 자동 생성 컨텍스트 (mcontext)
 
 ---
 
