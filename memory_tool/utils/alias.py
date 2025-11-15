@@ -27,6 +27,10 @@ class AliasManager:
         "mtoday": ("today", "Show today's timeline"),
         "mweek": ("week", "Show this week's timeline"),
         "mstatus": ("status", "Show statistics"),
+        "mbrowse": ("browse", "Interactive search browser"),
+        "mcompletion": ("completion", "Manage shell completions"),
+        "mplan": ("plan", "Manage plans and tasks"),
+        "mtutorial": ("tutorial", "Interactive tutorial"),
     }
 
     def __init__(self):
