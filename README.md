@@ -23,20 +23,35 @@
 
 **요구사항:** Python 3.10+
 
+#### Option 1: 단독 사용 (권장)
+
 ```bash
-# GitHub에서 설치 (권장)
+# GitHub에서 설치
 pip install git+https://github.com/hanyki111/memory_tool.git
 
-# 특정 버전
-pip install git+https://github.com/hanyki111/memory_tool.git@v1.0.0-alpha
-
-# 개발 모드 (소스 수정 시)
+# 또는 로컬 clone 후 설치
 git clone https://github.com/hanyki111/memory_tool.git
 cd memory_tool
 pip install -e .
 ```
 
-📚 **자세한 설치 가이드:** [INSTALLATION.md](docs/INSTALLATION.md)
+#### Option 2: 다른 프로젝트에서 라이브러리로 사용
+
+```bash
+# 프로젝트 구조
+your-workspace/
+├── memory_tool/          # git clone한 memory_tool
+└── your-project/         # 당신의 프로젝트
+
+# your-project/requirements.txt에 추가
+-e ../memory_tool
+
+# 설치
+cd your-project
+pip install -r requirements.txt
+```
+
+📚 **자세한 설치 가이드:** [INSTALLATION.md](docs/INSTALLATION.md) | **통합 가이드:** 아래 [다른 프로젝트에서 사용하기](#다른-프로젝트에서-사용하기) 참조
 
 ### 기본 사용
 
@@ -77,6 +92,152 @@ malias install --powershell
 ```
 
 설치 후 모든 터미널(PowerShell, VSCode, Windows Terminal)에서 작동합니다.
+
+---
+
+## 다른 프로젝트에서 사용하기
+
+memory_tool을 Python 라이브러리로 활용하여 자신만의 도구를 만들 수 있습니다.
+
+### 프로젝트 구조 설정
+
+```bash
+# 작업 공간 구조
+your-workspace/
+├── memory_tool/              # git clone한 memory_tool
+│   ├── memory_tool/          # 패키지
+│   ├── .memory/              # memory_tool 자체 개발 데이터
+│   └── .claude/              # memory_tool 설정
+│
+└── your-project/             # 당신의 프로젝트
+    ├── .memory/              # 프로젝트 데이터 (독립)
+    ├── .claude/              # 프로젝트 설정 (독립)
+    ├── requirements.txt      # ⭐ memory_tool 여기서 참조
+    └── your_code.py
+```
+
+### 통합 방법
+
+#### 1. requirements.txt 설정
+
+```txt
+# your-project/requirements.txt
+
+# 다른 의존성들...
+fastapi==0.104.1
+pydantic==2.5.0
+
+# memory_tool (로컬 개발 모드)
+# 상대 경로로 참조
+-e ../memory_tool
+```
+
+#### 2. 패키지 설치
+
+```bash
+cd your-project
+
+# 가상환경 생성 (권장)
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# 패키지 설치 (memory_tool 포함)
+pip install -r requirements.txt
+
+# 확인
+python -c "from memory_tool.core.timeline import TimelineManager; print('✅ OK')"
+```
+
+#### 3. 코드에서 사용
+
+```python
+# your-project/your_code.py
+
+from pathlib import Path
+from memory_tool.core.timeline import TimelineManager
+from memory_tool.core.search import SearchEngine
+
+class MyApp:
+    def __init__(self):
+        # 프로젝트의 .memory/ 디렉토리 사용
+        self.memory_dir = Path(".memory")
+        self.timeline = TimelineManager(self.memory_dir)
+        self.search = SearchEngine(self.memory_dir)
+
+    def log_action(self, message: str):
+        """작업 기록"""
+        return self.timeline.add_entry(message)
+
+    def search_history(self, query: str):
+        """과거 작업 검색"""
+        return self.search.search_text(query)
+
+# 사용 예시
+app = MyApp()
+app.log_action("사용자 인증 기능 구현 시작")
+results = app.search_history("인증")
+```
+
+### 장점
+
+- ✅ **.claude 폴더 충돌 없음** - 각 프로젝트 독립
+- ✅ **깔끔한 import** - `from memory_tool.core import ...`
+- ✅ **개발 편의성** - `-e` 옵션으로 수정사항 즉시 반영
+- ✅ **데이터 독립** - 각 프로젝트의 .memory/ 분리
+
+### 실제 사례: MemoryWeb
+
+memory_tool을 활용한 웹 애플리케이션 예시:
+
+```python
+# MemoryWeb/backend/core/notes_manager.py
+
+from memory_tool.core.timeline import TimelineManager
+from memory_tool.core.search import SearchEngine
+
+class NotesManager:
+    """웹 UI를 위한 노트 관리"""
+
+    def __init__(self, memory_dir: str = "../.memory"):
+        self.timeline = TimelineManager(memory_dir)
+        self.search = SearchEngine(memory_dir)
+
+    async def add_note(self, content: str, tags: list = None):
+        """노트 추가 (Web API에서 호출)"""
+        return self.timeline.add_entry(content, tags=tags or [])
+
+    async def search_notes(self, query: str, mode: str = "text"):
+        """노트 검색 (Web API에서 호출)"""
+        return self.search.search(query, mode=mode)
+```
+
+📚 **전체 예시:** [personal-notes-web-design.md](personal-notes-web-design.md), [QUICKSTART-NEW-SESSION.md](QUICKSTART-NEW-SESSION.md)
+
+### 주의사항
+
+1. **프로젝트 위치:** memory_tool과 your-project는 같은 레벨에 위치
+2. **.memory 디렉토리:** 각 프로젝트마다 독립적으로 생성
+3. **상대 경로:** requirements.txt의 경로가 올바른지 확인
+
+### 트러블슈팅
+
+**Import 실패 시:**
+```bash
+# 확인
+pip list | grep memory
+
+# 재설치
+pip install -e ../memory_tool
+```
+
+**경로 문제 시:**
+```
+확인 사항:
+your-workspace/
+├── memory_tool/
+└── your-project/
+    └── requirements.txt  # 여기서 -e ../memory_tool
+```
 
 ---
 
