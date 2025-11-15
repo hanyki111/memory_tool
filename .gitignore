@@ -1,7 +1,8 @@
 # Memory System - 전체 .memory 폴더 제외 (개발 내부 사용)
 .memory/
 
-# Claude Code - 사용자별 프로젝트 컨텍스트 파일
+# Claude Code - 사용자별 설정 폴더 및 컨텍스트 파일
+.claude/
 CLAUDE.md
 
 # Python

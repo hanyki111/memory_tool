@@ -36,21 +36,6 @@ cd memory_tool
 pip install -e .
 ```
 
-**선택적 기능:**
-```bash
-# Vector search (시맨틱 검색)
-pip install git+https://github.com/hanyki111/memory_tool.git#egg=memory-tool[vector]
-
-# LLM features (요약, AI 제안)
-pip install git+https://github.com/hanyki111/memory_tool.git#egg=memory-tool[llm]
-
-# TUI browser (대화형 브라우저)
-pip install git+https://github.com/hanyki111/memory_tool.git#egg=memory-tool[tui]
-
-# 모든 기능
-pip install git+https://github.com/hanyki111/memory_tool.git#egg=memory-tool[vector,llm,tui]
-```
-
 📚 **자세한 설치 가이드:** [INSTALLATION.md](docs/INSTALLATION.md)
 
 ### 기본 사용
@@ -79,12 +64,14 @@ mcontext
 ### 별칭 설치 (선택)
 
 **Windows 배치 파일:**
+
 ```bash
 malias install          # 전체 설치
 malias install m ms     # 특정 명령어만
 ```
 
 **PowerShell 프로필 (추천):**
+
 ```bash
 malias install --powershell
 ```
@@ -112,6 +99,7 @@ m --yesterday "자정 넘어서 한 작업"
 ```
 
 **검증:**
+
 - 미래 시간: 차단 (hard error)
 - 1년+ 과거: 경고 + `--force` 필요
 
@@ -129,6 +117,7 @@ minit --force
 ```
 
 생성 구조:
+
 ```
 .memory/
   timeline/
@@ -171,6 +160,7 @@ mcontext --output custom-path.md
 ```
 
 생성 파일: `.claude/memory-context.md`
+
 - 최근 N일 timeline 링크
 - 활성 모듈 current.md 링크
 
@@ -193,6 +183,7 @@ mstatus
 ```
 
 표시 항목:
+
 - Timeline 날짜 수 / 총 항목 수
 - 모듈 수
 - 전체 크기
@@ -214,6 +205,7 @@ msort today --no-backup
 ```
 
 **기능:**
+
 - Timeline 항목을 시간순으로 자동 재정렬
 - 기존 파일 자동 백업 (.bak)
 - HH:MM, H:MM 형식 모두 지원
@@ -238,8 +230,9 @@ python -m memory_tool module unarchive auth-system
 ```
 
 **기능:**
+
 - 자동 템플릿 생성 (module.md, current.md, decisions.md, dependencies.md, interface.md)
-- 중앙 아카이브 인덱스 (_index.md)
+- 중앙 아카이브 인덱스 (\_index.md)
 - 모듈 생명주기 관리
 
 ### `malias` - 별칭 관리
@@ -258,6 +251,7 @@ malias uninstall --powershell
 ```
 
 설치 경로:
+
 - 배치: `%LOCALAPPDATA%\memory-tool\bin\`
 - PowerShell: `$PROFILE.CurrentUserAllHosts`
 
@@ -268,6 +262,7 @@ malias uninstall --powershell
 ### 초기 설정
 
 **CLAUDE.md 생성 (선택사항, 권장):**
+
 ```bash
 # 템플릿 복사
 cp CLAUDE.md.template CLAUDE.md
@@ -281,6 +276,7 @@ cp CLAUDE.md.template CLAUDE.md
 ### 자동 컨텍스트 제공
 
 **1단계: 작업 종료 시**
+
 ```bash
 mcontext
 ```
@@ -288,12 +284,14 @@ mcontext
 **2단계: Claude Code 시작 시**
 
 Claude Code가 자동으로 다음을 읽습니다:
+
 - `CLAUDE.md` - 프로젝트 가이드라인 및 현재 상태 (사용자 생성)
 - `.claude/memory-context.md` - 최근 timeline 자동 요약 (mcontext 생성)
 
 ### 수동 업데이트
 
 작업 중 컨텍스트 갱신이 필요하면:
+
 ```bash
 m "새로운 작업 기록"
 mcontext  # 컨텍스트 갱신
@@ -302,9 +300,10 @@ mcontext  # 컨텍스트 갱신
 ### 설정
 
 `config.yaml`에서 조정 가능:
+
 ```yaml
 context:
-  recent_days: 3  # memory-context에 포함할 일수
+  recent_days: 3 # memory-context에 포함할 일수
 ```
 
 ---
@@ -370,6 +369,7 @@ context:
 ### Phase 1 Extended + Bonus: 완료 ✅
 
 **구현된 기능:**
+
 - ✅ 8개 명령어: `m`, `minit`, `ms`, `mcontext`, `malias`, `mtoday`, `mweek`, `mstatus`
 - ✅ 시간 검증 (미래 차단, 과거 경고)
 - ✅ 통합 검색 (로컬/KB/전체, regex)
@@ -381,6 +381,7 @@ context:
 ### Phase 1 Final: 완료 ✅✅✅
 
 **완료 작업:**
+
 - ✅ config.yaml 고급 기능 (auto_update)
 - ✅ Claude Skill 개발 (규칙 기반 자동화, 5가지 규칙)
 - ✅ PowerShell 프로필 통합
@@ -389,11 +390,13 @@ context:
 ### Phase 2: 완료 ✅✅✅
 
 **완료:**
+
 - ✅ 고급 검색 (날짜 범위 `--from/--to`, exclude patterns, 파일 크기 제한)
 - ✅ msort: Timeline 시간순 재정렬 (today/date/all)
 - ✅ 모듈 관리 명령어 (create/list/archive/unarchive)
 
 **날짜 검색 예시:**
+
 ```bash
 ms "authentication" --from 2025-11-01 --to 2025-11-14
 ```
@@ -401,6 +404,7 @@ ms "authentication" --from 2025-11-01 --to 2025-11-14
 ### Phase 3: 장기 계획 🔮
 
 **연구 중:**
+
 - MCP Server (Claude Code 네이티브 통합)
 - 벡터 검색 (의미 기반)
 - 자동 요약 (LLM 기반)
@@ -410,12 +414,14 @@ ms "authentication" --from 2025-11-01 --to 2025-11-14
 ## 기술 스택
 
 **Core:**
+
 - Python 3.10+
 - typer (CLI 프레임워크)
 - rich (터미널 출력)
 - PyYAML (설정 파일)
 
 **Optional:**
+
 - ripgrep (빠른 검색, 없으면 Python regex로 대체)
 
 ---
@@ -423,6 +429,7 @@ ms "authentication" --from 2025-11-01 --to 2025-11-14
 ## 참고 문서
 
 **사용자 문서:**
+
 - [docs/INSTALLATION.md](docs/INSTALLATION.md) - 설치 가이드
 - [docs/QUICKSTART.md](docs/QUICKSTART.md) - 5분 시작 가이드
 - [docs/USER_GUIDE.md](docs/USER_GUIDE.md) - 완전한 사용자 가이드 (3168줄)
@@ -430,6 +437,7 @@ ms "authentication" --from 2025-11-01 --to 2025-11-14
 - [docs/CLAUDE_SETUP.md](docs/CLAUDE_SETUP.md) - CLAUDE.md 설정 가이드 ⭐
 
 **Claude Code 통합:**
+
 - `CLAUDE.md.template` - Claude Code 프로젝트 설정 템플릿
 - `.claude/memory-context.md` - 자동 생성 컨텍스트 (mcontext)
 
@@ -478,6 +486,7 @@ ms --all "TypeError.*undefined"
 **Q: 다른 프로젝트와 지식을 공유하려면?**
 
 A: 개인 KB 사용:
+
 ```bash
 # KB 연결
 minit --kb
