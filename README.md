@@ -126,6 +126,7 @@ python -m memory_tool.cli init
 ```
 
 **자동 생성되는 구조:**
+
 ```
 your-project/
 ├── .memory/                  # 📚 지식 저장소
@@ -166,79 +167,19 @@ mweek
 **중요:** `minit`을 실행하면 `.claude/` 구조가 자동 생성됩니다:
 
 - ✅ `.claude/skills/memory-tool/` - memory_tool 자동화 스킬
-- ✅ `.claude/guidelines.md` - Claude Code 사고 원칙
 
-Claude Code가 자동으로 이 스킬과 가이드라인을 사용하여:
+Claude Code가 자동으로 이 스킬을 사용하여:
+
 - 적절한 시점에 timeline 기록 제안
 - 과거 작업 검색 및 분석
 - 컨텍스트 업데이트 관리
 
 **세션 시작 전:**
+
 ```bash
 # 컨텍스트 업데이트 (Claude가 프로젝트 상태 파악)
 mcontext
 ```
-
-### 🔧 고급: Python 라이브러리로 사용 (특수 케이스만)
-
-**이 방법은 다음과 같은 특수한 경우에만 사용:**
-- memory_tool 기능을 확장한 새로운 도구 개발 (예: MemoryWeb)
-- Python 코드에서 직접 memory_tool API 호출 필요
-- 커스텀 통합 및 자동화 구축
-
-일반 사용자는 이 방법을 **사용하지 않아야 합니다**.
-
-<details>
-<summary>라이브러리 통합 방법 (고급 사용자만)</summary>
-
-#### 프로젝트 구조
-
-```bash
-your-workspace/
-├── memory_tool/              # git clone한 memory_tool
-└── your-advanced-project/    # 라이브러리로 사용하는 프로젝트
-    ├── .memory/              # 독립적인 데이터
-    ├── .claude/              # 독립적인 설정
-    ├── requirements.txt
-    └── your_code.py
-```
-
-#### requirements.txt
-
-```txt
-# your-advanced-project/requirements.txt
--e ../memory_tool
-```
-
-#### 코드 예시
-
-```python
-# your_code.py
-from pathlib import Path
-from memory_tool.core.timeline import TimelineManager
-from memory_tool.core.search import SearchEngine
-
-class MyApp:
-    def __init__(self):
-        self.memory_dir = Path(".memory")
-        self.timeline = TimelineManager(self.memory_dir)
-        self.search = SearchEngine(self.memory_dir)
-
-    def log_action(self, message: str):
-        return self.timeline.add_entry(message)
-
-    def search_history(self, query: str):
-        return self.search.search_text(query)
-```
-
-</details>
-
-### 비교표
-
-| 사용 방법 | 적용 대상 | 사용 방식 | 장점 |
-|----------|----------|----------|------|
-| **CLI 도구** ⭐ | 모든 일반 프로젝트 | `m`, `ms`, `mcontext` | 간단, .claude 자동 통합 |
-| **Python 라이브러리** | 특수 확장 프로젝트 | `import memory_tool` | 커스텀 통합, API 직접 호출 |
 
 ### 트러블슈팅
 
