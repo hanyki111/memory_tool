@@ -3,6 +3,7 @@
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+import shutil
 import yaml
 
 
@@ -29,6 +30,9 @@ class MemoryInitializer:
             base_path = Path.cwd()
         self.base_path = Path(base_path)
         self.memory_path = self.base_path / ".memory"
+        self.claude_path = self.base_path / ".claude"
+        # Get memory_tool's installation directory
+        self.memory_tool_root = Path(__file__).parent.parent.parent
 
     def is_initialized(self) -> bool:
         """Check if .memory/ already exists.
@@ -57,6 +61,9 @@ class MemoryInitializer:
             ".memory/concepts/.gitkeep": "file",
             ".memory/templates/.gitkeep": "file",
             ".memory/docs/.gitkeep": "file",
+            ".claude": "dir",
+            ".claude/skills": "dir",
+            ".claude/skills/memory-tool": "dir",
         }
 
     def create_config_yaml(self) -> Path:
@@ -776,6 +783,60 @@ Action: Split by clear criteria
         doc_path.write_text(content, encoding="utf-8")
         return doc_path
 
+    def create_claude_skills(self) -> list[Path]:
+        """Copy memory_tool skills to project's .claude/skills/memory-tool/.
+
+        Returns:
+            List of paths to created skill files
+        """
+        created_files = []
+
+        # Source: memory_tool's .claude/skills/memory-tool/
+        source_skills_dir = self.memory_tool_root / ".claude" / "skills" / "memory-tool"
+        # Destination: project's .claude/skills/memory-tool/
+        dest_skills_dir = self.claude_path / "skills" / "memory-tool"
+
+        if not source_skills_dir.exists():
+            # If memory_tool's skills don't exist, skip silently
+            # This can happen if memory_tool is installed via pip
+            return created_files
+
+        # Ensure destination directory exists
+        dest_skills_dir.mkdir(parents=True, exist_ok=True)
+
+        # Copy all skill files
+        skill_files = ["SKILL.md", "README.md", "TEST_SCENARIOS.md", "TESTING_GUIDE.md"]
+        for filename in skill_files:
+            source_file = source_skills_dir / filename
+            if source_file.exists():
+                dest_file = dest_skills_dir / filename
+                shutil.copy2(source_file, dest_file)
+                created_files.append(dest_file)
+
+        return created_files
+
+    def create_claude_guidelines(self) -> Optional[Path]:
+        """Copy guidelines.md to project's .claude/.
+
+        Returns:
+            Path to created guidelines.md, or None if source doesn't exist
+        """
+        # Source: memory_tool's .claude/guidelines.md
+        source_guidelines = self.memory_tool_root / ".claude" / "guidelines.md"
+        # Destination: project's .claude/guidelines.md
+        dest_guidelines = self.claude_path / "guidelines.md"
+
+        if not source_guidelines.exists():
+            # If memory_tool's guidelines don't exist, skip silently
+            return None
+
+        # Ensure destination directory exists
+        self.claude_path.mkdir(parents=True, exist_ok=True)
+
+        # Copy guidelines
+        shutil.copy2(source_guidelines, dest_guidelines)
+        return dest_guidelines
+
     def initialize(
         self,
         force: bool = False,
@@ -836,6 +897,14 @@ Action: Split by clear criteria
 
         quick_ref_path = self.create_quick_reference()
         created["files"].append(quick_ref_path)
+
+        # Create .claude/ structure with skills and guidelines
+        skill_files = self.create_claude_skills()
+        created["files"].extend(skill_files)
+
+        guidelines_path = self.create_claude_guidelines()
+        if guidelines_path:
+            created["files"].append(guidelines_path)
 
         # Create kb.lock if requested
         if kb_path:

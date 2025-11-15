@@ -97,120 +97,169 @@ malias install --powershell
 
 ## 다른 프로젝트에서 사용하기
 
-memory_tool을 Python 라이브러리로 활용하여 자신만의 도구를 만들 수 있습니다.
+memory_tool은 **CLI 도구**로 설계되었습니다. 대부분의 사용자는 명령어를 통해 사용해야 합니다.
 
-### 프로젝트 구조 설정
+### 🎯 권장 사용 방법: CLI 도구로 사용
+
+이 방법은 **모든 일반 프로젝트**에 권장됩니다.
+
+#### 1. memory_tool 설치
 
 ```bash
-# 작업 공간 구조
-your-workspace/
-├── memory_tool/              # git clone한 memory_tool
-│   ├── memory_tool/          # 패키지
-│   ├── .memory/              # memory_tool 자체 개발 데이터
-│   └── .claude/              # memory_tool 설정
-│
-└── your-project/             # 당신의 프로젝트
-    ├── .memory/              # 프로젝트 데이터 (독립)
-    ├── .claude/              # 프로젝트 설정 (독립)
-    ├── requirements.txt      # ⭐ memory_tool 여기서 참조
-    └── your_code.py
+# 방법 A: GitHub에서 clone (권장)
+git clone https://github.com/sunginhong/memory_tool.git
+cd memory_tool
+pip install -e .
+
+# 방법 B: pip로 설치 (출시 후)
+pip install memory_tool
 ```
 
-### 통합 방법
-
-#### 1. requirements.txt 설정
-
-```txt
-# your-project/requirements.txt
-
-# 다른 의존성들...
-fastapi==0.104.1
-pydantic==2.5.0
-
-# memory_tool (로컬 개발 모드)
-# 상대 경로로 참조
--e ../memory_tool
-```
-
-#### 2. 패키지 설치
+#### 2. 프로젝트 초기화
 
 ```bash
 cd your-project
 
-# 가상환경 생성 (권장)
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-
-# 패키지 설치 (memory_tool 포함)
-pip install -r requirements.txt
-
-# 확인
-python -c "from memory_tool.core.timeline import TimelineManager; print('✅ OK')"
+# .memory/ 및 .claude/ 구조 생성
+python -m memory_tool.cli init
+# 또는 alias 설치 후: minit
 ```
 
-#### 3. 코드에서 사용
+**자동 생성되는 구조:**
+```
+your-project/
+├── .memory/                  # 📚 지식 저장소
+│   ├── timeline/            # 시간순 기록
+│   ├── modules/             # 주제별 정리
+│   ├── concepts/            # 개념 문서
+│   └── config.yaml          # 설정
+│
+└── .claude/                  # 🤖 Claude Code 통합
+    ├── skills/
+    │   └── memory-tool/     # ⭐ memory_tool 스킬 자동 복사
+    │       ├── SKILL.md
+    │       └── ...
+    └── guidelines.md         # ⭐ 사고 원칙 자동 복사
+```
+
+#### 3. 일상적인 사용
+
+```bash
+# 기록
+m "작업 내용"
+
+# 검색
+ms "검색어"
+
+# Claude Code 컨텍스트 생성
+mcontext
+
+# 오늘의 타임라인
+mtoday
+
+# 주간 타임라인
+mweek
+```
+
+#### 4. Claude Code에서 자동 통합
+
+**중요:** `minit`을 실행하면 `.claude/` 구조가 자동 생성됩니다:
+
+- ✅ `.claude/skills/memory-tool/` - memory_tool 자동화 스킬
+- ✅ `.claude/guidelines.md` - Claude Code 사고 원칙
+
+Claude Code가 자동으로 이 스킬과 가이드라인을 사용하여:
+- 적절한 시점에 timeline 기록 제안
+- 과거 작업 검색 및 분석
+- 컨텍스트 업데이트 관리
+
+**세션 시작 전:**
+```bash
+# 컨텍스트 업데이트 (Claude가 프로젝트 상태 파악)
+mcontext
+```
+
+### 🔧 고급: Python 라이브러리로 사용 (특수 케이스만)
+
+**이 방법은 다음과 같은 특수한 경우에만 사용:**
+- memory_tool 기능을 확장한 새로운 도구 개발 (예: MemoryWeb)
+- Python 코드에서 직접 memory_tool API 호출 필요
+- 커스텀 통합 및 자동화 구축
+
+일반 사용자는 이 방법을 **사용하지 않아야 합니다**.
+
+<details>
+<summary>라이브러리 통합 방법 (고급 사용자만)</summary>
+
+#### 프로젝트 구조
+
+```bash
+your-workspace/
+├── memory_tool/              # git clone한 memory_tool
+└── your-advanced-project/    # 라이브러리로 사용하는 프로젝트
+    ├── .memory/              # 독립적인 데이터
+    ├── .claude/              # 독립적인 설정
+    ├── requirements.txt
+    └── your_code.py
+```
+
+#### requirements.txt
+
+```txt
+# your-advanced-project/requirements.txt
+-e ../memory_tool
+```
+
+#### 코드 예시
 
 ```python
-# your-project/your_code.py
-
+# your_code.py
 from pathlib import Path
 from memory_tool.core.timeline import TimelineManager
 from memory_tool.core.search import SearchEngine
 
 class MyApp:
     def __init__(self):
-        # 프로젝트의 .memory/ 디렉토리 사용
         self.memory_dir = Path(".memory")
         self.timeline = TimelineManager(self.memory_dir)
         self.search = SearchEngine(self.memory_dir)
 
     def log_action(self, message: str):
-        """작업 기록"""
         return self.timeline.add_entry(message)
 
     def search_history(self, query: str):
-        """과거 작업 검색"""
         return self.search.search_text(query)
-
-# 사용 예시
-app = MyApp()
-app.log_action("사용자 인증 기능 구현 시작")
-results = app.search_history("인증")
 ```
 
-### 장점
+</details>
 
-- ✅ **.claude 폴더 충돌 없음** - 각 프로젝트 독립
-- ✅ **깔끔한 import** - `from memory_tool.core import ...`
-- ✅ **개발 편의성** - `-e` 옵션으로 수정사항 즉시 반영
-- ✅ **데이터 독립** - 각 프로젝트의 .memory/ 분리
+### 비교표
 
-### 주의사항
-
-1. **프로젝트 위치:** memory_tool과 your-project는 같은 레벨에 위치
-2. **.memory 디렉토리:** 각 프로젝트마다 독립적으로 생성
-3. **상대 경로:** requirements.txt의 경로가 올바른지 확인
+| 사용 방법 | 적용 대상 | 사용 방식 | 장점 |
+|----------|----------|----------|------|
+| **CLI 도구** ⭐ | 모든 일반 프로젝트 | `m`, `ms`, `mcontext` | 간단, .claude 자동 통합 |
+| **Python 라이브러리** | 특수 확장 프로젝트 | `import memory_tool` | 커스텀 통합, API 직접 호출 |
 
 ### 트러블슈팅
 
-**Import 실패 시:**
+**Q: `minit` 명령을 찾을 수 없습니다**
 
 ```bash
-# 확인
+# memory_tool이 설치되었는지 확인
 pip list | grep memory
 
-# 재설치
-pip install -e ../memory_tool
+# 설치되지 않았다면
+pip install -e /path/to/memory_tool
+
+# 또는 alias가 설치되지 않았다면
+python -m memory_tool.cli alias install
 ```
 
-**경로 문제 시:**
+**Q: `.claude/` 폴더가 생성되지 않았습니다**
 
-```
-확인 사항:
-your-workspace/
-├── memory_tool/
-└── your-project/
-    └── requirements.txt  # 여기서 -e ../memory_tool
+```bash
+# minit을 다시 실행하면 .claude/ 구조 생성
+python -m memory_tool.cli init --force
 ```
 
 ---
@@ -254,12 +303,21 @@ minit --force
 생성 구조:
 
 ```
-.memory/
-  timeline/
-  modules/
-  concepts/
+.memory/                      # 지식 저장소
+  timeline/                   # 시간순 기록
+  modules/                    # 주제별 정리
+  concepts/                   # 개념 문서
+  docs/                       # 문서
   config.yaml
   README.md
+
+.claude/                      # Claude Code 통합
+  skills/memory-tool/         # memory_tool 자동화 스킬
+    SKILL.md
+    README.md
+    TEST_SCENARIOS.md
+    TESTING_GUIDE.md
+  guidelines.md               # 사고 원칙
 ```
 
 ### `ms` - 검색
