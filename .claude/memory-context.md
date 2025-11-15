@@ -1,6 +1,6 @@
 # Memory Context
 
-**Generated:** 2025-11-15 11:47
+**Generated:** 2025-11-15 12:14
 
 ---
 
@@ -14,7 +14,6 @@
 
 ## Module Status
 
-- **memory-system**: `./.memory\modules\memory-system\current.md`
 - **memory-system.backup**: `./.memory\modules\memory-system.backup\current.md`
 
 ---
