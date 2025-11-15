@@ -46,9 +46,8 @@ Thumbs.db
 시간-공간-통합-지식-체계*.md
 *설계*.md
 
-# Derived project documentation (include these)
-!personal-notes-web-design.md
-!QUICKSTART-NEW-SESSION.md
+personal-notes-web-design.md
+QUICKSTART-NEW-SESSION.md
 
 # Test/development artifacts
 graph.dot

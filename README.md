@@ -185,34 +185,6 @@ results = app.search_history("인증")
 - ✅ **개발 편의성** - `-e` 옵션으로 수정사항 즉시 반영
 - ✅ **데이터 독립** - 각 프로젝트의 .memory/ 분리
 
-### 실제 사례: MemoryWeb
-
-memory_tool을 활용한 웹 애플리케이션 예시:
-
-```python
-# MemoryWeb/backend/core/notes_manager.py
-
-from memory_tool.core.timeline import TimelineManager
-from memory_tool.core.search import SearchEngine
-
-class NotesManager:
-    """웹 UI를 위한 노트 관리"""
-
-    def __init__(self, memory_dir: str = "../.memory"):
-        self.timeline = TimelineManager(memory_dir)
-        self.search = SearchEngine(memory_dir)
-
-    async def add_note(self, content: str, tags: list = None):
-        """노트 추가 (Web API에서 호출)"""
-        return self.timeline.add_entry(content, tags=tags or [])
-
-    async def search_notes(self, query: str, mode: str = "text"):
-        """노트 검색 (Web API에서 호출)"""
-        return self.search.search(query, mode=mode)
-```
-
-📚 **전체 예시:** [personal-notes-web-design.md](personal-notes-web-design.md), [QUICKSTART-NEW-SESSION.md](QUICKSTART-NEW-SESSION.md)
-
 ### 주의사항
 
 1. **프로젝트 위치:** memory_tool과 your-project는 같은 레벨에 위치
@@ -222,6 +194,7 @@ class NotesManager:
 ### 트러블슈팅
 
 **Import 실패 시:**
+
 ```bash
 # 확인
 pip list | grep memory
@@ -231,6 +204,7 @@ pip install -e ../memory_tool
 ```
 
 **경로 문제 시:**
+
 ```
 확인 사항:
 your-workspace/
