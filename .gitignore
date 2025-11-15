@@ -1,12 +1,5 @@
-# Memory System - 자동 생성 인덱스 제외
-.memory/.index/
-.memory/.index.db
-.memory/.index.db-shm
-.memory/.index.db-wal
-.memory/.connections.db
-.memory/.connections.db-shm
-.memory/.connections.db-wal
-.memory/.embeddings-cache/
+# Memory System - 전체 .memory 폴더 제외 (개발 내부 사용)
+.memory/
 
 # Python
 __pycache__/
