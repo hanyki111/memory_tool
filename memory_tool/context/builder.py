@@ -64,7 +64,7 @@ class ContextBuilder:
         return paths
 
     def get_module_statuses(self) -> Dict[str, Path]:
-        """Get current.md paths for all modules.
+        """Get current.md paths for all modules (recursive).
 
         Returns:
             Dictionary mapping module names to current.md paths
@@ -74,11 +74,13 @@ class ContextBuilder:
             return {}
 
         statuses = {}
-        for module_dir in modules_path.iterdir():
-            if module_dir.is_dir():
-                current_file = module_dir / "current.md"
-                if current_file.exists():
-                    statuses[module_dir.name] = current_file
+
+        # Recursively find all current.md files
+        for current_file in modules_path.rglob("current.md"):
+            # Get module name as relative path from modules/
+            module_rel_path = current_file.parent.relative_to(modules_path)
+            module_name = str(module_rel_path).replace("\\", "/")
+            statuses[module_name] = current_file
 
         return statuses
 
