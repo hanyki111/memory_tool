@@ -107,7 +107,7 @@ memory_tool은 **CLI 도구**로 설계되었습니다. 대부분의 사용자�
 
 ```bash
 # 방법 A: GitHub에서 clone (권장)
-git clone https://github.com/sunginhong/memory_tool.git
+git clone https://github.com/hanyki111/memory_tool.git
 cd memory_tool
 pip install -e .
 
