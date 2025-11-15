@@ -13,12 +13,6 @@ authors = [
     {name = "Memory Tool Contributors", email = "noreply@example.com"}
 ]
 keywords = ["knowledge-management", "timeline", "claude-code", "productivity", "pkm", "second-brain"]
-urls = {
-    "Homepage" = "https://github.com/hanyki111/memory_tool",
-    "Repository" = "https://github.com/hanyki111/memory_tool",
-    "Issues" = "https://github.com/hanyki111/memory_tool/issues",
-    "Documentation" = "https://github.com/hanyki111/memory_tool/blob/main/docs/USER_GUIDE.md"
-}
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -34,6 +28,12 @@ dependencies = [
     "pyyaml>=6.0",
     "rich>=13.0.0",  # For beautiful CLI output
 ]
+
+[project.urls]
+Homepage = "https://github.com/hanyki111/memory_tool"
+Repository = "https://github.com/hanyki111/memory_tool"
+Issues = "https://github.com/hanyki111/memory_tool/issues"
+Documentation = "https://github.com/hanyki111/memory_tool/blob/main/docs/USER_GUIDE.md"
 
 [project.optional-dependencies]
 dev = [
