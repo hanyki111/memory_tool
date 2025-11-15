@@ -21,15 +21,37 @@
 
 ### 설치
 
+**요구사항:** Python 3.10+
+
 ```bash
-# 개발 모드 설치
-git clone https://github.com/your-repo/memory_tool.git
+# GitHub에서 설치 (권장)
+pip install git+https://github.com/hanyki111/memory_tool.git
+
+# 특정 버전
+pip install git+https://github.com/hanyki111/memory_tool.git@v1.0.0-alpha
+
+# 개발 모드 (소스 수정 시)
+git clone https://github.com/hanyki111/memory_tool.git
 cd memory_tool
 pip install -e .
-
-# 또는 (나중에 PyPI 배포 시)
-pip install memory-tool
 ```
+
+**선택적 기능:**
+```bash
+# Vector search (시맨틱 검색)
+pip install git+https://github.com/hanyki111/memory_tool.git#egg=memory-tool[vector]
+
+# LLM features (요약, AI 제안)
+pip install git+https://github.com/hanyki111/memory_tool.git#egg=memory-tool[llm]
+
+# TUI browser (대화형 브라우저)
+pip install git+https://github.com/hanyki111/memory_tool.git#egg=memory-tool[tui]
+
+# 모든 기능
+pip install git+https://github.com/hanyki111/memory_tool.git#egg=memory-tool[vector,llm,tui]
+```
+
+📚 **자세한 설치 가이드:** [INSTALLATION.md](docs/INSTALLATION.md)
 
 ### 기본 사용
 

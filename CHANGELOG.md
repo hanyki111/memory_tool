@@ -1,0 +1,138 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.0.0-alpha] - 2025-11-15
+
+### 🎉 Initial Alpha Release
+
+**Core Philosophy:**
+"0.5초로 포착하고, 주말에 정리하며, 평생 활용한다."
+
+### ✨ Features
+
+#### Timeline System (시간축)
+- **m** - Record messages to timeline in 0.5 seconds
+- **mtoday** - View today's timeline
+- **mweek** - View this week's timeline
+- **msort** - Sort timeline entries by time
+
+#### Module System (공간축)
+- **module create** - Create hierarchical modules
+- **module list/tree** - View module structure
+- **module archive/unarchive** - Archive management
+- **module connections** - Wiki-style [[links]]
+- **module graph** - Visualize connections (Mermaid/Graphviz)
+- **module rebuild-graph** - Rebuild connection graph
+- **module check-links** - Validate links
+- **module suggest-links** - Manual connection suggestions
+- **module suggest-ai** - AI-based connection suggestions
+- **module auto-tag** - Automatic tagging
+- **module graph-history/diff/snapshot** - Graph version management
+
+#### Search System (검색)
+- **ms** - Search with multiple backends
+  - Text search (BM25 ranking)
+  - Semantic search (vector embeddings)
+  - Hybrid search (text + semantic)
+- Advanced filters (date, type, tags, exclude)
+- Result caching for performance
+- SQLite FTS5 indexing
+
+#### LLM Integration
+- **msummary** - Summarize timeline or modules
+- Dual provider support (Anthropic API + Ollama)
+- Local-first with Ollama
+- Vector embeddings for semantic search
+- AI connection suggestions
+- Auto-tagging
+
+#### UI/UX
+- **CLI** - 16 commands with rich output
+- **malias** - Alias management (batch + PowerShell)
+- **mbrowse** - Interactive TUI browser
+  - Multi-mode: Search/Timeline/Modules/Graph
+  - Vim-style navigation
+  - Filter toggles
+- **mcompletion** - Shell completion support
+- **mtutorial** - Interactive tutorial
+
+#### Project Management
+- **mstatus** - Project statistics
+- **marchive** - Archive completed documentation
+- **mplan** - Plan management
+- **mcontext** - Generate Claude Code context
+- **mhooks** - Git hooks for auto-sync
+
+#### Performance
+- Batch embeddings (10-50x improvement)
+- Incremental indexing
+- Result caching (TTL-based)
+- Parallel search processing
+
+### 📦 Architecture
+
+- **6 Feature-Based Modules:**
+  - core-system - Timeline, initialization, basic data
+  - search-system - Text, vector, hybrid search
+  - module-system - Hierarchical modules, wiki links, graph
+  - ui-system - CLI, TUI, aliases
+  - llm-integration - LLM features, embeddings
+  - project-management - Architecture, roadmap, decisions
+
+### 🎯 Design Principles
+
+1. **Time First** - Capture first, organize later
+2. **Lossless** - Record everything, lose nothing
+3. **Minimal Friction** - 0.5 second capture
+4. **Loose Coupling** - Modular architecture
+5. **Local First** - Local by default, explicit expansion
+
+### 📚 Documentation
+
+- README.md - Project overview
+- INSTALLATION.md - Installation guide
+- QUICKSTART.md - 5-minute start guide
+- USER_GUIDE.md - Complete user guide
+- FAQ.md - Frequently asked questions
+- CLAUDE.md - Claude Code integration guide
+- 시간-공간-통합-지식-체계-v2.0.md - Full design document (Korean)
+
+### 🧪 Testing
+
+This is an alpha release. The software has been extensively dogfooded during development (200+ timeline entries, 30+ decisions) but lacks formal test coverage. Use with caution and report issues.
+
+### 🔧 Requirements
+
+- Python 3.10+
+- Optional: sentence-transformers (vector search)
+- Optional: anthropic/ollama (LLM features)
+- Optional: textual (TUI browser)
+
+### 📝 Known Limitations
+
+- No automated tests (manual testing only)
+- Windows console encoding issues (workaround available)
+- Large datasets (10,000+ entries) not extensively tested
+- MCP server support postponed (may revisit)
+
+### 🙏 Acknowledgments
+
+This project practices what it preaches - it was built using its own system for knowledge management. All development is recorded in `.memory/timeline/` and decisions in module-specific `decisions.md` files.
+
+---
+
+## [Unreleased]
+
+### Planned
+- Automated test coverage
+- Performance benchmarks
+- PyPI release (pending community feedback)
+- Additional language support
+
+---
+
+**Note:** This is an alpha release. APIs may change before v1.0.0 stable.

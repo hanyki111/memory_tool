@@ -4,15 +4,21 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "memory-tool"
-version = "0.1.0"
-description = "Time-Space Integrated Knowledge System for Claude Code"
+version = "1.0.0-alpha"
+description = "Time-Space Integrated Knowledge System - Capture knowledge in 0.5 seconds, organize on weekends, use for life"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [
-    {name = "Memory Tool Contributors"}
+    {name = "Memory Tool Contributors", email = "noreply@example.com"}
 ]
-keywords = ["knowledge-management", "timeline", "claude-code", "productivity"]
+keywords = ["knowledge-management", "timeline", "claude-code", "productivity", "pkm", "second-brain"]
+urls = {
+    "Homepage" = "https://github.com/hanyki111/memory_tool",
+    "Repository" = "https://github.com/hanyki111/memory_tool",
+    "Issues" = "https://github.com/hanyki111/memory_tool/issues",
+    "Documentation" = "https://github.com/hanyki111/memory_tool/blob/main/docs/USER_GUIDE.md"
+}
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
