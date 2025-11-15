@@ -39,3 +39,17 @@ wheels/
 # OS
 .DS_Store
 Thumbs.db
+
+# Design documents (internal, not for public)
+시간-공간-통합-지식-체계*.md
+*설계*.md
+
+# Test/development artifacts
+graph.dot
+*.dot
+memory_tool*context/
+memory_tool*core/
+memory_tool*planner/
+memory_tool*search/
+memory_tool*tui/
+memory_tool*utils/
