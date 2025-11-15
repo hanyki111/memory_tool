@@ -391,8 +391,9 @@ ms "authentication" --from 2025-11-01 --to 2025-11-14
 
 **개발 기록 (.memory/):**
 - `.memory/timeline/2025-11/` - 개발 과정 전체 기록
-- `.memory/modules/memory-system/decisions.md` - 18개 주요 결정
-- `.memory/modules/memory-system/current.md` - 현재 상태
+- `.memory/modules/projects/memory-tool/` - 6개 feature-based 모듈:
+  - `core-system/`, `search-system/`, `module-system/`
+  - `ui-system/`, `llm-integration/`, `project-management/`
 - `.memory/concepts/python-cli-development-plan.md` - 개발 계획
 
 **Claude Code 통합 (.claude/):**
@@ -478,9 +479,9 @@ TBD (추후 결정)
 
 **이 프로젝트는 자신이 정의한 시스템을 사용하여 개발되고 있습니다.**
 
-모든 작업은 `.memory/timeline/`에 기록되고, 주요 결정은 `.memory/modules/memory-system/decisions.md`에 정리됩니다.
+모든 작업은 `.memory/timeline/`에 기록되고, 주요 결정은 feature별 모듈의 `decisions.md`에 정리됩니다. 프로젝트는 자체 모듈 조직화 원칙을 따라 6개의 feature-based 모듈로 구조화되어 있습니다.
 
-현재 **18개의 주요 결정**과 **100+ timeline 항목**이 기록되어 있으며, 이는 시스템의 실전 검증이자 살아있는 사용 사례입니다.
+현재 **30+ 주요 결정**과 **200+ timeline 항목**이 기록되어 있으며, 이는 시스템의 실전 검증이자 살아있는 사용 사례입니다.
 
 ---
 

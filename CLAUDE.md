@@ -329,7 +329,7 @@ git push origin main
 **Completed:**
 - ✅ Design document complete
 - ✅ .memory/ structure created
-- ✅ memory-system module defined
+- ✅ 6 feature-based modules created (projects/memory-tool/)
 - ✅ Python CLI plan established
 - ✅ .claude/guidelines.md created
 - ✅ This file (CLAUDE.md) created
@@ -425,15 +425,19 @@ git push origin main
   - Regenerate with: `mcontext` command
 
 **Current State (Manual):**
-- `.memory/modules/memory-system/current.md` - Detailed status
-- `.memory/timeline/2025-11/14.md` - Today's timeline
-- `.memory/timeline/2025-11/13.md` - Yesterday's timeline
-- `.memory/modules/memory-system/decisions.md` - Key decisions (22 decisions)
+- `.memory/modules/projects/memory-tool/` - 6 feature-based modules:
+  - `core-system/` - Timeline, initialization, basic data
+  - `search-system/` - Text, vector, hybrid search
+  - `module-system/` - Hierarchical modules, wiki links, graph
+  - `ui-system/` - CLI, TUI, aliases
+  - `llm-integration/` - LLM features, embeddings
+  - `project-management/` - Architecture, roadmap, decisions
+- `.memory/timeline/2025-11/15.md` - Today's timeline
 
 **Technical Plans:**
 - `.memory/concepts/python-cli-development-plan.md` - 14-day roadmap
-- `.memory/modules/memory-system/interface.md` - CLI command design
-- `.memory/modules/memory-system/dependencies.md` - Phase dependencies
+- See individual module directories for feature-specific documentation
+- Module organization principles: `.memory/docs/MODULE-ORGANIZATION-PRINCIPLES.md`
 
 ---
 
@@ -454,7 +458,8 @@ git push origin main
 
 **This project practices what it preaches:**
 - Development is recorded in `.memory/timeline/`
-- Decisions are documented in `.memory/modules/memory-system/decisions.md`
+- Decisions are documented in module-specific `decisions.md` files
+- Module structure follows own organization principles (`.memory/docs/MODULE-ORGANIZATION-PRINCIPLES.md`)
 - This is dogfooding - the project is its own use case
 
 ---
