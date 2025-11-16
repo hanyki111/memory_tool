@@ -243,13 +243,28 @@ mcontext                     # Generate .claude/memory-context.md
 
 ### During Session
 1. Record progress: `m "Implemented [feature]"`
-2. Update module state: Edit `.memory/modules/[name]/current.md`
+2. Update module state as you work
 3. Regenerate if needed: `mcontext`
 
-### Ending Session
-1. Final record: `m "Session complete: [summary]"`
-2. Update current state in modules
-3. Document decisions in `.memory/modules/[name]/decisions.md`
+### Ending Session (CRITICAL)
+
+**A. Update Timeline:**
+```bash
+m "Session complete: [summary of what was done]"
+```
+
+**B. Update Modules:**
+
+You MUST update relevant module documentation:
+- [ ] Update `.memory/modules/[name]/current.md` with new status/state
+- [ ] Document decisions in `.memory/modules/[name]/decisions.md`
+- [ ] Check module size (see MODULE-ORGANIZATION-PRINCIPLES.md)
+- [ ] Consider creating new module if feature is >100 lines and independent
+
+**Why Both Matter:**
+- Timeline = temporal record (when things happened)
+- Modules = structured knowledge (how things are organized)
+- Complete memory system requires both!
 
 ---
 
