@@ -354,12 +354,21 @@ python -m memory_tool module list
 # 모듈 목록 (아카이브 포함)
 python -m memory_tool module list --archived
 
-# 모듈 아카이브
-python -m memory_tool module archive auth-system --reason "프로젝트 완료"
+# 모듈 아카이브 (전체 경로)
+python -m memory_tool module archive projects/memory-tool/core-system --reason "Phase 완료"
+
+# 모듈 아카이브 (짧은 이름으로 자동 검색) ⭐ NEW
+python -m memory_tool module archive core-system --reason "Phase 완료"
+# → 자동으로 'projects/memory-tool/core-system' 찾음
 
 # 모듈 복원
 python -m memory_tool module unarchive auth-system
 ```
+
+**모듈 자동 검색:** ⭐ NEW
+- `archive` 액션에서 모듈명만 입력하면 자동 검색
+- 상위/하위 모듈 구분 없이 모든 계층 검색
+- 정확히 1개 발견 시 자동 사용
 
 **기능:**
 
@@ -386,6 +395,281 @@ malias uninstall --powershell
 
 - 배치: `%LOCALAPPDATA%\memory-tool\bin\`
 - PowerShell: `$PROFILE.CurrentUserAllHosts`
+
+---
+
+## 고급 명령어 가이드
+
+### `msummary` - LLM 기반 요약 ⚡
+
+Timeline이나 모듈을 AI로 자동 요약합니다.
+
+```bash
+# 오늘 작업 요약
+msummary today
+
+# 이번 주 작업 요약
+msummary week
+
+# 특정 날짜 요약
+msummary 2025-11-14
+
+# 날짜 범위 요약
+msummary 2025-11-01:2025-11-14
+
+# 특정 모듈 요약 (전체 경로)
+msummary --module projects/memory-tool/core-system
+
+# 특정 모듈 요약 (짧은 이름으로 자동 검색) ⭐ NEW
+msummary --module core-system
+# → 자동으로 'projects/memory-tool/core-system' 찾음
+
+# 언어 지정 (한국어/영어/자동)
+msummary today --lang ko
+msummary today --lang en
+
+# 파일로 저장
+msummary week --output summary.md
+```
+
+**설정 방법:**
+
+**Option 1: Anthropic API (Claude)**
+```bash
+# 환경 변수
+export ANTHROPIC_API_KEY="your-api-key"
+
+# 또는 config.yaml
+llm:
+  api_key: "your-api-key"
+  provider: "anthropic"
+  model: "claude-3-5-sonnet-20241022"
+```
+
+**Option 2: Ollama (로컬, 무료)**
+```bash
+# config.yaml
+llm:
+  provider: "ollama"
+  model: "llama3"
+  base_url: "http://localhost:11434"
+```
+
+**사용 시나리오:**
+- 장기 작업 후 진행 상황 파악
+- 주간/월간 리포트 작성
+- 프로젝트 상태 요약
+- Claude에게 전달할 컨텍스트 정리
+
+### `marchive` - 문서 아카이브 📦
+
+누적된 `decisions.md`, `current.md`, `PLAN-*.md`를 아카이브하여 파일 크기를 관리합니다.
+
+```bash
+# Decisions 아카이브 (최근 10개만 유지)
+marchive decisions
+
+# 최근 15개 유지
+marchive decisions --keep-recent 15
+
+# 특정 번호까지 아카이브 (#1-#25)
+marchive decisions --up-to 25
+
+# Phase 기반 아카이브 (Phase 1-5)
+marchive decisions --phase 5
+
+# Dry-run (미리보기)
+marchive decisions --keep-recent 10 --dry-run
+
+# Current 아카이브
+marchive current --phase 5
+
+# Plans 아카이브
+marchive plans
+
+# 특정 모듈 지정 (전체 경로)
+marchive decisions --module projects/memory-tool/core-system --keep-recent 10
+
+# 특정 모듈 지정 (짧은 이름으로 자동 검색) ⭐ NEW
+marchive decisions --module core-system --keep-recent 10
+# → 자동으로 'projects/memory-tool/core-system' 찾음
+
+# 모듈명만으로 검색 (상위/하위 구분 없음)
+marchive decisions --module website
+# → 'projects/website' 자동 검색
+```
+
+**모듈 자동 검색 기능:** ⭐ NEW
+- 모듈명만 입력하면 `.memory/modules/`에서 자동 검색
+- 정확히 1개 발견: 자동으로 사용하고 경로 표시
+- 여러 개 발견: 선택 가능한 목록 표시
+- 발견 안 됨: 에러 메시지와 함께 모듈 목록 확인 방법 안내
+
+**예시:**
+```bash
+# 짧은 이름 입력
+marchive decisions --module core-system
+
+# 출력:
+# Resolved 'core-system' -> 'projects/memory-tool/core-system'
+# [OK] Archived 20 decisions
+```
+
+**작동 방식:**
+1. 오래된 결정들을 `archive/decisions-1-25.md`로 이동
+2. `decisions.md`에는 최근 결정만 유지
+3. 원본 파일 자동 백업 (`.bak`)
+4. 링크 자동 업데이트
+
+**언제 사용하나:**
+- `decisions.md`가 300+ 줄로 길어졌을 때
+- Phase 전환 시
+- 문서 정리가 필요할 때
+
+### `mplan` - 작업 계획 관리 📋
+
+프로젝트 계획과 작업(Task)을 체계적으로 관리합니다.
+
+```bash
+# 새 계획 생성
+mplan create "API 개발" --desc "RESTful API 구현" --due 2025-12-31
+
+# 태그 추가
+mplan create "인증 시스템" --tag backend --tag security
+
+# 모든 계획 목록
+mplan list
+
+# 계획 상세 보기
+mplan show api-development
+
+# 작업 추가
+mplan add api-development "User CRUD API 구현"
+mplan add api-development "인증 미들웨어 추가"
+
+# 작업 완료 표시
+mplan done api-development "User CRUD API 구현"
+
+# 계획 삭제
+mplan delete api-development
+```
+
+**Task 상태:**
+- `[ ]` - Pending (대기)
+- `[~]` - In Progress (진행 중)
+- `[x]` - Completed (완료)
+- `[!]` - Blocked (차단됨)
+
+**생성 파일:** `.memory/plans/20251215-api-development.md`
+
+**언제 사용하나:**
+- 복잡한 기능 개발 시 작업 추적
+- 프로젝트 로드맵 관리
+- Timeline과 별도로 구조화된 계획 필요할 때
+
+### `mindex` - SQLite 검색 인덱스 🔍
+
+SQLite FTS5를 사용하여 검색 속도를 **10-100배** 향상시킵니다.
+
+```bash
+# 전체 인덱싱 (변경된 파일만)
+mindex
+
+# 강제 전체 재인덱싱
+mindex --force
+
+# 상태 확인
+mindex --check
+
+# 통계 보기
+mindex --stats
+
+# 인덱스 최적화
+mindex --optimize
+
+# Vacuum (공간 회수)
+mindex --vacuum
+```
+
+**인덱싱 대상:**
+- `.memory/timeline/**/*.md` - Timeline 항목
+- `.memory/modules/**/decisions.md` - 주요 결정
+- `.memory/modules/**/current.md` - 현재 상태
+- `.memory/concepts/**/*.md` - 개념 문서
+
+**성능:**
+- 일반 검색 (regex): 100-500ms
+- 인덱스 검색 (FTS5): 5-20ms (10-100배 빠름)
+
+**인덱스 파일:** `.memory/.index.db`
+
+**언제 사용하나:**
+- Timeline이 1000+ 항목으로 많을 때
+- 검색이 느려졌을 때
+- 프로젝트 초기 설정 시
+
+---
+
+## 고급 워크플로우
+
+### 주간 정리 워크플로우
+
+```bash
+# 1. 이번 주 작업 확인
+mweek
+
+# 2. 이번 주 요약 생성
+msummary week --output weekly-summary.md
+
+# 3. Timeline 정렬
+msort all
+
+# 4. Decisions 아카이브 (20개 이상이면)
+marchive decisions --keep-recent 15 --dry-run  # 미리보기
+marchive decisions --keep-recent 15            # 실행
+
+# 5. 인덱스 업데이트
+mindex
+```
+
+### Phase 전환 워크플로우
+
+```bash
+# Phase 5 완료 시
+
+# 1. Current 아카이브
+marchive current --phase 5
+
+# 2. Decisions 아카이브
+marchive decisions --phase 5
+
+# 3. Plans 아카이브
+marchive plans
+
+# 4. Phase 5 요약
+msummary 2025-10-01:2025-11-15 --output phase5-summary.md
+
+# 5. 인덱스 재구축
+mindex --force --optimize
+```
+
+### 프로젝트 시작 워크플로우
+
+```bash
+# 1. 프로젝트 계획 생성
+mplan create "프로젝트 X 개발" --desc "신규 프로젝트 개발" --due 2025-12-31
+
+# 2. 작업 추가
+mplan add project-x "아키텍처 설계"
+mplan add project-x "API 설계"
+mplan add project-x "DB 스키마 설계"
+
+# 3. 인덱스 초기화
+mindex
+
+# 4. 작업 시작
+m "프로젝트 X 개발 시작"
+```
 
 ---
 

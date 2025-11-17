@@ -93,6 +93,51 @@ def sanitize_output(text: str) -> str:
     return text
 
 
+def _resolve_module_name(module_name: str) -> str:
+    """Resolve module name to full path by searching all modules.
+
+    Args:
+        module_name: Module name or path (e.g., 'website' or 'projects/website')
+
+    Returns:
+        Full module path (e.g., 'projects/website')
+
+    Raises:
+        typer.Exit: If module not found or multiple matches require selection
+    """
+    if not module_name:
+        return None
+
+    # Try exact match first
+    manager = ModuleManager()
+    matches = manager.find_module_by_name(module_name, exact=True)
+
+    if len(matches) == 1:
+        return matches[0]
+
+    # Try flexible match (by last component)
+    if len(matches) == 0:
+        matches = manager.find_module_by_name(module_name, exact=False)
+
+    # Handle results
+    if len(matches) == 0:
+        console.print(f"[red]ERROR[/red] Module not found: {module_name}")
+        console.print("[dim]Use 'python -m memory_tool module list' to see all modules[/dim]")
+        raise typer.Exit(1)
+    elif len(matches) == 1:
+        resolved = matches[0]
+        if resolved != module_name:
+            console.print(f"[dim]Resolved '{module_name}' -> '{resolved}'[/dim]")
+        return resolved
+    else:
+        # Multiple matches - ask user to select
+        console.print(f"[yellow]Multiple modules match '{module_name}':[/yellow]")
+        for i, match in enumerate(matches, 1):
+            console.print(f"  {i}. {match}")
+        console.print("\n[dim]Please specify the full path (e.g., --module projects/website)[/dim]")
+        raise typer.Exit(1)
+
+
 @app.command()
 def record(
     message: str = typer.Argument(..., help="Message to record in timeline"),
@@ -1162,12 +1207,15 @@ def module(
                 console.print("[dim]Usage: module archive <name> [--reason \"reason\"][/dim]")
                 sys.exit(1)
 
-            console.print(f"[cyan]Archiving module '{name}'...[/cyan]")
-            archive_path = manager.archive(name, reason)
+            # Resolve module name
+            resolved_name = _resolve_module_name(name)
+
+            console.print(f"[cyan]Archiving module '{resolved_name}'...[/cyan]")
+            archive_path = manager.archive(resolved_name, reason)
 
             # Success
             rel_path = archive_path.relative_to(Path.cwd())
-            console.print(f"\n[green]OK[/green] Module archived: {name}")
+            console.print(f"\n[green]OK[/green] Module archived: {resolved_name}")
             console.print(f"[dim]Location: {rel_path}[/dim]")
 
             if reason:
@@ -1691,10 +1739,13 @@ def summary(
 
         # Module summarization
         if module_name:
-            console.print(f"[cyan]Summarizing module '{module_name}'...[/cyan]")
+            # Resolve module name
+            resolved_module = _resolve_module_name(module_name)
+
+            console.print(f"[cyan]Summarizing module '{resolved_module}'...[/cyan]")
 
             summarizer = ModuleSummarizer(llm_client)
-            module_path = Path.cwd() / ".memory" / "modules" / module_name
+            module_path = Path.cwd() / ".memory" / "modules" / resolved_module
 
             summary_text = summarizer.summarize_module(module_path)
 
@@ -1948,7 +1999,10 @@ def archive(
         from memory_tool.core.archiver import Archiver, ArchiverError
         from memory_tool.utils.config import Config
 
-        archiver = Archiver(module_name=module_name)
+        # Resolve module name if provided
+        resolved_module = _resolve_module_name(module_name)
+
+        archiver = Archiver(module_name=resolved_module)
 
         if target == "decisions":
             # Validate mutually exclusive options

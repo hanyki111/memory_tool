@@ -275,6 +275,40 @@ TODO: Add usage examples
         modules.sort(key=lambda p: str(p))
         return modules
 
+    def find_module_by_name(self, name: str, exact: bool = False) -> List[str]:
+        """Find module(s) by name, searching all module paths.
+
+        Args:
+            name: Module name to search for (e.g., 'website' or 'memory-system')
+            exact: If True, only exact name matches. If False, matches end of path.
+
+        Returns:
+            List of matching module paths (relative to modules_path).
+            Empty list if no matches found.
+
+        Examples:
+            find_module_by_name('website') -> ['projects/website', 'archive-projects/old-website']
+            find_module_by_name('memory-system') -> ['memory-system']
+            find_module_by_name('projects/website', exact=True) -> ['projects/website']
+        """
+        all_modules = self.discover_all_modules()
+        matches = []
+
+        for module_path in all_modules:
+            module_str = str(module_path)
+            module_parts = module_path.parts
+
+            if exact:
+                # Exact match: full path must match
+                if module_str == name:
+                    matches.append(module_str)
+            else:
+                # Flexible match: name matches last component OR full path
+                if module_str == name or module_parts[-1] == name:
+                    matches.append(module_str)
+
+        return matches
+
     def list_modules(self, include_archived: bool = False) -> Dict[str, List[str]]:
         """List all modules (hierarchical paths).
 
