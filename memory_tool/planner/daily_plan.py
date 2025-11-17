@@ -186,6 +186,9 @@ class DailyPlan:
         Returns:
             True if marked, False if not found
         """
+        if target_date is None:
+            target_date = date.today()
+
         plan_path = self.get_plan_path(target_date)
 
         if not plan_path.exists():
@@ -196,10 +199,12 @@ class DailyPlan:
 
         # Find and mark task
         marked = False
+        completion_time = datetime.now()
+        timestamp = completion_time.strftime("%H:%M")
+
         for i, line in enumerate(lines):
             if line.strip().startswith('- [ ]') and task.lower() in line.lower():
                 # Mark as completed with timestamp
-                timestamp = datetime.now().strftime("%H:%M")
                 lines[i] = line.replace('- [ ]', f'- [x]') + f" [{timestamp}]"
                 marked = True
                 break
@@ -212,6 +217,21 @@ class DailyPlan:
         updated_content = self._update_progress(updated_content)
 
         plan_path.write_text(updated_content, encoding='utf-8')
+
+        # Record completion in timeline (Plan-Timeline integration)
+        try:
+            from .integration import PlanTimelineIntegration
+            integration = PlanTimelineIntegration(self.base_path)
+            integration.record_task_completion(
+                task=task,
+                plan_type='daily',
+                plan_date=target_date,
+                completion_time=completion_time
+            )
+        except Exception:
+            # Silent failure - integration is optional
+            pass
+
         return True
 
     def get_progress(self, target_date: Optional[date] = None) -> Tuple[int, int]:

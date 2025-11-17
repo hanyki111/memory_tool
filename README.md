@@ -932,7 +932,7 @@ ms "authentication" --from 2025-11-01 --to 2025-11-14
 - ✅ `mplan` 명령어 (프로젝트 계획)
 - ✅ 모듈 자동 검색 (짧은 이름 지원)
 
-### Phase 5 (Timeline/Review/Plan): Phase 1 완료 ⭐ NEW
+### Phase 5 (Timeline/Review/Plan): Phase 1-4 완료 ⭐ UPDATED
 
 **Phase 1 완료:** Timeline 재구조화 ✅
 
@@ -941,11 +941,35 @@ ms "authentication" --from 2025-11-01 --to 2025-11-14
 - ✅ `migrate-timeline` 명령어 (자동 마이그레이션)
 - ✅ Review/Plan 시스템 준비 완료
 
+**Phase 2 완료:** Review 시스템 ✅
+
+- ✅ `mreview weekly` - 주간 회고 생성 및 조회
+- ✅ `mreview monthly` - 월간 회고 생성 및 조회
+- ✅ 템플릿 시스템 및 에디터 통합
+- ✅ Daily Timeline 자동 링크 생성
+
+**Phase 3 완료:** Plan 시스템 확장 ✅
+
+- ✅ `mplan daily` - 일간 계획 및 작업 관리
+- ✅ `mplan weekly` - 주간 목표 관리
+- ✅ `mplan monthly` - 월간 마일스톤 관리
+- ✅ `mplan module` - 모듈별 작업 계획
+- ✅ 진행률 자동 추적 및 업데이트
+
+**Phase 4 완료:** Plan-Timeline 강한 연계 ✅ NEW
+
+- ✅ **Plan 완료 시 Timeline 자동 기록** - `mplan daily/weekly/monthly done` 실행 시 자동으로 Timeline에 기록
+- ✅ 양방향 참조 (Plan ↔ Timeline)
+- ✅ 작업 유형 표시 (Daily Plan / Weekly Plan / Monthly Plan)
+- ✅ 예시:
+  ```bash
+  $ mplan daily done "API 구현"
+  # Timeline에 자동 기록:
+  # - 14:30 | ✓ API 구현 (Daily Plan)
+  ```
+
 **다음 단계:**
 
-- Phase 2: Review 시스템 (주간/월간 회고)
-- Phase 3: Plan 확장 (daily/weekly/monthly plans)
-- Phase 4: Plan-Timeline 강한 연계
 - Phase 5: Module Plan 통합
 
 **관련 문서:**

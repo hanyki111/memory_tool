@@ -258,6 +258,9 @@ class MonthlyPlan:
         Returns:
             True if marked, False if not found
         """
+        if target_date is None:
+            target_date = date.today()
+
         plan_path = self.get_plan_path(target_date)
 
         if not plan_path.exists():
@@ -268,6 +271,8 @@ class MonthlyPlan:
 
         # Find and mark goal
         marked = False
+        completion_time = datetime.now()
+
         for i, line in enumerate(lines):
             if line.strip().startswith('- [ ]') and goal.lower() in line.lower():
                 lines[i] = line.replace('- [ ]', '- [x]')
@@ -282,6 +287,21 @@ class MonthlyPlan:
         updated_content = self._update_progress(updated_content)
 
         plan_path.write_text(updated_content, encoding='utf-8')
+
+        # Record completion in timeline (Plan-Timeline integration)
+        try:
+            from .integration import PlanTimelineIntegration
+            integration = PlanTimelineIntegration(self.base_path)
+            integration.record_task_completion(
+                task=goal,
+                plan_type='monthly',
+                plan_date=target_date,
+                completion_time=completion_time
+            )
+        except Exception:
+            # Silent failure - integration is optional
+            pass
+
         return True
 
     def get_progress(self, target_date: Optional[date] = None) -> Tuple[int, int]:
