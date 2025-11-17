@@ -2,8 +2,6 @@
 
 **시간-공간 통합 지식 체계** - Timeline 기반 작업 기록 & Claude Code 자동 컨텍스트 제공
 
-> **For Claude Code:** Read `CLAUDE.md` first 🤖
-
 ---
 
 ## 특징
@@ -81,14 +79,14 @@ mcontext
 **Windows 배치 파일:**
 
 ```bash
-malias install          # 전체 설치
-malias install m ms     # 특정 명령어만
+python -m memory_tool malias install         # 전체 설치
+python -m memory_tool malias install m ms     # 특정 명령어만
 ```
 
 **PowerShell 프로필 (추천):**
 
 ```bash
-malias install --powershell
+python -m memory_tool malias install --powershell
 ```
 
 설치 후 모든 터미널(PowerShell, VSCode, Windows Terminal)에서 작동합니다.
