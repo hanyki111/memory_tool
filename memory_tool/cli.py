@@ -2653,6 +2653,82 @@ def hooks(
         sys.exit(1)
 
 
+@app.command()
+def migrate_timeline(
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be migrated without actually moving files"),
+):
+    """Migrate timeline files from legacy structure to new daily/ structure.
+
+    This command migrates timeline files from:
+      timeline/YYYY-MM/DD.md (legacy)
+    To:
+      timeline/daily/YYYY-MM/DD.md (new structure)
+
+    Use --dry-run to preview what would be migrated.
+
+    Examples:
+        mmigrate-timeline              # Perform migration
+        mmigrate-timeline --dry-run    # Preview migration
+    """
+    try:
+        from memory_tool.utils.migrate_timeline import TimelineMigrator
+
+        console.print("[cyan]Timeline Migration[/cyan]\n")
+
+        # Initialize migrator
+        migrator = TimelineMigrator()
+
+        # Find files to migrate
+        migrations = migrator.find_legacy_files()
+
+        if not migrations:
+            console.print("[green]No legacy timeline files found.[/green]")
+            console.print("[dim]All timeline files are already in the new structure.[/dim]")
+            return
+
+        # Show what will be migrated
+        console.print(f"[yellow]Found {len(migrations)} file(s) to migrate:[/yellow]\n")
+
+        for source, dest in migrations[:10]:  # Show first 10
+            console.print(f"  [dim]{source.relative_to(migrator.timeline_path)}[/dim]")
+            console.print(f"  [cyan]→[/cyan] [dim]{dest.relative_to(migrator.timeline_path)}[/dim]\n")
+
+        if len(migrations) > 10:
+            console.print(f"  [dim]... and {len(migrations) - 10} more files[/dim]\n")
+
+        if dry_run:
+            console.print("[yellow]DRY RUN:[/yellow] No files were moved.")
+            console.print("[dim]Run without --dry-run to perform migration[/dim]")
+            return
+
+        # Confirm migration
+        if not typer.confirm("\nProceed with migration?"):
+            console.print("[yellow]Migration cancelled[/yellow]")
+            return
+
+        # Perform migration
+        console.print("\n[cyan]Migrating files...[/cyan]")
+        success_count, error_count = migrator.migrate(dry_run=False)
+
+        # Report results
+        console.print()
+        if success_count > 0:
+            console.print(f"[green]SUCCESS[/green] Migrated {success_count} file(s)")
+
+        if error_count > 0:
+            console.print(f"[red]ERROR[/red] Failed to migrate {error_count} file(s)")
+
+        if success_count > 0:
+            console.print("\n[dim]Empty legacy directories have been removed.[/dim]")
+            console.print("[green]Migration complete![/green]")
+
+    except Exception as e:
+        console.print(f"[red]ERROR[/red] Migration failed: {e}")
+        import traceback
+        console.print(f"[dim]{traceback.format_exc()}[/dim]")
+        sys.exit(1)
+
+
 @app.callback(invoke_without_command=True)
 def main(
     ctx: typer.Context,

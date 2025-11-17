@@ -31,30 +31,51 @@ class DistantPastWarning(TimelineError):
 class Timeline:
     """Timeline manager for recording messages."""
 
-    def __init__(self, base_path: Optional[Path] = None):
+    def __init__(self, base_path: Optional[Path] = None, use_daily_structure: bool = True):
         """Initialize timeline manager.
 
         Args:
             base_path: Base path for .memory/ directory. Defaults to current directory.
+            use_daily_structure: Use new daily/ structure (default: True). Set to False for legacy.
         """
         if base_path is None:
             base_path = Path.cwd()
         self.base_path = Path(base_path)
         self.memory_path = self.base_path / ".memory"
         self.timeline_path = self.memory_path / "timeline"
+        self.use_daily_structure = use_daily_structure
 
-    def get_timeline_file(self, date: datetime) -> Path:
+    def get_timeline_file(self, date: datetime, create: bool = True) -> Path:
         """Get timeline file path for a given date.
 
         Args:
             date: Date for the timeline file
+            create: If True, use new daily/ structure. If False, check both locations.
 
         Returns:
-            Path to timeline markdown file (YYYY-MM/DD.md)
+            Path to timeline markdown file (daily/YYYY-MM/DD.md or YYYY-MM/DD.md for legacy)
         """
         year_month = date.strftime("%Y-%m")
         day = date.strftime("%d")
-        return self.timeline_path / year_month / f"{day}.md"
+
+        if create and self.use_daily_structure:
+            # New structure: timeline/daily/YYYY-MM/DD.md
+            return self.timeline_path / "daily" / year_month / f"{day}.md"
+        elif create:
+            # Legacy structure: timeline/YYYY-MM/DD.md
+            return self.timeline_path / year_month / f"{day}.md"
+        else:
+            # Reading: Prefer legacy path if it exists (for backward compatibility during migration)
+            # This ensures old entries are not hidden when both files exist
+            legacy_path = self.timeline_path / year_month / f"{day}.md"
+            if legacy_path.exists():
+                return legacy_path
+            # Try new structure if legacy doesn't exist
+            new_path = self.timeline_path / "daily" / year_month / f"{day}.md"
+            if new_path.exists():
+                return new_path
+            # Return new path as default (for existence checks)
+            return new_path
 
     def parse_time(
         self,
@@ -236,7 +257,18 @@ class Timeline:
             dt = datetime.combine(target_date, target_time)
 
         # Get timeline file
-        file_path = self.get_timeline_file(dt)
+        # During migration transition: if legacy file exists for this date, append to it
+        # This prevents splitting entries across old and new structures
+        year_month = dt.strftime("%Y-%m")
+        day = dt.strftime("%d")
+        legacy_path = self.timeline_path / year_month / f"{day}.md"
+
+        if legacy_path.exists():
+            # Use legacy file if it exists (backward compatibility during migration)
+            file_path = legacy_path
+        else:
+            # Use new structure for new files
+            file_path = self.get_timeline_file(dt)
 
         # Read existing content
         header, entries = self.read_timeline(file_path)
@@ -269,7 +301,7 @@ class Timeline:
             Returns (None, None) if today's timeline doesn't exist
         """
         today = datetime.now()
-        file_path = self.get_timeline_file(today)
+        file_path = self.get_timeline_file(today, create=False)
 
         if not file_path.exists():
             return None, None
@@ -294,7 +326,7 @@ class Timeline:
         results = []
         current_date = monday
         while current_date <= today:
-            file_path = self.get_timeline_file(current_date)
+            file_path = self.get_timeline_file(current_date, create=False)
             if file_path.exists():
                 content = file_path.read_text(encoding="utf-8")
                 results.append((file_path, content))
