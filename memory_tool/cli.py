@@ -2305,34 +2305,61 @@ def browse(
 
 @app.command()
 def plan(
-    action: str = typer.Argument(..., help="Action: create, list, show, add, done, delete"),
-    name: str = typer.Argument(None, help="Plan name"),
+    action: str = typer.Argument(..., help="Action: create, list, show, add, done, delete, daily, weekly, monthly, module"),
+    name: str = typer.Argument(None, help="Plan name or sub-action (add/done/show)"),
     title: str = typer.Argument(None, help="Task title (for 'add' action)"),
     description: str = typer.Option("", "--desc", "-d", help="Plan description"),
     due_date: str = typer.Option(None, "--due", help="Due date (YYYY-MM-DD)"),
     tags: List[str] = typer.Option([], "--tag", "-t", help="Tags"),
+    section: str = typer.Option("sprint", "--section", "-s", help="Module plan section: sprint, backlog, debt"),
 ):
     """Manage plans and tasks (mplan command).
 
-    Actions:
-        create: Create a new plan
-        list: List all plans
+    Actions (Project Plans):
+        create: Create a new project plan
+        list: List all project plans
         show: Show plan details
         add: Add task to plan
         done: Mark task as completed
         delete: Delete a plan
 
-    Examples:
+    Actions (Time-based Plans):
+        daily: Daily plan (today)
+        weekly: Weekly plan (this week)
+        monthly: Monthly plan (this month)
+        module: Module plan (sprint/backlog/debt)
+
+    Examples (Project Plans):
         mplan create "Project Alpha" --desc "Main project plan"
         mplan list
         mplan show "Project Alpha"
         mplan add "Project Alpha" "Implement feature X"
         mplan done "Project Alpha" "Implement feature X"
         mplan delete "Project Alpha"
+
+    Examples (Time-based Plans):
+        mplan daily              # Show today's plan
+        mplan daily add "Task"   # Add task to today
+        mplan daily done "Task"  # Mark task as done
+
+        mplan weekly             # Show this week's plan
+        mplan weekly add "Goal"  # Add goal to this week
+
+        mplan monthly            # Show this month's plan
+
+        mplan module core-system              # Show module plan
+        mplan module core-system add "Task"   # Add to sprint (default)
+        mplan module core-system add "Task" --section backlog
+        mplan module core-system done "Task"
     """
     try:
-        from memory_tool.planner import PlanManager, Task, TaskStatus
+        from memory_tool.planner import (
+            PlanManager, Task, TaskStatus,
+            DailyPlan, WeeklyPlan, MonthlyPlan, ModulePlan
+        )
         from datetime import datetime
+        import subprocess
+        import os
 
         memory_path = Path.cwd() / ".memory"
 
@@ -2340,6 +2367,197 @@ def plan(
             console.print("[red]ERROR[/red] .memory/ not found. Run 'minit' first.")
             sys.exit(1)
 
+        # Handle time-based plans (daily/weekly/monthly/module)
+        if action in ["daily", "weekly", "monthly", "module"]:
+            if action == "daily":
+                plan_mgr = DailyPlan(base_path=memory_path)
+
+                if name is None or name == "show":
+                    # Show today's plan
+                    content = plan_mgr.show_plan()
+                    console.print(content)
+
+                elif name == "add":
+                    if not title:
+                        console.print("[red]ERROR[/red] Task title required")
+                        console.print("[dim]Usage: mplan daily add <task>[/dim]")
+                        sys.exit(1)
+
+                    plan_mgr.add_task(title)
+                    console.print(f"[green]OK[/green] Task added to today's plan")
+                    console.print(f"  - [ ] {title}")
+
+                elif name == "done":
+                    if not title:
+                        console.print("[red]ERROR[/red] Task title required")
+                        console.print("[dim]Usage: mplan daily done <task>[/dim]")
+                        sys.exit(1)
+
+                    if plan_mgr.mark_done(title):
+                        console.print(f"[green]OK[/green] Task marked as completed")
+                        console.print(f"  - [x] {title}")
+                    else:
+                        console.print(f"[red]ERROR[/red] Task not found: {title}")
+                        sys.exit(1)
+
+                else:
+                    # Try to create plan and open editor
+                    plan_path = plan_mgr.create_plan()
+                    console.print(f"[green]OK[/green] Daily plan ready")
+                    console.print(f"  → {plan_path.relative_to(Path.cwd())}")
+
+                    # Open in editor if name is not a command
+                    editor = os.environ.get('EDITOR')
+                    if editor:
+                        subprocess.run([editor, str(plan_path)])
+
+                    return
+
+            elif action == "weekly":
+                plan_mgr = WeeklyPlan(base_path=memory_path)
+
+                if name is None or name == "show":
+                    # Show this week's plan or specific week
+                    week_id = title if title else None
+                    content = plan_mgr.show_plan(week_id)
+                    console.print(content)
+
+                elif name == "add":
+                    if not title:
+                        console.print("[red]ERROR[/red] Goal required")
+                        console.print("[dim]Usage: mplan weekly add <goal>[/dim]")
+                        sys.exit(1)
+
+                    plan_mgr.add_goal(title)
+                    console.print(f"[green]OK[/green] Goal added to this week's plan")
+                    console.print(f"  - [ ] {title}")
+
+                elif name == "done":
+                    if not title:
+                        console.print("[red]ERROR[/red] Goal required")
+                        console.print("[dim]Usage: mplan weekly done <goal>[/dim]")
+                        sys.exit(1)
+
+                    if plan_mgr.mark_done(title):
+                        console.print(f"[green]OK[/green] Goal marked as completed")
+                        console.print(f"  - [x] {title}")
+                    else:
+                        console.print(f"[red]ERROR[/red] Goal not found: {title}")
+                        sys.exit(1)
+
+                else:
+                    # Create plan and open editor
+                    plan_path = plan_mgr.create_plan()
+                    console.print(f"[green]OK[/green] Weekly plan ready")
+                    console.print(f"  → {plan_path.relative_to(Path.cwd())}")
+
+                    editor = os.environ.get('EDITOR')
+                    if editor:
+                        subprocess.run([editor, str(plan_path)])
+
+                    return
+
+            elif action == "monthly":
+                plan_mgr = MonthlyPlan(base_path=memory_path)
+
+                if name is None or name == "show":
+                    # Show this month's plan or specific month
+                    month_id = title if title else None
+                    content = plan_mgr.show_plan(month_id)
+                    console.print(content)
+
+                elif name == "add":
+                    if not title:
+                        console.print("[red]ERROR[/red] Goal required")
+                        console.print("[dim]Usage: mplan monthly add <goal>[/dim]")
+                        sys.exit(1)
+
+                    plan_mgr.add_goal(title)
+                    console.print(f"[green]OK[/green] Goal added to this month's plan")
+                    console.print(f"  - [ ] {title}")
+
+                elif name == "done":
+                    if not title:
+                        console.print("[red]ERROR[/red] Goal required")
+                        console.print("[dim]Usage: mplan monthly done <goal>[/dim]")
+                        sys.exit(1)
+
+                    if plan_mgr.mark_done(title):
+                        console.print(f"[green]OK[/green] Goal marked as completed")
+                        console.print(f"  - [x] {title}")
+                    else:
+                        console.print(f"[red]ERROR[/red] Goal not found: {title}")
+                        sys.exit(1)
+
+                else:
+                    # Create plan and open editor
+                    plan_path = plan_mgr.create_plan()
+                    console.print(f"[green]OK[/green] Monthly plan ready")
+                    console.print(f"  → {plan_path.relative_to(Path.cwd())}")
+
+                    editor = os.environ.get('EDITOR')
+                    if editor:
+                        subprocess.run([editor, str(plan_path)])
+
+                    return
+
+            elif action == "module":
+                if not name:
+                    console.print("[red]ERROR[/red] Module name required")
+                    console.print("[dim]Usage: mplan module <module-name> [add|done|show][/dim]")
+                    sys.exit(1)
+
+                plan_mgr = ModulePlan(base_path=memory_path)
+
+                # Check if title is a sub-command
+                sub_action = title if title in ["add", "done", "show"] else "show"
+
+                if sub_action == "show" or title is None:
+                    # Show module plan
+                    content = plan_mgr.show_plan(name)
+                    console.print(content)
+
+                elif sub_action == "add":
+                    # For add, we need another argument (the actual task)
+                    # This is a limitation - we'll use description option instead
+                    if not description:
+                        console.print("[red]ERROR[/red] Task required")
+                        console.print("[dim]Usage: mplan module <module> add --desc <task> [--section sprint|backlog|debt][/dim]")
+                        sys.exit(1)
+
+                    if plan_mgr.add_task(name, section, description):
+                        console.print(f"[green]OK[/green] Task added to {name}/{section}")
+                        console.print(f"  - [ ] {description}")
+                    else:
+                        console.print(f"[red]ERROR[/red] Failed to add task")
+                        sys.exit(1)
+
+                elif sub_action == "done":
+                    if not description:
+                        console.print("[red]ERROR[/red] Task required")
+                        console.print("[dim]Usage: mplan module <module> done --desc <task> [--section sprint|backlog|debt][/dim]")
+                        sys.exit(1)
+
+                    if plan_mgr.mark_done(name, section, description):
+                        console.print(f"[green]OK[/green] Task marked as completed")
+                        console.print(f"  - [x] {description}")
+                    else:
+                        console.print(f"[red]ERROR[/red] Task not found: {description}")
+                        sys.exit(1)
+
+                else:
+                    # Create/show plan
+                    plan_path = plan_mgr.create_plan(name)
+                    console.print(f"[green]OK[/green] Module plan ready: {name}")
+                    console.print(f"  → {plan_path.relative_to(Path.cwd())}")
+
+                    editor = os.environ.get('EDITOR')
+                    if editor:
+                        subprocess.run([editor, str(plan_path)])
+
+            return
+
+        # Handle project plans (original functionality)
         manager = PlanManager(base_path=memory_path)
 
         # Action: create
