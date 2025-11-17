@@ -243,7 +243,10 @@ minit --force
 
 ```
 .memory/                      # 지식 저장소
-  timeline/                   # 시간순 기록
+  timeline/
+    daily/                    # 일간 시간순 기록 (NEW)
+      YYYY-MM/
+        DD.md
   modules/                    # 주제별 정리
   concepts/                   # 개념 문서
   docs/                       # 문서
@@ -341,6 +344,29 @@ msort today --no-backup
 - Timeline 항목을 시간순으로 자동 재정렬
 - 기존 파일 자동 백업 (.bak)
 - HH:MM, H:MM 형식 모두 지원
+
+### `migrate-timeline` - Timeline 마이그레이션 ⭐ NEW
+
+```bash
+# 마이그레이션 미리보기 (dry-run)
+python -m memory_tool migrate-timeline --dry-run
+
+# 실제 마이그레이션 실행
+python -m memory_tool migrate-timeline
+```
+
+**기능:**
+
+- 기존 Timeline 파일을 새 구조로 마이그레이션
+- `timeline/YYYY-MM/DD.md` → `timeline/daily/YYYY-MM/DD.md`
+- Dry-run 모드로 안전하게 미리보기 가능
+- 자동으로 빈 legacy 디렉토리 정리
+- 데이터 손실 없는 안전한 마이그레이션
+
+**언제 사용:**
+- Phase 1 (Timeline 재구조화) 업데이트 후 한 번만 실행
+- 기존 사용자가 새 디렉토리 구조로 전환할 때
+- 새 사용자는 실행 불필요 (자동으로 새 구조 사용)
 
 ### `module` - 모듈 관리 ⭐ NEW
 
@@ -817,13 +843,51 @@ context:
 ms "authentication" --from 2025-11-01 --to 2025-11-14
 ```
 
-### Phase 3: 장기 계획 🔮
+### Phase 3: 벡터 검색 - 완료 ✅✅✅
+
+**완료:**
+
+- ✅ 의미 기반 검색 (sentence-transformers)
+- ✅ `ms --semantic` 플래그
+- ✅ 임베딩 캐싱 (성능 최적화)
+
+### Phase 4: LLM 통합 - 완료 ✅✅✅
+
+**완료:**
+
+- ✅ Anthropic Claude API 통합
+- ✅ Ollama 지원 (로컬, 무료)
+- ✅ `msummary` 명령어 (Timeline/모듈 요약)
+- ✅ `marchive` 명령어 (자동 아카이브)
+- ✅ `mplan` 명령어 (프로젝트 계획)
+- ✅ 모듈 자동 검색 (짧은 이름 지원)
+
+### Phase 5 (Timeline/Review/Plan): Phase 1 완료 ⭐ NEW
+
+**Phase 1 완료:** Timeline 재구조화 ✅
+
+- ✅ 새 디렉토리 구조: `timeline/daily/YYYY-MM/DD.md`
+- ✅ 완전한 하위 호환성 (기존 파일 읽기/쓰기)
+- ✅ `migrate-timeline` 명령어 (자동 마이그레이션)
+- ✅ Review/Plan 시스템 준비 완료
+
+**다음 단계:**
+
+- Phase 2: Review 시스템 (주간/월간 회고)
+- Phase 3: Plan 확장 (daily/weekly/monthly plans)
+- Phase 4: Plan-Timeline 강한 연계
+- Phase 5: Module Plan 통합
+
+**관련 문서:**
+- `.memory/concepts/timeline-review-plan-system-design.md`
+
+### Phase 6+: 장기 계획 🔮
 
 **연구 중:**
 
-- MCP Server (Claude Code 네이티브 통합)
-- 벡터 검색 (의미 기반)
-- 자동 요약 (LLM 기반)
+- MCP Server (Claude Code 네이티브 통합) - 우선순위 하향
+- SQLite 인덱싱 (검색 속도 10-100배)
+- 테스트 커버리지 및 안정성 개선
 
 ---
 
@@ -915,7 +979,33 @@ KB 경로: `~/memory/personal/` (config.yaml에서 변경 가능)
 
 **Q: Timeline 시간순 정렬은?**
 
-A: Phase 1은 추가순 유지, Phase 2에 `msort` 명령어 구현 예정. "Capture first, organize later" 철학.
+A: `msort` 명령어로 자동 정렬 가능합니다:
+
+```bash
+msort today          # 오늘 정렬
+msort 2025-11-14     # 특정 날짜
+msort all            # 모든 Timeline
+```
+
+원본 파일은 자동으로 백업됩니다 (.bak).
+
+**Q: Timeline 구조가 변경되었나요?**
+
+A: Phase 1 업데이트 이후 Timeline 구조가 개선되었습니다:
+
+- **이전:** `timeline/YYYY-MM/DD.md`
+- **현재:** `timeline/daily/YYYY-MM/DD.md`
+
+**기존 사용자:** `migrate-timeline` 명령어로 한 번만 마이그레이션하세요:
+
+```bash
+python -m memory_tool migrate-timeline --dry-run  # 미리보기
+python -m memory_tool migrate-timeline            # 실행
+```
+
+**새 사용자:** 자동으로 새 구조를 사용하므로 아무 작업도 필요 없습니다.
+
+**하위 호환성:** 기존 파일은 계속 읽을 수 있으며, 마이그레이션 전까지 기존 위치에 기록됩니다.
 
 **Q: Claude Skill은 언제?**
 
