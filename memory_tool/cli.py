@@ -47,6 +47,7 @@ from memory_tool.summary import (
     ConversationSummarizer,
     ModuleSummarizer,
 )
+from memory_tool.review import ReviewManager
 
 app = typer.Typer(
     name="memory-tool",
@@ -2724,6 +2725,128 @@ def migrate_timeline(
 
     except Exception as e:
         console.print(f"[red]ERROR[/red] Migration failed: {e}")
+        import traceback
+        console.print(f"[dim]{traceback.format_exc()}[/dim]")
+        sys.exit(1)
+
+
+@app.command()
+def review(
+    period: str = typer.Argument(..., help="Period: 'weekly' or 'monthly'"),
+    action: str = typer.Argument("create", help="Action: 'create' or 'show'"),
+    identifier: str = typer.Argument(None, help="Week ID (W##) or Month (MM) for 'show' action"),
+    editor: bool = typer.Option(True, "--editor/--no-editor", help="Open in editor after creation"),
+):
+    """Manage weekly and monthly reviews (mreview command).
+
+    Examples:
+        mreview weekly                  # Create/edit this week's review
+        mreview weekly show             # Show this week's review
+        mreview weekly show W47         # Show specific week review
+        mreview monthly                 # Create/edit this month's review
+        mreview monthly show            # Show this month's review
+        mreview monthly show 11         # Show specific month review
+    """
+    try:
+        import os
+        import subprocess
+
+        memory_path = Path.cwd() / ".memory"
+
+        if not memory_path.exists():
+            console.print("[red]ERROR[/red] .memory/ not found. Run 'minit' first.")
+            sys.exit(1)
+
+        manager = ReviewManager()
+
+        # Validate period
+        if period.lower() not in ["weekly", "monthly"]:
+            console.print(f"[red]ERROR[/red] Invalid period: {period}")
+            console.print("[dim]Valid periods: weekly, monthly[/dim]")
+            sys.exit(1)
+
+        # Action: show
+        if action.lower() == "show":
+            if period.lower() == "weekly":
+                review_file = manager.get_weekly_review(week_id=identifier) if identifier else manager.get_weekly_review()
+
+                if not review_file:
+                    if identifier:
+                        console.print(f"[yellow]![/yellow] Weekly review not found: {identifier}")
+                    else:
+                        console.print("[yellow]![/yellow] No review for this week yet")
+                        console.print("[dim]Create one with: mreview weekly[/dim]")
+                    sys.exit(1)
+
+                # Display review content
+                content = review_file.read_text(encoding="utf-8")
+                console.print(content)
+
+            else:  # monthly
+                # Parse month/year if provided
+                month = None
+                year = None
+                if identifier:
+                    try:
+                        month = int(identifier)
+                        if month < 1 or month > 12:
+                            console.print(f"[red]ERROR[/red] Invalid month: {month}")
+                            console.print("[dim]Month must be between 1 and 12[/dim]")
+                            sys.exit(1)
+                    except ValueError:
+                        console.print(f"[red]ERROR[/red] Invalid month format: {identifier}")
+                        console.print("[dim]Use numeric month (1-12)[/dim]")
+                        sys.exit(1)
+
+                review_file = manager.get_monthly_review(month=month, year=year)
+
+                if not review_file:
+                    if identifier:
+                        console.print(f"[yellow]![/yellow] Monthly review not found: {identifier}")
+                    else:
+                        console.print("[yellow]![/yellow] No review for this month yet")
+                        console.print("[dim]Create one with: mreview monthly[/dim]")
+                    sys.exit(1)
+
+                # Display review content
+                content = review_file.read_text(encoding="utf-8")
+                console.print(content)
+
+        # Action: create (default)
+        else:
+            if period.lower() == "weekly":
+                console.print("[cyan]Creating weekly review...[/cyan]")
+                review_file = manager.create_weekly_review()
+
+                week_id = manager.weekly.get_week_id()
+                console.print(f"[green]OK[/green] Weekly review created: {week_id}")
+                console.print(f"  → {review_file.relative_to(Path.cwd())}")
+
+            else:  # monthly
+                console.print("[cyan]Creating monthly review...[/cyan]")
+                review_file = manager.create_monthly_review()
+
+                from datetime import datetime
+                month_name = datetime.now().strftime("%B %Y")
+                console.print(f"[green]OK[/green] Monthly review created: {month_name}")
+                console.print(f"  → {review_file.relative_to(Path.cwd())}")
+
+            # Open in editor if requested
+            if editor:
+                editor_cmd = os.environ.get("EDITOR", "notepad" if sys.platform == "win32" else "vi")
+
+                try:
+                    console.print(f"\n[cyan]Opening in editor: {editor_cmd}[/cyan]")
+                    subprocess.run([editor_cmd, str(review_file)], check=True)
+                except subprocess.CalledProcessError:
+                    console.print(f"[yellow]![/yellow] Failed to open editor")
+                    console.print(f"[dim]Edit manually: {review_file}[/dim]")
+                except FileNotFoundError:
+                    console.print(f"[yellow]![/yellow] Editor not found: {editor_cmd}")
+                    console.print(f"[dim]Set EDITOR environment variable or edit manually: {review_file}[/dim]")
+
+    except Exception as e:
+        console.print(f"[red]ERROR[/red] Unexpected error: {e}")
         import traceback
         console.print(f"[dim]{traceback.format_exc()}[/dim]")
         sys.exit(1)
