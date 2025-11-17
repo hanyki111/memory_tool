@@ -368,6 +368,76 @@ python -m memory_tool migrate-timeline
 - 기존 사용자가 새 디렉토리 구조로 전환할 때
 - 새 사용자는 실행 불필요 (자동으로 새 구조 사용)
 
+### `mreview` - 회고 시스템 ⭐⭐ NEW (Phase 2)
+
+```bash
+# 주간 회고 생성/편집 (이번 주)
+mreview weekly
+
+# 주간 회고 조회 (이번 주)
+mreview weekly show
+
+# 특정 주차 회고 조회
+mreview weekly show W47
+
+# 월간 회고 생성/편집 (이번 달)
+mreview monthly
+
+# 월간 회고 조회 (이번 달)
+mreview monthly show
+
+# 특정 월 회고 조회
+mreview monthly show 11
+
+# 에디터 열지 않고 생성만
+mreview weekly --no-editor
+```
+
+**기능:**
+
+- **주간 회고 (Weekly Review):**
+  - ISO week 형식 (W47)
+  - 7일간 Daily Timeline 링크 자동 생성
+  - 엔트리 수 자동 계산
+  - 활동 일수 통계
+
+- **월간 회고 (Monthly Review):**
+  - 숫자 월 형식 (11)
+  - 4-5주간 Weekly Review 링크 자동 생성
+  - 월간 통계 (총 엔트리, 활동 일수, 주간 회고 수)
+
+- **자동 기능:**
+  - Daily Timeline 링크 + 엔트리 수
+  - Weekly Review 링크 (월간 회고)
+  - 통계 자동 계산
+  - 생성 후 에디터 자동 열기 (EDITOR 환경 변수 지원)
+
+**디렉토리 구조:**
+```
+.memory/
+├── reviews/
+│   ├── weekly/
+│   │   └── YYYY/
+│   │       └── W##.md
+│   ├── monthly/
+│   │   └── YYYY/
+│   │       └── MM.md
+│   └── templates/
+│       ├── weekly.md
+│       └── monthly.md
+```
+
+**에디터 설정:**
+- Windows: `notepad` (기본)
+- Linux/Mac: `vi` (기본)
+- 커스텀: `EDITOR` 환경 변수 설정
+
+**관련 문서:**
+- 설계: `.memory/concepts/timeline-review-plan-system-design.md`
+- Phase 1: Timeline 재구조화 (완료)
+- Phase 2: Review 시스템 (완료) ✅
+- Phase 3: Plan 시스템 (예정)
+
 ### `module` - 모듈 관리 ⭐ NEW
 
 ```bash
