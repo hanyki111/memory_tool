@@ -142,11 +142,12 @@ class WeeklyPlan:
 
         return plan_path
 
-    def show_plan(self, week_id: Optional[str] = None) -> str:
+    def show_plan(self, week_id: Optional[str] = None, auto_update: bool = True) -> str:
         """Show weekly plan content.
 
         Args:
             week_id: Week ID (e.g., "W47") or None for current week
+            auto_update: If True, automatically update progress before showing
 
         Returns:
             Plan content
@@ -178,6 +179,19 @@ class WeeklyPlan:
 
         if not plan_path.exists():
             return f"No weekly plan found\nCreate one with: mplan weekly"
+
+        # Auto-update progress if requested
+        if auto_update:
+            try:
+                content = plan_path.read_text(encoding='utf-8')
+                updated_content = self._update_progress(content)
+                # Save if changed
+                if updated_content != content:
+                    plan_path.write_text(updated_content, encoding='utf-8')
+                return updated_content
+            except Exception:
+                # If update fails, just return original content
+                return plan_path.read_text(encoding='utf-8')
 
         return plan_path.read_text(encoding='utf-8')
 

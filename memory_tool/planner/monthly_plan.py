@@ -181,11 +181,12 @@ class MonthlyPlan:
 
         return plan_path
 
-    def show_plan(self, month_id: Optional[str] = None) -> str:
+    def show_plan(self, month_id: Optional[str] = None, auto_update: bool = True) -> str:
         """Show monthly plan content.
 
         Args:
             month_id: Month ID (e.g., "11") or None for current month
+            auto_update: If True, automatically update progress before showing
 
         Returns:
             Plan content
@@ -206,6 +207,19 @@ class MonthlyPlan:
 
         if not plan_path.exists():
             return f"No monthly plan found\nCreate one with: mplan monthly"
+
+        # Auto-update progress if requested
+        if auto_update:
+            try:
+                content = plan_path.read_text(encoding='utf-8')
+                updated_content = self._update_progress(content)
+                # Save if changed
+                if updated_content != content:
+                    plan_path.write_text(updated_content, encoding='utf-8')
+                return updated_content
+            except Exception:
+                # If update fails, just return original content
+                return plan_path.read_text(encoding='utf-8')
 
         return plan_path.read_text(encoding='utf-8')
 

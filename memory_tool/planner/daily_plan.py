@@ -114,11 +114,12 @@ class DailyPlan:
 
         return plan_path
 
-    def show_plan(self, target_date: Optional[date] = None) -> str:
+    def show_plan(self, target_date: Optional[date] = None, auto_update: bool = True) -> str:
         """Show daily plan content.
 
         Args:
             target_date: Target date (today if None)
+            auto_update: If True, automatically update progress before showing
 
         Returns:
             Plan content
@@ -131,6 +132,19 @@ class DailyPlan:
             else:
                 date_str = target_date.strftime("%Y-%m-%d")
             return f"No plan found for {date_str}\nCreate one with: mplan daily"
+
+        # Auto-update progress if requested
+        if auto_update:
+            try:
+                content = plan_path.read_text(encoding='utf-8')
+                updated_content = self._update_progress(content)
+                # Save if changed
+                if updated_content != content:
+                    plan_path.write_text(updated_content, encoding='utf-8')
+                return updated_content
+            except Exception:
+                # If update fails, just return original content
+                return plan_path.read_text(encoding='utf-8')
 
         return plan_path.read_text(encoding='utf-8')
 
