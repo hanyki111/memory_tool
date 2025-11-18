@@ -84,6 +84,104 @@ class ContextBuilder:
 
         return statuses
 
+    def get_plan_summary(self) -> Dict[str, any]:
+        """Get current plan information.
+
+        Returns:
+            Dictionary with plan summary:
+            {
+                "daily": {"path": Path, "progress": (completed, total), "tasks": [...]}
+                "weekly": {"path": Path, "progress": (completed, total), "goals": [...]}
+                "monthly": {"path": Path, "progress": (completed, total), "goals": [...]}
+            }
+        """
+        from datetime import date
+        import re
+
+        plans_path = self.memory_path / "plans"
+        summary = {}
+
+        # Daily Plan
+        today = date.today()
+        daily_path = plans_path / "daily" / today.strftime("%Y-%m") / f"{today.strftime('%d')}.md"
+        if daily_path.exists():
+            try:
+                content = daily_path.read_text(encoding='utf-8')
+                # Count tasks
+                total = len(re.findall(r'- \[[ x]\]', content))
+                completed = len(re.findall(r'- \[x\]', content))
+                # Get pending tasks (limit to 3)
+                pending_tasks = []
+                for line in content.splitlines():
+                    if line.strip().startswith('- [ ]'):
+                        task = line.strip()[6:].strip()
+                        if task:
+                            pending_tasks.append(task)
+                        if len(pending_tasks) >= 3:
+                            break
+
+                summary["daily"] = {
+                    "path": daily_path,
+                    "progress": (completed, total),
+                    "tasks": pending_tasks
+                }
+            except Exception:
+                pass
+
+        # Weekly Plan
+        iso_cal = today.isocalendar()
+        week_num = iso_cal[1]
+        weekly_path = plans_path / "weekly" / str(today.year) / f"W{week_num:02d}.md"
+        if weekly_path.exists():
+            try:
+                content = weekly_path.read_text(encoding='utf-8')
+                total = len(re.findall(r'- \[[ x]\]', content))
+                completed = len(re.findall(r'- \[x\]', content))
+                # Get pending goals (limit to 3)
+                pending_goals = []
+                for line in content.splitlines():
+                    if line.strip().startswith('- [ ]'):
+                        goal = line.strip()[6:].strip()
+                        if goal:
+                            pending_goals.append(goal)
+                        if len(pending_goals) >= 3:
+                            break
+
+                summary["weekly"] = {
+                    "path": weekly_path,
+                    "progress": (completed, total),
+                    "goals": pending_goals
+                }
+            except Exception:
+                pass
+
+        # Monthly Plan
+        monthly_path = plans_path / "monthly" / str(today.year) / f"{today.month:02d}.md"
+        if monthly_path.exists():
+            try:
+                content = monthly_path.read_text(encoding='utf-8')
+                total = len(re.findall(r'- \[[ x]\]', content))
+                completed = len(re.findall(r'- \[x\]', content))
+                # Get pending goals (limit to 2)
+                pending_goals = []
+                for line in content.splitlines():
+                    if line.strip().startswith('- [ ]'):
+                        goal = line.strip()[6:].strip()
+                        if goal:
+                            pending_goals.append(goal)
+                        if len(pending_goals) >= 2:
+                            break
+
+                summary["monthly"] = {
+                    "path": monthly_path,
+                    "progress": (completed, total),
+                    "goals": pending_goals
+                }
+            except Exception:
+                pass
+
+        return summary
+
     def load_config(self) -> dict:
         """Load config.yaml settings.
 
@@ -126,6 +224,60 @@ class ContextBuilder:
             lines.append("## Recent Timeline")
             lines.append("")
             lines.append("*No recent timeline entries found.*")
+            lines.append("")
+
+        lines.append("---")
+        lines.append("")
+
+        # Current Plans
+        plan_summary = self.get_plan_summary()
+
+        if plan_summary:
+            lines.append("## Current Plans")
+            lines.append("")
+
+            # Daily Plan
+            if "daily" in plan_summary:
+                daily = plan_summary["daily"]
+                completed, total = daily["progress"]
+                percentage = (completed / total * 100) if total > 0 else 0
+                lines.append(f"### Today's Plan")
+                lines.append(f"- **Progress:** {completed}/{total} ({percentage:.0f}%)")
+                if daily["tasks"]:
+                    lines.append("- **Pending Tasks:**")
+                    for task in daily["tasks"]:
+                        lines.append(f"  - {task}")
+                lines.append("")
+
+            # Weekly Plan
+            if "weekly" in plan_summary:
+                weekly = plan_summary["weekly"]
+                completed, total = weekly["progress"]
+                percentage = (completed / total * 100) if total > 0 else 0
+                lines.append(f"### This Week's Plan")
+                lines.append(f"- **Progress:** {completed}/{total} ({percentage:.0f}%)")
+                if weekly["goals"]:
+                    lines.append("- **Pending Goals:**")
+                    for goal in weekly["goals"]:
+                        lines.append(f"  - {goal}")
+                lines.append("")
+
+            # Monthly Plan
+            if "monthly" in plan_summary:
+                monthly = plan_summary["monthly"]
+                completed, total = monthly["progress"]
+                percentage = (completed / total * 100) if total > 0 else 0
+                lines.append(f"### This Month's Plan")
+                lines.append(f"- **Progress:** {completed}/{total} ({percentage:.0f}%)")
+                if monthly["goals"]:
+                    lines.append("- **Pending Goals:**")
+                    for goal in monthly["goals"]:
+                        lines.append(f"  - {goal}")
+                lines.append("")
+        else:
+            lines.append("## Current Plans")
+            lines.append("")
+            lines.append("*No active plans found.*")
             lines.append("")
 
         lines.append("---")

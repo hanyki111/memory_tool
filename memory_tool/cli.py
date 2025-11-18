@@ -841,6 +841,68 @@ def status():
         console.print(f"  Concepts: {concepts_count}")
         console.print()
 
+        # Count plans and get progress
+        plans_path = memory_path / "plans"
+        daily_plans = 0
+        weekly_plans = 0
+        monthly_plans = 0
+        today_progress = None
+        week_progress = None
+
+        if plans_path.exists():
+            # Count daily plans
+            daily_path = plans_path / "daily"
+            if daily_path.exists():
+                daily_plans = len(list(daily_path.rglob("*.md")))
+                # Get today's progress
+                from datetime import date
+                today = date.today()
+                today_plan = daily_path / today.strftime("%Y-%m") / f"{today.strftime('%d')}.md"
+                if today_plan.exists():
+                    import re
+                    content = today_plan.read_text(encoding='utf-8')
+                    total = len(re.findall(r'- \[[ x]\]', content))
+                    completed = len(re.findall(r'- \[x\]', content))
+                    if total > 0:
+                        today_progress = (completed, total)
+
+            # Count weekly plans
+            weekly_path = plans_path / "weekly"
+            if weekly_path.exists():
+                weekly_plans = len(list(weekly_path.rglob("*.md")))
+                # Get this week's progress
+                from datetime import date
+                today = date.today()
+                iso_cal = today.isocalendar()
+                week_num = iso_cal[1]
+                week_plan = weekly_path / str(today.year) / f"W{week_num:02d}.md"
+                if week_plan.exists():
+                    import re
+                    content = week_plan.read_text(encoding='utf-8')
+                    total = len(re.findall(r'- \[[ x]\]', content))
+                    completed = len(re.findall(r'- \[x\]', content))
+                    if total > 0:
+                        week_progress = (completed, total)
+
+            # Count monthly plans
+            monthly_path = plans_path / "monthly"
+            if monthly_path.exists():
+                monthly_plans = len(list(monthly_path.rglob("*.md")))
+
+        console.print(f"[bold]Plans:[/bold]")
+        console.print(f"  Daily plans: {daily_plans}")
+        if today_progress:
+            completed, total = today_progress
+            percentage = (completed / total * 100)
+            console.print(f"  Today's progress: {completed}/{total} ({percentage:.0f}%)")
+        console.print(f"  Weekly plans: {weekly_plans}")
+        if week_progress:
+            completed, total = week_progress
+            percentage = (completed / total * 100)
+            console.print(f"  This week's progress: {completed}/{total} ({percentage:.0f}%)")
+        console.print(f"  Monthly plans: {monthly_plans}")
+        console.print()
+
         console.print(f"[bold]Storage:[/bold]")
         console.print(f"  Size: {size_mb:.2f} MB")
         console.print(f"  Location: {memory_path}")

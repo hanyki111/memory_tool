@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### ✨ Added
+- **Plan-Timeline Integration (Phase 4)** - Plan 완료 시 Timeline 자동 기록
+  - `mplan daily/weekly/monthly done` 실행 시 Timeline에 자동 기록
+  - 양방향 참조 (Plan ↔ Timeline)
+  - 작업 유형 표시 (Daily Plan / Weekly Plan / Monthly Plan)
+- **mcontext improvements** - Current Plans 섹션 추가
+  - 오늘/이번 주/이번 달 Plan 진행률 표시
+  - Pending Tasks/Goals 표시 (최대 3개)
+- **mstatus improvements** - Plans 통계 추가
+  - Daily/Weekly/Monthly Plans 수 표시
+  - 오늘/이번 주 진행률 표시
+
+### 📝 Changed
+- Timeline/Review/Plan 시스템 전체 완료 (Phase 1-5)
+- README.md 및 design 문서 최종 업데이트
+
 ## [1.0.0-alpha] - 2025-11-15
 
 ### 🎉 Initial Alpha Release
