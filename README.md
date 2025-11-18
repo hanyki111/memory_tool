@@ -624,44 +624,104 @@ marchive decisions --module core-system
 
 ### `mplan` - 작업 계획 관리 📋
 
-프로젝트 계획과 작업(Task)을 체계적으로 관리합니다.
+Daily/Weekly/Monthly 단위로 작업과 목표를 체계적으로 관리합니다.
 
 ```bash
-# 새 계획 생성
-mplan create "API 개발" --desc "RESTful API 구현" --due 2025-12-31
+# === Daily Plan (일간 계획) ===
+# 오늘 계획 조회
+mplan daily
 
-# 태그 추가
-mplan create "인증 시스템" --tag backend --tag security
-
-# 모든 계획 목록
-mplan list
-
-# 계획 상세 보기
-mplan show api-development
+# 오늘 계획 생성
+mplan daily create
 
 # 작업 추가
-mplan add api-development "User CRUD API 구현"
-mplan add api-development "인증 미들웨어 추가"
+mplan daily add "API 엔드포인트 구현"
+mplan daily add "테스트 코드 작성"
 
-# 작업 완료 표시
-mplan done api-development "User CRUD API 구현"
+# 작업 완료 (자동으로 Timeline에 기록됨!)
+mplan daily done "API 엔드포인트"
 
-# 계획 삭제
-mplan delete api-development
+# === Weekly Plan (주간 계획) ===
+# 이번 주 계획 조회
+mplan weekly
+
+# 특정 주차 조회 (ISO week)
+mplan weekly W47
+
+# 목표 추가
+mplan weekly add "Phase 3 완료"
+
+# 목표 완료
+mplan weekly done "Phase 3"
+
+# === Monthly Plan (월간 계획) ===
+# 이번 달 계획 조회
+mplan monthly
+
+# 특정 월 조회
+mplan monthly 11
+
+# 목표 추가
+mplan monthly add "프로젝트 v1.0 릴리스"
+
+# 목표 완료
+mplan monthly done "프로젝트 v1.0"
 ```
 
-**Task 상태:**
-- `[ ]` - Pending (대기)
-- `[~]` - In Progress (진행 중)
-- `[x]` - Completed (완료)
-- `[!]` - Blocked (차단됨)
+**주요 기능:**
 
-**생성 파일:** `.memory/plans/20251215-api-development.md`
+1. **Progress 자동 업데이트** ⭐ NEW
+   - Plan 조회 시 자동으로 진행률 계산 및 저장
+   - 체크박스 추가/완료 시 자동 반영
+   - `**Progress:** 2/5 (40%)` 형식으로 표시
+
+2. **Timeline 자동 통합**
+   - `done` 명령어로 작업/목표 완료 시 Timeline에 자동 기록
+   - 체크마크 표시: `✓ Task (Daily Plan)`
+   - 양방향 링크: Plan ↔ Timeline
+
+3. **계층적 링크 구조**
+   - Daily → Weekly → Monthly Plan 자동 링크
+   - Daily → Timeline 링크
+   - 날짜 기반 자동 연결
+
+**Task/Goal 상태:**
+- `[ ]` - Pending (대기)
+- `[x]` - Completed (완료, Timeline에 자동 기록)
+
+**생성 파일:**
+- `.memory/plans/daily/YYYY-MM/DD.md` - 일간 계획
+- `.memory/plans/weekly/YYYY/W##.md` - 주간 계획
+- `.memory/plans/monthly/YYYY/MM.md` - 월간 계획
+
+**예시: Daily Plan 완료 흐름**
+```bash
+# 1. 계획 생성 및 작업 추가
+mplan daily create
+mplan daily add "테스트 작성"
+mplan daily add "문서 업데이트"
+
+# 2. 작업 완료 (자동으로 Timeline에 기록!)
+mplan daily done "테스트"
+# → Timeline에 "✓ 테스트 작성 (Daily Plan)" 자동 기록
+# → Progress: 1/2 (50%) 자동 업데이트
+
+# 3. 진행 상황 확인
+mplan daily
+# Progress: 1/2 (50%)
+# - [x] 테스트 작성 [14:30]
+# - [ ] 문서 업데이트
+```
+
+**mcontext와 mstatus 통합:**
+- `mcontext`: 현재 Plan 진행률 및 Pending tasks 표시
+- `mstatus`: Plan 통계 (총 Plan 수, 오늘/이번 주 진행률)
 
 **언제 사용하나:**
-- 복잡한 기능 개발 시 작업 추적
-- 프로젝트 로드맵 관리
-- Timeline과 별도로 구조화된 계획 필요할 때
+- 체계적인 작업 추적이 필요할 때
+- Timeline과 연계된 계획 관리
+- 주간/월간 목표 설정 및 추적
+- Claude Code가 현재 계획 상태를 인지해야 할 때
 
 ### `mindex` - SQLite 검색 인덱스 🔍
 
