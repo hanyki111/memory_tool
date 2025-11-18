@@ -406,11 +406,13 @@ mreview weekly --no-editor
   - 4-5주간 Weekly Review 링크 자동 생성
   - 월간 통계 (총 엔트리, 활동 일수, 주간 회고 수)
 
-- **자동 기능:**
-  - Daily Timeline 링크 + 엔트리 수
-  - Weekly Review 링크 (월간 회고)
-  - 통계 자동 계산
-  - 생성 후 에디터 자동 열기 (EDITOR 환경 변수 지원)
+- **자동화 기능:** ⭐
+  - **자동 링크 생성**: Daily Timeline / Weekly Review 자동 링크
+  - **자동 통계 계산**: 전체 엔트리 수, 활동 일수 자동 집계
+  - **템플릿 자동 적용**: 구조화된 회고 템플릿 자동 생성
+  - **변수 자동 치환**: 날짜, 주차, 월명, 통계 자동 삽입
+  - **에디터 자동 열기**: 생성 후 에디터 자동 실행 (EDITOR 환경 변수 지원)
+  - **Legacy 호환**: 기존/신규 Timeline 구조 모두 자동 인식
 
 **디렉토리 구조:**
 ```
@@ -432,11 +434,22 @@ mreview weekly --no-editor
 - Linux/Mac: `vi` (기본)
 - 커스텀: `EDITOR` 환경 변수 설정
 
+**Timeline과의 관계:**
+- **Timeline**: 일간 사실 기록 (자동, HH:MM)
+- **Review**: 주간/월간 회고 (수동, 의미 부여) ⭐
+- **Plan**: 작업 계획 및 추적 (체크리스트)
+
+**흐름:**
+```
+Timeline (사실 기록) → Review (회고) → Plan (다음 계획)
+```
+
 **관련 문서:**
 - 설계: `.memory/concepts/timeline-review-plan-system-design.md`
-- Phase 1: Timeline 재구조화 (완료)
+- Phase 1: Timeline 재구조화 (완료) ✅
 - Phase 2: Review 시스템 (완료) ✅
-- Phase 3: Plan 시스템 (예정)
+- Phase 3: Plan 시스템 (완료) ✅
+- Phase 4: Plan-Timeline 통합 (완료) ✅
 
 ### `module` - 모듈 관리 ⭐ NEW
 
