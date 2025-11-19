@@ -1789,6 +1789,7 @@ def summary(
     output: str = typer.Option(None, "--output", "-o", help="Output file path (optional)"),
     module_name: str = typer.Option(None, "--module", "-m", help="Summarize specific module"),
     lang: str = typer.Option(None, "--lang", "-l", help="Output language: 'ko' (Korean), 'en' (English), 'auto' (detect)"),
+    force: bool = typer.Option(False, "--force", "-f", help="Force regeneration, bypassing cache"),
 ):
     """Summarize timeline or module using LLM (msummary command)."""
     # Check if LLM is available
@@ -1805,12 +1806,15 @@ def summary(
             # Resolve module name
             resolved_module = _resolve_module_name(module_name)
 
-            console.print(f"[cyan]Summarizing module '{resolved_module}'...[/cyan]")
+            if force:
+                console.print(f"[cyan]Summarizing module '{resolved_module}' (force regeneration)...[/cyan]")
+            else:
+                console.print(f"[cyan]Summarizing module '{resolved_module}'...[/cyan]")
 
             summarizer = ModuleSummarizer(llm_client)
             module_path = Path.cwd() / ".memory" / "modules" / resolved_module
 
-            summary_text = summarizer.summarize_module(module_path)
+            summary_text = summarizer.summarize_module(module_path, force=force)
 
             # Display summary
             console.print("\n" + "="*80)
@@ -1831,13 +1835,14 @@ def summary(
         summarizer = TimelineSummarizer(llm_client)
 
         # Parse scope
+        force_msg = " (force regeneration)" if force else ""
         if scope.lower() == "today":
-            console.print("[cyan]Summarizing today's timeline...[/cyan]")
-            summary_text = summarizer.summarize_today(output_language=lang)
+            console.print(f"[cyan]Summarizing today's timeline{force_msg}...[/cyan]")
+            summary_text = summarizer.summarize_today(output_language=lang, force=force)
 
         elif scope.lower() == "week":
-            console.print("[cyan]Summarizing this week's timeline...[/cyan]")
-            summary_text = summarizer.summarize_week(output_language=lang)
+            console.print(f"[cyan]Summarizing this week's timeline{force_msg}...[/cyan]")
+            summary_text = summarizer.summarize_week(output_language=lang, force=force)
 
         elif ":" in scope:
             # Date range: YYYY-MM-DD:YYYY-MM-DD
@@ -1846,8 +1851,8 @@ def summary(
                 start_date = datetime.strptime(start_str.strip(), "%Y-%m-%d").date()
                 end_date = datetime.strptime(end_str.strip(), "%Y-%m-%d").date()
 
-                console.print(f"[cyan]Summarizing timeline from {start_date} to {end_date}...[/cyan]")
-                summary_text = summarizer.summarize_range(start_date, end_date, output_language=lang)
+                console.print(f"[cyan]Summarizing timeline from {start_date} to {end_date}{force_msg}...[/cyan]")
+                summary_text = summarizer.summarize_range(start_date, end_date, output_language=lang, force=force)
 
             except ValueError as e:
                 console.print(f"[red]ERROR[/red] Invalid date range format: {scope}")
@@ -1858,8 +1863,8 @@ def summary(
             # Specific date: YYYY-MM-DD
             try:
                 target_date = datetime.strptime(scope, "%Y-%m-%d").date()
-                console.print(f"[cyan]Summarizing timeline for {target_date}...[/cyan]")
-                summary_text = summarizer.summarize_date(target_date, output_language=lang)
+                console.print(f"[cyan]Summarizing timeline for {target_date}{force_msg}...[/cyan]")
+                summary_text = summarizer.summarize_date(target_date, output_language=lang, force=force)
 
             except ValueError:
                 console.print(f"[red]ERROR[/red] Invalid date format: {scope}")

@@ -539,7 +539,44 @@ msummary today --lang en
 
 # 파일로 저장
 msummary week --output summary.md
+
+# 캐시 무시하고 강제 재생성 ⭐ NEW
+msummary today --force
 ```
+
+**스마트 캐싱:** ⭐ NEW
+
+msummary는 생성된 요약을 자동으로 캐시하여 불필요한 LLM 호출을 방지합니다:
+
+- **자동 캐시 저장:** 요약 결과가 `.memory/summaries/`에 자동 저장됩니다
+- **컨텐츠 기반 검증:** Timeline/Module 내용이 변경되었는지 SHA256 해시로 확인합니다
+- **스마트 재사용:** 내용이 변경되지 않았다면 캐시된 요약을 즉시 반환합니다
+- **강제 재생성:** `--force` 플래그로 캐시를 무시하고 새로 생성할 수 있습니다
+
+```bash
+# 첫 번째 실행: LLM 호출하여 요약 생성 및 캐시 저장
+msummary today
+# → LLM API 호출, .memory/summaries/daily/2025-11-19.md에 저장
+
+# 두 번째 실행: Timeline이 변경되지 않았다면 캐시에서 즉시 반환
+msummary today
+# → LLM API 호출 없이 캐시에서 반환 (빠르고 무료!)
+
+# Timeline 수정 후 실행: 자동으로 변경 감지하여 재생성
+# (Timeline 파일을 편집한 경우)
+msummary today
+# → 내용 변경 감지, 자동으로 새로 생성
+
+# 캐시 무시하고 강제 재생성
+msummary today --force
+# → 캐시 무시하고 무조건 새로 생성
+```
+
+**캐시 저장 위치:**
+- Daily summaries: `.memory/summaries/daily/YYYY-MM-DD.md`
+- Weekly summaries: `.memory/summaries/weekly/YYYY-Www.md`
+- Range summaries: `.memory/summaries/range/YYYY-MM-DD_to_YYYY-MM-DD.md`
+- Module summaries: `.memory/summaries/modules/module_name.md`
 
 **설정 방법:**
 
