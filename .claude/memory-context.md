@@ -1,6 +1,6 @@
 # Memory Context
 
-**Generated:** 2025-11-19 15:22
+**Generated:** 2025-11-19 21:04
 
 ---
 
@@ -29,6 +29,7 @@
 - **archive/memory-system**: `./.memory\modules\archive\memory-system\current.md`
 - **memory-system.backup**: `./.memory\modules\memory-system.backup\current.md`
 - **projects/memory-tool/core-system**: `./.memory\modules\projects\memory-tool\core-system\current.md`
+- **projects/memory-tool/knowledge-graph-system**: `./.memory\modules\projects\memory-tool\knowledge-graph-system\current.md`
 - **projects/memory-tool/llm-integration**: `./.memory\modules\projects\memory-tool\llm-integration\current.md`
 - **projects/memory-tool/module-system**: `./.memory\modules\projects\memory-tool\module-system\current.md`
 - **projects/memory-tool/project-management**: `./.memory\modules\projects\memory-tool\project-management\current.md`
