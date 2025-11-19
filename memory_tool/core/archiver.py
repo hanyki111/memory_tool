@@ -4,7 +4,8 @@ import re
 import shutil
 from pathlib import Path
 from typing import Optional, List, Dict, Tuple
-from datetime import datetime
+from datetime import datetime, timedelta
+from dateutil import parser as date_parser
 
 
 class ArchiverError(Exception):
@@ -641,3 +642,162 @@ For Phase {phase} status, see [archive/current-phase{phase}.md](./archive/curren
         if insert_pos > 0:
             lines.insert(insert_pos, archive_line)
             index_file.write_text("\n".join(lines), encoding="utf-8")
+
+    # ============================================================================
+    # Phase 5a: New features - Date-based archiving, Auto-suggestion
+    # ============================================================================
+
+    def _parse_duration(self, duration_str: str) -> timedelta:
+        """
+        Parse duration string to timedelta.
+
+        Supported formats:
+        - "6m" or "6M" = 6 months
+        - "1y" or "1Y" = 1 year
+        - "180d" or "180D" = 180 days
+        - "4w" or "4W" = 4 weeks
+
+        Args:
+            duration_str: Duration string
+
+        Returns:
+            timedelta object
+
+        Raises:
+            ArchiverError: If format is invalid
+        """
+        match = re.match(r'^(\d+)([mMdDwWyY])$', duration_str.strip())
+        if not match:
+            raise ArchiverError(
+                f"Invalid duration format: '{duration_str}'. "
+                f"Use: 6m (months), 1y (year), 180d (days), 4w (weeks)"
+            )
+
+        value = int(match.group(1))
+        unit = match.group(2).lower()
+
+        if unit == 'd':
+            return timedelta(days=value)
+        elif unit == 'w':
+            return timedelta(weeks=value)
+        elif unit == 'm':
+            # Approximate: 1 month = 30 days
+            return timedelta(days=value * 30)
+        elif unit == 'y':
+            # Approximate: 1 year = 365 days
+            return timedelta(days=value * 365)
+        else:
+            raise ArchiverError(f"Unknown duration unit: {unit}")
+
+    def _parse_decision_date(self, date_str: str) -> Optional[datetime]:
+        """
+        Parse decision date string.
+
+        Args:
+            date_str: Date string (YYYY-MM-DD format)
+
+        Returns:
+            datetime object or None if parsing fails
+        """
+        try:
+            return datetime.strptime(date_str, '%Y-%m-%d')
+        except ValueError:
+            # Try flexible parsing
+            try:
+                return date_parser.parse(date_str)
+            except:
+                return None
+
+    def archive_decisions_by_date(
+        self,
+        older_than: str,
+        dry_run: bool = False,
+    ) -> Tuple[Path, int]:
+        """
+        Archive decisions older than specified duration.
+
+        Args:
+            older_than: Duration string (e.g., "6m", "1y", "180d")
+            dry_run: If True, show what would be archived without doing it
+
+        Returns:
+            (archive_file_path, num_decisions_archived)
+
+        Raises:
+            ArchiverError: If archiving fails
+        """
+        decisions_file = self.module_path / "decisions.md"
+
+        if not decisions_file.exists():
+            raise ArchiverError(f"decisions.md not found at {decisions_file}")
+
+        # Parse duration
+        duration = self._parse_duration(older_than)
+        cutoff_date = datetime.now() - duration
+
+        # Read current decisions
+        content = decisions_file.read_text(encoding="utf-8")
+
+        # Parse decisions
+        decisions = self._parse_decisions(content)
+
+        if not decisions:
+            raise ArchiverError("No decisions found in decisions.md")
+
+        # Filter by date
+        to_archive = []
+        to_keep = []
+
+        for decision in decisions:
+            decision_date = self._parse_decision_date(decision['date'])
+            if decision_date and decision_date < cutoff_date:
+                to_archive.append(decision)
+            else:
+                to_keep.append(decision)
+
+        if not to_archive:
+            raise ArchiverError(
+                f"No decisions older than {older_than} "
+                f"(cutoff: {cutoff_date.strftime('%Y-%m-%d')})"
+            )
+
+        # Determine archive file name (by date range)
+        dates = [self._parse_decision_date(d['date']) for d in to_archive]
+        dates = [d for d in dates if d]  # Filter None
+
+        if dates:
+            min_date = min(dates)
+            max_date = max(dates)
+            archive_filename = f"decisions-{min_date.strftime('%Y%m')}-{max_date.strftime('%Y%m')}.md"
+        else:
+            # Fallback to decision number range
+            min_num = min(d['number'] for d in to_archive)
+            max_num = max(d['number'] for d in to_archive)
+            archive_filename = f"decisions-{min_num}-{max_num}.md"
+
+        archive_file = self.archive_path / archive_filename
+
+        if dry_run:
+            return (archive_file, len(to_archive))
+
+        # Ensure archive directory exists
+        self.archive_path.mkdir(parents=True, exist_ok=True)
+
+        # Create backup
+        backup_file = decisions_file.with_suffix(".md.bak")
+        shutil.copy2(decisions_file, backup_file)
+
+        # Create archive file
+        min_num = min(d['number'] for d in to_archive)
+        max_num = max(d['number'] for d in to_archive)
+        archive_content = self._build_archive_content_by_number(to_archive, min_num, max_num)
+        archive_file.write_text(archive_content, encoding="utf-8")
+
+        # Update decisions.md (keep recent only)
+        new_content = self._build_updated_decisions_by_number(to_keep, archive_filename, min_num, max_num)
+        decisions_file.write_text(new_content, encoding="utf-8")
+
+        # Update decisions-index.md
+        self._update_decisions_index_by_number(archive_filename, min_num, max_num)
+
+        return (archive_file, len(to_archive))
