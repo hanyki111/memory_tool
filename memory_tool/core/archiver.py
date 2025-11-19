@@ -801,3 +801,95 @@ For Phase {phase} status, see [archive/current-phase{phase}.md](./archive/curren
         self._update_decisions_index_by_number(archive_filename, min_num, max_num)
 
         return (archive_file, len(to_archive))
+
+    def suggest_archive(
+        self,
+        age_threshold_months: int = 6,
+    ) -> Dict[str, any]:
+        """
+        Analyze decisions.md and suggest what to archive.
+
+        Args:
+            age_threshold_months: Age threshold in months (default: 6)
+
+        Returns:
+            Dictionary with suggestion details
+
+        Raises:
+            ArchiverError: If analysis fails
+        """
+        decisions_file = self.module_path / "decisions.md"
+
+        if not decisions_file.exists():
+            raise ArchiverError(f"decisions.md not found at {decisions_file}")
+
+        # Calculate cutoff date
+        cutoff_date = datetime.now() - timedelta(days=age_threshold_months * 30)
+
+        # Read current decisions
+        content = decisions_file.read_text(encoding="utf-8")
+
+        # Parse decisions
+        decisions = self._parse_decisions(content)
+
+        if not decisions:
+            raise ArchiverError("No decisions found in decisions.md")
+
+        # Analyze decisions
+        to_archive = []
+        to_keep = []
+        total_lines = len(content.split("
+"))
+
+        for decision in decisions:
+            decision_date = self._parse_decision_date(decision["date"])
+            if decision_date and decision_date < cutoff_date:
+                to_archive.append(decision)
+            else:
+                to_keep.append(decision)
+
+        # Calculate estimated sizes
+        if to_archive:
+            archive_lines = sum(len(d["content"].split("
+")) for d in to_archive)
+            remaining_lines = total_lines - archive_lines
+        else:
+            archive_lines = 0
+            remaining_lines = total_lines
+
+        # Build summary
+        summary_lines = []
+        summary_lines.append(f"📊 Archive Suggestion for {self.module_name}/decisions.md")
+        summary_lines.append("")
+        summary_lines.append(f"Cutoff date: {cutoff_date.strftime("%Y-%m-%d")} ({age_threshold_months} months ago)")
+        summary_lines.append("")
+
+        if to_archive:
+            min_num = min(d["number"] for d in to_archive)
+            max_num = max(d["number"] for d in to_archive)
+            dates = [self._parse_decision_date(d["date"]) for d in to_archive if self._parse_decision_date(d["date"])]
+            min_date = min(dates).strftime("%Y-%m-%d") if dates else "Unknown"
+            max_date = max(dates).strftime("%Y-%m-%d") if dates else "Unknown"
+
+            summary_lines.append(f"✅ Suggestions:")
+            summary_lines.append(f"  • Archive {len(to_archive)} decisions (#{min_num}-#{max_num})")
+            summary_lines.append(f"  • Date range: {min_date} to {max_date}")
+            summary_lines.append(f"  • Keep {len(to_keep)} recent decisions")
+            summary_lines.append("")
+            summary_lines.append(f"📏 Estimated sizes:")
+            summary_lines.append(f"  • Current file: ~{total_lines} lines")
+            summary_lines.append(f"  • After archive: ~{remaining_lines} lines ({int(remaining_lines/total_lines*100)}%)")
+            summary_lines.append(f"  • Archive file: ~{archive_lines} lines")
+        else:
+            summary_lines.append(f"ℹ️  No decisions older than {age_threshold_months} months.")
+            summary_lines.append(f"   All {len(to_keep)} decisions are recent.")
+
+        return {
+            "to_archive": to_archive,
+            "to_keep": to_keep,
+            "cutoff_date": cutoff_date,
+            "summary": "
+".join(summary_lines),
+            "archive_count": len(to_archive),
+            "keep_count": len(to_keep),
+        }
