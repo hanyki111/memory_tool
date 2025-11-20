@@ -190,6 +190,73 @@ class ContextBuilder:
         """
         return self.config.load(strict=False)
 
+    def get_document_health(self) -> List[Dict[str, any]]:
+        """Get document health check for modules with large files.
+
+        Returns:
+            List of dictionaries with module, file, lines, and suggestion
+        """
+        health_issues = []
+        modules_path = self.memory_path / "modules"
+
+        if not modules_path.exists():
+            return health_issues
+
+        # Check all modules for large decisions.md or current.md files
+        for module_path in modules_path.rglob("*"):
+            if not module_path.is_dir():
+                continue
+
+            # Get relative module name
+            try:
+                module_name = str(module_path.relative_to(modules_path)).replace("\\", "/")
+            except ValueError:
+                continue
+
+            # Check decisions.md
+            decisions_file = module_path / "decisions.md"
+            if decisions_file.exists():
+                try:
+                    content = decisions_file.read_text(encoding="utf-8")
+                    line_count = len(content.split("\n"))
+
+                    if line_count > 300:
+                        if line_count > 600:
+                            suggestion = "⚠️ Very large, should archive soon"
+                        else:
+                            suggestion = "Consider archiving"
+                        health_issues.append({
+                            "module": module_name,
+                            "file": "decisions.md",
+                            "lines": line_count,
+                            "suggestion": suggestion,
+                        })
+                except Exception:
+                    pass  # Skip files that can't be read
+
+            # Check current.md
+            current_file = module_path / "current.md"
+            if current_file.exists():
+                try:
+                    content = current_file.read_text(encoding="utf-8")
+                    line_count = len(content.split("\n"))
+
+                    if line_count > 200:
+                        if line_count > 400:
+                            suggestion = "⚠️ Very large, consider archiving"
+                        else:
+                            suggestion = "Consider reviewing"
+                        health_issues.append({
+                            "module": module_name,
+                            "file": "current.md",
+                            "lines": line_count,
+                            "suggestion": suggestion,
+                        })
+                except Exception:
+                    pass  # Skip files that can't be read
+
+        return health_issues
+
     def build_context_content(self) -> str:
         """Build context markdown content.
 
@@ -301,6 +368,36 @@ class ContextBuilder:
 
         lines.append("---")
         lines.append("")
+
+        # Document Health (Archive Suggestions)
+        doc_health = self.get_document_health()
+
+        if doc_health:
+            lines.append("## Document Health")
+            lines.append("")
+            lines.append("*Files that may need archiving:*")
+            lines.append("")
+            for item in doc_health:
+                module_name = item["module"]
+                file_name = item["file"]
+                line_count = item["lines"]
+                suggestion = item["suggestion"]
+                lines.append(f"- **{module_name}/{file_name}**: {line_count} lines - {suggestion}")
+            lines.append("")
+            lines.append("*Recommended commands:*")
+            lines.append("```bash")
+            lines.append("# Check what can be archived")
+            lines.append("marchive decisions --module <module-name> --suggest")
+            lines.append("")
+            lines.append("# Interactively select decisions to archive")
+            lines.append("marchive decisions --module <module-name> --interactive")
+            lines.append("")
+            lines.append("# Or use LLM-powered analysis")
+            lines.append("msummary --module <module-name> --decisions")
+            lines.append("```")
+            lines.append("")
+            lines.append("---")
+            lines.append("")
 
         # Footer
         lines.append("## Usage")
