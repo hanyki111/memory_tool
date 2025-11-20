@@ -1788,6 +1788,7 @@ def summary(
     scope: str = typer.Argument("today", help="Scope: 'today', 'week', date (YYYY-MM-DD), or date range (YYYY-MM-DD:YYYY-MM-DD)"),
     output: str = typer.Option(None, "--output", "-o", help="Output file path (optional)"),
     module_name: str = typer.Option(None, "--module", "-m", help="Summarize specific module"),
+    decisions: bool = typer.Option(False, "--decisions", help="Summarize decisions.md only (requires --module)"),
     lang: str = typer.Option(None, "--lang", "-l", help="Output language: 'ko' (Korean), 'en' (English), 'auto' (detect)"),
     force: bool = typer.Option(False, "--force", "-f", help="Force regeneration, bypassing cache"),
 ):
@@ -1798,6 +1799,12 @@ def summary(
         console.print("[dim]Set ANTHROPIC_API_KEY environment variable or add 'llm.api_key' to config.yaml[/dim]")
         sys.exit(1)
 
+    # Validation: --decisions requires --module
+    if decisions and not module_name:
+        console.print("[red]ERROR[/red] --decisions flag requires --module to be specified")
+        console.print("[dim]Example: msummary --module project-management --decisions[/dim]")
+        sys.exit(1)
+
     try:
         llm_client = LLMClient()
 
@@ -1806,15 +1813,76 @@ def summary(
             # Resolve module name
             resolved_module = _resolve_module_name(module_name)
 
-            if force:
-                console.print(f"[cyan]Summarizing module '{resolved_module}' (force regeneration)...[/cyan]")
+            if decisions:
+                # Decisions-only summarization
+                if force:
+                    console.print(f"[cyan]Summarizing decisions.md from '{resolved_module}' (force regeneration)...[/cyan]")
+                else:
+                    console.print(f"[cyan]Summarizing decisions.md from '{resolved_module}'...[/cyan]")
+
+                module_path = Path.cwd() / ".memory" / "modules" / resolved_module
+                decisions_file = module_path / "decisions.md"
+
+                if not decisions_file.exists():
+                    console.print(f"[red]ERROR[/red] decisions.md not found in module '{resolved_module}'")
+                    sys.exit(1)
+
+                # Read decisions content
+                decisions_content = decisions_file.read_text(encoding="utf-8")
+
+                # Create prompt for decisions summarization
+                prompt = f"""Analyze and summarize the following decisions.md content from a software project module.
+
+Provide:
+1. Overview: Total number of decisions and time span
+2. Key Categories: Group decisions by theme/topic
+3. Major Decisions: Highlight the most important 3-5 decisions
+4. Patterns: Any trends or patterns in decision-making
+5. Archive Suggestions: Which decisions are outdated and could be archived (if any)
+
+Decisions Content:
+```markdown
+{decisions_content}
+```
+
+Provide a clear, structured summary in markdown format."""
+
+                # Call LLM with smart caching
+                import hashlib
+                content_hash = hashlib.sha256(decisions_content.encode('utf-8')).hexdigest()[:16]
+                cache_key = f"decisions_{resolved_module}_{content_hash}"
+
+                if force:
+                    # Force regeneration - skip cache
+                    summary_text = llm_client.summarize(prompt)
+                else:
+                    # Check cache first
+                    from pathlib import Path as PathlibPath
+                    cache_dir = PathlibPath.cwd() / ".memory" / "summaries"
+                    cache_file = cache_dir / f"{cache_key}.md"
+
+                    if cache_file.exists():
+                        console.print("[dim]Using cached summary (content unchanged)[/dim]")
+                        summary_text = cache_file.read_text(encoding="utf-8")
+                    else:
+                        # Generate new summary
+                        summary_text = llm_client.summarize(prompt)
+
+                        # Save to cache
+                        cache_dir.mkdir(parents=True, exist_ok=True)
+                        cache_file.write_text(summary_text, encoding="utf-8")
+
             else:
-                console.print(f"[cyan]Summarizing module '{resolved_module}'...[/cyan]")
+                # Full module summarization
+                if force:
+                    console.print(f"[cyan]Summarizing module '{resolved_module}' (force regeneration)...[/cyan]")
+                else:
+                    console.print(f"[cyan]Summarizing module '{resolved_module}'...[/cyan]")
 
-            summarizer = ModuleSummarizer(llm_client)
-            module_path = Path.cwd() / ".memory" / "modules" / resolved_module
+                summarizer = ModuleSummarizer(llm_client)
+                module_path = Path.cwd() / ".memory" / "modules" / resolved_module
 
-            summary_text = summarizer.summarize_module(module_path, force=force)
+                summary_text = summarizer.summarize_module(module_path, force=force)
 
             # Display summary
             console.print("\n" + "="*80)
