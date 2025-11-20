@@ -1,6 +1,6 @@
 # Memory Context
 
-**Generated:** 2025-11-20 21:29
+**Generated:** 2025-11-20 21:31
 
 ---
 
@@ -35,6 +35,38 @@
 - **projects/memory-tool/project-management**: `./.memory\modules\projects\memory-tool\project-management\current.md`
 - **projects/memory-tool/search-system**: `./.memory\modules\projects\memory-tool\search-system\current.md`
 - **projects/memory-tool/ui-system**: `./.memory\modules\projects\memory-tool\ui-system\current.md`
+
+---
+
+## Document Health
+
+*Files that may need archiving:*
+
+- **memory-system.backup/decisions.md**: 693 lines - ⚠️ Very large, should archive soon
+- **memory-system.backup/current.md**: 235 lines - Consider reviewing
+- **archive/memory-system/decisions.md**: 693 lines - ⚠️ Very large, should archive soon
+- **archive/memory-system/current.md**: 235 lines - Consider reviewing
+- **projects/memory-tool/core-system/current.md**: 242 lines - Consider reviewing
+- **projects/memory-tool/knowledge-graph-system/decisions.md**: 348 lines - Consider archiving
+- **projects/memory-tool/llm-integration/decisions.md**: 348 lines - Consider archiving
+- **projects/memory-tool/llm-integration/current.md**: 340 lines - Consider reviewing
+- **projects/memory-tool/module-system/current.md**: 351 lines - Consider reviewing
+- **projects/memory-tool/project-management/decisions.md**: 876 lines - ⚠️ Very large, should archive soon
+- **projects/memory-tool/project-management/current.md**: 357 lines - Consider reviewing
+- **projects/memory-tool/search-system/current.md**: 263 lines - Consider reviewing
+- **projects/memory-tool/ui-system/current.md**: 404 lines - ⚠️ Very large, consider archiving
+
+*Recommended commands:*
+```bash
+# Check what can be archived
+marchive decisions --module <module-name> --suggest
+
+# Interactively select decisions to archive
+marchive decisions --module <module-name> --interactive
+
+# Or use LLM-powered analysis
+msummary --module <module-name> --decisions
+```
 
 ---
 
