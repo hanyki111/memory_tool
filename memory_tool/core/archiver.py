@@ -838,8 +838,7 @@ For Phase {phase} status, see [archive/current-phase{phase}.md](./archive/curren
         # Analyze decisions
         to_archive = []
         to_keep = []
-        total_lines = len(content.split("
-"))
+        total_lines = len(content.split("\n"))
 
         for decision in decisions:
             decision_date = self._parse_decision_date(decision["date"])
@@ -850,8 +849,7 @@ For Phase {phase} status, see [archive/current-phase{phase}.md](./archive/curren
 
         # Calculate estimated sizes
         if to_archive:
-            archive_lines = sum(len(d["content"].split("
-")) for d in to_archive)
+            archive_lines = sum(len(d["content"].split("\n")) for d in to_archive)
             remaining_lines = total_lines - archive_lines
         else:
             archive_lines = 0
@@ -859,9 +857,9 @@ For Phase {phase} status, see [archive/current-phase{phase}.md](./archive/curren
 
         # Build summary
         summary_lines = []
-        summary_lines.append(f"📊 Archive Suggestion for {self.module_name}/decisions.md")
-        summary_lines.append("")
-        summary_lines.append(f"Cutoff date: {cutoff_date.strftime("%Y-%m-%d")} ({age_threshold_months} months ago)")
+        summary_lines.append(f"Archive Suggestion for {self.module_name}/decisions.md")
+        summary_lines.append("=" * 60)
+        summary_lines.append(f"Cutoff date: {cutoff_date.strftime('%Y-%m-%d')} ({age_threshold_months} months ago)")
         summary_lines.append("")
 
         if to_archive:
@@ -871,25 +869,24 @@ For Phase {phase} status, see [archive/current-phase{phase}.md](./archive/curren
             min_date = min(dates).strftime("%Y-%m-%d") if dates else "Unknown"
             max_date = max(dates).strftime("%Y-%m-%d") if dates else "Unknown"
 
-            summary_lines.append(f"✅ Suggestions:")
-            summary_lines.append(f"  • Archive {len(to_archive)} decisions (#{min_num}-#{max_num})")
-            summary_lines.append(f"  • Date range: {min_date} to {max_date}")
-            summary_lines.append(f"  • Keep {len(to_keep)} recent decisions")
+            summary_lines.append("Suggestions:")
+            summary_lines.append(f"  - Archive {len(to_archive)} decisions (#{min_num}-#{max_num})")
+            summary_lines.append(f"  - Date range: {min_date} to {max_date}")
+            summary_lines.append(f"  - Keep {len(to_keep)} recent decisions")
             summary_lines.append("")
-            summary_lines.append(f"📏 Estimated sizes:")
-            summary_lines.append(f"  • Current file: ~{total_lines} lines")
-            summary_lines.append(f"  • After archive: ~{remaining_lines} lines ({int(remaining_lines/total_lines*100)}%)")
-            summary_lines.append(f"  • Archive file: ~{archive_lines} lines")
+            summary_lines.append("Estimated sizes:")
+            summary_lines.append(f"  - Current file: ~{total_lines} lines")
+            summary_lines.append(f"  - After archive: ~{remaining_lines} lines ({int(remaining_lines/total_lines*100)}%)")
+            summary_lines.append(f"  - Archive file: ~{archive_lines} lines")
         else:
-            summary_lines.append(f"ℹ️  No decisions older than {age_threshold_months} months.")
-            summary_lines.append(f"   All {len(to_keep)} decisions are recent.")
+            summary_lines.append(f"No decisions older than {age_threshold_months} months.")
+            summary_lines.append(f"All {len(to_keep)} decisions are recent.")
 
         return {
             "to_archive": to_archive,
             "to_keep": to_keep,
             "cutoff_date": cutoff_date,
-            "summary": "
-".join(summary_lines),
+            "summary": "\n".join(summary_lines),
             "archive_count": len(to_archive),
             "keep_count": len(to_keep),
         }
