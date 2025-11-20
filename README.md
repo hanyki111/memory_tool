@@ -624,13 +624,29 @@ marchive decisions --up-to 25
 # Phase 기반 아카이브 (Phase 1-5)
 marchive decisions --phase 5
 
+# 날짜 기반 아카이브 (6개월 이상 된 결정들) ⭐ NEW
+marchive decisions --older-than 6m
+
+# 1년 이상 된 결정들
+marchive decisions --older-than 1y
+
+# 180일 이상, 4주 이상 (유연한 형식)
+marchive decisions --older-than 180d
+marchive decisions --older-than 4w
+
+# 제안 모드 (어떤 결정들을 아카이브할지 확인) ⭐ NEW
+marchive decisions --suggest
+
+# 인터랙티브 선택 모드 (직접 선택) ⭐ NEW
+marchive decisions --interactive
+
 # Dry-run (미리보기)
 marchive decisions --keep-recent 10 --dry-run
 
 # Current 아카이브
 marchive current --phase 5
 
-# Plans 아카이브
+# Plans 아카이브 (완료된 PLAN-*.md 파일들을 archive/plans/로 이동)
 marchive plans
 
 # 특정 모듈 지정 (전체 경로)
@@ -667,10 +683,40 @@ marchive decisions --module core-system
 3. 원본 파일 자동 백업 (`.bak`)
 4. 링크 자동 업데이트
 
+**새로운 아카이브 모드:** ⭐
+
+1. **날짜 기반 (`--older-than`)**: 특정 기간보다 오래된 결정들을 자동으로 아카이브
+   - 형식: `6m` (6개월), `1y` (1년), `180d` (180일), `4w` (4주)
+   - 예: `marchive decisions --older-than 6m`
+
+2. **제안 모드 (`--suggest`)**: 아카이브할 후보를 분석해서 보여줌 (실행은 안 함)
+   - 6개월 이상 된 결정들을 자동으로 찾아서 요약
+   - 예상 파일 크기 및 효과 표시
+   - 예: `marchive decisions --suggest`
+
+3. **인터랙티브 모드 (`--interactive`)**: 직접 선택해서 아카이브
+   - Rich 테이블로 아카이브 후보 목록 표시
+   - 번호로 선택 가능 (예: `1,3,5` 또는 `1-5` 또는 `all`)
+   - 확인 프롬프트로 실수 방지
+   - 예: `marchive decisions --interactive`
+
+**추천 워크플로우:**
+```bash
+# 1단계: 먼저 제안 확인
+marchive decisions --suggest
+
+# 2단계: 자동으로 아카이브하거나
+marchive decisions --older-than 6m
+
+# 또는: 직접 선택해서 아카이브
+marchive decisions --interactive
+```
+
 **언제 사용하나:**
 - `decisions.md`가 300+ 줄로 길어졌을 때
 - Phase 전환 시
 - 문서 정리가 필요할 때
+- 오래된 결정들을 정리하고 싶을 때
 
 ### `mplan` - 작업 계획 관리 📋
 
