@@ -1854,7 +1854,10 @@ Provide a clear, structured summary in markdown format."""
 
                 if force:
                     # Force regeneration - skip cache
-                    summary_text = llm_client.summarize(prompt)
+                    summary_text = llm_client.summarize(
+                        user_prompt=prompt,
+                        system_prompt="You are a technical analyst specializing in software project documentation."
+                    )
                 else:
                     # Check cache first
                     from pathlib import Path as PathlibPath
@@ -1866,7 +1869,10 @@ Provide a clear, structured summary in markdown format."""
                         summary_text = cache_file.read_text(encoding="utf-8")
                     else:
                         # Generate new summary
-                        summary_text = llm_client.summarize(prompt)
+                        summary_text = llm_client.summarize(
+                            user_prompt=prompt,
+                            system_prompt="You are a technical analyst specializing in software project documentation."
+                        )
 
                         # Save to cache
                         cache_dir.mkdir(parents=True, exist_ok=True)
