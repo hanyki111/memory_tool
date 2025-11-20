@@ -11,6 +11,7 @@
 - 🤖 **Claude Code 통합**: `.claude/memory-context.md` 자동 생성
 - 📂 **프로젝트 격리**: 각 프로젝트는 독립적인 `.memory/`
 - 🚀 **별칭 시스템**: 배치/PowerShell 프로필 자동 설정
+- 📦 **문서 관리 자동화** (Phase 5a ✅): 날짜/제안/인터랙티브 아카이브, LLM 분석, 건강 모니터링
 - 🐶 **Dogfooding**: 이 프로젝트 자체가 .memory/로 기록됨
 
 ---
@@ -876,11 +877,24 @@ msummary week --output weekly-summary.md
 # 3. Timeline 정렬
 msort all
 
-# 4. Decisions 아카이브 (20개 이상이면)
-marchive decisions --keep-recent 15 --dry-run  # 미리보기
-marchive decisions --keep-recent 15            # 실행
+# 4. Decisions 아카이브 (Phase 5a - 다양한 전략) ⭐ NEW
+# 먼저 제안 확인
+marchive decisions --suggest
 
-# 5. 인덱스 업데이트
+# 옵션 A: 날짜 기반 (6개월 이상 된 결정)
+marchive decisions --older-than 6m --dry-run  # 미리보기
+marchive decisions --older-than 6m            # 실행
+
+# 옵션 B: 인터랙티브 선택
+marchive decisions --interactive
+
+# 옵션 C: 기존 방식 (개수 기반)
+marchive decisions --keep-recent 15
+
+# 5. Decisions 분석 (LLM 기반) ⭐ NEW
+msummary --module <module-name> --decisions
+
+# 6. 인덱스 업데이트
 mindex
 ```
 
