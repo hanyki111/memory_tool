@@ -46,6 +46,36 @@ python -m memory_tool module rebuild-graph --quiet 2>&1
 exit 0
 """
 
+    DOCUMENT_HEALTH_HOOK_TEMPLATE = """#!/bin/sh
+# memory_tool document-health pre-commit hook (auto-generated)
+#
+# This hook checks document health before each commit
+# and warns if any files need archiving.
+
+echo "🔍 Checking document health..."
+
+# Run health check
+python -m memory_tool context --check-health-only --quiet 2>&1
+
+EXIT_CODE=$?
+
+if [ $EXIT_CODE -eq 1 ]; then
+    echo ""
+    echo "⚠️  Large files detected. Commit will proceed in 3 seconds..."
+    echo "   (Press Ctrl+C to cancel and archive first)"
+    sleep 3
+elif [ $EXIT_CODE -eq 2 ]; then
+    # Critical issues - give more time
+    echo ""
+    echo "🔴 CRITICAL: Very large files detected!"
+    echo "   Strongly recommend archiving before commit."
+    echo "   Commit will proceed in 5 seconds... (Ctrl+C to cancel)"
+    sleep 5
+fi
+
+exit 0
+"""
+
     def __init__(self, repo_path: Optional[Path] = None):
         """Initialize git hook manager.
 
@@ -149,6 +179,55 @@ exit 0
 
         return hook_path
 
+    def install_document_health_hook(self, force: bool = False) -> Path:
+        """Install document-health pre-commit hook.
+
+        Args:
+            force: Overwrite existing hook if True
+
+        Returns:
+            Path to installed hook
+
+        Raises:
+            GitHookError: If installation fails
+        """
+        if not self.is_git_repo():
+            raise GitHookError(f"Not a git repository: {self.repo_path}")
+
+        # Ensure hooks directory exists
+        self.hooks_dir.mkdir(parents=True, exist_ok=True)
+
+        hook_path = self.hooks_dir / "pre-commit"
+
+        # Check if hook already exists
+        if hook_path.exists() and not force:
+            # Check if it's our graph rebuild hook
+            content = hook_path.read_text(encoding="utf-8")
+            if "module rebuild-graph" in content:
+                raise GitHookError(
+                    f"Pre-commit hook already exists (graph rebuild).\n"
+                    f"Cannot install document-health hook. Use --force to replace."
+                )
+            else:
+                raise GitHookError(
+                    f"Pre-commit hook already exists.\n"
+                    f"Use --force to overwrite"
+                )
+
+        # Write hook script
+        try:
+            hook_path.write_text(self.DOCUMENT_HEALTH_HOOK_TEMPLATE, encoding="utf-8")
+
+            # Make executable (Unix)
+            if sys.platform != "win32":
+                import stat
+                hook_path.chmod(hook_path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+
+        except Exception as e:
+            raise GitHookError(f"Failed to install hook: {e}")
+
+        return hook_path
+
     def uninstall_hook(self, hook_name: str) -> bool:
         """Uninstall a git hook.
 
@@ -175,30 +254,44 @@ exit 0
         except Exception as e:
             raise GitHookError(f"Failed to uninstall hook: {e}")
 
-    def list_installed_hooks(self) -> dict[str, bool]:
+    def list_installed_hooks(self) -> dict[str, str]:
         """List memory_tool hooks and their installation status.
 
         Returns:
-            Dictionary mapping hook names to installation status
+            Dictionary mapping hook names to their type or "not installed"
+            Possible types: "graph-rebuild", "document-health", "not installed"
         """
         if not self.is_git_repo():
             return {}
 
         hooks = {
-            "pre-commit": False,
-            "post-checkout": False,
+            "pre-commit": "not installed",
+            "post-checkout": "not installed",
         }
 
-        for hook_name in hooks.keys():
-            hook_path = self.hooks_dir / hook_name
+        # Check pre-commit hook
+        pre_commit_path = self.hooks_dir / "pre-commit"
+        if pre_commit_path.exists():
+            try:
+                content = pre_commit_path.read_text(encoding="utf-8")
+                if "memory_tool" in content:
+                    if "document-health" in content or "check-health" in content:
+                        hooks["pre-commit"] = "document-health"
+                    elif "rebuild-graph" in content:
+                        hooks["pre-commit"] = "graph-rebuild"
+                    else:
+                        hooks["pre-commit"] = "unknown"
+            except Exception:
+                pass
 
-            if hook_path.exists():
-                # Check if it's a memory_tool hook
-                try:
-                    content = hook_path.read_text(encoding="utf-8")
-                    if "memory_tool" in content:
-                        hooks[hook_name] = True
-                except Exception:
-                    pass
+        # Check post-checkout hook
+        post_checkout_path = self.hooks_dir / "post-checkout"
+        if post_checkout_path.exists():
+            try:
+                content = post_checkout_path.read_text(encoding="utf-8")
+                if "memory_tool" in content:
+                    hooks["post-checkout"] = "graph-rebuild"
+            except Exception:
+                pass
 
         return hooks

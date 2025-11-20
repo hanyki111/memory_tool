@@ -1,6 +1,6 @@
 # Memory Context
 
-**Generated:** 2025-11-20 21:44
+**Generated:** 2025-11-20 22:08
 
 ---
 
@@ -40,32 +40,43 @@
 
 ## Document Health
 
-*Files that may need archiving:*
+### 🔴 CRITICAL (>600/400 lines)
 
 - **memory-system.backup/decisions.md**: 693 lines - ⚠️ Very large, should archive soon
-- **memory-system.backup/current.md**: 235 lines - Consider reviewing
+  - Quick action: `marchive decisions --module memory-system.backup --interactive`
 - **archive/memory-system/decisions.md**: 693 lines - ⚠️ Very large, should archive soon
+  - Quick action: `marchive decisions --module archive/memory-system --interactive`
+- **projects/memory-tool/project-management/decisions.md**: 985 lines - ⚠️ Very large, should archive soon
+  - Quick action: `marchive decisions --module projects/memory-tool/project-management --interactive`
+- **projects/memory-tool/ui-system/current.md**: 404 lines - ⚠️ Very large, should archive soon
+  - Quick action: `marchive current --module projects/memory-tool/ui-system --interactive`
+
+### 🟡 WARNING (300-600/200-400 lines)
+
+- **memory-system.backup/current.md**: 235 lines - Consider reviewing
 - **archive/memory-system/current.md**: 235 lines - Consider reviewing
 - **projects/memory-tool/core-system/current.md**: 242 lines - Consider reviewing
 - **projects/memory-tool/knowledge-graph-system/decisions.md**: 348 lines - Consider archiving
 - **projects/memory-tool/llm-integration/decisions.md**: 348 lines - Consider archiving
 - **projects/memory-tool/llm-integration/current.md**: 340 lines - Consider reviewing
 - **projects/memory-tool/module-system/current.md**: 351 lines - Consider reviewing
-- **projects/memory-tool/project-management/decisions.md**: 985 lines - ⚠️ Very large, should archive soon
 - **projects/memory-tool/project-management/current.md**: 364 lines - Consider reviewing
 - **projects/memory-tool/search-system/current.md**: 263 lines - Consider reviewing
-- **projects/memory-tool/ui-system/current.md**: 404 lines - ⚠️ Very large, consider archiving
 
-*Recommended commands:*
+### ✅ Quick Actions
+
 ```bash
-# Check what can be archived
-marchive decisions --module <module-name> --suggest
+# 1. View suggestions for all modules
+marchive decisions --suggest
 
-# Interactively select decisions to archive
+# 2. Interactive archive (select which decisions to archive)
 marchive decisions --module <module-name> --interactive
 
-# Or use LLM-powered analysis
+# 3. LLM-powered analysis (analyze and categorize)
 msummary --module <module-name> --decisions
+
+# 4. Check health anytime
+mcontext
 ```
 
 ---

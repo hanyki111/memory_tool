@@ -373,27 +373,49 @@ class ContextBuilder:
         doc_health = self.get_document_health()
 
         if doc_health:
+            # Group by severity
+            critical = [item for item in doc_health if "⚠️ Very large" in item["suggestion"]]
+            warning = [item for item in doc_health if item not in critical]
+
             lines.append("## Document Health")
             lines.append("")
-            lines.append("*Files that may need archiving:*")
+
+            if critical:
+                lines.append("### 🔴 CRITICAL (>600/400 lines)")
+                lines.append("")
+                for item in critical:
+                    module_name = item["module"]
+                    file_name = item["file"]
+                    line_count = item["lines"]
+                    lines.append(f"- **{module_name}/{file_name}**: {line_count} lines - ⚠️ Very large, should archive soon")
+                    lines.append(f"  - Quick action: `marchive {file_name.replace('.md', '')} --module {module_name} --interactive`")
+                lines.append("")
+
+            if warning:
+                lines.append("### 🟡 WARNING (300-600/200-400 lines)")
+                lines.append("")
+                for item in warning:
+                    module_name = item["module"]
+                    file_name = item["file"]
+                    line_count = item["lines"]
+                    suggestion = item["suggestion"]
+                    lines.append(f"- **{module_name}/{file_name}**: {line_count} lines - {suggestion}")
+                lines.append("")
+
+            lines.append("### ✅ Quick Actions")
             lines.append("")
-            for item in doc_health:
-                module_name = item["module"]
-                file_name = item["file"]
-                line_count = item["lines"]
-                suggestion = item["suggestion"]
-                lines.append(f"- **{module_name}/{file_name}**: {line_count} lines - {suggestion}")
-            lines.append("")
-            lines.append("*Recommended commands:*")
             lines.append("```bash")
-            lines.append("# Check what can be archived")
-            lines.append("marchive decisions --module <module-name> --suggest")
+            lines.append("# 1. View suggestions for all modules")
+            lines.append("marchive decisions --suggest")
             lines.append("")
-            lines.append("# Interactively select decisions to archive")
+            lines.append("# 2. Interactive archive (select which decisions to archive)")
             lines.append("marchive decisions --module <module-name> --interactive")
             lines.append("")
-            lines.append("# Or use LLM-powered analysis")
+            lines.append("# 3. LLM-powered analysis (analyze and categorize)")
             lines.append("msummary --module <module-name> --decisions")
+            lines.append("")
+            lines.append("# 4. Check health anytime")
+            lines.append("mcontext")
             lines.append("```")
             lines.append("")
             lines.append("---")

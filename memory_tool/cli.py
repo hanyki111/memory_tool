@@ -173,18 +173,14 @@ def record(
             # Don't fail the record if auto-update fails
             console.print(f"[yellow]Warning:[/yellow] Auto-update failed: {e}")
 
-        # Check file sizes and show warnings
+        # Document health suggestion (NEW - Phase 5b)
         try:
-            from memory_tool.core.warnings import FileSizeWarning
+            from memory_tool.utils.suggestion_helper import check_and_suggest_after_command
 
-            warning_system = FileSizeWarning()
-            warnings = warning_system.check_sizes()
-
-            if warnings:
-                console.print()  # Blank line
-                console.print(warning_system.format_warning(warnings))
+            memory_dir = Path.cwd() / ".memory"
+            check_and_suggest_after_command(memory_dir, "m", force=False)
         except Exception:
-            # Don't fail the record if warning check fails
+            # Don't fail the record if suggestion fails
             pass
 
     except FutureTimeError as e:
@@ -650,6 +646,16 @@ def search(
             )
             console.print(formatted)
 
+        # Document health suggestion (NEW - Phase 5b)
+        try:
+            from memory_tool.utils.suggestion_helper import check_and_suggest_after_command
+
+            memory_dir = Path.cwd() / ".memory"
+            check_and_suggest_after_command(memory_dir, "search", force=False)
+        except Exception:
+            # Don't fail if suggestion fails
+            pass
+
     except SearchError as e:
         console.print(f"[red]ERROR[/red] {e}")
         sys.exit(1)
@@ -669,8 +675,53 @@ def context(
         "-o",
         help="Output file path (default: .claude/memory-context.md)",
     ),
+    check_health_only: bool = typer.Option(
+        False,
+        "--check-health-only",
+        help="Only check document health and exit (for git hooks)",
+    ),
+    quiet: bool = typer.Option(
+        False,
+        "--quiet",
+        "-q",
+        help="Quiet mode (minimal output)",
+    ),
 ):
     """Build context for Claude Code (mcontext command)."""
+    # Health check only mode (for git hooks)
+    if check_health_only:
+        from memory_tool.utils.health_checker import DocumentHealthChecker
+
+        memory_dir = Path.cwd() / ".memory"
+        checker = DocumentHealthChecker(memory_dir)
+
+        critical_issues = checker.get_critical_issues()
+        warning_issues = checker.get_warning_issues()
+
+        if critical_issues:
+            if not quiet:
+                console.print("\n[red]CRITICAL[/red] Document Health Issues:\n")
+                for issue in critical_issues[:5]:
+                    console.print(f"  - {issue.module_name}/{issue.file_type}.md: [yellow]{issue.line_count}[/yellow] lines")
+                console.print()
+                console.print("  [dim]Recommend archiving before commit:[/dim]")
+                console.print(f"  [cyan]marchive decisions --suggest[/cyan]")
+            sys.exit(2)  # Exit code 2 for critical
+        elif warning_issues:
+            if not quiet:
+                console.print("\n[yellow]WARNING[/yellow] Document Health Issues:\n")
+                for issue in warning_issues[:5]:
+                    console.print(f"  - {issue.module_name}/{issue.file_type}.md: [yellow]{issue.line_count}[/yellow] lines")
+                console.print()
+                console.print("  [dim]Consider archiving:[/dim]")
+                console.print(f"  [cyan]marchive decisions --suggest[/cyan]")
+            sys.exit(1)  # Exit code 1 for warning
+        else:
+            if not quiet:
+                console.print("[green]OK[/green] Document health OK")
+            sys.exit(0)  # Exit code 0 for OK
+
+    # Normal context building
     builder = ContextBuilder()
 
     # Parse output path
@@ -680,20 +731,21 @@ def context(
         result_path = builder.write_context(output_path)
 
         # Success message
-        try:
-            rel_path = result_path.relative_to(Path.cwd())
-        except ValueError:
-            rel_path = result_path
-        console.print(f"[green]OK[/green] Context built successfully")
-        console.print(f"[dim]-> {rel_path}[/dim]")
+        if not quiet:
+            try:
+                rel_path = result_path.relative_to(Path.cwd())
+            except ValueError:
+                rel_path = result_path
+            console.print(f"[green]OK[/green] Context built successfully")
+            console.print(f"[dim]-> {rel_path}[/dim]")
 
-        # Show what was included
-        config = builder.load_config()
-        recent_days = config.get("context", {}).get("recent_days", 3)
-        timeline_count = len(builder.get_recent_timeline_paths(recent_days))
-        module_count = len(builder.get_module_statuses())
+            # Show what was included
+            config = builder.load_config()
+            recent_days = config.get("context", {}).get("recent_days", 3)
+            timeline_count = len(builder.get_recent_timeline_paths(recent_days))
+            module_count = len(builder.get_module_statuses())
 
-        console.print(f"[dim]Included: {timeline_count} timeline(s), {module_count} module(s)[/dim]")
+            console.print(f"[dim]Included: {timeline_count} timeline(s), {module_count} module(s)[/dim]")
 
     except ContextError as e:
         console.print(f"[red]ERROR[/red] {e}")
@@ -1237,6 +1289,16 @@ def module(
             console.print(f"  - decisions.md   (decisions)")
             console.print(f"  - dependencies.md (dependencies)")
             console.print(f"  - interface.md   (interface/API)")
+
+            # Document health suggestion (NEW - Phase 5b)
+            try:
+                from memory_tool.utils.suggestion_helper import check_and_suggest_after_command
+
+                memory_dir = Path.cwd() / ".memory"
+                check_and_suggest_after_command(memory_dir, "module", force=False)
+            except Exception:
+                # Don't fail if suggestion fails
+                pass
 
         elif action.lower() == "list":
             # List modules
@@ -2960,16 +3022,17 @@ def tutorial(
 @app.command()
 def hooks(
     action: str = typer.Argument(..., help="Action: install, uninstall, list"),
-    hook_type: str = typer.Argument(None, help="Hook type: pre-commit, post-checkout"),
+    hook_type: str = typer.Argument(None, help="Hook type: pre-commit, post-checkout, document-health"),
     force: bool = typer.Option(False, "--force", "-f", help="Overwrite existing hook"),
 ):
-    """Manage git hooks for automatic graph updates.
+    """Manage git hooks for memory_tool.
 
     Examples:
-        mhooks install pre-commit    # Install pre-commit hook
-        mhooks install post-checkout # Install post-checkout hook
-        mhooks list                  # List installed hooks
-        mhooks uninstall pre-commit  # Remove hook
+        mhooks install document-health  # Install document health check hook ⭐
+        mhooks install pre-commit       # Install graph rebuild hook
+        mhooks install post-checkout    # Install post-checkout hook
+        mhooks list                     # List installed hooks
+        mhooks uninstall pre-commit     # Remove hook
     """
     try:
         from memory_tool.utils.git_hooks import GitHookManager, GitHookError
@@ -2979,7 +3042,7 @@ def hooks(
         if action.lower() == "install":
             if not hook_type:
                 console.print("[red]ERROR[/red] Hook type required for install")
-                console.print("[dim]Usage: hooks install <pre-commit|post-checkout>[/dim]")
+                console.print("[dim]Usage: hooks install <document-health|pre-commit|post-checkout>[/dim]")
                 sys.exit(1)
 
             # Check if git repo
@@ -2991,17 +3054,22 @@ def hooks(
             console.print(f"[cyan]Installing {hook_type} hook...[/cyan]")
 
             try:
-                if hook_type == "pre-commit":
+                if hook_type == "document-health":
+                    hook_path = manager.install_document_health_hook(force=force)
+                    hook_description = "check document health before commits"
+                elif hook_type == "pre-commit":
                     hook_path = manager.install_pre_commit_hook(force=force)
+                    hook_description = "rebuild connection graph before commits"
                 elif hook_type == "post-checkout":
                     hook_path = manager.install_post_checkout_hook(force=force)
+                    hook_description = "rebuild connection graph after checkout"
                 else:
                     console.print(f"[red]ERROR[/red] Unknown hook type: {hook_type}")
-                    console.print("Valid types: pre-commit, post-checkout")
+                    console.print("Valid types: document-health, pre-commit, post-checkout")
                     sys.exit(1)
 
                 console.print(f"\n[green]OK[/green] Hook installed: {hook_path.relative_to(Path.cwd())}")
-                console.print("\n[dim]This hook will automatically rebuild the connection graph.")
+                console.print(f"\n[dim]This hook will automatically {hook_description}.")
                 console.print("You can disable it by removing the hook file.[/dim]")
 
             except GitHookError as e:
@@ -3041,14 +3109,18 @@ def hooks(
 
             console.print("[cyan]Git Hooks Status:[/cyan]\n")
 
-            for hook_name, installed in hooks_status.items():
-                if installed:
-                    console.print(f"  [green]OK[/green] {hook_name}")
-                else:
+            for hook_name, hook_type_status in hooks_status.items():
+                if hook_type_status == "not installed":
                     console.print(f"  [dim]-- {hook_name} (not installed)[/dim]")
+                elif hook_type_status == "document-health":
+                    console.print(f"  [green]OK[/green] {hook_name}: [yellow]document-health[/yellow]")
+                elif hook_type_status == "graph-rebuild":
+                    console.print(f"  [green]OK[/green] {hook_name}: [cyan]graph-rebuild[/cyan]")
+                else:
+                    console.print(f"  [green]OK[/green] {hook_name}: {hook_type_status}")
 
             console.print()
-            console.print("[dim]Use 'hooks install <type>' to install a hook[/dim]")
+            console.print("[dim]Use 'mhooks install <document-health|pre-commit|post-checkout>' to install[/dim]")
 
         else:
             console.print(f"[red]ERROR[/red] Unknown action: {action}")
