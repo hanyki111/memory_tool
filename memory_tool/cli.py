@@ -1850,7 +1850,9 @@ Provide a clear, structured summary in markdown format."""
                 # Call LLM with smart caching
                 import hashlib
                 content_hash = hashlib.sha256(decisions_content.encode('utf-8')).hexdigest()[:16]
-                cache_key = f"decisions_{resolved_module}_{content_hash}"
+                # Replace slashes in module name for safe filename
+                safe_module_name = resolved_module.replace('/', '_').replace('\\', '_')
+                cache_key = f"decisions_{safe_module_name}_{content_hash}"
 
                 if force:
                     # Force regeneration - skip cache
