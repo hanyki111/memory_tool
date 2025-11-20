@@ -890,3 +890,172 @@ For Phase {phase} status, see [archive/current-phase{phase}.md](./archive/curren
             "archive_count": len(to_archive),
             "keep_count": len(to_keep),
         }
+
+    def archive_decisions_interactive(
+        self,
+        age_threshold_months: int = 6,
+        dry_run: bool = False,
+    ) -> Tuple[Path, int]:
+        """
+        Interactively select and archive decisions.
+
+        Args:
+            age_threshold_months: Age threshold for initial suggestions (default: 6)
+            dry_run: If True, only show what would be archived
+
+        Returns:
+            Tuple of (archive file path, number of decisions archived)
+
+        Raises:
+            ArchiverError: If archiving fails
+        """
+        from rich.console import Console
+        from rich.prompt import Prompt, Confirm
+        from rich.table import Table
+
+        console = Console()
+
+        # Get suggestions
+        suggestions = self.suggest_archive(age_threshold_months)
+
+        if suggestions["archive_count"] == 0:
+            console.print(f"[yellow]No decisions older than {age_threshold_months} months found.[/yellow]")
+            console.print("Nothing to archive.")
+            raise ArchiverError("No decisions to archive")
+
+        # Show suggestions
+        console.print("\n[bold cyan]Archive Candidates:[/bold cyan]")
+        console.print(f"Found {suggestions['archive_count']} decisions older than {age_threshold_months} months\n")
+
+        # Build decision table
+        table = Table(show_header=True, header_style="bold magenta")
+        table.add_column("Select", justify="center", width=8)
+        table.add_column("#", justify="right", width=5)
+        table.add_column("Date", width=12)
+        table.add_column("Title", no_wrap=False)
+
+        # Display decisions with selection indices
+        for idx, decision in enumerate(suggestions["to_archive"], 1):
+            # Extract title from content (first line after "## Decision #X:")
+            lines = decision["content"].strip().split("\n")
+            title = lines[0] if lines else "No title"
+            if title.startswith("## Decision"):
+                title = lines[1] if len(lines) > 1 else "No title"
+            title = title.strip("- ").strip()
+
+            table.add_row(
+                f"[{idx}]",
+                str(decision["number"]),
+                decision["date"],
+                title[:60] + "..." if len(title) > 60 else title
+            )
+
+        console.print(table)
+        console.print()
+
+        # Ask user to select decisions
+        console.print("[dim]Enter decision numbers to archive (comma-separated), or 'all' for all:[/dim]")
+        console.print("[dim]Example: 1,3,5  or  1-5  or  all[/dim]")
+
+        selection = Prompt.ask("Select", default="all")
+
+        # Parse selection
+        selected_indices = set()
+        if selection.strip().lower() == "all":
+            selected_indices = set(range(1, len(suggestions["to_archive"]) + 1))
+        else:
+            # Parse comma-separated numbers and ranges
+            for part in selection.split(","):
+                part = part.strip()
+                if "-" in part:
+                    # Range like "1-5"
+                    try:
+                        start, end = part.split("-")
+                        start_idx = int(start.strip())
+                        end_idx = int(end.strip())
+                        selected_indices.update(range(start_idx, end_idx + 1))
+                    except ValueError:
+                        console.print(f"[yellow]Invalid range: {part}[/yellow]")
+                else:
+                    # Single number
+                    try:
+                        selected_indices.add(int(part))
+                    except ValueError:
+                        console.print(f"[yellow]Invalid number: {part}[/yellow]")
+
+        # Filter selected decisions
+        selected_decisions = [
+            suggestions["to_archive"][idx - 1]
+            for idx in sorted(selected_indices)
+            if 1 <= idx <= len(suggestions["to_archive"])
+        ]
+
+        if not selected_decisions:
+            console.print("[yellow]No valid decisions selected.[/yellow]")
+            raise ArchiverError("No decisions selected")
+
+        # Show selection summary
+        console.print(f"\n[green]Selected {len(selected_decisions)} decision(s) for archiving:[/green]")
+        for decision in selected_decisions:
+            console.print(f"  - Decision #{decision['number']} ({decision['date']})")
+
+        # Confirm
+        if not dry_run:
+            if not Confirm.ask("\nProceed with archiving?", default=True):
+                console.print("[yellow]Archiving cancelled.[/yellow]")
+                raise ArchiverError("User cancelled archiving")
+
+        # Archive selected decisions
+        decisions_file = self.module_path / "decisions.md"
+        content = decisions_file.read_text(encoding="utf-8")
+
+        # Get decision numbers to archive
+        numbers_to_archive = [d["number"] for d in selected_decisions]
+
+        # Create archive file name
+        dates = [self._parse_decision_date(d["date"]) for d in selected_decisions if self._parse_decision_date(d["date"])]
+        if dates:
+            min_date = min(dates)
+            max_date = max(dates)
+            archive_file_name = f"decisions-{min_date.strftime('%Y%m')}-{max_date.strftime('%Y%m')}.md"
+        else:
+            archive_file_name = f"decisions-interactive-{datetime.now().strftime('%Y%m%d')}.md"
+
+        archive_file = self.archive_path / archive_file_name
+
+        if dry_run:
+            console.print(f"\n[bold]Dry run - would archive to:[/bold]")
+            console.print(f"  {archive_file}")
+            console.print(f"\n[bold]Mode:[/bold] interactive")
+            return archive_file, len(selected_decisions)
+
+        # Perform archiving
+        # Ensure archive directory exists
+        self.archive_path.mkdir(parents=True, exist_ok=True)
+
+        # Create backup
+        backup_file = decisions_file.with_suffix(".md.bak")
+        shutil.copy2(decisions_file, backup_file)
+
+        # Create archive file
+        min_num = min(d['number'] for d in selected_decisions)
+        max_num = max(d['number'] for d in selected_decisions)
+        archive_content = self._build_archive_content_by_number(selected_decisions, min_num, max_num)
+        archive_file.write_text(archive_content, encoding="utf-8")
+
+        # Build list of decisions to keep (all except selected)
+        numbers_to_archive_set = set(numbers_to_archive)
+        all_decisions = self._parse_decisions(content)
+        to_keep = [d for d in all_decisions if d['number'] not in numbers_to_archive_set]
+
+        # Update decisions.md (keep non-archived)
+        new_content = self._build_updated_decisions_by_number(to_keep, archive_file_name, min_num, max_num)
+        decisions_file.write_text(new_content, encoding="utf-8")
+
+        # Update decisions-index.md
+        self._update_decisions_index_by_number(archive_file_name, min_num, max_num)
+
+        console.print(f"\n[green]OK Archived {len(selected_decisions)} decisions to:[/green]")
+        console.print(f"  {archive_file}")
+
+        return (archive_file, len(selected_decisions))

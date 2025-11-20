@@ -2049,6 +2049,7 @@ def archive(
     up_to: int = typer.Option(None, "--up-to", help="Archive decisions up to this number (e.g., 25 = #1-#25)"),
     keep_recent: int = typer.Option(None, "--keep-recent", help="Keep only N most recent decisions"),
     older_than: str = typer.Option(None, "--older-than", help="Archive decisions older than duration (e.g., 6m, 1y, 180d)"),
+    interactive: bool = typer.Option(False, "--interactive", "-i", help="Interactively select decisions to archive"),
     suggest: bool = typer.Option(False, "--suggest", help="Suggest what to archive (does not archive)"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be archived without doing it"),
     module_name: str = typer.Option(None, "--module", "-m", help="Module name or path (default: memory-system)"),
@@ -2061,6 +2062,7 @@ def archive(
         marchive decisions --up-to 25                   # Archive #1-25
         marchive decisions --older-than 6m              # Archive older than 6 months
         marchive decisions --older-than 1y              # Archive older than 1 year
+        marchive decisions --interactive                # Interactively select decisions
         marchive decisions --suggest                    # Show suggestions (no archive)
         marchive decisions --phase 5                    # Archive Phase 1-5 (old style)
         marchive current --phase 5                      # Archive Phase 5 current.md
@@ -2087,6 +2089,21 @@ def archive(
                     if result['archive_count'] > 0:
                         console.print("\n[dim]To archive these decisions:[/dim]")
                         console.print(f"[dim]  marchive decisions --older-than 6m[/dim]")
+                        console.print(f"[dim]  marchive decisions --interactive[/dim]")
+                except ArchiverError as e:
+                    console.print(f"[red]ERROR[/red] {e}")
+                    sys.exit(1)
+                return
+
+            # Special case: --interactive mode
+            if interactive:
+                try:
+                    archive_path, num_archived = archiver.archive_decisions_interactive(
+                        age_threshold_months=6,
+                        dry_run=dry_run
+                    )
+                    if not dry_run:
+                        console.print(f"\n[dim]Backup: decisions.md.bak[/dim]")
                 except ArchiverError as e:
                     console.print(f"[red]ERROR[/red] {e}")
                     sys.exit(1)
