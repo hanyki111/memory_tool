@@ -2048,6 +2048,8 @@ def archive(
     phase: int = typer.Option(None, "--phase", help="Phase number to archive (backwards compat)"),
     up_to: int = typer.Option(None, "--up-to", help="Archive decisions up to this number (e.g., 25 = #1-#25)"),
     keep_recent: int = typer.Option(None, "--keep-recent", help="Keep only N most recent decisions"),
+    older_than: str = typer.Option(None, "--older-than", help="Archive decisions older than duration (e.g., 6m, 1y, 180d)"),
+    suggest: bool = typer.Option(False, "--suggest", help="Suggest what to archive (does not archive)"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be archived without doing it"),
     module_name: str = typer.Option(None, "--module", "-m", help="Module name or path (default: memory-system)"),
 ):
@@ -2057,6 +2059,9 @@ def archive(
         marchive decisions                              # Keep recent 10 (default)
         marchive decisions --keep-recent 15             # Keep recent 15
         marchive decisions --up-to 25                   # Archive #1-25
+        marchive decisions --older-than 6m              # Archive older than 6 months
+        marchive decisions --older-than 1y              # Archive older than 1 year
+        marchive decisions --suggest                    # Show suggestions (no archive)
         marchive decisions --phase 5                    # Archive Phase 1-5 (old style)
         marchive current --phase 5                      # Archive Phase 5 current.md
         marchive plans                                  # Move PLAN-*.md to archive
@@ -2073,11 +2078,30 @@ def archive(
         archiver = Archiver(module_name=resolved_module)
 
         if target == "decisions":
+            # Special case: --suggest mode
+            if suggest:
+                try:
+                    result = archiver.suggest_archive()
+                    console.print(result['summary'])
+
+                    if result['archive_count'] > 0:
+                        console.print("\n[dim]To archive these decisions:[/dim]")
+                        console.print(f"[dim]  marchive decisions --older-than 6m[/dim]")
+                except ArchiverError as e:
+                    console.print(f"[red]ERROR[/red] {e}")
+                    sys.exit(1)
+                return
+
             # Validate mutually exclusive options
-            options_provided = sum([phase is not None, up_to is not None, keep_recent is not None])
+            options_provided = sum([
+                phase is not None,
+                up_to is not None,
+                keep_recent is not None,
+                older_than is not None
+            ])
 
             if options_provided > 1:
-                console.print("[red]ERROR[/red] Only one of --phase, --up-to, or --keep-recent can be specified")
+                console.print("[red]ERROR[/red] Only one of --phase, --up-to, --keep-recent, or --older-than can be specified")
                 sys.exit(1)
 
             # Determine which mode to use
@@ -2089,6 +2113,10 @@ def archive(
                 # Mode: Decision number-based
                 mode = "up-to"
                 value = up_to
+            elif older_than is not None:
+                # Mode: Date-based (NEW)
+                mode = "older-than"
+                value = older_than
             else:
                 # Mode: Keep recent (default or explicit)
                 mode = "keep-recent"
@@ -2105,6 +2133,8 @@ def archive(
                     archive_path, num_archived = archiver.archive_decisions(value, dry_run)
                 elif mode == "up-to":
                     archive_path, num_archived = archiver.archive_decisions_by_number(value, dry_run)
+                elif mode == "older-than":
+                    archive_path, num_archived = archiver.archive_decisions_by_date(value, dry_run)
                 else:  # keep-recent
                     archive_path, num_archived = archiver.archive_decisions_by_count(value, dry_run)
 
