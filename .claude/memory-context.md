@@ -1,6 +1,6 @@
 # Memory Context
 
-**Generated:** 2025-11-20 21:31
+**Generated:** 2025-11-20 21:34
 
 ---
 
@@ -51,8 +51,8 @@
 - **projects/memory-tool/llm-integration/decisions.md**: 348 lines - Consider archiving
 - **projects/memory-tool/llm-integration/current.md**: 340 lines - Consider reviewing
 - **projects/memory-tool/module-system/current.md**: 351 lines - Consider reviewing
-- **projects/memory-tool/project-management/decisions.md**: 876 lines - ⚠️ Very large, should archive soon
-- **projects/memory-tool/project-management/current.md**: 357 lines - Consider reviewing
+- **projects/memory-tool/project-management/decisions.md**: 985 lines - ⚠️ Very large, should archive soon
+- **projects/memory-tool/project-management/current.md**: 364 lines - Consider reviewing
 - **projects/memory-tool/search-system/current.md**: 263 lines - Consider reviewing
 - **projects/memory-tool/ui-system/current.md**: 404 lines - ⚠️ Very large, consider archiving
 
