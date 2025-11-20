@@ -1855,7 +1855,7 @@ Provide a clear, structured summary in markdown format."""
                 if force:
                     # Force regeneration - skip cache
                     summary_text = llm_client.summarize(
-                        user_prompt=prompt,
+                        content=prompt,
                         system_prompt="You are a technical analyst specializing in software project documentation."
                     )
                 else:
@@ -1870,7 +1870,7 @@ Provide a clear, structured summary in markdown format."""
                     else:
                         # Generate new summary
                         summary_text = llm_client.summarize(
-                            user_prompt=prompt,
+                            content=prompt,
                             system_prompt="You are a technical analyst specializing in software project documentation."
                         )
 
