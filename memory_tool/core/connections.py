@@ -652,3 +652,141 @@ class ConnectionGraph:
                     suggestions.append((candidate, f"Links to {len(common)} common module(s)"))
 
         return suggestions[:max_suggestions]
+
+    def _module_exists(self, module_path: str) -> bool:
+        """Check if a module directory exists.
+
+        Args:
+            module_path: Module path (e.g., 'projects/website')
+
+        Returns:
+            True if module directory exists
+        """
+        modules_dir = Path.cwd() / ".memory" / "modules"
+        module_dir = modules_dir / module_path
+        return module_dir.exists() and module_dir.is_dir()
+
+    def _get_module_description(self, module_path: str) -> Optional[str]:
+        """Get module description from module.md.
+
+        Args:
+            module_path: Module path
+
+        Returns:
+            Description string or None if not found
+        """
+        modules_dir = Path.cwd() / ".memory" / "modules"
+        module_md = modules_dir / module_path / "module.md"
+
+        if not module_md.exists():
+            return None
+
+        try:
+            content = module_md.read_text(encoding="utf-8")
+            lines = content.split('\n')
+
+            # Look for description patterns:
+            # 1. "**Description:** ..." or "**목적:** ..."
+            # 2. First paragraph after title
+            for i, line in enumerate(lines):
+                line_stripped = line.strip()
+
+                # Pattern 1: Explicit description field
+                if line_stripped.startswith("**Description:**") or line_stripped.startswith("**목적:**"):
+                    desc = line_stripped.split(":", 1)[1].strip()
+                    if desc:
+                        return desc
+
+                # Pattern 2: First non-empty paragraph after # title
+                if line_stripped.startswith("#") and i + 1 < len(lines):
+                    # Skip empty lines
+                    j = i + 1
+                    while j < len(lines) and not lines[j].strip():
+                        j += 1
+
+                    if j < len(lines):
+                        desc = lines[j].strip()
+                        # Don't return lines that are headings or markdown syntax
+                        if desc and not desc.startswith("#") and not desc.startswith("**"):
+                            return desc
+
+            return None
+
+        except Exception:
+            return None
+
+    def to_json(self) -> dict:
+        """Export graph as JSON structure.
+
+        Returns:
+            Dictionary with nodes, edges, and stats:
+            {
+                "nodes": [
+                    {
+                        "id": "projects/memory-note",
+                        "name": "memory-note",
+                        "path": "projects/memory-note",
+                        "type": "module",
+                        "has_files": true,
+                        "description": "..."
+                    }
+                ],
+                "edges": [
+                    {
+                        "source": "projects/memory-note",
+                        "target": "projects/memory-note/search-system",
+                        "type": "connection",
+                        "source_file": ".memory/modules/...",
+                        "line_number": 42
+                    }
+                ],
+                "stats": {
+                    "total_connections": 1,
+                    "connected_modules": 2,
+                    "orphaned_modules": 0
+                }
+            }
+        """
+        # Get all modules from graph
+        all_modules = self.get_all_modules()
+
+        # Build nodes
+        nodes = []
+        for module_path in sorted(all_modules):
+            # Get module info
+            node = {
+                "id": module_path,
+                "name": module_path.split('/')[-1],
+                "path": module_path,
+                "type": "module",
+                "has_files": self._module_exists(module_path),
+            }
+
+            # Optional: read description from module.md
+            desc = self._get_module_description(module_path)
+            if desc:
+                node["description"] = desc
+
+            nodes.append(node)
+
+        # Build edges
+        edges = []
+        for module in sorted(all_modules):
+            connections = self.get_outgoing_connections(module)
+            for conn in connections:
+                edges.append({
+                    "source": conn.source,
+                    "target": conn.target,
+                    "type": "connection",
+                    "source_file": conn.source_file,
+                    "line_number": conn.line_number,
+                })
+
+        # Get stats
+        stats = self.get_graph_stats()
+
+        return {
+            "nodes": nodes,
+            "edges": edges,
+            "stats": stats,
+        }

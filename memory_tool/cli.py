@@ -1254,7 +1254,7 @@ def module(
     reason: str = typer.Option("", "--reason", "-r", help="Reason for archiving"),
     tags: str = typer.Option("", "--tags", "-t", help="Module tags (comma-separated)"),
     archived: bool = typer.Option(False, "--archived", "-a", help="Include archived modules in list"),
-    format: str = typer.Option(None, "--format", "-f", help="Export format: mermaid, graphviz (for graph action)"),
+    format: str = typer.Option(None, "--format", "-f", help="Export format: mermaid, graphviz, json (for graph action)"),
     output: str = typer.Option(None, "--output", "-o", help="Output file path (for graph action)"),
     quiet: bool = typer.Option(False, "--quiet", "-q", help="Suppress output (for rebuild-graph in hooks)"),
     version1: int = typer.Option(None, "--v1", help="First version ID (for graph-diff)"),
@@ -1444,9 +1444,24 @@ def module(
                         console.print("[cyan]Graphviz DOT:[/cyan]\n")
                         console.print(dot)
 
+                elif format.lower() == "json":
+                    import json
+
+                    graph_data = graph.to_json()
+                    json_output = json.dumps(graph_data, indent=2, ensure_ascii=False)
+
+                    if output:
+                        # Save to file
+                        output_path = Path(output)
+                        output_path.write_text(json_output, encoding="utf-8")
+                        console.print(f"[green]OK[/green] JSON saved to: {output}")
+                    else:
+                        # Print to console (for piping)
+                        print(json_output)
+
                 else:
                     console.print(f"[red]ERROR[/red] Unknown format: {format}")
-                    console.print("Valid formats: mermaid, graphviz")
+                    console.print("Valid formats: mermaid, graphviz, json")
                     sys.exit(1)
 
                 return

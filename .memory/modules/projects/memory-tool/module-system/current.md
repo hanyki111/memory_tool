@@ -2,7 +2,7 @@
 
 > **Module System - Hierarchical Modules with Wiki-Style Connections**
 
-Last Updated: 2025-11-15
+Last Updated: 2025-11-24
 
 ---
 
@@ -310,6 +310,73 @@ find_module_by_name('core-system')
 - Works across all hierarchy levels
 - Type less, work faster
 - Safe ambiguity resolution
+
+---
+
+### JSON Graph Export ✅ (2025-11-24)
+
+**New Feature: `module graph --format json`**
+- Location: `memory_tool/core/connections.py` + `memory_tool/cli.py`
+- Export module graph as JSON for programmatic consumption
+- Designed for web UI integration (memory_note project)
+
+**New Methods:**
+```python
+# ConnectionGraph class
+to_json() -> dict                          # Export graph as JSON
+_module_exists(module_path: str) -> bool   # Check module directory exists
+_get_module_description(module_path: str)  # Extract description from module.md
+```
+
+**CLI Usage:**
+```bash
+# Output to stdout (for piping)
+python -m memory_tool module graph --format json
+
+# Save to file
+python -m memory_tool module graph --format json --output graph.json
+```
+
+**JSON Structure:**
+```json
+{
+  "nodes": [
+    {
+      "id": "projects/memory-note",
+      "name": "memory-note",
+      "path": "projects/memory-note",
+      "type": "module",
+      "has_files": true,
+      "description": "..."
+    }
+  ],
+  "edges": [
+    {
+      "source": "projects/memory-note",
+      "target": "projects/memory-note/search-system",
+      "type": "connection",
+      "source_file": ".memory/modules/...",
+      "line_number": 42
+    }
+  ],
+  "stats": {
+    "total_connections": 1,
+    "connected_modules": 2,
+    "orphaned_modules": 0
+  }
+}
+```
+
+**Benefits:**
+- Enables web UI visualization (React Flow, Cytoscape, etc.)
+- Programmatic access to graph data
+- UTF-8 support for descriptions
+- Clean, structured data format
+
+**Use Case:**
+- memory_note web UI will consume this JSON to visualize module relationships
+- Backend can call CLI and parse JSON output
+- Supports real-time graph updates
 
 ---
 
