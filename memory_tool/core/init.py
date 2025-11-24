@@ -286,8 +286,47 @@ You MUST update relevant module documentation:
         template_path.write_text(content, encoding="utf-8")
         return template_path
 
+    def _copy_docs_templates(self) -> list[Path]:
+        """Copy documentation templates from templates/docs/ to .memory/docs/.
+
+        Returns:
+            List of paths to created documentation files
+        """
+        created_files = []
+
+        # Source: memory_tool's templates/docs/
+        source_docs_dir = Path(__file__).parent.parent / "templates" / "docs"
+        # Destination: project's .memory/docs/
+        dest_docs_dir = self.memory_path / "docs"
+
+        if not source_docs_dir.exists():
+            # Templates directory doesn't exist, fall back to old methods
+            return created_files
+
+        # Ensure destination directory exists
+        dest_docs_dir.mkdir(parents=True, exist_ok=True)
+
+        # Copy all template files
+        template_files = [
+            "README.md",
+            "MODULE-ORGANIZATION-PRINCIPLES.md",
+            "QUICK-REFERENCE-MODULE-ORGANIZATION.md",
+        ]
+
+        for filename in template_files:
+            source_file = source_docs_dir / filename
+            if source_file.exists():
+                dest_file = dest_docs_dir / filename
+                shutil.copy2(source_file, dest_file)
+                created_files.append(dest_file)
+
+        return created_files
+
     def create_module_organization_principles(self) -> Path:
         """Create MODULE-ORGANIZATION-PRINCIPLES.md documentation.
+
+        DEPRECATED: Use _copy_docs_templates() instead.
+        This method is kept for backward compatibility.
 
         Returns:
             Path to created documentation file
@@ -553,6 +592,9 @@ When deciding module structure, ask:
 
     def create_quick_reference(self) -> Path:
         """Create QUICK-REFERENCE-MODULE-ORGANIZATION.md documentation.
+
+        DEPRECATED: Use _copy_docs_templates() instead.
+        This method is kept for backward compatibility.
 
         Returns:
             Path to created documentation file
@@ -884,12 +926,18 @@ Action: Split by clear criteria
         template_path = self.create_claude_template()
         created["files"].append(template_path)
 
-        # Create module organization documentation
-        module_org_path = self.create_module_organization_principles()
-        created["files"].append(module_org_path)
+        # Copy documentation templates from templates/docs/
+        docs_files = self._copy_docs_templates()
+        if docs_files:
+            # Successfully copied from templates
+            created["files"].extend(docs_files)
+        else:
+            # Fallback to old methods if templates don't exist
+            module_org_path = self.create_module_organization_principles()
+            created["files"].append(module_org_path)
 
-        quick_ref_path = self.create_quick_reference()
-        created["files"].append(quick_ref_path)
+            quick_ref_path = self.create_quick_reference()
+            created["files"].append(quick_ref_path)
 
         # Create .claude/ structure with skills and guidelines
         skill_files = self.create_claude_skills()
