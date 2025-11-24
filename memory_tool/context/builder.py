@@ -218,7 +218,7 @@ class ContextBuilder:
             if decisions_file.exists():
                 try:
                     content = decisions_file.read_text(encoding="utf-8")
-                    line_count = len(content.split("\n"))
+                    line_count = len(content.splitlines())
 
                     if line_count > 300:
                         if line_count > 600:
@@ -239,7 +239,7 @@ class ContextBuilder:
             if current_file.exists():
                 try:
                     content = current_file.read_text(encoding="utf-8")
-                    line_count = len(content.split("\n"))
+                    line_count = len(content.splitlines())
 
                     if line_count > 200:
                         if line_count > 400:
