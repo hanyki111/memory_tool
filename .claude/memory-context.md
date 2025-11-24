@@ -1,6 +1,6 @@
 # Memory Context
 
-**Generated:** 2025-11-24 13:47
+**Generated:** 2025-11-24 16:52
 
 ---
 
@@ -41,7 +41,9 @@
   - Quick action: `marchive decisions --module memory-system.backup --interactive`
 - **archive/memory-system/decisions.md**: 692 lines - ⚠️ Very large, should archive soon
   - Quick action: `marchive decisions --module archive/memory-system --interactive`
-- **projects/memory-tool/project-management/decisions.md**: 984 lines - ⚠️ Very large, should archive soon
+- **projects/memory-tool/module-system/current.md**: 417 lines - ⚠️ Very large, should archive soon
+  - Quick action: `marchive current --module projects/memory-tool/module-system --interactive`
+- **projects/memory-tool/project-management/decisions.md**: 1031 lines - ⚠️ Very large, should archive soon
   - Quick action: `marchive decisions --module projects/memory-tool/project-management --interactive`
 - **projects/memory-tool/ui-system/current.md**: 403 lines - ⚠️ Very large, should archive soon
   - Quick action: `marchive current --module projects/memory-tool/ui-system --interactive`
@@ -54,7 +56,6 @@
 - **projects/memory-tool/knowledge-graph-system/decisions.md**: 347 lines - Consider archiving
 - **projects/memory-tool/llm-integration/decisions.md**: 347 lines - Consider archiving
 - **projects/memory-tool/llm-integration/current.md**: 339 lines - Consider reviewing
-- **projects/memory-tool/module-system/current.md**: 350 lines - Consider reviewing
 - **projects/memory-tool/project-management/current.md**: 363 lines - Consider reviewing
 - **projects/memory-tool/search-system/current.md**: 262 lines - Consider reviewing
 

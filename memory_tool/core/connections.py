@@ -666,6 +666,40 @@ class ConnectionGraph:
         module_dir = modules_dir / module_path
         return module_dir.exists() and module_dir.is_dir()
 
+    def _get_parent_module(self, module_path: str) -> Optional[str]:
+        """Get parent module path from child path.
+
+        Args:
+            module_path: Child module path (e.g., 'projects/memory-note/context-builder')
+
+        Returns:
+            Parent module path (e.g., 'projects/memory-note') or None if no parent
+        """
+        parts = module_path.split('/')
+        if len(parts) <= 1:
+            return None
+        return '/'.join(parts[:-1])
+
+    def _build_hierarchical_edges(self, all_module_paths: Set[str]) -> List[dict]:
+        """Build parent-child edges from directory structure.
+
+        Args:
+            all_module_paths: Set of all module paths
+
+        Returns:
+            List of edge dictionaries with type "parent-child"
+        """
+        edges = []
+        for module_path in all_module_paths:
+            parent_path = self._get_parent_module(module_path)
+            if parent_path and parent_path in all_module_paths:
+                edges.append({
+                    "source": parent_path,
+                    "target": module_path,
+                    "type": "parent-child"
+                })
+        return edges
+
     def _get_module_description(self, module_path: str) -> Optional[str]:
         """Get module description from module.md.
 
@@ -716,7 +750,7 @@ class ConnectionGraph:
             return None
 
     def to_json(self) -> dict:
-        """Export graph as JSON structure.
+        """Export graph as JSON structure with hierarchical relationships.
 
         Returns:
             Dictionary with nodes, edges, and stats:
@@ -735,24 +769,35 @@ class ConnectionGraph:
                     {
                         "source": "projects/memory-note",
                         "target": "projects/memory-note/search-system",
+                        "type": "parent-child"
+                    },
+                    {
+                        "source": "projects/memory-note",
+                        "target": "projects/memory-note/context-builder",
                         "type": "connection",
                         "source_file": ".memory/modules/...",
                         "line_number": 42
                     }
                 ],
                 "stats": {
-                    "total_connections": 1,
+                    "total_connections": 2,
+                    "total_modules": 2,
                     "connected_modules": 2,
-                    "orphaned_modules": 0
+                    "orphaned_modules": 0,
+                    "wiki_links": 1,
+                    "parent_child_links": 1
                 }
             }
         """
-        # Get all modules from graph
-        all_modules = self.get_all_modules()
+        # Get ALL modules (not just connected ones)
+        from memory_tool.core.module import ModuleManager
+        manager = ModuleManager()
+        all_modules_list = manager.discover_all_modules()
+        all_module_paths = {str(m).replace('\\', '/') for m in all_modules_list}
 
-        # Build nodes
+        # Build nodes for ALL modules
         nodes = []
-        for module_path in sorted(all_modules):
+        for module_path in sorted(all_module_paths):
             # Get module info
             node = {
                 "id": module_path,
@@ -769,9 +814,11 @@ class ConnectionGraph:
 
             nodes.append(node)
 
-        # Build edges
+        # Build edges: wiki-links + hierarchical
         edges = []
-        for module in sorted(all_modules):
+
+        # 1. Wiki-link edges (existing functionality)
+        for module in sorted(all_module_paths):
             connections = self.get_outgoing_connections(module)
             for conn in connections:
                 edges.append({
@@ -782,8 +829,22 @@ class ConnectionGraph:
                     "line_number": conn.line_number,
                 })
 
-        # Get stats
-        stats = self.get_graph_stats()
+        # 2. Hierarchical edges (parent-child relationships)
+        hierarchical_edges = self._build_hierarchical_edges(all_module_paths)
+        edges.extend(hierarchical_edges)
+
+        # Calculate stats
+        wiki_links = [e for e in edges if e["type"] == "connection"]
+        parent_child_links = [e for e in edges if e["type"] == "parent-child"]
+
+        stats = {
+            "total_connections": len(edges),
+            "total_modules": len(all_module_paths),
+            "connected_modules": len(all_module_paths),  # All modules are now included
+            "orphaned_modules": 0,  # With hierarchy, no modules are truly orphaned
+            "wiki_links": len(wiki_links),
+            "parent_child_links": len(parent_child_links),
+        }
 
         return {
             "nodes": nodes,

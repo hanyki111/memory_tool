@@ -380,6 +380,76 @@ python -m memory_tool module graph --format json --output graph.json
 
 ---
 
+### Hierarchical Graph Support ✅ (2025-11-24)
+
+**Enhancement: Parent-Child Relationships in JSON Export**
+- Location: `memory_tool/core/connections.py`
+- Added automatic detection of directory-based hierarchical relationships
+- All modules now included in JSON output (not just connected ones)
+
+**New Methods:**
+```python
+# ConnectionGraph class
+_get_parent_module(module_path: str) -> Optional[str]        # Extract parent path
+_build_hierarchical_edges(all_module_paths: Set[str]) -> List[dict]  # Generate parent-child edges
+```
+
+**Updated JSON Structure:**
+```json
+{
+  "nodes": [
+    {"id": "projects/memory-note", "name": "memory-note", ...},
+    {"id": "projects/memory-note/context-builder", "name": "context-builder", ...}
+  ],
+  "edges": [
+    {
+      "source": "projects/memory-note",
+      "target": "projects/memory-note/context-builder",
+      "type": "parent-child"
+    },
+    {
+      "source": "projects/memory-note",
+      "target": "projects/memory-note/search-system",
+      "type": "connection",
+      "source_file": "...",
+      "line_number": 42
+    }
+  ],
+  "stats": {
+    "total_connections": 2,
+    "total_modules": 2,
+    "connected_modules": 2,
+    "orphaned_modules": 0,
+    "wiki_links": 1,
+    "parent_child_links": 1
+  }
+}
+```
+
+**Edge Types:**
+- `"parent-child"`: Directory hierarchy relationship (e.g., projects/parent → projects/parent/child)
+- `"connection"`: Wiki-style [[link]] relationship (existing)
+
+**Benefits:**
+- No orphaned modules (all modules connected via hierarchy)
+- Complete graph representation (directory structure + wiki links)
+- Enables tree/graph hybrid visualizations
+- Better understanding of module organization
+
+**Key Changes:**
+1. **All modules included**: ModuleManager.discover_all_modules() used instead of ConnectionGraph.get_all_modules()
+2. **Hierarchical edges**: Automatically generated from directory paths
+3. **Enhanced stats**: Added wiki_links and parent_child_links counts
+4. **Type distinction**: Clear separation between hierarchy and cross-references
+
+**Test Results (memory_note project):**
+- 4 modules discovered (all included)
+- 3 parent-child edges created
+- 0 orphaned modules
+- Works with existing wiki-link edges
+
+---
+
 ## Future Enhancements
 
 **Potential improvements:**
