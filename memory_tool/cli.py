@@ -3450,3 +3450,104 @@ def main(
 
 if __name__ == "__main__":
     app()
+
+
+# ============================================================================
+# CLI Entry Points
+# ============================================================================
+# These wrapper functions are needed because pyproject.toml entry points
+# call functions directly, bypassing Typer's CLI argument parsing.
+# Without these wrappers, typer.Argument(...) returns ArgumentInfo objects
+# instead of actual command-line arguments on Typer 0.12+.
+# ============================================================================
+
+
+def record_cli():
+    """Entry point for 'm' command."""
+    import sys
+    sys.argv = ['memory_tool', 'record'] + sys.argv[1:]
+    app()
+
+
+def init_cli():
+    """Entry point for 'minit' command."""
+    import sys
+    sys.argv = ['memory_tool', 'init'] + sys.argv[1:]
+    app()
+
+
+def search_cli():
+    """Entry point for 'ms' command."""
+    import sys
+    sys.argv = ['memory_tool', 'search'] + sys.argv[1:]
+    app()
+
+
+def context_cli():
+    """Entry point for 'mcontext' command."""
+    import sys
+    sys.argv = ['memory_tool', 'context'] + sys.argv[1:]
+    app()
+
+
+def today_cli():
+    """Entry point for 'mtoday' command."""
+    import sys
+    sys.argv = ['memory_tool', 'today'] + sys.argv[1:]
+    app()
+
+
+def week_cli():
+    """Entry point for 'mweek' command."""
+    import sys
+    sys.argv = ['memory_tool', 'week'] + sys.argv[1:]
+    app()
+
+
+def status_cli():
+    """Entry point for 'mstatus' command."""
+    import sys
+    sys.argv = ['memory_tool', 'status'] + sys.argv[1:]
+    app()
+
+
+def alias_cli():
+    """Entry point for 'malias' command."""
+    import sys
+    sys.argv = ['memory_tool', 'alias'] + sys.argv[1:]
+    app()
+
+
+def summary_cli():
+    """Entry point for 'msummary' command."""
+    import sys
+    sys.argv = ['memory_tool', 'summary'] + sys.argv[1:]
+    app()
+
+
+def browse_cli():
+    """Entry point for 'mbrowse' command."""
+    import sys
+    sys.argv = ['memory_tool', 'browse'] + sys.argv[1:]
+    app()
+
+
+def completion_cli():
+    """Entry point for 'mcompletion' command."""
+    import sys
+    sys.argv = ['memory_tool', 'completion'] + sys.argv[1:]
+    app()
+
+
+def plan_cli():
+    """Entry point for 'mplan' command."""
+    import sys
+    sys.argv = ['memory_tool', 'plan'] + sys.argv[1:]
+    app()
+
+
+def tutorial_cli():
+    """Entry point for 'mtutorial' command."""
+    import sys
+    sys.argv = ['memory_tool', 'tutorial'] + sys.argv[1:]
+    app()

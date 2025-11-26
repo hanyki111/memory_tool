@@ -57,19 +57,19 @@ completion = [
 ]
 
 [project.scripts]
-m = "memory_tool.cli:record"
-minit = "memory_tool.cli:init"
-ms = "memory_tool.cli:search"
-mcontext = "memory_tool.cli:context"
-mtoday = "memory_tool.cli:today"
-mweek = "memory_tool.cli:week"
-mstatus = "memory_tool.cli:status"
-malias = "memory_tool.cli:alias"
-msummary = "memory_tool.cli:summary"
-mbrowse = "memory_tool.cli:browse"
-mcompletion = "memory_tool.cli:completion"
-mplan = "memory_tool.cli:plan"
-mtutorial = "memory_tool.cli:tutorial"
+m = "memory_tool.cli:record_cli"
+minit = "memory_tool.cli:init_cli"
+ms = "memory_tool.cli:search_cli"
+mcontext = "memory_tool.cli:context_cli"
+mtoday = "memory_tool.cli:today_cli"
+mweek = "memory_tool.cli:week_cli"
+mstatus = "memory_tool.cli:status_cli"
+malias = "memory_tool.cli:alias_cli"
+msummary = "memory_tool.cli:summary_cli"
+mbrowse = "memory_tool.cli:browse_cli"
+mcompletion = "memory_tool.cli:completion_cli"
+mplan = "memory_tool.cli:plan_cli"
+mtutorial = "memory_tool.cli:tutorial_cli"
 
 [tool.setuptools.packages.find]
 where = ["."]
