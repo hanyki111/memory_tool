@@ -114,6 +114,28 @@ def _opt_str(value) -> Optional[str]:
     return None
 
 
+def _arg_str(value) -> str:
+    """Safely convert Typer argument value to str.
+
+    Typer 0.12.0+ may return ArgumentInfo objects instead of actual values
+    in some edge cases. This function handles that.
+
+    Args:
+        value: Value from typer.Argument (could be str or ArgumentInfo)
+
+    Returns:
+        str value
+
+    Raises:
+        typer.BadParameter: If value is not a valid string
+    """
+    if isinstance(value, str):
+        return value
+    # ArgumentInfo or other objects - this shouldn't happen for required args
+    # but if it does, raise an error
+    raise typer.BadParameter(f"Invalid argument value: {type(value).__name__}")
+
+
 def _resolve_module_name(module_name: str) -> str:
     """Resolve module name to full path by searching all modules.
 
@@ -167,7 +189,8 @@ def record(
     force: bool = typer.Option(False, "--force", "-f", help="Force recording (skip warnings)"),
 ):
     """Record a message to timeline (m command)."""
-    # Safely convert Typer OptionInfo to str/None
+    # Safely convert Typer ArgumentInfo/OptionInfo to str/None
+    message = _arg_str(message)
     date = _opt_str(date)
     time = _opt_str(time)
 
@@ -315,7 +338,8 @@ def search(
         ms "implementation" --hybrid --text-weight 0.5 --semantic-weight 0.5
         ms "query" --no-cache
     """
-    # Safely convert Typer OptionInfo to str/None
+    # Safely convert Typer ArgumentInfo/OptionInfo to str/None
+    query = _arg_str(query)
     from_date = _opt_str(from_date)
     to_date = _opt_str(to_date)
     rank = _opt_str(rank)
@@ -1298,7 +1322,9 @@ def module(
     limit: int = typer.Option(10, "--limit", "-l", help="Limit number of results"),
 ):
     """Manage modules (supports hierarchical paths, wiki-style [[connections]], and AI suggestions)."""
-    # Safely convert Typer OptionInfo to str/None
+    # Safely convert Typer ArgumentInfo/OptionInfo to str/None
+    action = _arg_str(action)
+    name = _opt_str(name)
     format = _opt_str(format)
     output = _opt_str(output)
 
@@ -1909,7 +1935,8 @@ def summary(
     force: bool = typer.Option(False, "--force", "-f", help="Force regeneration, bypassing cache"),
 ):
     """Summarize timeline or module using LLM (msummary command)."""
-    # Safely convert Typer OptionInfo to str/None
+    # Safely convert Typer ArgumentInfo/OptionInfo to str/None
+    scope = _arg_str(scope)
     output = _opt_str(output)
     module_name = _opt_str(module_name)
     lang = _opt_str(lang)
