@@ -25,10 +25,7 @@
 #### Option 1: 단독 사용 (권장)
 
 ```bash
-# GitHub에서 설치
-pip install git+https://github.com/hanyki111/memory_tool.git
-
-# 또는 로컬 clone 후 설치
+# 로컬 clone 후 설치
 git clone https://github.com/hanyki111/memory_tool.git
 cd memory_tool
 pip install -e .
@@ -110,8 +107,6 @@ git clone https://github.com/hanyki111/memory_tool.git
 cd memory_tool
 pip install -e .
 
-# 방법 B: pip로 설치 (출시 후)
-pip install memory_tool
 ```
 
 #### 2. 프로젝트 초기화
@@ -365,6 +360,7 @@ python -m memory_tool migrate-timeline
 - 데이터 손실 없는 안전한 마이그레이션
 
 **언제 사용:**
+
 - Phase 1 (Timeline 재구조화) 업데이트 후 한 번만 실행
 - 기존 사용자가 새 디렉토리 구조로 전환할 때
 - 새 사용자는 실행 불필요 (자동으로 새 구조 사용)
@@ -397,12 +393,14 @@ mreview weekly --no-editor
 **기능:**
 
 - **주간 회고 (Weekly Review):**
+
   - ISO week 형식 (W47)
   - 7일간 Daily Timeline 링크 자동 생성
   - 엔트리 수 자동 계산
   - 활동 일수 통계
 
 - **월간 회고 (Monthly Review):**
+
   - 숫자 월 형식 (11)
   - 4-5주간 Weekly Review 링크 자동 생성
   - 월간 통계 (총 엔트리, 활동 일수, 주간 회고 수)
@@ -416,6 +414,7 @@ mreview weekly --no-editor
   - **Legacy 호환**: 기존/신규 Timeline 구조 모두 자동 인식
 
 **디렉토리 구조:**
+
 ```
 .memory/
 ├── reviews/
@@ -431,21 +430,25 @@ mreview weekly --no-editor
 ```
 
 **에디터 설정:**
+
 - Windows: `notepad` (기본)
 - Linux/Mac: `vi` (기본)
 - 커스텀: `EDITOR` 환경 변수 설정
 
 **Timeline과의 관계:**
+
 - **Timeline**: 일간 사실 기록 (자동, HH:MM)
 - **Review**: 주간/월간 회고 (수동, 의미 부여) ⭐
 - **Plan**: 작업 계획 및 추적 (체크리스트)
 
 **흐름:**
+
 ```
 Timeline (사실 기록) → Review (회고) → Plan (다음 계획)
 ```
 
 **관련 문서:**
+
 - 설계: `.memory/concepts/timeline-review-plan-system-design.md`
 - Phase 1: Timeline 재구조화 (완료) ✅
 - Phase 2: Review 시스템 (완료) ✅
@@ -476,6 +479,7 @@ python -m memory_tool module unarchive auth-system
 ```
 
 **모듈 자동 검색:** ⭐ NEW
+
 - `archive` 액션에서 모듈명만 입력하면 자동 검색
 - 상위/하위 모듈 구분 없이 모든 계층 검색
 - 정확히 1개 발견 시 자동 사용
@@ -574,6 +578,7 @@ msummary today --force
 ```
 
 **캐시 저장 위치:**
+
 - Daily summaries: `.memory/summaries/daily/YYYY-MM-DD.md`
 - Weekly summaries: `.memory/summaries/weekly/YYYY-Www.md`
 - Range summaries: `.memory/summaries/range/YYYY-MM-DD_to_YYYY-MM-DD.md`
@@ -582,6 +587,7 @@ msummary today --force
 **설정 방법:**
 
 **Option 1: Anthropic API (Claude)**
+
 ```bash
 # 환경 변수
 export ANTHROPIC_API_KEY="your-api-key"
@@ -594,6 +600,7 @@ llm:
 ```
 
 **Option 2: Ollama (로컬, 무료)**
+
 ```bash
 # config.yaml
 llm:
@@ -603,6 +610,7 @@ llm:
 ```
 
 **사용 시나리오:**
+
 - 장기 작업 후 진행 상황 파악
 - 주간/월간 리포트 작성
 - 프로젝트 상태 요약
@@ -663,12 +671,14 @@ marchive decisions --module website
 ```
 
 **모듈 자동 검색 기능:** ⭐ NEW
+
 - 모듈명만 입력하면 `.memory/modules/`에서 자동 검색
 - 정확히 1개 발견: 자동으로 사용하고 경로 표시
 - 여러 개 발견: 선택 가능한 목록 표시
 - 발견 안 됨: 에러 메시지와 함께 모듈 목록 확인 방법 안내
 
 **예시:**
+
 ```bash
 # 짧은 이름 입력
 marchive decisions --module core-system
@@ -679,6 +689,7 @@ marchive decisions --module core-system
 ```
 
 **작동 방식:**
+
 1. 오래된 결정들을 `archive/decisions-1-25.md`로 이동
 2. `decisions.md`에는 최근 결정만 유지
 3. 원본 파일 자동 백업 (`.bak`)
@@ -687,10 +698,12 @@ marchive decisions --module core-system
 **새로운 아카이브 모드:** ⭐
 
 1. **날짜 기반 (`--older-than`)**: 특정 기간보다 오래된 결정들을 자동으로 아카이브
+
    - 형식: `6m` (6개월), `1y` (1년), `180d` (180일), `4w` (4주)
    - 예: `marchive decisions --older-than 6m`
 
 2. **제안 모드 (`--suggest`)**: 아카이브할 후보를 분석해서 보여줌 (실행은 안 함)
+
    - 6개월 이상 된 결정들을 자동으로 찾아서 요약
    - 예상 파일 크기 및 효과 표시
    - 예: `marchive decisions --suggest`
@@ -702,6 +715,7 @@ marchive decisions --module core-system
    - 예: `marchive decisions --interactive`
 
 **추천 워크플로우:**
+
 ```bash
 # 1단계: 먼저 제안 확인
 marchive decisions --suggest
@@ -714,6 +728,7 @@ marchive decisions --interactive
 ```
 
 **언제 사용하나:**
+
 - `decisions.md`가 300+ 줄로 길어졌을 때
 - Phase 전환 시
 - 문서 정리가 필요할 때
@@ -768,11 +783,13 @@ mplan monthly done "프로젝트 v1.0"
 **주요 기능:**
 
 1. **Progress 자동 업데이트** ⭐ NEW
+
    - Plan 조회 시 자동으로 진행률 계산 및 저장
    - 체크박스 추가/완료 시 자동 반영
    - `**Progress:** 2/5 (40%)` 형식으로 표시
 
 2. **Timeline 자동 통합**
+
    - `done` 명령어로 작업/목표 완료 시 Timeline에 자동 기록
    - 체크마크 표시: `✓ Task (Daily Plan)`
    - 양방향 링크: Plan ↔ Timeline
@@ -783,15 +800,18 @@ mplan monthly done "프로젝트 v1.0"
    - 날짜 기반 자동 연결
 
 **Task/Goal 상태:**
+
 - `[ ]` - Pending (대기)
 - `[x]` - Completed (완료, Timeline에 자동 기록)
 
 **생성 파일:**
+
 - `.memory/plans/daily/YYYY-MM/DD.md` - 일간 계획
 - `.memory/plans/weekly/YYYY/W##.md` - 주간 계획
 - `.memory/plans/monthly/YYYY/MM.md` - 월간 계획
 
 **예시: Daily Plan 완료 흐름**
+
 ```bash
 # 1. 계획 생성 및 작업 추가
 mplan daily create
@@ -811,10 +831,12 @@ mplan daily
 ```
 
 **mcontext와 mstatus 통합:**
+
 - `mcontext`: 현재 Plan 진행률 및 Pending tasks 표시
 - `mstatus`: Plan 통계 (총 Plan 수, 오늘/이번 주 진행률)
 
 **언제 사용하나:**
+
 - 체계적인 작업 추적이 필요할 때
 - Timeline과 연계된 계획 관리
 - 주간/월간 목표 설정 및 추적
@@ -845,18 +867,21 @@ mindex --vacuum
 ```
 
 **인덱싱 대상:**
+
 - `.memory/timeline/**/*.md` - Timeline 항목
 - `.memory/modules/**/decisions.md` - 주요 결정
 - `.memory/modules/**/current.md` - 현재 상태
 - `.memory/concepts/**/*.md` - 개념 문서
 
 **성능:**
+
 - 일반 검색 (regex): 100-500ms
 - 인덱스 검색 (FTS5): 5-20ms (10-100배 빠름)
 
 **인덱스 파일:** `.memory/.index.db`
 
 **언제 사용하나:**
+
 - Timeline이 1000+ 항목으로 많을 때
 - 검색이 느려졌을 때
 - 프로젝트 초기 설정 시
@@ -1152,12 +1177,14 @@ ms "authentication" --from 2025-11-01 --to 2025-11-14
 **시스템 완성:**
 
 Timeline/Review/Plan 통합 시스템의 모든 Phase(1-5)가 완료되었습니다! 🎉
+
 - 일간/주간/월간 계획 및 회고
 - 모듈별 작업 관리 (Sprint/Backlog/Debt)
 - Plan 완료 시 Timeline 자동 기록
 - 완전한 양방향 참조
 
 **관련 문서:**
+
 - `.memory/concepts/timeline-review-plan-system-design.md`
 
 ### Phase 6+: 장기 계획 🔮
