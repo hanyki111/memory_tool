@@ -1,6 +1,6 @@
 # Memory Context
 
-**Generated:** 2025-11-24 19:45
+**Generated:** 2025-11-26 17:19
 
 ---
 
@@ -53,8 +53,8 @@
 
 - **memory-system.backup/current.md**: 234 lines - Consider reviewing
 - **archive/memory-system/current.md**: 234 lines - Consider reviewing
-- **projects/memory-tool/current.md**: 313 lines - Consider reviewing
-- **projects/memory-tool/core-system/current.md**: 241 lines - Consider reviewing
+- **projects/memory-tool/current.md**: 337 lines - Consider reviewing
+- **projects/memory-tool/core-system/current.md**: 277 lines - Consider reviewing
 - **projects/memory-tool/knowledge-graph-system/decisions.md**: 347 lines - Consider archiving
 - **projects/memory-tool/llm-integration/decisions.md**: 347 lines - Consider archiving
 - **projects/memory-tool/llm-integration/current.md**: 339 lines - Consider reviewing
@@ -76,6 +76,29 @@ msummary --module <module-name> --decisions
 # 4. Check health anytime
 mcontext
 ```
+
+---
+
+## Module Organization Quick Reference
+
+**When to Split a Module:**
+- `current.md` > 300 lines
+- Total files > 3000 lines
+- More than 20 decisions
+- More than 3 distinct topics
+
+**Decision Flow:**
+```
+Small enhancement (<100 lines)  → Add to existing module
+New feature (>500 lines)        → Create new module
+Unrelated topic                 → Create new module
+Part of existing project        → Child module (projects/parent/child)
+New project                     → New project (projects/new-project)
+```
+
+**Full Documentation:**
+- `.memory/docs/MODULE-ORGANIZATION-PRINCIPLES.md` - Complete principles
+- `.memory/docs/QUICK-REFERENCE-MODULE-ORGANIZATION.md` - Quick decisions
 
 ---
 

@@ -3,7 +3,7 @@
 import sys
 from datetime import timedelta
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 import typer
 from rich.console import Console
@@ -142,8 +142,8 @@ def _resolve_module_name(module_name: str) -> str:
 @app.command()
 def record(
     message: str = typer.Argument(..., help="Message to record in timeline"),
-    date: str = typer.Option(None, "--date", help="Date (YYYY-MM-DD)"),
-    time: str = typer.Option(None, "--time", help="Time (HH:MM)"),
+    date: Optional[str] = typer.Option(None, "--date", help="Date (YYYY-MM-DD)"),
+    time: Optional[str] = typer.Option(None, "--time", help="Time (HH:MM)"),
     force: bool = typer.Option(False, "--force", "-f", help="Force recording (skip warnings)"),
 ):
     """Record a message to timeline (m command)."""
@@ -205,7 +205,7 @@ def record(
 def init(
     path: str = typer.Argument(".", help="Path to initialize .memory/ structure"),
     force: bool = typer.Option(False, "--force", "-f", help="Force reinitialize"),
-    kb: str = typer.Option(None, "--kb", help="Path to knowledge base"),
+    kb: Optional[str] = typer.Option(None, "--kb", help="Path to knowledge base"),
 ):
     """Initialize .memory/ structure (minit command)."""
     target_path = Path(path).resolve()
@@ -258,19 +258,19 @@ def search(
     case_sensitive: bool = typer.Option(False, "--case", "-c", help="Case sensitive search"),
     no_context: bool = typer.Option(False, "--no-context", help="Hide context lines"),
     max_results: int = typer.Option(None, "--max", "-n", help="Maximum results"),
-    from_date: str = typer.Option(None, "--from", help="Start date (YYYY-MM-DD)"),
-    to_date: str = typer.Option(None, "--to", help="End date (YYYY-MM-DD)"),
+    from_date: Optional[str] = typer.Option(None, "--from", help="Start date (YYYY-MM-DD)"),
+    to_date: Optional[str] = typer.Option(None, "--to", help="End date (YYYY-MM-DD)"),
     semantic: bool = typer.Option(False, "--semantic", "-s", help="Semantic search using embeddings"),
     threshold: float = typer.Option(0.3, "--threshold", "-t", help="Similarity threshold (0-1, semantic only)"),
     no_index: bool = typer.Option(False, "--no-index", help="Force file-based search (skip SQLite index)"),
     # New ranking options
-    rank: str = typer.Option(None, "--rank", help="Ranking algorithm: bm25 (default: none)"),
+    rank: Optional[str] = typer.Option(None, "--rank", help="Ranking algorithm: bm25 (default: none)"),
     boost_recent: bool = typer.Option(False, "--boost-recent", help="Boost recent results"),
     decay_days: int = typer.Option(30, "--decay-days", help="Date decay days (for --boost-recent)"),
     # New filter options
-    date: str = typer.Option(None, "--date", help="Date expression: today, yesterday, this-week, last-N-days, YYYY-MM-DD"),
-    file_type: str = typer.Option(None, "--type", help="File type: timeline, modules, decisions, plans, archive"),
-    module_filter: str = typer.Option(None, "--module", help="Filter by module path (e.g., 'projects' or 'projects/website')"),
+    date: Optional[str] = typer.Option(None, "--date", help="Date expression: today, yesterday, this-week, last-N-days, YYYY-MM-DD"),
+    file_type: Optional[str] = typer.Option(None, "--type", help="File type: timeline, modules, decisions, plans, archive"),
+    module_filter: Optional[str] = typer.Option(None, "--module", help="Filter by module path (e.g., 'projects' or 'projects/website')"),
     tag: List[str] = typer.Option(None, "--tag", help="Filter by tags (can use multiple times)"),
     # New formatting options
     show_score: bool = typer.Option(False, "--show-score", help="Show relevance scores"),
@@ -968,7 +968,7 @@ def status():
 def alias(
     action: str = typer.Argument(..., help="Action: install, uninstall, list"),
     name: str = typer.Argument(None, help="Alias name (optional, default: all)"),
-    directory: str = typer.Option(None, "--dir", "-d", help="Installation directory (for batch files)"),
+    directory: Optional[str] = typer.Option(None, "--dir", "-d", help="Installation directory (for batch files)"),
     powershell: bool = typer.Option(False, "--powershell", "--ps", help="Use PowerShell profile (works in all terminals)"),
 ):
     """Manage command aliases (malias command)."""
@@ -1254,8 +1254,8 @@ def module(
     reason: str = typer.Option("", "--reason", "-r", help="Reason for archiving"),
     tags: str = typer.Option("", "--tags", "-t", help="Module tags (comma-separated)"),
     archived: bool = typer.Option(False, "--archived", "-a", help="Include archived modules in list"),
-    format: str = typer.Option(None, "--format", "-f", help="Export format: mermaid, graphviz, json (for graph action)"),
-    output: str = typer.Option(None, "--output", "-o", help="Output file path (for graph action)"),
+    format: Optional[str] = typer.Option(None, "--format", "-f", help="Export format: mermaid, graphviz, json (for graph action)"),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output file path (for graph action)"),
     quiet: bool = typer.Option(False, "--quiet", "-q", help="Suppress output (for rebuild-graph in hooks)"),
     version1: int = typer.Option(None, "--v1", help="First version ID (for graph-diff)"),
     version2: int = typer.Option(None, "--v2", help="Second version ID (for graph-diff)"),
@@ -1863,10 +1863,10 @@ def module(
 @app.command()
 def summary(
     scope: str = typer.Argument("today", help="Scope: 'today', 'week', date (YYYY-MM-DD), or date range (YYYY-MM-DD:YYYY-MM-DD)"),
-    output: str = typer.Option(None, "--output", "-o", help="Output file path (optional)"),
-    module_name: str = typer.Option(None, "--module", "-m", help="Summarize specific module"),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output file path (optional)"),
+    module_name: Optional[str] = typer.Option(None, "--module", "-m", help="Summarize specific module"),
     decisions: bool = typer.Option(False, "--decisions", help="Summarize decisions.md only (requires --module)"),
-    lang: str = typer.Option(None, "--lang", "-l", help="Output language: 'ko' (Korean), 'en' (English), 'auto' (detect)"),
+    lang: Optional[str] = typer.Option(None, "--lang", "-l", help="Output language: 'ko' (Korean), 'en' (English), 'auto' (detect)"),
     force: bool = typer.Option(False, "--force", "-f", help="Force regeneration, bypassing cache"),
 ):
     """Summarize timeline or module using LLM (msummary command)."""
@@ -2201,11 +2201,11 @@ def archive(
     phase: int = typer.Option(None, "--phase", help="Phase number to archive (backwards compat)"),
     up_to: int = typer.Option(None, "--up-to", help="Archive decisions up to this number (e.g., 25 = #1-#25)"),
     keep_recent: int = typer.Option(None, "--keep-recent", help="Keep only N most recent decisions"),
-    older_than: str = typer.Option(None, "--older-than", help="Archive decisions older than duration (e.g., 6m, 1y, 180d)"),
+    older_than: Optional[str] = typer.Option(None, "--older-than", help="Archive decisions older than duration (e.g., 6m, 1y, 180d)"),
     interactive: bool = typer.Option(False, "--interactive", "-i", help="Interactively select decisions to archive"),
     suggest: bool = typer.Option(False, "--suggest", help="Suggest what to archive (does not archive)"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be archived without doing it"),
-    module_name: str = typer.Option(None, "--module", "-m", help="Module name or path (default: memory-system)"),
+    module_name: Optional[str] = typer.Option(None, "--module", "-m", help="Module name or path (default: memory-system)"),
 ):
     """Archive completed documentation (marchive command).
 
@@ -2381,7 +2381,7 @@ def archive(
 def completion(
     action: str = typer.Argument(..., help="Action: generate, install, uninstall, status"),
     shell: str = typer.Argument(None, help="Shell: bash, zsh, powershell"),
-    output: str = typer.Option(None, "--output", "-o", help="Output file path"),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output file path"),
     to_profile: bool = typer.Option(False, "--profile", help="Append to shell profile"),
 ):
     """Manage shell completion scripts (mcompletion command).
@@ -2576,7 +2576,7 @@ def plan(
     name: str = typer.Argument(None, help="Plan name or sub-action (add/done/show)"),
     title: str = typer.Argument(None, help="Task title (for 'add' action)"),
     description: str = typer.Option("", "--desc", "-d", help="Plan description"),
-    due_date: str = typer.Option(None, "--due", help="Due date (YYYY-MM-DD)"),
+    due_date: Optional[str] = typer.Option(None, "--due", help="Due date (YYYY-MM-DD)"),
     tags: List[str] = typer.Option([], "--tag", "-t", help="Tags"),
     section: str = typer.Option("sprint", "--section", "-s", help="Module plan section: sprint, backlog, debt"),
 ):
