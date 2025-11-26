@@ -94,6 +94,26 @@ def sanitize_output(text: str) -> str:
     return text
 
 
+def _opt_str(value) -> Optional[str]:
+    """Safely convert Typer option value to str or None.
+
+    Typer 0.12.0+ may return OptionInfo objects instead of None
+    when optional parameters are not provided. This function handles that.
+
+    Args:
+        value: Value from typer.Option (could be str, None, or OptionInfo)
+
+    Returns:
+        str if value is a string, None otherwise
+    """
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    # OptionInfo or other objects become None
+    return None
+
+
 def _resolve_module_name(module_name: str) -> str:
     """Resolve module name to full path by searching all modules.
 
@@ -147,6 +167,10 @@ def record(
     force: bool = typer.Option(False, "--force", "-f", help="Force recording (skip warnings)"),
 ):
     """Record a message to timeline (m command)."""
+    # Safely convert Typer OptionInfo to str/None
+    date = _opt_str(date)
+    time = _opt_str(time)
+
     timeline = Timeline()
 
     try:
@@ -291,6 +315,14 @@ def search(
         ms "implementation" --hybrid --text-weight 0.5 --semantic-weight 0.5
         ms "query" --no-cache
     """
+    # Safely convert Typer OptionInfo to str/None
+    from_date = _opt_str(from_date)
+    to_date = _opt_str(to_date)
+    rank = _opt_str(rank)
+    date = _opt_str(date)
+    file_type = _opt_str(file_type)
+    module_filter = _opt_str(module_filter)
+
     # Initialize cache if enabled
     search_cache = None
     cache_key_params = {
@@ -972,6 +1004,9 @@ def alias(
     powershell: bool = typer.Option(False, "--powershell", "--ps", help="Use PowerShell profile (works in all terminals)"),
 ):
     """Manage command aliases (malias command)."""
+    # Safely convert Typer OptionInfo to str/None
+    directory = _opt_str(directory)
+
     manager = AliasManager()
 
     # Parse directory
@@ -1263,6 +1298,10 @@ def module(
     limit: int = typer.Option(10, "--limit", "-l", help="Limit number of results"),
 ):
     """Manage modules (supports hierarchical paths, wiki-style [[connections]], and AI suggestions)."""
+    # Safely convert Typer OptionInfo to str/None
+    format = _opt_str(format)
+    output = _opt_str(output)
+
     manager = ModuleManager()
 
     try:
@@ -1870,6 +1909,11 @@ def summary(
     force: bool = typer.Option(False, "--force", "-f", help="Force regeneration, bypassing cache"),
 ):
     """Summarize timeline or module using LLM (msummary command)."""
+    # Safely convert Typer OptionInfo to str/None
+    output = _opt_str(output)
+    module_name = _opt_str(module_name)
+    lang = _opt_str(lang)
+
     # Check if LLM is available
     if not LLMClient.check_availability():
         console.print("[red]ERROR[/red] LLM not configured")
@@ -2223,6 +2267,10 @@ def archive(
         marchive decisions --dry-run                    # Preview
         marchive decisions --module projects/website    # Archive for specific module
     """
+    # Safely convert Typer OptionInfo to str/None
+    older_than = _opt_str(older_than)
+    module_name = _opt_str(module_name)
+
     try:
         from memory_tool.core.archiver import Archiver, ArchiverError
         from memory_tool.utils.config import Config
@@ -2619,6 +2667,9 @@ def plan(
         mplan module core-system add "Task" --section backlog
         mplan module core-system done "Task"
     """
+    # Safely convert Typer OptionInfo to str/None
+    due_date = _opt_str(due_date)
+
     try:
         from memory_tool.planner import (
             PlanManager, Task, TaskStatus,
