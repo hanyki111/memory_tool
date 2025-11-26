@@ -71,11 +71,12 @@ mcompletion = "memory_tool.cli:completion"
 mplan = "memory_tool.cli:plan"
 mtutorial = "memory_tool.cli:tutorial"
 
-[tool.setuptools]
-packages = ["memory_tool"]
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["memory_tool*"]
 
 [tool.setuptools.package-data]
-memory_tool = ["py.typed"]
+memory_tool = ["py.typed", "templates/**/*"]
 
 [tool.black]
 line-length = 100
