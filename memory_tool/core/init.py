@@ -872,6 +872,33 @@ Action: Split by clear criteria
 
         return created_files
 
+    def create_claude_guidelines(self) -> Optional[Path]:
+        """Copy guidelines.md template to project's .claude/guidelines.md.
+
+        Only creates if guidelines.md doesn't exist (preserves user customizations).
+
+        Returns:
+            Path to created guidelines.md, or None if already exists or template not found
+        """
+        dest_file = self.claude_path / "guidelines.md"
+
+        # Don't overwrite existing guidelines (user may have customized)
+        if dest_file.exists():
+            return None
+
+        # Source: memory_tool's templates/claude/guidelines.md
+        source_file = Path(__file__).parent.parent / "templates" / "claude" / "guidelines.md"
+
+        if not source_file.exists():
+            return None
+
+        # Ensure .claude/ directory exists
+        self.claude_path.mkdir(parents=True, exist_ok=True)
+
+        # Copy template
+        shutil.copy2(source_file, dest_file)
+        return dest_file
+
     def initialize(
         self,
         force: bool = False,
@@ -942,6 +969,11 @@ Action: Split by clear criteria
         # Create .claude/ structure with skills and guidelines
         skill_files = self.create_claude_skills()
         created["files"].extend(skill_files)
+
+        # Create guidelines.md (only if not exists)
+        guidelines_path = self.create_claude_guidelines()
+        if guidelines_path:
+            created["files"].append(guidelines_path)
 
         # Create kb.lock if requested
         if kb_path:
