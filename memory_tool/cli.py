@@ -1711,7 +1711,9 @@ def module(
                         confidence_pct = int(confidence * 100)
                         color = "green" if confidence >= 0.7 else "yellow" if confidence >= 0.5 else "dim"
 
-                        console.print(f"  → [[{module_name}]] [{color}]({confidence_pct}%)[/{color}]")
+                        # Normalize path separators for display
+                        display_name = module_name.replace('\\', '/')
+                        console.print(f"  → \\[\\[{display_name}]] [{color}]({confidence_pct}%)[/{color}]")
                         console.print(f"    [dim]{reason}[/dim]")
                         console.print()
 

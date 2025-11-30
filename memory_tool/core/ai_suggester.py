@@ -136,17 +136,20 @@ If no strong connections exist, respond with: NO_SUGGESTIONS
             # Parse response
             suggestions = self._parse_suggestions(response)
 
-            # Filter out invalid suggestions
+            # Filter and match suggestions to candidate modules
             candidate_names = [name for name, _ in candidate_modules]
+
             filtered = []
             for module_name, reason, confidence in suggestions:
                 # Skip if it's the target module itself
                 if target_module_name and module_name == target_module_name:
                     continue
-                # Skip if module name is not in candidate list
-                if module_name not in candidate_names:
-                    continue
-                filtered.append((module_name, reason, confidence))
+
+                # Try to match module name to a candidate
+                matched_name = self._match_module_name(module_name, candidate_names)
+
+                if matched_name:
+                    filtered.append((matched_name, reason, confidence))
 
             return filtered[:max_suggestions]
 
@@ -158,6 +161,7 @@ If no strong connections exist, respond with: NO_SUGGESTIONS
         """Parse LLM response into structured suggestions.
 
         Handles multiple response formats:
+        - Code blocks with simple format: module_name: confidence
         - Standard: MODULE: xxx, REASON: xxx, CONFIDENCE: 0.x
         - Numbered: 1. MODULE: xxx
         - Markdown bold: **MODULE:** xxx
@@ -179,6 +183,12 @@ If no strong connections exist, respond with: NO_SUGGESTIONS
         if "NO_SUGGESTIONS" in llm_response.upper():
             return []
 
+        # Strategy 1: Try to extract from code blocks first (most reliable)
+        code_block_suggestions = self._parse_code_blocks(llm_response)
+        if code_block_suggestions:
+            return code_block_suggestions
+
+        # Strategy 2: Fall back to markdown/text parsing
         # Split by various block separators
         # Try numbered items first (1. **module**)
         blocks = re.split(r'\n(?=\d+\.\s+\*\*)', llm_response)
@@ -199,32 +209,38 @@ If no strong connections exist, respond with: NO_SUGGESTIONS
             for line in lines:
                 line = line.strip()
 
-                # Pattern 1: Backtick wrapped module name
-                # e.g., "1. **`projects/memory-tool`** or **`projects/memory-tool` (root module)**"
+                # Pattern 1: Backtick wrapped module name (supports both / and \ separators)
+                # e.g., "1. **`projects/memory-tool`**" or "**`projects\memory-tool\search-system`**"
                 backtick_match = re.search(
-                    r'`([a-zA-Z0-9/_-]+(?:/[a-zA-Z0-9/_-]+)*)`',
+                    r'`([a-zA-Z0-9/\\_-]+(?:[/\\][a-zA-Z0-9/\\_-]+)*)`',
                     line
                 )
-                if backtick_match and '/' in backtick_match.group(1):
-                    module_name = backtick_match.group(1).strip()
+                if backtick_match:
+                    match_text = backtick_match.group(1)
+                    if '/' in match_text or '\\' in match_text:
+                        # Normalize to forward slashes
+                        module_name = match_text.replace('\\', '/').strip()
 
-                # Pattern 2: Standard format - MODULE: xxx (path with slashes and hyphens)
+                # Pattern 2: Standard format - MODULE: xxx (supports both / and \ separators)
                 module_match = re.match(
-                    r'^(?:MODULE|Module|module)[:\s]+([a-zA-Z0-9/_-]+(?:/[a-zA-Z0-9/_-]+)*)',
+                    r'^(?:MODULE|Module|module)[:\s]+([a-zA-Z0-9/\\_-]+(?:[/\\][a-zA-Z0-9/\\_-]+)*)',
                     re.sub(r'\*\*([^*]+)\*\*', r'\1', line), re.IGNORECASE
                 )
                 if module_match and not module_name:
-                    module_name = module_match.group(1).strip().strip('`"\'[]')
+                    match_text = module_match.group(1).strip().strip('`"\'[]')
+                    module_name = match_text.replace('\\', '/').strip()
 
-                # Pattern 3: Markdown header with module name (no backticks)
+                # Pattern 3: Markdown header with module name (supports both / and \ separators)
                 # e.g., "### 1. **projects/memory-tool/search-system**"
                 if not module_name:
                     header_match = re.match(
-                        r'^(?:\#{1,6}\s*)?(?:\d+\.\s*)?(?:\*\*)?([a-zA-Z0-9/_-]+(?:/[a-zA-Z0-9/_-]+)+)(?:\*\*)?\s*(?:\(.*\))?$',
+                        r'^(?:\#{1,6}\s*)?(?:\d+\.\s*)?(?:\*\*)?([a-zA-Z0-9/\\_-]+(?:[/\\][a-zA-Z0-9/\\_-]+)+)(?:\*\*)?\s*(?:\(.*\))?$',
                         line
                     )
-                    if header_match and '/' in header_match.group(1):
-                        module_name = header_match.group(1).strip()
+                    if header_match:
+                        match_text = header_match.group(1)
+                        if '/' in match_text or '\\' in match_text:
+                            module_name = match_text.replace('\\', '/').strip()
 
                 # Pattern 4: REASON: xxx format (explicit)
                 reason_match = re.match(
@@ -277,6 +293,184 @@ If no strong connections exist, respond with: NO_SUGGESTIONS
         suggestions.sort(key=lambda x: x[2], reverse=True)
 
         return suggestions
+
+    def _parse_code_blocks(self, llm_response: str) -> List[Tuple[str, str, float]]:
+        """Extract suggestions from code blocks in LLM response.
+
+        Handles formats like:
+        ```plaintext
+        projects/memory-tool: 1.0
+        projects/memory-tool/llm-integration: 0.85
+        ```
+
+        Or:
+        ```
+        module_name: confidence
+        ```
+
+        Args:
+            llm_response: Raw LLM response text
+
+        Returns:
+            List of (module_name, reason, confidence) tuples
+        """
+        import re
+
+        suggestions = []
+
+        # Find all code blocks
+        code_block_pattern = r'```(?:plaintext|text|)?\s*\n(.*?)```'
+        code_blocks = re.findall(code_block_pattern, llm_response, re.DOTALL)
+
+        for block in code_blocks:
+            lines = block.strip().split('\n')
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
+
+                # Pattern: module_path: confidence (e.g., "projects/memory-tool: 1.0" or "projects\memory-tool: 1.0")
+                match = re.match(
+                    r'^([a-zA-Z0-9/\\_-]+(?:[/\\][a-zA-Z0-9/\\_-]+)*)\s*:\s*([0-9.]+)$',
+                    line
+                )
+                if match:
+                    match_text = match.group(1)
+                    if '/' in match_text or '\\' in match_text:
+                        # Normalize to forward slashes
+                        module_name = match_text.replace('\\', '/').strip()
+                        try:
+                            confidence = float(match.group(2))
+                            if confidence > 1:
+                                confidence = confidence / 100
+                            confidence = min(1.0, max(0.0, confidence))
+                        except ValueError:
+                            confidence = 0.5
+
+                        # Try to find reason from surrounding text
+                        reason = self._find_reason_for_module(llm_response, module_name)
+                        suggestions.append((module_name, reason, confidence))
+
+        # Sort by confidence descending
+        suggestions.sort(key=lambda x: x[2], reverse=True)
+
+        return suggestions
+
+    def _find_reason_for_module(self, llm_response: str, module_name: str) -> str:
+        """Find reason/description for a module from the LLM response.
+
+        Args:
+            llm_response: Full LLM response text
+            module_name: Module name to find reason for
+
+        Returns:
+            Reason string or default message
+        """
+        import re
+
+        # Look for patterns like:
+        # "**module_name** - description"
+        # "module_name: description"
+        # "- module_name: description"
+        # Lines containing the module name followed by description
+
+        # Escape module name for regex
+        escaped_name = re.escape(module_name)
+
+        # Pattern 1: Bold module name followed by description
+        pattern1 = rf'\*\*`?{escaped_name}`?\*\*[:\s-]+([^\n]+)'
+        match = re.search(pattern1, llm_response)
+        if match:
+            reason = self._clean_reason_text(match.group(1))
+            if len(reason) > 10:
+                return reason
+
+        # Pattern 2: Backtick module name followed by description
+        pattern2 = rf'`{escaped_name}`[:\s-]+([^\n]+)'
+        match = re.search(pattern2, llm_response)
+        if match:
+            reason = self._clean_reason_text(match.group(1))
+            if len(reason) > 10:
+                return reason
+
+        # Pattern 3: Look for bullet point description after module mention
+        pattern3 = rf'{escaped_name}[^\n]*\n\s*[-*]\s*([^\n]+)'
+        match = re.search(pattern3, llm_response)
+        if match:
+            reason = self._clean_reason_text(match.group(1))
+            if len(reason) > 10 and 'confidence' not in reason.lower():
+                return reason
+
+        # Default reason based on module name
+        module_short = module_name.split('/')[-1]
+        return f"Related to {module_short} functionality"
+
+    def _match_module_name(
+        self, suggested_name: str, candidate_names: List[str]
+    ) -> Optional[str]:
+        """Match a suggested module name to the best candidate.
+
+        Handles variations in module names:
+        - Exact match
+        - Case-insensitive match
+        - Path separator normalization (forward slash vs backslash)
+        - Partial path match (suggested is suffix of candidate or vice versa)
+        - Module name (last component) match
+
+        Args:
+            suggested_name: Module name from LLM suggestion
+            candidate_names: List of valid candidate module names
+
+        Returns:
+            Matched candidate name, or None if no match found
+        """
+        if not suggested_name or not candidate_names:
+            return None
+
+        # Normalize the suggested name (convert \ to /, lowercase, strip slashes)
+        suggested_normalized = suggested_name.replace('\\', '/').lower().strip('/')
+
+        # Strategy 1: Exact match
+        if suggested_name in candidate_names:
+            return suggested_name
+
+        # Strategy 2: Normalized exact match (handles / vs \ differences)
+        for candidate in candidate_names:
+            candidate_normalized = candidate.replace('\\', '/').lower().strip('/')
+            if candidate_normalized == suggested_normalized:
+                return candidate
+
+        # Strategy 3: Suggested name is a suffix of candidate (or vice versa)
+        # e.g., suggested="llm-integration" matches "projects/memory-tool/llm-integration"
+        for candidate in candidate_names:
+            candidate_normalized = candidate.replace('\\', '/').lower().strip('/')
+            if candidate_normalized.endswith('/' + suggested_normalized):
+                return candidate
+            if suggested_normalized.endswith('/' + candidate_normalized):
+                return candidate
+
+        # Strategy 4: Last component (module name) match
+        suggested_last = suggested_normalized.split('/')[-1]
+        for candidate in candidate_names:
+            candidate_normalized = candidate.replace('\\', '/').lower()
+            candidate_last = candidate_normalized.split('/')[-1]
+            if suggested_last == candidate_last:
+                return candidate
+
+        # Strategy 5: Partial path overlap (at least 2 components match)
+        suggested_parts = suggested_normalized.split('/')
+        for candidate in candidate_names:
+            candidate_normalized = candidate.replace('\\', '/').lower()
+            candidate_parts = candidate_normalized.split('/')
+            # Check if suggested ends with candidate parts or vice versa
+            if len(suggested_parts) >= 2 and len(candidate_parts) >= 2:
+                # Check suffix overlap
+                for i in range(1, min(len(suggested_parts), len(candidate_parts)) + 1):
+                    if suggested_parts[-i:] == candidate_parts[-i:]:
+                        if i >= 2:  # At least 2 components match
+                            return candidate
+
+        return None
 
     def _clean_reason_text(self, text: str) -> str:
         """Clean up reason text by removing markdown artifacts.
