@@ -123,13 +123,19 @@ Your brain remembers: "I fixed that bug yesterday afternoon"
 
 ```
 .memory/timeline/
-├── 2025-11/
-│   ├── 13.md          # November 13
-│   ├── 14.md          # November 14
-│   └── 15.md          # November 15
-└── 2025-12/
-    └── 01.md
+├── daily/                    # NEW: Daily timeline (recommended)
+│   ├── 2025-11/
+│   │   ├── 13.md            # November 13
+│   │   ├── 14.md            # November 14
+│   │   └── 15.md            # November 15
+│   └── 2025-12/
+│       └── 01.md
+├── 2025-11/                  # LEGACY: Old structure (still supported)
+│   └── *.md
+└── (reviews/, plans/ - see below)
 ```
+
+**Note:** New installations use `timeline/daily/`. Existing projects can migrate with `migrate-timeline` command.
 
 **Format:**
 ```markdown
@@ -572,24 +578,35 @@ minit
 
 **Usage:**
 ```bash
-msort [FILE]
+msort <target> [options]
 ```
+
+**Targets:**
+- `today` - Sort today's timeline
+- `YYYY-MM-DD` - Sort specific date (e.g., `2025-11-14`)
+- `all` - Sort all timeline files
+
+**Options:**
+- `--no-backup` - Skip creating backup files (.bak)
 
 **Why needed:**
 - Manual edits may break time order
 - Batch imports from other systems
 - Time-travelling records (--yesterday, --date)
 
-**Example:**
+**Examples:**
 ```bash
 # Sort today's timeline
-msort
+msort today
 
-# Sort specific file
-msort .memory/timeline/2025-11/14.md
+# Sort specific date
+msort 2025-11-14
 
 # Sort all timelines
-find .memory/timeline -name "*.md" -exec msort {} \;
+msort all
+
+# Sort without backup
+msort today --no-backup
 ```
 
 **Before:**
@@ -605,6 +622,169 @@ find .memory/timeline -name "*.md" -exec msort {} \;
 - 12:00 | Task C
 - 14:00 | Task A
 ```
+
+**Note:** Original files are automatically backed up with `.bak` extension unless `--no-backup` is used.
+
+---
+
+### `mreview` - Review System
+
+**Purpose:** Create and manage weekly/monthly reviews for reflection and retrospective
+
+**Usage:**
+```bash
+mreview <type> [action] [identifier]
+```
+
+**Types:**
+- `weekly` - Weekly review (ISO week format: W47)
+- `monthly` - Monthly review (month number: 11)
+
+**Actions:**
+- (none) - Create/edit review (opens editor)
+- `show` - Display review content
+
+**Examples:**
+
+#### Weekly Review
+```bash
+# Create/edit this week's review (opens editor)
+mreview weekly
+
+# View this week's review
+mreview weekly show
+
+# View specific week
+mreview weekly show W47
+
+# Create without opening editor
+mreview weekly --no-editor
+```
+
+#### Monthly Review
+```bash
+# Create/edit this month's review
+mreview monthly
+
+# View this month's review
+mreview monthly show
+
+# View specific month
+mreview monthly show 11
+```
+
+**Generated Structure:**
+```
+.memory/reviews/
+├── weekly/
+│   └── 2025/
+│       ├── W46.md
+│       └── W47.md
+├── monthly/
+│   └── 2025/
+│       ├── 10.md
+│       └── 11.md
+└── templates/
+    ├── weekly.md
+    └── monthly.md
+```
+
+**Automatic Features:**
+- **Auto-links:** Daily Timeline links automatically generated
+- **Auto-statistics:** Entry counts, active days calculated
+- **Auto-template:** Structured review template applied
+- **Variable substitution:** Dates, weeks, months, stats auto-filled
+- **Editor integration:** Opens your preferred editor (EDITOR env var)
+- **Legacy compatible:** Works with both old and new Timeline structures
+
+**Weekly Review Template:**
+```markdown
+# Week W47 Review (2025-11-18 ~ 2025-11-24)
+
+## Daily Timeline Links
+- [Mon 2025-11-18](../timeline/daily/2025-11/18.md) (5 entries)
+- [Tue 2025-11-19](../timeline/daily/2025-11/19.md) (3 entries)
+...
+
+## Summary
+Total entries: 25 | Active days: 5/7
+
+## Accomplishments
+-
+
+## Challenges
+-
+
+## Learnings
+-
+
+## Next Week Goals
+-
+```
+
+**Editor Configuration:**
+- Windows: `notepad` (default)
+- Linux/Mac: `vi` (default)
+- Custom: Set `EDITOR` environment variable
+
+**Relationship with Timeline and Plan:**
+```
+Timeline (facts) → Review (reflection) → Plan (action)
+     ↓                    ↓                   ↓
+  What happened      What it means      What to do next
+```
+
+---
+
+### `migrate-timeline` - Timeline Migration
+
+**Purpose:** Migrate timeline files from legacy structure to new daily/ structure
+
+**Usage:**
+```bash
+python -m memory_tool migrate-timeline [options]
+```
+
+**Options:**
+- `--dry-run` - Preview changes without moving files
+
+**When to use:**
+- After updating to a version with new Timeline structure
+- When transitioning from `timeline/YYYY-MM/DD.md` to `timeline/daily/YYYY-MM/DD.md`
+- New users don't need this (auto-uses new structure)
+
+**Examples:**
+```bash
+# Preview migration (recommended first)
+python -m memory_tool migrate-timeline --dry-run
+
+# Execute migration
+python -m memory_tool migrate-timeline
+```
+
+**What happens:**
+1. Scans `.memory/timeline/` for legacy files (outside `daily/`)
+2. Moves files to `.memory/timeline/daily/YYYY-MM/DD.md`
+3. Cleans up empty legacy directories
+4. Preserves all data (no content changes)
+
+**Output:**
+```
+Migrating timeline files...
+
+Found 45 files to migrate:
+  timeline/2025-11/13.md → timeline/daily/2025-11/13.md
+  timeline/2025-11/14.md → timeline/daily/2025-11/14.md
+  ...
+
+OK Migrated 45 files
+Cleaned up 2 empty directories
+```
+
+**Safety:**
+- `--dry-run` shows what would happen without making changes
+- No data loss (only moves, no deletions)
+- Backwards compatible (old paths still readable)
 
 ---
 
@@ -949,16 +1129,41 @@ Module Hierarchy:
 python -m memory_tool module archive <name> --reason "reason"
 ```
 
-**Example:**
+**Examples:**
 ```bash
-python -m memory_tool module archive old-api --reason "Migrated to new API v2"
+# Full path
+python -m memory_tool module archive projects/memory-tool/core-system --reason "Phase completed"
+
+# Short name (auto-search)
+python -m memory_tool module archive core-system --reason "Phase completed"
+# → Automatically finds 'projects/memory-tool/core-system'
 ```
+
+**Module Auto-Search Feature:**
+
+When you provide a short module name, the system automatically searches for matching modules:
+
+```bash
+# Instead of typing full path:
+python -m memory_tool module archive projects/memory-tool/core-system
+
+# Just use short name:
+python -m memory_tool module archive core-system
+# Output: Resolved 'core-system' -> 'projects/memory-tool/core-system'
+```
+
+**Auto-search behavior:**
+- **1 match found:** Automatically uses it, shows resolved path
+- **Multiple matches:** Shows list to choose from
+- **No match:** Error with suggestion to check `module list`
 
 **What happens:**
 - Moved to `.memory/modules/archive/<name>/`
 - Marked as archived
 - Still searchable
 - Can be unarchived
+
+**Note:** Module auto-search also works with `msummary --module`, `marchive --module`, and other commands that accept module names.
 
 ---
 
@@ -1666,94 +1871,309 @@ Performance:
 
 ### `marchive` - Archive Completed Documentation
 
-**Purpose:** Move completed plans/docs to archive
+**Purpose:** Archive accumulated decisions, current.md, and completed plans to manage file size
 
 **Usage:**
 ```bash
-python -m memory_tool archive <type> [name] [options]
+marchive <type> [options]
 ```
 
 **Types:**
-- `plans` - Archive PLAN-*.md files
-- `decisions` - Archive old decisions
-- `module` - Archive entire module
+- `decisions` - Archive old decisions from decisions.md
+- `current` - Archive old content from current.md
+- `plans` - Archive completed PLAN-*.md files
+
+**Options:**
+- `--keep-recent N` - Keep N most recent items
+- `--up-to N` - Archive items #1 to #N
+- `--phase N` - Archive items from Phase 1 to N
+- `--older-than DURATION` - Archive items older than duration (6m, 1y, 180d, 4w)
+- `--suggest` - Show archive suggestions (no action)
+- `--interactive` - Interactively select items to archive
+- `--module NAME` - Specify module (supports auto-search with short names)
+- `--dry-run` - Preview without making changes
 
 **Examples:**
 
-#### Archive Plan
+#### Basic Archive Modes
 ```bash
-python -m memory_tool archive plans PLAN-search-improvements
+# Keep recent 10 decisions
+marchive decisions --keep-recent 10
+
+# Archive decisions #1-25
+marchive decisions --up-to 25
+
+# Archive Phase 1-5 content
+marchive decisions --phase 5
+marchive current --phase 5
+
+# Archive completed plans
+marchive plans
 ```
 
-#### Archive Decisions
+#### Date-based Archive (NEW)
 ```bash
-# Keep recent N decisions
-python -m memory_tool archive decisions --keep-recent 10
+# Archive decisions older than 6 months
+marchive decisions --older-than 6m
 
-# Archive up to decision number
-python -m memory_tool archive decisions --up-to 20
+# Archive decisions older than 1 year
+marchive decisions --older-than 1y
 
-# Archive by decision number/count
-python -m memory_tool archive decisions 1-20
+# Archive decisions older than 180 days
+marchive decisions --older-than 180d
+
+# Archive decisions older than 4 weeks
+marchive decisions --older-than 4w
 ```
+
+#### Suggestion Mode (NEW)
+```bash
+# See what would be archived (no action taken)
+marchive decisions --suggest
+```
+
+**Output:**
+```
+Archive Suggestions for decisions.md:
+
+Found 15 decisions older than 6 months:
+  #1  (2025-05-10) - Using JWT tokens
+  #2  (2025-05-12) - PostgreSQL selection
+  ...
+  #15 (2025-06-01) - Rate limiting strategy
+
+Estimated size reduction: 450 lines → 120 lines (73%)
+
+To archive these:
+  marchive decisions --older-than 6m
+```
+
+#### Interactive Mode (NEW)
+```bash
+# Select items to archive interactively
+marchive decisions --interactive
+```
+
+**Output:**
+```
+Select decisions to archive:
+
+┌───┬────────────┬───────────────────────────────┐
+│ # │ Date       │ Title                         │
+├───┼────────────┼───────────────────────────────┤
+│ 1 │ 2025-05-10 │ Using JWT tokens              │
+│ 2 │ 2025-05-12 │ PostgreSQL selection          │
+│ 3 │ 2025-05-15 │ API versioning strategy       │
+│ ...                                            │
+└───┴────────────┴───────────────────────────────┘
+
+Enter selection (e.g., 1,3,5 or 1-5 or all): 1-5
+
+Confirm archive 5 decisions? [y/N]: y
+
+OK Archived 5 decisions to archive/decisions-1-5.md
+```
+
+#### Module Auto-Search (NEW)
+```bash
+# Full path
+marchive decisions --module projects/memory-tool/core-system
+
+# Short name (auto-searches)
+marchive decisions --module core-system
+# → Resolved 'core-system' -> 'projects/memory-tool/core-system'
+```
+
+**Workflow:**
+
+1. **Check first:**
+   ```bash
+   marchive decisions --suggest
+   ```
+
+2. **Choose method:**
+   ```bash
+   # Automatic (date-based)
+   marchive decisions --older-than 6m --dry-run
+   marchive decisions --older-than 6m
+
+   # Or interactive
+   marchive decisions --interactive
+
+   # Or count-based
+   marchive decisions --keep-recent 15
+   ```
 
 **Before:**
 ```
 .memory/modules/my-module/
-├── decisions.md (30 decisions)
+├── decisions.md (30 decisions, 450 lines)
 └── PLAN-feature-x.md (completed)
 ```
 
 **After:**
 ```
 .memory/modules/my-module/
-├── decisions.md (10 recent decisions)
+├── decisions.md (10 recent decisions, 120 lines)
 └── archive/
     ├── decisions-1-20.md (20 old decisions)
     └── plans/
         └── PLAN-feature-x.md
 ```
 
+**When to use:**
+- `decisions.md` exceeds 300 lines
+- Phase transitions
+- Regular maintenance (quarterly)
+- Old decisions no longer actively referenced
+
 ---
 
 ### `mplan` - Manage Plans
 
-**Purpose:** Track implementation plans
+**Purpose:** Track daily/weekly/monthly plans with automatic Timeline integration
 
 **Usage:**
 ```bash
-python -m memory_tool plan <action> [name]
+mplan <type> [action] [args]
 ```
+
+**Types:**
+- `daily` - Daily task planning
+- `weekly` - Weekly goal planning
+- `monthly` - Monthly milestone planning
+- `module` - Module-specific work planning
 
 **Actions:**
+- (none) - Show current plan
 - `create` - Create new plan
-- `list` - List plans
-- `show` - Show plan
-- `complete` - Mark complete
+- `add` - Add task/goal
+- `done` - Mark task/goal complete (auto-records to Timeline!)
+- `show` - Display plan
 
-**Examples:**
-
-#### Create Plan
+#### Daily Plan
 ```bash
-python -m memory_tool plan create feature-x
+# View today's plan
+mplan daily
+
+# Create today's plan
+mplan daily create
+
+# Add task
+mplan daily add "Implement API endpoint"
+mplan daily add "Write unit tests"
+
+# Complete task (automatically records to Timeline!)
+mplan daily done "API endpoint"
+# → Timeline: "✓ Implement API endpoint (Daily Plan)"
+# → Progress: 1/2 (50%) auto-updated
 ```
 
-**Creates:** `.memory/modules/current-module/PLAN-feature-x.md`
-
-#### List Plans
+#### Weekly Plan
 ```bash
-python -m memory_tool plan list
+# View this week's plan
+mplan weekly
+
+# View specific week
+mplan weekly W47
+
+# Add goal
+mplan weekly add "Complete Phase 3"
+
+# Complete goal
+mplan weekly done "Phase 3"
 ```
 
-**Output:**
-```
-Active Plans:
-  PLAN-feature-x.md      In Progress
-  PLAN-refactoring.md    Proposed
+#### Monthly Plan
+```bash
+# View this month's plan
+mplan monthly
 
-Completed:
-  PLAN-phase1.md         Complete (archived)
+# View specific month
+mplan monthly 11
+
+# Add milestone
+mplan monthly add "Release v1.0"
+
+# Complete milestone
+mplan monthly done "v1.0"
 ```
+
+#### Module Plan
+```bash
+# View module plan
+mplan module auth-system
+
+# Add to sprint
+mplan module auth-system add "JWT refresh rotation"
+
+# Complete task
+mplan module auth-system done "JWT refresh"
+```
+
+**Generated Structure:**
+```
+.memory/plans/
+├── daily/
+│   └── 2025-11/
+│       └── 15.md
+├── weekly/
+│   └── 2025/
+│       └── W47.md
+└── monthly/
+    └── 2025/
+        └── 11.md
+```
+
+**Key Features:**
+
+1. **Progress Auto-Update**
+   - Progress calculated automatically when viewing plan
+   - Format: `**Progress:** 2/5 (40%)`
+   - Updates on add/done actions
+
+2. **Timeline Auto-Integration**
+   - `done` command automatically records to Timeline
+   - Format: `✓ Task name (Daily Plan)` / `(Weekly Plan)` / `(Monthly Plan)`
+   - Bidirectional links: Plan ↔ Timeline
+
+3. **Hierarchical Links**
+   - Daily → Weekly → Monthly Plan auto-linked
+   - Daily → Timeline linked
+   - Date-based automatic connection
+
+**Task States:**
+- `[ ]` - Pending
+- `[x]` - Completed (auto-recorded to Timeline)
+
+**Example Workflow:**
+```bash
+# Morning: Create plan
+mplan daily create
+mplan daily add "Review PR #123"
+mplan daily add "Fix authentication bug"
+mplan daily add "Update documentation"
+
+# During work: Complete tasks
+mplan daily done "PR #123"
+# → Timeline: "✓ Review PR #123 (Daily Plan)"
+# → Progress: 1/3 (33%)
+
+mplan daily done "authentication"
+# → Timeline: "✓ Fix authentication bug (Daily Plan)"
+# → Progress: 2/3 (67%)
+
+# Evening: Check progress
+mplan daily
+# Shows: Progress 2/3 (67%)
+# - [x] Review PR #123 [10:30]
+# - [x] Fix authentication bug [14:15]
+# - [ ] Update documentation
+```
+
+**Integration with mcontext and mstatus:**
+- `mcontext`: Shows current Plan progress and pending tasks
+- `mstatus`: Shows Plan statistics (total plans, today/week progress)
 
 ---
 

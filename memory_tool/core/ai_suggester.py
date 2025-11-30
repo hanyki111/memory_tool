@@ -61,6 +61,18 @@ class AIConnectionSuggester:
         if not target_content:
             return []
 
+        # Extract target module name for filtering
+        # Try to get name from path relative to modules directory
+        target_module_name = None
+        try:
+            # module_path could be like: .memory/modules/projects/memory-tool/core-system
+            parts = module_path.parts
+            if "modules" in parts:
+                idx = parts.index("modules")
+                target_module_name = "/".join(parts[idx + 1 :])
+        except (ValueError, IndexError):
+            pass
+
         # Read candidate module contents
         candidates_info = []
         for name, path in candidate_modules[:20]:  # Limit to avoid token limits
@@ -79,7 +91,7 @@ class AIConnectionSuggester:
             for name, content in candidates_info
         ])
 
-        prompt = f"""Analyze the following module and suggest which other modules it should connect to based on content similarity and relevance.
+        prompt = f"""You are a module connection analyzer. Analyze the TARGET MODULE and suggest connections to CANDIDATE MODULES.
 
 TARGET MODULE:
 {target_content[:2000]}
@@ -87,27 +99,31 @@ TARGET MODULE:
 CANDIDATE MODULES:
 {candidates_text}
 
-Task:
-1. Identify the top {max_suggestions} most relevant candidate modules for the target module
-2. For each suggestion, provide:
-   - Module name
-   - Reason for connection (one sentence)
-   - Confidence score (0.0-1.0)
+TASK: Suggest up to {max_suggestions} relevant module connections.
 
-Format your response as:
-MODULE: [name]
-REASON: [reason]
-CONFIDENCE: [score]
+IMPORTANT: You MUST respond in EXACTLY this format for each suggestion:
+
+MODULE: <exact module name from candidates>
+REASON: <one sentence explanation>
+CONFIDENCE: <number between 0.0 and 1.0>
 
 ---
 
-Focus on:
-- Topical relevance
-- Complementary information
-- Shared concepts or themes
-- Potential dependencies or relationships
+Example response format:
+MODULE: projects/memory-tool/search-system
+REASON: Both modules handle data retrieval and indexing operations.
+CONFIDENCE: 0.85
 
-Only suggest connections that add real value. If no strong connections exist, suggest fewer modules.
+---
+
+MODULE: projects/memory-tool/ui-system
+REASON: The UI system displays timeline data managed by core system.
+CONFIDENCE: 0.75
+
+---
+
+Now analyze and suggest connections. Use ONLY module names from the CANDIDATE MODULES list.
+If no strong connections exist, respond with: NO_SUGGESTIONS
 """
 
         try:
@@ -120,7 +136,19 @@ Only suggest connections that add real value. If no strong connections exist, su
             # Parse response
             suggestions = self._parse_suggestions(response)
 
-            return suggestions[:max_suggestions]
+            # Filter out invalid suggestions
+            candidate_names = [name for name, _ in candidate_modules]
+            filtered = []
+            for module_name, reason, confidence in suggestions:
+                # Skip if it's the target module itself
+                if target_module_name and module_name == target_module_name:
+                    continue
+                # Skip if module name is not in candidate list
+                if module_name not in candidate_names:
+                    continue
+                filtered.append((module_name, reason, confidence))
+
+            return filtered[:max_suggestions]
 
         except Exception as e:
             # Fall back to empty list on error
@@ -129,16 +157,37 @@ Only suggest connections that add real value. If no strong connections exist, su
     def _parse_suggestions(self, llm_response: str) -> List[Tuple[str, str, float]]:
         """Parse LLM response into structured suggestions.
 
+        Handles multiple response formats:
+        - Standard: MODULE: xxx, REASON: xxx, CONFIDENCE: 0.x
+        - Numbered: 1. MODULE: xxx
+        - Markdown bold: **MODULE:** xxx
+        - Markdown headers: ### 1. **projects/memory-tool** (Top-level module)
+        - Backtick wrapped: 1. **`projects/memory-tool`**
+        - Various separators: ---, blank lines, numbered lists
+
         Args:
             llm_response: Raw LLM response text
 
         Returns:
             List of (module_name, reason, confidence) tuples
         """
+        import re
+
         suggestions = []
 
-        # Split by --- or blank lines
-        blocks = llm_response.split('---')
+        # Check for NO_SUGGESTIONS response
+        if "NO_SUGGESTIONS" in llm_response.upper():
+            return []
+
+        # Split by various block separators
+        # Try numbered items first (1. **module**)
+        blocks = re.split(r'\n(?=\d+\.\s+\*\*)', llm_response)
+        if len(blocks) <= 1:
+            # Try --- separator
+            blocks = re.split(r'\n---+\n', llm_response)
+        if len(blocks) <= 1:
+            # Try blank line followed by MODULE:
+            blocks = re.split(r'\n\n+(?=MODULE:)', llm_response, flags=re.IGNORECASE)
 
         for block in blocks:
             lines = block.strip().split('\n')
@@ -150,16 +199,76 @@ Only suggest connections that add real value. If no strong connections exist, su
             for line in lines:
                 line = line.strip()
 
-                if line.startswith('MODULE:'):
-                    module_name = line.replace('MODULE:', '').strip()
-                elif line.startswith('REASON:'):
-                    reason = line.replace('REASON:', '').strip()
-                elif line.startswith('CONFIDENCE:'):
+                # Pattern 1: Backtick wrapped module name
+                # e.g., "1. **`projects/memory-tool`** or **`projects/memory-tool` (root module)**"
+                backtick_match = re.search(
+                    r'`([a-zA-Z0-9/_-]+(?:/[a-zA-Z0-9/_-]+)*)`',
+                    line
+                )
+                if backtick_match and '/' in backtick_match.group(1):
+                    module_name = backtick_match.group(1).strip()
+
+                # Pattern 2: Standard format - MODULE: xxx (path with slashes and hyphens)
+                module_match = re.match(
+                    r'^(?:MODULE|Module|module)[:\s]+([a-zA-Z0-9/_-]+(?:/[a-zA-Z0-9/_-]+)*)',
+                    re.sub(r'\*\*([^*]+)\*\*', r'\1', line), re.IGNORECASE
+                )
+                if module_match and not module_name:
+                    module_name = module_match.group(1).strip().strip('`"\'[]')
+
+                # Pattern 3: Markdown header with module name (no backticks)
+                # e.g., "### 1. **projects/memory-tool/search-system**"
+                if not module_name:
+                    header_match = re.match(
+                        r'^(?:\#{1,6}\s*)?(?:\d+\.\s*)?(?:\*\*)?([a-zA-Z0-9/_-]+(?:/[a-zA-Z0-9/_-]+)+)(?:\*\*)?\s*(?:\(.*\))?$',
+                        line
+                    )
+                    if header_match and '/' in header_match.group(1):
+                        module_name = header_match.group(1).strip()
+
+                # Pattern 4: REASON: xxx format (explicit)
+                reason_match = re.match(
+                    r'^(?:\*\*)?(?:REASON|Reason|reason)[:\s]*(?:\*\*)?\s*(.+)',
+                    line, re.IGNORECASE
+                )
+                if reason_match:
+                    reason = self._clean_reason_text(reason_match.group(1))
+
+                # Pattern 5: Extract reason from description lines (if no explicit REASON found)
+                # e.g., "- This is the main entry point..." or "Requires core-system to..."
+                if module_name and not reason:
+                    reason_line = re.sub(r'^\s*[-*]\s*', '', line)  # Remove bullet
+                    reason_line = self._clean_reason_text(reason_line)
+                    if (reason_line and
+                        not reason_line.lower().startswith(('confidence', 'note:', 'why')) and
+                        '/' not in reason_line[:20] and  # Not a module path
+                        len(reason_line) > 20):  # Substantial text
+                        reason = reason_line
+
+                # Pattern 6: CONFIDENCE (various formats)
+                # e.g., "- **Confidence: 1.0**", "**Confidence:** 0.85", "- **Confidence**: 0.98"
+                conf_match = re.search(
+                    r'(?:\*\*)?(?:CONFIDENCE|Confidence|confidence)(?:\*\*)?[:\s]*(?:\*\*)?([0-9.]+)(?:\*\*)?',
+                    line, re.IGNORECASE
+                )
+                if conf_match:
                     try:
-                        conf_str = line.replace('CONFIDENCE:', '').strip()
-                        confidence = float(conf_str)
+                        conf_val = float(conf_match.group(1))
+                        if conf_val > 1:
+                            conf_val = conf_val / 100
+                        confidence = min(1.0, max(0.0, conf_val))
                     except ValueError:
-                        confidence = 0.5
+                        pass
+
+            # If still no reason, try to find any descriptive text
+            if module_name and not reason:
+                for line in lines:
+                    line = line.strip()
+                    if line.startswith('-') and 'Confidence' not in line:
+                        reason_text = self._clean_reason_text(line)
+                        if len(reason_text) > 20:
+                            reason = reason_text
+                            break
 
             if module_name and reason:
                 suggestions.append((module_name, reason, confidence))
@@ -168,6 +277,34 @@ Only suggest connections that add real value. If no strong connections exist, su
         suggestions.sort(key=lambda x: x[2], reverse=True)
 
         return suggestions
+
+    def _clean_reason_text(self, text: str) -> str:
+        """Clean up reason text by removing markdown artifacts.
+
+        Args:
+            text: Raw reason text
+
+        Returns:
+            Cleaned reason text
+        """
+        import re
+
+        # Remove leading bullet points
+        text = re.sub(r'^\s*[-*]\s*', '', text)
+        # Remove markdown bold (** around text)
+        text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)
+        # Remove orphaned ** or *: patterns (e.g., "**:" at start)
+        text = re.sub(r'^\*+[:\s]*', '', text)
+        # Remove single asterisks (italic markers)
+        text = re.sub(r'(?<!\*)\*(?!\*)', '', text)
+        # Remove backticks
+        text = re.sub(r'`([^`]+)`', r'\1', text)
+        # Remove "Reason:" prefix if still present
+        text = re.sub(r'^(?:Reason|REASON)[:\s]*', '', text, flags=re.IGNORECASE)
+        # Clean up extra whitespace
+        text = ' '.join(text.split())
+
+        return text.strip()
 
     def suggest_tags(self, module_path: Path, max_tags: int = 5) -> List[str]:
         """Suggest tags for a module based on its content.

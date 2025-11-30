@@ -34,6 +34,53 @@ class OllamaClient:
         # Create client
         self.client = ollama.Client(host=self.host)
 
+    def _call_api(
+        self,
+        user_content: str,
+        system_prompt: Optional[str] = None,
+        max_tokens: Optional[int] = None,
+        temperature: Optional[float] = None,
+    ) -> str:
+        """
+        Internal method to call Ollama API.
+
+        Args:
+            user_content: User message content
+            system_prompt: System prompt (optional)
+            max_tokens: Maximum tokens in response (optional, not used by Ollama)
+            temperature: Temperature for generation (optional)
+
+        Returns:
+            Response text
+
+        Raises:
+            Exception: If Ollama call fails
+        """
+        # Ollama doesn't use max_tokens, but we keep the interface consistent
+        options = {}
+        if temperature is not None:
+            options["temperature"] = temperature
+
+        try:
+            messages = []
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
+            messages.append({"role": "user", "content": user_content})
+
+            response = self.client.chat(
+                model=self.model,
+                messages=messages,
+                options=options if options else None,
+            )
+
+            if response and "message" in response:
+                return response["message"]["content"]
+            else:
+                raise ValueError("Empty response from Ollama")
+
+        except Exception as e:
+            raise Exception(f"Ollama API call failed: {e}")
+
     def summarize(
         self,
         content: str,
@@ -52,33 +99,29 @@ class OllamaClient:
 
         Returns:
             Summary text
-
-        Raises:
-            Exception: If Ollama call fails
         """
-        # Ollama doesn't use max_tokens, but we keep the interface consistent
-        options = {}
-        if temperature is not None:
-            options["temperature"] = temperature
+        return self._call_api(content, system_prompt, max_tokens, temperature)
 
-        try:
-            response = self.client.chat(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": content},
-                ],
-                options=options if options else None,
-            )
+    def generate(
+        self,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        max_tokens: Optional[int] = None,
+        temperature: Optional[float] = None,
+    ) -> str:
+        """
+        Generate text using Ollama.
 
-            # Extract text from response
-            if response and "message" in response:
-                return response["message"]["content"]
-            else:
-                raise ValueError("Empty response from Ollama")
+        Args:
+            prompt: User prompt for generation
+            system_prompt: System prompt (optional)
+            max_tokens: Maximum tokens in response (optional, not used by Ollama)
+            temperature: Temperature for generation (optional)
 
-        except Exception as e:
-            raise Exception(f"Failed to summarize content with Ollama: {e}")
+        Returns:
+            Generated text
+        """
+        return self._call_api(prompt, system_prompt, max_tokens, temperature)
 
     def is_available(self) -> bool:
         """

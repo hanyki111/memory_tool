@@ -1,0 +1,39 @@
+Based on the analysis of the target module (core-system) as the foundational component for the memory_tool project, the following candidate modules directly depend on it for critical functionality related to timeline storage and initialization:
+
+1. **`projects/memory-tool` (root module)**  
+   - This is the main entry point for the application. It relies on core-system to initialize the project structure and access timeline data (e.g., via CLI commands).  
+   - **Confidence: 1.0** (direct dependency for system initialization).
+
+2. **`projects/memory-tool/llm-integration`**  
+   - Requires core-system to access and process timeline entries for tasks like "Summary Generation" and "Contextual Response." Without core-system, it cannot retrieve the raw timeline data.  
+   - **Confidence: 1.0** (explicit dependency on timeline storage).
+
+3. **`projects/memory-tool/search-system`**  
+   - Depends on core-system to read and index timeline content (e.g., for search queries like "Find events in June 2023"). Core-system is the sole source of timeline data.  
+   - **Confidence: 1.0** (hard dependency for data retrieval).
+
+4. **`projects/memory-tool/ui-system`**  
+   - Uses core-system to load and display timeline data in the UI (e.g., "Display all notes from last week").  
+   - **Confidence: 1.0** (direct interaction with timeline storage).
+
+### Why other candidates are excluded:
+- **`projects/memory-tool/knowledge-graph-system`**  
+  - Rely on `module-system` (not core-system) to access timeline data. It operates at a higher abstraction level (e.g., extracting relationships between events), so it does not depend on core-system's storage interface.  
+  - **Confidence: 0.0** (no direct dependency on core-system).
+
+- **`memory-system.backup`**  
+  - Focuses on Claude-specific integrations (e.g., backup operations), unrelated to memory_tool's core timeline functionality.  
+  - **Confidence: 0.0** (no relevance to core-system's purpose).
+
+### Key reason for confidence:  
+Core-system is explicitly defined as the **only module responsible for timeline storage** (e.g., writing to `.memory/timeline.json`). All non-root candidate modules (llm-integration, search-system, ui-system) require direct access to this storage. The root module depends on core-system to bootstrap the system. Knowledge-graph-system and backup-module operate independently of this storage layer.  
+
+**Output Format:**  
+`[candidate module]: [confidence]`  
+
+```plaintext
+projects/memory-tool: 1.0
+projects/memory-tool/llm-integration: 1.0
+projects/memory-tool/search-system: 1.0
+projects/memory-tool/ui-system: 1.0
+```

@@ -510,6 +510,25 @@ malias uninstall --powershell
 - 배치: `%LOCALAPPDATA%\memory-tool\bin\`
 - PowerShell: `$PROFILE.CurrentUserAllHosts`
 
+### `mtutorial` - 인터랙티브 튜토리얼
+
+```bash
+# 인터랙티브 메뉴 실행
+mtutorial
+
+# 특정 레슨 바로 실행
+mtutorial basics
+
+# 사용 가능한 레슨 목록
+mtutorial --list
+```
+
+**기능:**
+
+- 단계별 사용법 학습
+- 실습 예제 포함
+- 초보자 친화적 인터페이스
+
 ---
 
 ## 고급 명령어 가이드

@@ -47,6 +47,52 @@ class AnthropicClient:
         self.max_tokens = config.get("llm.max_tokens") or 4096
         self.temperature = config.get("llm.temperature") or 0.7
 
+    def _call_api(
+        self,
+        user_content: str,
+        system_prompt: Optional[str] = None,
+        max_tokens: Optional[int] = None,
+        temperature: Optional[float] = None,
+    ) -> str:
+        """
+        Internal method to call Claude API.
+
+        Args:
+            user_content: User message content
+            system_prompt: System prompt (optional)
+            max_tokens: Maximum tokens in response (optional)
+            temperature: Temperature for generation (optional)
+
+        Returns:
+            Response text
+
+        Raises:
+            APIError: If API call fails
+            ValueError: If response is empty
+        """
+        max_tokens = max_tokens or self.max_tokens
+        temperature = temperature or self.temperature
+
+        try:
+            kwargs = {
+                "model": self.model,
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+                "messages": [{"role": "user", "content": user_content}],
+            }
+            if system_prompt:
+                kwargs["system"] = system_prompt
+
+            response = self.client.messages.create(**kwargs)
+
+            if response.content and len(response.content) > 0:
+                return response.content[0].text
+            else:
+                raise ValueError("Empty response from API")
+
+        except APIError as e:
+            raise APIError(f"API call failed: {e}")
+
     def summarize(
         self,
         content: str,
@@ -65,37 +111,29 @@ class AnthropicClient:
 
         Returns:
             Summary text
-
-        Raises:
-            APIError: If API call fails
-            ValueError: If content is too long
         """
-        # Use provided values or fall back to instance defaults
-        max_tokens = max_tokens or self.max_tokens
-        temperature = temperature or self.temperature
+        return self._call_api(content, system_prompt, max_tokens, temperature)
 
-        try:
-            response = self.client.messages.create(
-                model=self.model,
-                max_tokens=max_tokens,
-                temperature=temperature,
-                system=system_prompt,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": content,
-                    }
-                ],
-            )
+    def generate(
+        self,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        max_tokens: Optional[int] = None,
+        temperature: Optional[float] = None,
+    ) -> str:
+        """
+        Generate text using Claude API.
 
-            # Extract text from response
-            if response.content and len(response.content) > 0:
-                return response.content[0].text
-            else:
-                raise ValueError("Empty response from API")
+        Args:
+            prompt: User prompt for generation
+            system_prompt: System prompt (optional)
+            max_tokens: Maximum tokens in response (optional)
+            temperature: Temperature for generation (optional)
 
-        except APIError as e:
-            raise APIError(f"Failed to summarize content: {e}")
+        Returns:
+            Generated text
+        """
+        return self._call_api(prompt, system_prompt, max_tokens, temperature)
 
     def is_available(self) -> bool:
         """
