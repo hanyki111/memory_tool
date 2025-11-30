@@ -1307,7 +1307,7 @@ def sort(
 
 @app.command()
 def module(
-    action: str = typer.Argument(..., help="Action: create, list, tree, archive, unarchive, connections, graph, rebuild-graph, check-links, suggest-links, suggest-ai, auto-tag, graph-history, graph-diff, graph-snapshot"),
+    action: str = typer.Argument(..., help="Action: create, list, tree, archive, unarchive, connections, graph, rebuild-graph, check-links, suggest-links, suggest-ai, ai-organize, auto-tag, graph-history, graph-diff, graph-snapshot"),
     name: str = typer.Argument(None, help="Module name or path (e.g., 'projects/website')"),
     description: str = typer.Option("", "--desc", "-d", help="Module description"),
     reason: str = typer.Option("", "--reason", "-r", help="Reason for archiving"),
@@ -1724,6 +1724,42 @@ def module(
 
             except Exception as e:
                 console.print(f"[red]ERROR[/red] AI suggestion failed: {e}")
+                sys.exit(1)
+
+        elif action.lower() == "ai-organize":
+            # AI-based module organization suggestions
+            from memory_tool.core.ai_organizer import ModuleOrganizer
+
+            console.print("[cyan]Analyzing module structure...[/cyan]\n")
+
+            mod_manager = ModuleManager()
+            organizer = ModuleOrganizer(mod_manager.modules_path)
+
+            try:
+                # Use name as scope if provided
+                scope = name if name else None
+                include_merges = True  # Could add --no-merges flag later
+
+                with console.status("[dim]Analyzing modules (this may take a moment)...[/dim]"):
+                    suggestions = organizer.analyze_and_suggest(
+                        scope=scope,
+                        include_merges=include_merges
+                    )
+
+                if suggestions:
+                    # Format and display suggestions
+                    output_text = organizer.format_suggestions(suggestions)
+                    console.print(output_text)
+
+                    # Summary
+                    console.print(f"\n[dim]Total suggestions: {len(suggestions)}[/dim]")
+                    console.print("[dim]Use these suggestions to improve your module organization.[/dim]")
+                else:
+                    console.print("[green]✓ Module structure looks good![/green]")
+                    console.print("[dim]No organization suggestions at this time.[/dim]")
+
+            except Exception as e:
+                console.print(f"[red]ERROR[/red] Analysis failed: {e}")
                 sys.exit(1)
 
         elif action.lower() == "auto-tag":
