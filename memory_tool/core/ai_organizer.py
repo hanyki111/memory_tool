@@ -4,6 +4,11 @@ from pathlib import Path
 from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass
 from enum import Enum
+from .embedding_cache import (
+    get_model_manager,
+    get_embedding_cache,
+    SimilarityCalculator,
+)
 
 
 class SuggestionType(Enum):
@@ -46,13 +51,27 @@ class ModuleAnalyzer:
     VERY_LARGE_MODULE_LINES = 500
     MIN_SIMILARITY_FOR_MERGE = 0.65
 
-    def __init__(self, modules_path: Path):
+    def __init__(self, modules_path: Path, cache_dir: Optional[Path] = None):
         """Initialize analyzer.
 
         Args:
             modules_path: Path to .memory/modules/ directory
+            cache_dir: Directory for embedding cache (default: .memory/.cache)
         """
         self.modules_path = modules_path
+        self._model_manager = get_model_manager()
+
+        # Set up cache directory
+        if cache_dir is None:
+            cache_dir = modules_path.parent / ".cache"
+        self._cache_dir = cache_dir
+        self._embedding_cache = None
+
+    def _get_cache(self):
+        """Get or create embedding cache."""
+        if self._embedding_cache is None:
+            self._embedding_cache = get_embedding_cache(self._cache_dir)
+        return self._embedding_cache
 
     def get_module_info(self, module_path: Path) -> ModuleInfo:
         """Get detailed information about a module.
@@ -148,6 +167,8 @@ class ModuleAnalyzer:
     ) -> List[Tuple[ModuleInfo, ModuleInfo, float]]:
         """Find pairs of similar modules using embedding similarity.
 
+        Uses shared embedding cache for faster repeated analysis.
+
         Args:
             modules: List of ModuleInfo
             threshold: Minimum similarity score
@@ -155,36 +176,45 @@ class ModuleAnalyzer:
         Returns:
             List of (module1, module2, similarity) tuples
         """
-        try:
-            from sentence_transformers import SentenceTransformer
-            import math
-        except ImportError:
+        if not self._model_manager.is_available():
             return []
 
         if len(modules) < 2:
             return []
 
-        model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+        model = self._model_manager.get_model()
+        if model is None:
+            return []
 
-        # Get embeddings for all modules
+        cache = self._get_cache()
+
+        # Get embeddings for all modules (with caching)
         contents = [m.content_preview for m in modules]
-        embeddings = model.encode(contents, convert_to_tensor=False)
+        module_names = [m.name for m in modules]
 
-        # Compute pairwise similarities
+        if cache:
+            embeddings = cache.get_many(contents, model)
+        else:
+            raw_embeddings = model.encode(contents, convert_to_tensor=False)
+            embeddings = [emb.tolist() for emb in raw_embeddings]
+
+        # Find pairs above threshold using SimilarityCalculator
+        pairs_data = SimilarityCalculator.find_all_pairs_above_threshold(
+            embeddings, module_names, threshold
+        )
+
+        # Map back to ModuleInfo objects
+        name_to_module = {m.name: m for m in modules}
         similar_pairs = []
-        for i in range(len(modules)):
-            for j in range(i + 1, len(modules)):
-                # Cosine similarity
-                dot = sum(a * b for a, b in zip(embeddings[i], embeddings[j]))
-                norm_i = math.sqrt(sum(a * a for a in embeddings[i]))
-                norm_j = math.sqrt(sum(b * b for b in embeddings[j]))
+        for name1, name2, similarity in pairs_data:
+            if name1 in name_to_module and name2 in name_to_module:
+                similar_pairs.append((
+                    name_to_module[name1],
+                    name_to_module[name2],
+                    similarity
+                ))
 
-                if norm_i > 0 and norm_j > 0:
-                    similarity = dot / (norm_i * norm_j)
-                    if similarity >= threshold:
-                        similar_pairs.append((modules[i], modules[j], similarity))
-
-        return sorted(similar_pairs, key=lambda x: x[2], reverse=True)
+        return similar_pairs
 
     def find_namespace_issues(self, modules: List[ModuleInfo]) -> List[ModuleInfo]:
         """Find modules with inconsistent namespace patterns.

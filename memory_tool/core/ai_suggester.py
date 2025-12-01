@@ -6,6 +6,11 @@ from pathlib import Path
 from typing import List, Tuple, Optional, Dict
 from datetime import datetime, timedelta
 from ..llm.client import LLMClient
+from .embedding_cache import (
+    get_model_manager,
+    get_embedding_cache,
+    SimilarityCalculator,
+)
 
 
 class SuggestionCache:
@@ -106,47 +111,30 @@ class SuggestionCache:
 
 
 class EmbeddingPreFilter:
-    """Pre-filter candidates using embedding similarity before LLM call."""
+    """Pre-filter candidates using embedding similarity before LLM call.
 
-    def __init__(self, base_path: Optional[Path] = None):
+    Uses shared embedding cache for performance.
+    """
+
+    def __init__(self, cache_dir: Optional[Path] = None):
         """Initialize embedding pre-filter.
 
         Args:
-            base_path: Base path for .memory/ directory
+            cache_dir: Directory for embedding cache (default: .memory/.cache)
         """
-        self.base_path = base_path
-        self._model = None
-        self._available = None
+        self._model_manager = get_model_manager()
+        self._cache_dir = cache_dir
+        self._embedding_cache = None
+
+    def _get_cache(self):
+        """Get or create embedding cache."""
+        if self._embedding_cache is None and self._cache_dir:
+            self._embedding_cache = get_embedding_cache(self._cache_dir)
+        return self._embedding_cache
 
     def is_available(self) -> bool:
         """Check if embedding functionality is available."""
-        if self._available is None:
-            try:
-                from sentence_transformers import SentenceTransformer
-                self._available = True
-            except ImportError:
-                self._available = False
-        return self._available
-
-    def _get_model(self):
-        """Lazy-load the embedding model."""
-        if self._model is None and self.is_available():
-            from sentence_transformers import SentenceTransformer
-            self._model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
-        return self._model
-
-    def _compute_similarity(self, embedding1: List[float], embedding2: List[float]) -> float:
-        """Compute cosine similarity between two embeddings."""
-        import math
-
-        dot_product = sum(a * b for a, b in zip(embedding1, embedding2))
-        norm1 = math.sqrt(sum(a * a for a in embedding1))
-        norm2 = math.sqrt(sum(b * b for b in embedding2))
-
-        if norm1 == 0 or norm2 == 0:
-            return 0.0
-
-        return dot_product / (norm1 * norm2)
+        return self._model_manager.is_available()
 
     def filter_candidates(
         self,
@@ -155,6 +143,8 @@ class EmbeddingPreFilter:
         top_k: int = 10
     ) -> List[Tuple[str, str, float]]:
         """Filter candidates by embedding similarity.
+
+        Uses cached embeddings when available for faster processing.
 
         Args:
             target_content: Content of the target module
@@ -168,21 +158,45 @@ class EmbeddingPreFilter:
             # Return all candidates with default similarity if embeddings not available
             return [(name, content, 0.5) for name, content in candidates[:top_k]]
 
-        model = self._get_model()
+        model = self._model_manager.get_model()
         if model is None:
             return [(name, content, 0.5) for name, content in candidates[:top_k]]
 
         try:
-            # Get target embedding
-            target_embedding = model.encode(target_content[:2000], convert_to_tensor=False).tolist()
+            cache = self._get_cache()
 
-            # Compute similarities for all candidates
+            # Get target embedding (with cache)
+            target_text = target_content[:2000]
+            if cache:
+                target_embedding = cache.get_or_compute(target_text, model)
+            else:
+                target_embedding = model.encode(target_text, convert_to_tensor=False).tolist()
+
+            if not target_embedding:
+                return [(name, content, 0.5) for name, content in candidates[:top_k]]
+
+            # Get candidate embeddings (with batch caching)
+            candidate_texts = [content[:1000] for _, content in candidates if content]
+            candidate_names = [name for name, content in candidates if content]
+
+            if cache:
+                candidate_embeddings = cache.get_many(candidate_texts, model)
+            else:
+                raw_embeddings = model.encode(candidate_texts, convert_to_tensor=False)
+                candidate_embeddings = [emb.tolist() for emb in raw_embeddings]
+
+            # Compute similarities
             scored_candidates = []
-            for name, content in candidates:
-                if content:
-                    candidate_embedding = model.encode(content[:1000], convert_to_tensor=False).tolist()
-                    similarity = self._compute_similarity(target_embedding, candidate_embedding)
-                    scored_candidates.append((name, content, similarity))
+            for i, (name, content) in enumerate(zip(candidate_names, candidate_texts)):
+                if i < len(candidate_embeddings) and candidate_embeddings[i]:
+                    similarity = SimilarityCalculator.cosine_similarity(
+                        target_embedding, candidate_embeddings[i]
+                    )
+                    # Find original content from candidates
+                    original_content = next(
+                        (c for n, c in candidates if n == name), content
+                    )
+                    scored_candidates.append((name, original_content, similarity))
 
             # Sort by similarity and return top_k
             scored_candidates.sort(key=lambda x: x[2], reverse=True)
@@ -226,10 +240,11 @@ class AIConnectionSuggester:
         # Initialize cache
         if cache_dir is None:
             cache_dir = self._find_cache_dir()
+        self.cache_dir = cache_dir
         self.cache = SuggestionCache(cache_dir, ttl_hours=cache_ttl_hours) if use_cache else None
 
-        # Initialize embedding pre-filter
-        self.embedding_filter = EmbeddingPreFilter() if use_embedding_filter else None
+        # Initialize embedding pre-filter (with shared cache)
+        self.embedding_filter = EmbeddingPreFilter(cache_dir=cache_dir) if use_embedding_filter else None
 
     def _find_cache_dir(self) -> Path:
         """Find or create cache directory."""
