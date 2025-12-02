@@ -1,7 +1,7 @@
 """AI-based module generation from text input."""
 
 from pathlib import Path
-from typing import Optional, Dict, List, Tuple
+from typing import Optional, Dict, List, Tuple, Literal
 from dataclasses import dataclass
 from datetime import datetime
 from ..llm.client import LLMClient
@@ -14,6 +14,7 @@ class GeneratedModule:
 
     name: str
     module_type: str  # "projects", "areas", "resources"
+    structure_type: str  # "feature" or "topic"
     description: str
     module_md: str
     current_md: str
@@ -27,8 +28,8 @@ class AIModuleGenerator:
 
     Features:
     - Analyzes text to determine appropriate module structure
+    - Supports Feature-based (software projects) and Topic-based (learning/KB) modules
     - Follows module organization principles
-    - Suggests module type (projects/areas/resources)
     - Generates module.md, current.md, decisions.md content
     - Suggests connections to existing modules
     """
@@ -73,6 +74,7 @@ class AIModuleGenerator:
         text: str,
         existing_modules: List[str],
         language: str = "auto",
+        structure_type: str = "auto",
     ) -> str:
         """Build prompt for module generation.
 
@@ -80,13 +82,14 @@ class AIModuleGenerator:
             text: Input text to convert to module
             existing_modules: List of existing module names
             language: Output language ("ko", "en", "auto")
+            structure_type: Module structure type ("feature", "topic", "auto")
 
         Returns:
             Prompt string for LLM
         """
         existing_modules_str = "\n".join(f"- {m}" for m in existing_modules) if existing_modules else "None"
 
-        # Build language instruction with emphasis
+        # Build language instruction
         lang_instruction_brief = ""
         lang_instruction_emphasis = ""
 
@@ -97,7 +100,7 @@ LANGUAGE REQUIREMENT (CRITICAL):
 - Write ALL content in Korean (한국어로 작성)
 - DESCRIPTION, REASONING values must be in Korean
 - module.md, current.md, decisions.md content must be in Korean
-- Only keep format keywords (MODULE_NAME, MODULE_TYPE, etc.) in English
+- Only keep format keywords (MODULE_NAME, STRUCTURE_TYPE, etc.) in English
 - Example: DESCRIPTION: 비동기 프로그래밍 학습을 위한 모듈입니다."""
         elif language == "en":
             lang_instruction_brief = "OUTPUT LANGUAGE: English"
@@ -111,11 +114,26 @@ LANGUAGE REQUIREMENT (CRITICAL):
 LANGUAGE REQUIREMENT (CRITICAL):
 - Write ALL content in the SAME LANGUAGE as the input text
 - If input is in Korean, output in Korean. If input is in English, output in English.
-- Only keep format keywords (MODULE_NAME, MODULE_TYPE, etc.) in English"""
+- Only keep format keywords (MODULE_NAME, STRUCTURE_TYPE, etc.) in English"""
+
+        # Build structure type instruction
+        if structure_type == "feature":
+            structure_instruction = """
+STRUCTURE TYPE: Feature-based (기능 중심) - FORCED
+You MUST create a Feature-based module structure."""
+        elif structure_type == "topic":
+            structure_instruction = """
+STRUCTURE TYPE: Topic-based (주제 중심) - FORCED
+You MUST create a Topic-based module structure."""
+        else:
+            structure_instruction = """
+STRUCTURE TYPE: Auto-detect
+Analyze the input text and determine the appropriate structure type."""
 
         prompt = f"""You are a module structure analyzer. Convert the following text into a well-organized module structure.
 
 {lang_instruction_brief}
+{structure_instruction}
 
 INPUT TEXT:
 {text}
@@ -123,44 +141,212 @@ INPUT TEXT:
 EXISTING MODULES:
 {existing_modules_str}
 
-MODULE ORGANIZATION PRINCIPLES:
+==============================================================================
+MODULE STRUCTURE TYPES (IMPORTANT - Read carefully)
+==============================================================================
+
+There are TWO distinct module structure types. Choose the appropriate one:
+
+## 1. FEATURE-BASED (기능 중심) Module
+**Use when:**
+- Software projects or features
+- Multiple developers/teams collaborate
+- Long-term maintenance required
+- Code implementation is the focus
+
+**Characteristics:**
+- High cohesion: All elements implementing a specific feature in one module
+- Independent evolution: Changes to one feature minimally affect others
+- Clear single responsibility: Each module has exactly one reason to change
+
+**Directory pattern:** projects/[project-name]/[feature-name]
+**Examples:**
+- projects/memory-tool/search-system
+- projects/memory-tool/llm-integration
+- projects/webapp/auth-system
+
+**module.md template for Feature-based:**
+```
+# Module: [name]
+
+## Purpose and Goals
+[What software feature does this module implement?]
+
+## Responsibility and Scope
+- Responsibility: [Single clear responsibility]
+- Scope: [What's included and excluded]
+
+## Architecture
+[Technical architecture, components, data flow]
+
+## Interface
+[Public APIs, commands, data structures]
+```
+
+**current.md template for Feature-based:**
+```
+# Current Status
+
+## Implementation Status
+- Phase: [planning/development/testing/stable]
+- Progress: [percentage or milestone]
+
+## In Progress
+- [ ] [Feature/task being implemented]
+
+## Completed
+- [x] [Completed features]
+
+## Technical Debt / Known Issues
+- [Issues to address]
+
+## Next Steps
+1. [Next implementation task]
+```
+
+**decisions.md template for Feature-based:**
+```
+# Technical Decisions
+
+## Decision [N]: [Title] ([date])
+
+**Context:** [Technical problem or requirement]
+
+**Decision:** [Chosen solution]
+
+**Alternatives Considered:**
+- [Alternative 1]: [Why rejected]
+- [Alternative 2]: [Why rejected]
+
+**Consequences:**
+- [Technical impact]
+- [Trade-offs accepted]
+
+**Status:** [Accepted/Superseded/Deprecated]
+```
+
+---
+
+## 2. TOPIC-BASED (주제 중심) Module
+**Use when:**
+- Learning/research projects
+- Concept organization
+- Personal Knowledge Base (KB) building
+- Documentation of understanding
+
+**Characteristics:**
+- Knowledge cohesion: Related concepts grouped together
+- Evolution tracking: Records how understanding develops over time
+- Conceptual clarity: Focuses on explaining and organizing ideas
+
+**Directory pattern:** areas/[knowledge-domain]
+**Examples:**
+- areas/async-programming
+- areas/machine-learning
+- areas/system-design
+
+**module.md template for Topic-based:**
+```
+# [Topic Name]
+
+## Purpose and Goals
+[What knowledge does this module capture? What learning objectives?]
+
+## Responsibility and Scope
+- Responsibility: [What concepts this module explains]
+- Scope:
+  - Included: [Topics covered]
+  - Excluded: [Related but out-of-scope topics]
+
+## Key Concepts
+[Core concepts and their relationships]
+
+## Learning Path
+[Suggested order for understanding the material]
+```
+
+**current.md template for Topic-based:**
+```
+# Current Understanding
+
+## Core Concepts
+### [Concept 1]
+[Definition and explanation]
+
+### [Concept 2]
+[Definition and explanation]
+
+## Learning Progress
+- [ ] [Topic to study]
+- [x] [Topic understood]
+
+## Questions to Explore
+- [Open questions]
+
+## Resources
+- [Books, articles, courses]
+```
+
+**decisions.md template for Topic-based:**
+```
+# Learning Decisions
+
+## Decision [N]: [Title] ([date])
+
+**Context:** [Learning challenge or conceptual question]
+
+**Decision:** [How to approach or understand the topic]
+
+**Rationale:** [Why this interpretation/approach]
+
+**Insights:**
+- [Key learnings]
+- [Connections to other concepts]
+
+**Status:** [Active/Revised/Archived]
+```
+
+==============================================================================
+CORE ORGANIZATION PRINCIPLES (Apply to both types)
+==============================================================================
 1. Single Responsibility: Each module should have one clear purpose
 2. Cohesion: All content should relate to a single theme
 3. Size Guidelines: 100-500 lines (small), 500-1500 lines (medium)
-4. Naming: Use lowercase with dashes (e.g., "my-feature")
-5. Types:
-   - projects/[name]: Active projects or features
-   - areas/[name]: Knowledge domains or disciplines
-   - resources/[name]: Reusable templates or references
+4. Naming: Use lowercase with dashes (e.g., "my-feature" or "my-topic")
+5. Split when: current.md > 300 lines, >5 distinct topics, >20 decisions
 
-TASK:
+==============================================================================
+TASK
+==============================================================================
 Analyze the input text and generate a module structure.
 
 RESPOND IN EXACTLY THIS FORMAT (keep keywords in English, write values in specified language):
 
-MODULE_NAME: [suggested path like "projects/feature-name" or "areas/topic-name"]
+STRUCTURE_TYPE: [feature|topic]
+MODULE_NAME: [suggested path - use "projects/xxx" for feature, "areas/xxx" for topic]
 MODULE_TYPE: [projects|areas|resources]
 DESCRIPTION: [1-2 sentence description in specified language]
-REASONING: [explanation in specified language]
+REASONING: [Explain why you chose this structure type and path. Reference the criteria above.]
 
 CONNECTIONS: [comma-separated list of existing module names, or "none"]
 
 ---MODULE_MD---
-[Full content for module.md in specified language - include Purpose, Scope, Architecture sections]
+[Full content following the appropriate template above]
 ---END_MODULE_MD---
 
 ---CURRENT_MD---
-[Full content for current.md in specified language - include status, tasks, next steps]
+[Full content following the appropriate template above]
 ---END_CURRENT_MD---
 
 ---DECISIONS_MD---
-[Full content for decisions.md in specified language - include initial decision for creating this module]
+[Full content following the appropriate template above]
 ---END_DECISIONS_MD---
 {lang_instruction_emphasis}
 
 IMPORTANT:
-- If the input text is too short (<50 lines of meaningful content), suggest adding to an existing module instead
-- Follow the exact format above with section markers
+- Choose Feature-based for software/implementation content
+- Choose Topic-based for learning/concept/knowledge content
+- Follow the exact template for the chosen structure type
 - Generate complete, ready-to-use markdown content
 """
         return prompt
@@ -180,6 +366,7 @@ IMPORTANT:
         import re
 
         # Extract metadata
+        structure_match = re.search(r'STRUCTURE_TYPE:\s*(.+)', response)
         name_match = re.search(r'MODULE_NAME:\s*(.+)', response)
         type_match = re.search(r'MODULE_TYPE:\s*(.+)', response)
         desc_match = re.search(r'DESCRIPTION:\s*(.+)', response)
@@ -189,6 +376,7 @@ IMPORTANT:
         if not name_match:
             raise ValueError("Could not parse MODULE_NAME from response")
 
+        structure_type = structure_match.group(1).strip().lower() if structure_match else "topic"
         name = name_match.group(1).strip()
         module_type = type_match.group(1).strip() if type_match else "projects"
         description = desc_match.group(1).strip() if desc_match else ""
@@ -218,13 +406,14 @@ IMPORTANT:
             re.DOTALL
         )
 
-        module_md = module_md_match.group(1).strip() if module_md_match else self._generate_default_module_md(name, description)
-        current_md = current_md_match.group(1).strip() if current_md_match else self._generate_default_current_md()
-        decisions_md = decisions_md_match.group(1).strip() if decisions_md_match else self._generate_default_decisions_md(name, description)
+        module_md = module_md_match.group(1).strip() if module_md_match else self._generate_default_module_md(name, description, structure_type)
+        current_md = current_md_match.group(1).strip() if current_md_match else self._generate_default_current_md(structure_type)
+        decisions_md = decisions_md_match.group(1).strip() if decisions_md_match else self._generate_default_decisions_md(name, description, structure_type)
 
         return GeneratedModule(
             name=name,
             module_type=module_type,
+            structure_type=structure_type,
             description=description,
             module_md=module_md,
             current_md=current_md,
@@ -233,75 +422,158 @@ IMPORTANT:
             reasoning=reasoning,
         )
 
-    def _generate_default_module_md(self, name: str, description: str) -> str:
-        """Generate default module.md content."""
+    def _generate_default_module_md(self, name: str, description: str, structure_type: str) -> str:
+        """Generate default module.md content based on structure type."""
         timestamp = datetime.now().strftime("%Y-%m-%d")
-        return f"""# Module: {name}
+
+        if structure_type == "feature":
+            return f"""# Module: {name}
 
 **Created:** {timestamp}
-**Tags:**
+**Type:** Feature-based (기능 중심)
 
-## Purpose
+## Purpose and Goals
 
-{description if description else "TODO: Describe the purpose of this module"}
+{description if description else "TODO: What software feature does this module implement?"}
 
-## Scope
+## Responsibility and Scope
 
-TODO: Define what is included and excluded from this module
+- **Responsibility:** TODO: Single clear responsibility
+- **Scope:** TODO: What's included and excluded
 
 ## Architecture
 
-TODO: Describe the high-level architecture and design decisions
+TODO: Technical architecture, components, data flow
+
+## Interface
+
+TODO: Public APIs, commands, data structures
+"""
+        else:  # topic
+            return f"""# {name}
+
+**Created:** {timestamp}
+**Type:** Topic-based (주제 중심)
+
+## Purpose and Goals
+
+{description if description else "TODO: What knowledge does this module capture?"}
+
+## Responsibility and Scope
+
+- **Responsibility:** TODO: What concepts this module explains
+- **Scope:**
+  - Included: TODO
+  - Excluded: TODO
+
+## Key Concepts
+
+TODO: Core concepts and their relationships
+
+## Learning Path
+
+TODO: Suggested order for understanding the material
 """
 
-    def _generate_default_current_md(self) -> str:
-        """Generate default current.md content."""
+    def _generate_default_current_md(self, structure_type: str) -> str:
+        """Generate default current.md content based on structure type."""
         timestamp = datetime.now().strftime("%Y-%m-%d")
-        return f"""# Current Status
+
+        if structure_type == "feature":
+            return f"""# Current Status
 
 ## {timestamp}
 
-### In Progress
+## Implementation Status
+- Phase: planning
+- Progress: 0%
+
+## In Progress
 - [ ] Initial setup
 
-### Completed
+## Completed
 - [x] Module created
 
-### Next Steps
-1. Define scope and boundaries
-2. Add initial content
+## Technical Debt / Known Issues
+None
+
+## Next Steps
+1. Define architecture
+2. Begin implementation
+"""
+        else:  # topic
+            return f"""# Current Understanding
+
+## {timestamp}
+
+## Core Concepts
+
+### Concept 1
+TODO: Definition and explanation
+
+## Learning Progress
+- [ ] Initial study
+- [x] Module created
+
+## Questions to Explore
+- TODO: Open questions
+
+## Resources
+- TODO: Books, articles, courses
 """
 
-    def _generate_default_decisions_md(self, name: str, description: str) -> str:
-        """Generate default decisions.md content."""
+    def _generate_default_decisions_md(self, name: str, description: str, structure_type: str) -> str:
+        """Generate default decisions.md content based on structure type."""
         timestamp = datetime.now().strftime("%Y-%m-%d")
-        return f"""# Decisions
+
+        if structure_type == "feature":
+            return f"""# Technical Decisions
 
 ## Decision 1: Module Creation ({timestamp})
 
-**Context:** Initial module setup
+**Context:** Need to implement {name}
 
-**Decision:** Created {name} module
+**Decision:** Created Feature-based module for {name}
 
-**Rationale:** {description if description else "To organize related content"}
+**Alternatives Considered:**
+- Adding to existing module: Rejected due to single responsibility principle
 
 **Consequences:**
-- Module structure established
-- Ready for content development
+- Clear ownership and responsibility
+- Independent development possible
 
 **Status:** Accepted
+"""
+        else:  # topic
+            return f"""# Learning Decisions
+
+## Decision 1: Module Creation ({timestamp})
+
+**Context:** Need to organize knowledge about {name}
+
+**Decision:** Created Topic-based module for learning and concept organization
+
+**Rationale:** {description if description else "To systematically capture and organize understanding"}
+
+**Insights:**
+- Starting point for knowledge accumulation
+- Will evolve as understanding deepens
+
+**Status:** Active
 """
 
     def generate(
         self,
         text: str,
         language: str = "auto",
+        structure_type: str = "auto",
     ) -> GeneratedModule:
         """Generate module structure from text.
 
         Args:
             text: Input text to convert to module
             language: Output language ("ko", "en", "auto")
+            structure_type: Module structure type ("feature", "topic", "auto")
 
         Returns:
             GeneratedModule with generated content
@@ -310,7 +582,7 @@ TODO: Describe the high-level architecture and design decisions
             ValueError: If generation fails
         """
         existing_modules = self._get_existing_modules()
-        prompt = self._build_generation_prompt(text, existing_modules, language)
+        prompt = self._build_generation_prompt(text, existing_modules, language, structure_type)
 
         try:
             response = self.llm_client.generate(
@@ -395,12 +667,15 @@ None yet
         Returns:
             Formatted string for console output
         """
+        structure_label = "Feature-based" if generated.structure_type == "feature" else "Topic-based"
+
         lines = [
             "=" * 60,
             "GENERATED MODULE PREVIEW",
             "=" * 60,
             "",
             f"[bold]Module Name:[/bold] {generated.name}",
+            f"[bold]Structure:[/bold] {structure_label} ({generated.structure_type})",
             f"[bold]Type:[/bold] {generated.module_type}",
             f"[bold]Description:[/bold] {generated.description}",
             "",

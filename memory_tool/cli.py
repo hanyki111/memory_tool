@@ -1324,6 +1324,7 @@ def module(
     text_file: Optional[str] = typer.Option(None, "--text-file", help="File path containing input text for from-text action"),
     preview: bool = typer.Option(False, "--preview", "-p", help="Preview generated module without saving (for from-text action)"),
     lang: Optional[str] = typer.Option(None, "--lang", help="Output language for from-text: 'ko', 'en', 'auto'"),
+    structure: Optional[str] = typer.Option(None, "--structure", "-s", help="Module structure type for from-text: 'feature' (software), 'topic' (learning/KB), 'auto'"),
 ):
     """Manage modules (supports hierarchical paths, wiki-style [[connections]], and AI suggestions)."""
     # Safely convert Typer ArgumentInfo/OptionInfo to str/None
@@ -1983,14 +1984,24 @@ def module(
                 console.print("[dim]Set ANTHROPIC_API_KEY environment variable or configure Ollama[/dim]")
                 sys.exit(1)
 
+            # Validate structure type if provided
+            structure_type = structure if structure else "auto"
+            if structure_type not in ["feature", "topic", "auto"]:
+                console.print(f"[red]ERROR[/red] Invalid structure type: {structure_type}")
+                console.print("[dim]Valid values: 'feature', 'topic', 'auto'[/dim]")
+                sys.exit(1)
+
             console.print("[cyan]Analyzing text and generating module structure...[/cyan]")
+            if structure_type != "auto":
+                structure_label = "Feature-based" if structure_type == "feature" else "Topic-based"
+                console.print(f"[dim]Structure type: {structure_label} (forced)[/dim]")
 
             try:
                 generator = AIModuleGenerator()
                 output_lang = lang if lang else "auto"
 
                 with console.status("[dim]Generating module (this may take a moment)...[/dim]"):
-                    generated = generator.generate(input_text, language=output_lang)
+                    generated = generator.generate(input_text, language=output_lang, structure_type=structure_type)
 
                 # Preview mode: show generated content
                 if preview:
@@ -2005,8 +2016,10 @@ def module(
                     module_path = generator.save_module(generated)
                     rel_path = module_path.relative_to(Path.cwd())
 
+                    structure_label = "Feature-based" if generated.structure_type == "feature" else "Topic-based"
                     console.print(f"\n[green]OK[/green] Module created: {generated.name}")
                     console.print(f"[dim]Location: {rel_path}[/dim]")
+                    console.print(f"[dim]Structure: {structure_label}[/dim]")
                     console.print(f"[dim]Type: {generated.module_type}[/dim]")
 
                     if generated.suggested_connections:
