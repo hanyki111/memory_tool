@@ -86,15 +86,36 @@ class AIModuleGenerator:
         """
         existing_modules_str = "\n".join(f"- {m}" for m in existing_modules) if existing_modules else "None"
 
-        lang_instruction = ""
+        # Build language instruction with emphasis
+        lang_instruction_brief = ""
+        lang_instruction_emphasis = ""
+
         if language == "ko":
-            lang_instruction = "Generate all content in Korean (한국어로 작성)."
+            lang_instruction_brief = "OUTPUT LANGUAGE: Korean (한국어)"
+            lang_instruction_emphasis = """
+LANGUAGE REQUIREMENT (CRITICAL):
+- Write ALL content in Korean (한국어로 작성)
+- DESCRIPTION, REASONING values must be in Korean
+- module.md, current.md, decisions.md content must be in Korean
+- Only keep format keywords (MODULE_NAME, MODULE_TYPE, etc.) in English
+- Example: DESCRIPTION: 비동기 프로그래밍 학습을 위한 모듈입니다."""
         elif language == "en":
-            lang_instruction = "Generate all content in English."
+            lang_instruction_brief = "OUTPUT LANGUAGE: English"
+            lang_instruction_emphasis = """
+LANGUAGE REQUIREMENT (CRITICAL):
+- Write ALL content in English
+- All descriptions, reasoning, and markdown content must be in English"""
         else:
-            lang_instruction = "Generate content in the same language as the input text."
+            lang_instruction_brief = "OUTPUT LANGUAGE: Same as input text"
+            lang_instruction_emphasis = """
+LANGUAGE REQUIREMENT (CRITICAL):
+- Write ALL content in the SAME LANGUAGE as the input text
+- If input is in Korean, output in Korean. If input is in English, output in English.
+- Only keep format keywords (MODULE_NAME, MODULE_TYPE, etc.) in English"""
 
         prompt = f"""You are a module structure analyzer. Convert the following text into a well-organized module structure.
+
+{lang_instruction_brief}
 
 INPUT TEXT:
 {text}
@@ -115,28 +136,27 @@ MODULE ORGANIZATION PRINCIPLES:
 TASK:
 Analyze the input text and generate a module structure.
 
-{lang_instruction}
-
-RESPOND IN EXACTLY THIS FORMAT:
+RESPOND IN EXACTLY THIS FORMAT (keep keywords in English, write values in specified language):
 
 MODULE_NAME: [suggested path like "projects/feature-name" or "areas/topic-name"]
 MODULE_TYPE: [projects|areas|resources]
-DESCRIPTION: [1-2 sentence description]
-REASONING: [Why this structure? Consider existing modules and organization principles]
+DESCRIPTION: [1-2 sentence description in specified language]
+REASONING: [explanation in specified language]
 
-CONNECTIONS: [comma-separated list of existing module names that should be connected, or "none"]
+CONNECTIONS: [comma-separated list of existing module names, or "none"]
 
 ---MODULE_MD---
-[Full content for module.md - include Purpose, Scope, Architecture sections]
+[Full content for module.md in specified language - include Purpose, Scope, Architecture sections]
 ---END_MODULE_MD---
 
 ---CURRENT_MD---
-[Full content for current.md - include status, tasks, next steps]
+[Full content for current.md in specified language - include status, tasks, next steps]
 ---END_CURRENT_MD---
 
 ---DECISIONS_MD---
-[Full content for decisions.md - include initial decision for creating this module]
+[Full content for decisions.md in specified language - include initial decision for creating this module]
 ---END_DECISIONS_MD---
+{lang_instruction_emphasis}
 
 IMPORTANT:
 - If the input text is too short (<50 lines of meaningful content), suggest adding to an existing module instead
