@@ -1307,7 +1307,7 @@ def sort(
 
 @app.command()
 def module(
-    action: str = typer.Argument(..., help="Action: create, list, tree, archive, unarchive, connections, graph, rebuild-graph, check-links, suggest-links, suggest-ai, ai-organize, auto-tag, graph-history, graph-diff, graph-snapshot"),
+    action: str = typer.Argument(..., help="Action: create, list, tree, archive, unarchive, connections, graph, rebuild-graph, check-links, suggest-links, suggest-ai, ai-organize, auto-tag, graph-history, graph-diff, graph-snapshot, from-text"),
     name: str = typer.Argument(None, help="Module name or path (e.g., 'projects/website')"),
     description: str = typer.Option("", "--desc", "-d", help="Module description"),
     reason: str = typer.Option("", "--reason", "-r", help="Reason for archiving"),
@@ -1320,6 +1320,10 @@ def module(
     version2: int = typer.Option(None, "--v2", help="Second version ID (for graph-diff)"),
     notes: str = typer.Option("", "--notes", "-n", help="Notes for graph snapshot"),
     limit: int = typer.Option(10, "--limit", "-l", help="Limit number of results"),
+    text: Optional[str] = typer.Option(None, "--text", help="Input text for from-text action"),
+    text_file: Optional[str] = typer.Option(None, "--text-file", help="File path containing input text for from-text action"),
+    preview: bool = typer.Option(False, "--preview", "-p", help="Preview generated module without saving (for from-text action)"),
+    lang: Optional[str] = typer.Option(None, "--lang", help="Output language for from-text: 'ko', 'en', 'auto'"),
 ):
     """Manage modules (supports hierarchical paths, wiki-style [[connections]], and AI suggestions)."""
     # Safely convert Typer ArgumentInfo/OptionInfo to str/None
@@ -1948,10 +1952,87 @@ def module(
             console.print(f"\n[green]OK[/green] Module restored: {name}")
             console.print(f"[dim]Location: {rel_path}[/dim]")
 
+        elif action.lower() == "from-text":
+            # AI-based module generation from text
+            from memory_tool.core.ai_module_generator import AIModuleGenerator
+
+            # Get input text
+            input_text = None
+
+            if text:
+                input_text = text
+            elif text_file:
+                text_path = Path(text_file)
+                if not text_path.exists():
+                    console.print(f"[red]ERROR[/red] Text file not found: {text_file}")
+                    sys.exit(1)
+                input_text = text_path.read_text(encoding="utf-8")
+            else:
+                console.print("[red]ERROR[/red] Either --text or --text-file is required")
+                console.print("[dim]Usage: module from-text --text \"Your text here\"[/dim]")
+                console.print("[dim]   or: module from-text --text-file input.txt[/dim]")
+                sys.exit(1)
+
+            if not input_text.strip():
+                console.print("[red]ERROR[/red] Input text is empty")
+                sys.exit(1)
+
+            # Check LLM availability
+            if not LLMClient.check_availability():
+                console.print("[red]ERROR[/red] LLM not configured")
+                console.print("[dim]Set ANTHROPIC_API_KEY environment variable or configure Ollama[/dim]")
+                sys.exit(1)
+
+            console.print("[cyan]Analyzing text and generating module structure...[/cyan]")
+
+            try:
+                generator = AIModuleGenerator()
+                output_lang = lang if lang else "auto"
+
+                with console.status("[dim]Generating module (this may take a moment)...[/dim]"):
+                    generated = generator.generate(input_text, language=output_lang)
+
+                # Preview mode: show generated content
+                if preview:
+                    console.print()
+                    preview_output = generator.format_preview(generated)
+                    console.print(preview_output)
+                    console.print()
+                    console.print("[yellow]Preview mode:[/yellow] Module not saved")
+                    console.print(f"[dim]To save, run without --preview flag[/dim]")
+                else:
+                    # Save mode: create module
+                    module_path = generator.save_module(generated)
+                    rel_path = module_path.relative_to(Path.cwd())
+
+                    console.print(f"\n[green]OK[/green] Module created: {generated.name}")
+                    console.print(f"[dim]Location: {rel_path}[/dim]")
+                    console.print(f"[dim]Type: {generated.module_type}[/dim]")
+
+                    if generated.suggested_connections:
+                        console.print(f"\n[cyan]Suggested connections:[/cyan]")
+                        for conn in generated.suggested_connections:
+                            console.print(f"  - [[{conn}]]")
+
+                    console.print(f"\n[dim]Files created:[/dim]")
+                    console.print(f"  - module.md      (module definition)")
+                    console.print(f"  - current.md     (current status)")
+                    console.print(f"  - decisions.md   (decisions)")
+                    if generated.suggested_connections:
+                        console.print(f"  - dependencies.md (dependencies)")
+
+            except ValueError as e:
+                console.print(f"[red]ERROR[/red] {e}")
+                sys.exit(1)
+            except Exception as e:
+                console.print(f"[red]ERROR[/red] Module generation failed: {e}")
+                sys.exit(1)
+
         else:
             console.print(f"[red]ERROR[/red] Unknown action: {action}")
             console.print("Valid actions: create, list, tree, archive, unarchive, connections, graph, rebuild-graph,")
-            console.print("  check-links, suggest-links, suggest-ai, auto-tag, graph-snapshot, graph-history, graph-diff")
+            console.print("  check-links, suggest-links, suggest-ai, ai-organize, auto-tag, graph-snapshot,")
+            console.print("  graph-history, graph-diff, from-text")
             sys.exit(1)
 
     except ModuleError as e:
