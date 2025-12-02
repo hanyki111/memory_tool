@@ -52,10 +52,14 @@ class Config:
             "max_tokens": 4096,
             "temperature": 0.7,
         },
+        "summary": {
+            "default_language": "ko",  # ko, en, or auto
+        },
     }
 
     VALID_GRANULARITIES = {"low", "medium", "high"}
     VALID_SCOPES = {"local", "kb", "all"}
+    VALID_LANGUAGES = {"ko", "en", "auto"}
 
     def __init__(self, memory_path: Optional[Path] = None):
         """Initialize config manager.
@@ -208,6 +212,14 @@ class Config:
         if not isinstance(max_size, int) or max_size < 0:
             raise ConfigValidationError(
                 f"Invalid search.max_file_size: {max_size}. Must be >= 0"
+            )
+
+        # Validate summary.default_language
+        lang = config.get("summary", {}).get("default_language")
+        if lang not in self.VALID_LANGUAGES:
+            raise ConfigValidationError(
+                f"Invalid summary.default_language: '{lang}'. "
+                f"Must be one of: {', '.join(self.VALID_LANGUAGES)}"
             )
 
     def get(self, key_path: str, default: Any = None) -> Any:

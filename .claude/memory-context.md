@@ -1,6 +1,6 @@
 # Memory Context
 
-**Generated:** 2025-11-30 21:08
+**Generated:** 2025-12-01 09:42
 
 ---
 
@@ -12,10 +12,7 @@
 
 ## Current Plans
 
-### This Month's Plan
-- **Progress:** 1/3 (33%)
-- **Pending Goals:**
-  - Implement Timeline/Review/Plan system
+*No active plans found.*
 
 ---
 
@@ -42,7 +39,7 @@
   - Quick action: `marchive decisions --module memory-system.backup --interactive`
 - **archive/memory-system/decisions.md**: 692 lines - ⚠️ Very large, should archive soon
   - Quick action: `marchive decisions --module archive/memory-system --interactive`
-- **projects/memory-tool/module-system/current.md**: 487 lines - ⚠️ Very large, should archive soon
+- **projects/memory-tool/module-system/current.md**: 530 lines - ⚠️ Very large, should archive soon
   - Quick action: `marchive current --module projects/memory-tool/module-system --interactive`
 - **projects/memory-tool/project-management/decisions.md**: 1031 lines - ⚠️ Very large, should archive soon
   - Quick action: `marchive decisions --module projects/memory-tool/project-management --interactive`
@@ -57,7 +54,7 @@
 - **projects/memory-tool/core-system/current.md**: 277 lines - Consider reviewing
 - **projects/memory-tool/knowledge-graph-system/decisions.md**: 347 lines - Consider archiving
 - **projects/memory-tool/llm-integration/decisions.md**: 347 lines - Consider archiving
-- **projects/memory-tool/llm-integration/current.md**: 357 lines - Consider reviewing
+- **projects/memory-tool/llm-integration/current.md**: 372 lines - Consider reviewing
 - **projects/memory-tool/project-management/current.md**: 363 lines - Consider reviewing
 - **projects/memory-tool/search-system/current.md**: 262 lines - Consider reviewing
 

@@ -4,9 +4,10 @@ import hashlib
 import re
 from pathlib import Path
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Literal
 from ..llm.client import LLMClient
-from ..llm.prompts import MODULE_SUMMARY_PROMPT
+from ..llm.prompts import get_prompt_for_language, detect_language
+from ..utils.config import Config
 
 
 class ModuleSummarizer:
@@ -20,10 +21,43 @@ class ModuleSummarizer:
             llm_client: LLM client (optional, creates one if not provided)
         """
         self.llm_client = llm_client or LLMClient()
+        self.config = Config()
 
         # Summary directory
         self.summary_dir = Path.cwd() / ".memory" / "summaries"
         self.summary_dir.mkdir(parents=True, exist_ok=True)
+
+    def _get_output_language(
+        self,
+        cli_language: Optional[str],
+        content: str,
+    ) -> Literal["ko", "en"]:
+        """
+        Determine output language based on priority.
+
+        Priority:
+        1. CLI flag (highest)
+        2. Config setting
+        3. Auto-detect from content (fallback)
+
+        Args:
+            cli_language: Language from CLI flag (ko/en/auto/None)
+            content: Content to analyze for auto-detection
+
+        Returns:
+            "ko" or "en"
+        """
+        # 1. CLI flag (highest priority)
+        if cli_language and cli_language != "auto":
+            return cli_language
+
+        # 2. Config setting
+        config_lang = self.config.get("llm.output_language", "auto")
+        if config_lang != "auto":
+            return config_lang
+
+        # 3. Auto-detect from content
+        return detect_language(content)
 
     def get_content_hash(self, file_path: Path) -> str:
         """
@@ -144,13 +178,19 @@ generated: {timestamp}
         full_content = metadata + summary
         summary_file.write_text(full_content, encoding="utf-8")
 
-    def summarize_module(self, module_path: Path, force: bool = False) -> str:
+    def summarize_module(
+        self,
+        module_path: Path,
+        force: bool = False,
+        output_language: Optional[str] = None,
+    ) -> str:
         """
         Summarize a module's documentation.
 
         Args:
             module_path: Path to module directory
             force: Force regeneration ignoring cache
+            output_language: Output language (ko/en/auto/None)
 
         Returns:
             Summary text
@@ -212,10 +252,16 @@ generated: {timestamp}
 {chr(10).join(module_content)}
 """
 
+        # Determine output language
+        lang = self._get_output_language(output_language, full_content)
+
+        # Get language-specific prompt
+        system_prompt = get_prompt_for_language("module", lang)
+
         # Generate summary
         summary = self.llm_client.summarize(
             content=full_content,
-            system_prompt=MODULE_SUMMARY_PROMPT,
+            system_prompt=system_prompt,
         )
 
         # Calculate combined hash and save with metadata

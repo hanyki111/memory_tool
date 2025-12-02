@@ -2076,7 +2076,9 @@ Provide a clear, structured summary in markdown format."""
                 summarizer = ModuleSummarizer(llm_client)
                 module_path = Path.cwd() / ".memory" / "modules" / resolved_module
 
-                summary_text = summarizer.summarize_module(module_path, force=force)
+                summary_text = summarizer.summarize_module(
+                    module_path, force=force, output_language=lang
+                )
 
             # Display summary
             console.print("\n" + "="*80)
