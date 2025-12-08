@@ -793,7 +793,9 @@ class ConnectionGraph:
         from memory_tool.core.module import ModuleManager
         manager = ModuleManager()
         all_modules_list = manager.discover_all_modules()
-        all_module_paths = {str(m).replace('\\', '/') for m in all_modules_list}
+        # Use as_posix() for consistent path handling across platforms
+        # This also ensures proper encoding for non-ASCII characters (e.g., Korean)
+        all_module_paths = {m.as_posix() for m in all_modules_list}
 
         # Build nodes for ALL modules
         nodes = []
