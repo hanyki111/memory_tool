@@ -257,8 +257,14 @@ def init(
     path: str = typer.Argument(".", help="Path to initialize .memory/ structure"),
     force: bool = typer.Option(False, "--force", "-f", help="Force reinitialize"),
     kb: Optional[str] = typer.Option(None, "--kb", help="Path to knowledge base"),
+    update_docs: bool = typer.Option(False, "--update-docs", help="Update documentation templates in existing project"),
+    update_all: bool = typer.Option(False, "--update-all", help="Update all templates including guidelines (backs up existing)"),
 ):
-    """Initialize .memory/ structure (minit command)."""
+    """Initialize .memory/ structure (minit command).
+
+    Use --update-docs to update documentation templates in an existing project.
+    Use --update-all to also update .claude/guidelines.md (creates backup).
+    """
     target_path = Path(path).resolve()
 
     if not target_path.exists():
@@ -272,6 +278,22 @@ def init(
     initializer = MemoryInitializer(target_path)
 
     try:
+        # Handle --update-docs or --update-all mode
+        if update_docs or update_all:
+            result = initializer.update_docs(include_guidelines=update_all)
+
+            if result["files"]:
+                console.print(f"[green]OK[/green] Updated documentation templates")
+                for f in result["files"]:
+                    console.print(f"  [dim]Updated: {f.relative_to(target_path)}[/dim]")
+
+            if result.get("backed_up"):
+                for f in result["backed_up"]:
+                    console.print(f"  [yellow]Backup: {f.relative_to(target_path)}[/yellow]")
+
+            return
+
+        # Normal initialization
         created = initializer.initialize(force=force, kb_path=kb)
 
         # Success message

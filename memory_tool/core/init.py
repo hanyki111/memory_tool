@@ -1009,3 +1009,60 @@ Action: Split by clear criteria
                 created["files"].append(kb_lock_path)
 
         return created
+
+    def update_docs(self, include_guidelines: bool = False) -> dict:
+        """Update documentation templates in existing .memory/ project.
+
+        This updates .memory/docs/ with the latest templates without
+        affecting other project data (timeline, modules, etc.).
+
+        Args:
+            include_guidelines: Also update .claude/guidelines.md
+
+        Returns:
+            Dictionary with updated paths
+
+        Raises:
+            InitializationError: If .memory/ doesn't exist
+        """
+        if not self.is_initialized():
+            raise InitializationError(
+                f".memory/ not found at {self.memory_path}. "
+                f"Run 'minit' to initialize first."
+            )
+
+        updated = {
+            "files": [],
+            "skipped": [],
+            "backed_up": [],
+        }
+
+        # Update documentation templates
+        docs_files = self._copy_docs_templates()
+        if docs_files:
+            updated["files"].extend(docs_files)
+        else:
+            # Fallback: templates directory doesn't exist
+            raise InitializationError(
+                "Template files not found. Memory tool may be incorrectly installed."
+            )
+
+        # Optionally update guidelines.md
+        if include_guidelines:
+            dest_file = self.claude_path / "guidelines.md"
+            source_file = Path(__file__).parent.parent / "templates" / "claude" / "guidelines.md"
+
+            if source_file.exists():
+                # Ensure .claude/ directory exists
+                self.claude_path.mkdir(parents=True, exist_ok=True)
+
+                if dest_file.exists():
+                    # Backup existing file
+                    backup_path = dest_file.with_suffix(".md.backup")
+                    shutil.copy2(dest_file, backup_path)
+                    updated["backed_up"].append(backup_path)
+
+                shutil.copy2(source_file, dest_file)
+                updated["files"].append(dest_file)
+
+        return updated
