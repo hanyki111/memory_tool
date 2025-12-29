@@ -148,7 +148,87 @@ mmodule graph
 
 # Check for issues
 mmodule check-links
+
+# Validate Related Files paths
+mcheck
+mcheck --module my-module
 ```
+
+---
+
+## Related Files Section
+
+### Purpose
+
+Link your module to source code files for:
+- Quick navigation to relevant code
+- Path validation with `mcheck`
+- Module-source mapping in context
+
+### Standard Format
+
+Add this section at the top of your module's `current.md`:
+
+```markdown
+## 📂 Related Files
+
+- **Source:** `src/my-feature/`
+- **Tests:** `tests/my-feature/`
+- **Docs:** `docs/my-feature.md`
+- **Other:** `scripts/deploy.sh`
+```
+
+### Categories
+
+| Category | Purpose | Required |
+|----------|---------|----------|
+| **Source** | Main source code paths | Yes |
+| **Tests** | Test file paths | No |
+| **Docs** | Documentation paths | No |
+| **Other** | Misc files (config, scripts) | No |
+
+### Validation
+
+```bash
+# Check all modules
+mcheck
+
+# Check specific module
+mcheck --module projects/my-project
+
+# Show all paths (not just issues)
+mcheck --verbose
+
+# Include mapping in context
+mcontext --structure
+```
+
+### Example Output
+
+```
+[OK] projects/my-project/auth-system
+  [OK] src/auth/ (dir)
+  [OK] tests/auth/ (dir)
+
+[X] projects/my-project/database
+  [X] src/db/old_file.py (NOT FOUND)
+
+[!] projects/my-project/utils
+  No Related Files section found
+
+----------------------------------------
+Summary:
+  Modules checked: 3
+  Valid paths: 2
+  Missing paths: 1
+```
+
+### Best Practices
+
+1. **Add early**: Create Related Files when creating module
+2. **Keep updated**: Update when moving/renaming files
+3. **Validate regularly**: Run `mcheck` in weekly reviews
+4. **Use in context**: `mcontext --structure` for LLM navigation
 
 ---
 
@@ -292,4 +372,4 @@ Need to track something?
 
 ---
 
-**Last Updated:** 2025-11-15
+**Last Updated:** 2025-12-29
