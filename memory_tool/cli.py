@@ -36,6 +36,10 @@ from memory_tool.context.builder import (
     ContextBuilder,
     ContextError,
 )
+from memory_tool.utils.path_checker import (
+    PathChecker,
+    format_check_result,
+)
 from memory_tool.utils.alias import (
     AliasManager,
     AliasError,
@@ -731,6 +735,12 @@ def context(
         "-o",
         help="Output file path (default: .claude/memory-context.md)",
     ),
+    structure: bool = typer.Option(
+        False,
+        "--structure",
+        "-s",
+        help="Include module-source mapping in context",
+    ),
     check_health_only: bool = typer.Option(
         False,
         "--check-health-only",
@@ -784,7 +794,7 @@ def context(
     output_path = Path(output) if output else None
 
     try:
-        result_path = builder.write_context(output_path)
+        result_path = builder.write_context(output_path, include_structure=structure)
 
         # Success message
         if not quiet:
@@ -803,12 +813,102 @@ def context(
 
             console.print(f"[dim]Included: {timeline_count} timeline(s), {module_count} module(s)[/dim]")
 
+            if structure:
+                console.print(f"[dim]Module-source mapping: included[/dim]")
+
+            # Show cached path check warning if any
+            path_checker = PathChecker()
+            cached_warning = path_checker.get_cached_summary()
+            if cached_warning:
+                console.print(f"[yellow]Path issues:[/yellow] {cached_warning}")
+                console.print(f"[dim]Run 'mcheck' for details[/dim]")
+
     except ContextError as e:
         console.print(f"[red]ERROR[/red] {e}")
         sys.exit(1)
 
     except Exception as e:
         console.print(f"[red]ERROR[/red] Unexpected error: {e}")
+        sys.exit(1)
+
+
+@app.command()
+def check(
+    module: str = typer.Option(
+        None,
+        "--module",
+        "-m",
+        help="Check specific module only",
+    ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-v",
+        help="Show all paths, not just issues",
+    ),
+    quiet: bool = typer.Option(
+        False,
+        "--quiet",
+        "-q",
+        help="Quiet mode (exit code only)",
+    ),
+):
+    """Check validity of Related Files paths in modules (mcheck command).
+
+    Validates that all paths specified in module Related Files sections
+    actually exist in the project.
+    """
+    checker = PathChecker()
+
+    try:
+        if module:
+            # Check specific module
+            module_name = _resolve_module_name(module)
+            result = checker.check_module(module_name)
+
+            if not quiet:
+                if not result.has_related_files:
+                    console.print(f"[yellow]![/yellow] {module_name}")
+                    console.print(f"  No Related Files section found")
+                    if result.related_files.format_type == "legacy":
+                        console.print(f"  [dim](using legacy Key Files format)[/dim]")
+                else:
+                    console.print(f"{result.status_icon} {module_name}")
+                    for path_result in result.path_results:
+                        if verbose or not path_result.exists:
+                            type_ind = ""
+                            if path_result.exists:
+                                type_ind = " (dir)" if path_result.is_directory else " (file)"
+                            console.print(f"  {path_result.status_icon} {path_result.path}{type_ind}")
+
+                console.print()
+                console.print(f"[dim]Valid: {result.valid_count}, Missing: {result.missing_count}[/dim]")
+
+            # Exit with error if issues found
+            if result.has_issues:
+                sys.exit(1)
+
+        else:
+            # Check all modules
+            summary = checker.check_all_modules()
+
+            # Save to cache
+            checker.save_cache(summary)
+
+            if not quiet:
+                output = format_check_result(summary, verbose=verbose)
+                console.print(output)
+
+            # Exit with error if issues found
+            if summary.has_issues:
+                sys.exit(1)
+            else:
+                if not quiet:
+                    console.print("\n[green]All paths valid![/green]")
+
+    except Exception as e:
+        if not quiet:
+            console.print(f"[red]ERROR[/red] {e}")
         sys.exit(1)
 
 
@@ -3621,6 +3721,13 @@ def context_cli():
     """Entry point for 'mcontext' command."""
     import sys
     sys.argv = ['memory_tool', 'context'] + sys.argv[1:]
+    app()
+
+
+def check_cli():
+    """Entry point for 'mcheck' command."""
+    import sys
+    sys.argv = ['memory_tool', 'check'] + sys.argv[1:]
     app()
 
 

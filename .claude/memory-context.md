@@ -1,6 +1,6 @@
 # Memory Context
 
-**Generated:** 2025-12-09 09:00
+**Generated:** 2025-12-29 11:22
 
 ---
 
@@ -39,7 +39,7 @@
   - Quick action: `marchive decisions --module memory-system.backup --interactive`
 - **archive/memory-system/decisions.md**: 692 lines - ⚠️ Very large, should archive soon
   - Quick action: `marchive decisions --module archive/memory-system --interactive`
-- **projects/memory-tool/module-system/current.md**: 530 lines - ⚠️ Very large, should archive soon
+- **projects/memory-tool/module-system/current.md**: 641 lines - ⚠️ Very large, should archive soon
   - Quick action: `marchive current --module projects/memory-tool/module-system --interactive`
 - **projects/memory-tool/project-management/decisions.md**: 1031 lines - ⚠️ Very large, should archive soon
   - Quick action: `marchive decisions --module projects/memory-tool/project-management --interactive`

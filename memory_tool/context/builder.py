@@ -2,9 +2,14 @@
 
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Tuple
 
 from memory_tool.utils.config import Config
+from memory_tool.context.related_files import (
+    RelatedFilesParser,
+    RelatedFiles,
+    get_module_related_files,
+)
 
 
 class ContextError(Exception):
@@ -257,8 +262,78 @@ class ContextBuilder:
 
         return health_issues
 
-    def build_context_content(self) -> str:
+    def get_module_source_mapping(self) -> List[Dict]:
+        """Get module to source path mapping.
+
+        Returns:
+            List of dicts with module info:
+            [
+                {
+                    "name": "core-system",
+                    "description": "Timeline, initialization",
+                    "source_paths": ["memory_tool/core/"],
+                    "format_type": "standard",
+                    "valid_paths": ["memory_tool/core/"],
+                    "missing_paths": [],
+                }
+            ]
+        """
+        mappings = []
+        modules_path = self.memory_path / "modules"
+
+        if not modules_path.exists():
+            return mappings
+
+        for current_file in modules_path.rglob("current.md"):
+            module_dir = current_file.parent
+            module_name = str(
+                module_dir.relative_to(modules_path)
+            ).replace("\\", "/")
+
+            # Parse Related Files
+            related_files = get_module_related_files(module_dir)
+
+            # Extract description from current.md (first > blockquote)
+            description = ""
+            try:
+                content = current_file.read_text(encoding="utf-8")
+                for line in content.split("\n"):
+                    if line.strip().startswith(">"):
+                        description = line.strip().lstrip(">").strip()
+                        # Clean up bold markers
+                        description = description.replace("**", "")
+                        break
+            except Exception:
+                pass
+
+            # Check which paths exist
+            source_paths = related_files.source
+            valid_paths = []
+            missing_paths = []
+
+            for path in source_paths:
+                full_path = self.base_path / path
+                if full_path.exists():
+                    valid_paths.append(path)
+                else:
+                    missing_paths.append(path)
+
+            mappings.append({
+                "name": module_name,
+                "description": description[:80] if description else "",
+                "source_paths": source_paths,
+                "format_type": related_files.format_type,
+                "valid_paths": valid_paths,
+                "missing_paths": missing_paths,
+            })
+
+        return sorted(mappings, key=lambda m: m["name"])
+
+    def build_context_content(self, include_structure: bool = False) -> str:
         """Build context markdown content.
+
+        Args:
+            include_structure: Include module-source mapping section
 
         Returns:
             Markdown content for memory-context.md
@@ -369,6 +444,48 @@ class ContextBuilder:
         lines.append("---")
         lines.append("")
 
+        # Module-Source Mapping (if --structure flag)
+        if include_structure:
+            mappings = self.get_module_source_mapping()
+
+            if mappings:
+                lines.append("## Module-Source Mapping")
+                lines.append("")
+                lines.append("| Module | Source | Status |")
+                lines.append("|--------|--------|--------|")
+
+                for m in mappings:
+                    name = m["name"]
+                    sources = ", ".join(f"`{p}`" for p in m["source_paths"]) if m["source_paths"] else "*none*"
+
+                    # Status icon
+                    if m["format_type"] == "none":
+                        status = "⚠️ no section"
+                    elif m["missing_paths"]:
+                        status = f"❌ {len(m['missing_paths'])} missing"
+                    else:
+                        status = "✅"
+
+                    lines.append(f"| {name} | {sources} | {status} |")
+
+                lines.append("")
+
+                # Detailed navigation for modules with sources
+                modules_with_sources = [m for m in mappings if m["source_paths"]]
+                if modules_with_sources:
+                    lines.append("### Quick Navigation")
+                    lines.append("")
+
+                    for m in modules_with_sources:
+                        desc = m["description"] if m["description"] else "*no description*"
+                        lines.append(f"**{m['name']}** → {desc}")
+                        for path in m["source_paths"]:
+                            lines.append(f"- `{path}`")
+                        lines.append("")
+
+                lines.append("---")
+                lines.append("")
+
         # Document Health (Archive Suggestions)
         doc_health = self.get_document_health()
 
@@ -463,11 +580,13 @@ class ContextBuilder:
     def write_context(
         self,
         output_path: Optional[Path] = None,
+        include_structure: bool = False,
     ) -> Path:
         """Write context to file.
 
         Args:
             output_path: Output file path. Defaults to .claude/memory-context.md
+            include_structure: Include module-source mapping section
 
         Returns:
             Path to written file
@@ -489,7 +608,7 @@ class ContextBuilder:
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Build content
-        content = self.build_context_content()
+        content = self.build_context_content(include_structure=include_structure)
 
         # Write file
         try:
