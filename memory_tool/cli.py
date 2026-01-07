@@ -796,6 +796,11 @@ def context(
         "-i",
         help="Update interface.md for all modules based on Related Files",
     ),
+    include_archived: bool = typer.Option(
+        False,
+        "--include-archived",
+        help="Include archived modules when updating interfaces",
+    ),
 ):
     """Build context for Claude Code (mcontext command).
 
@@ -804,6 +809,7 @@ def context(
 
     With --update-interfaces, updates interface.md for all modules by analyzing
     the Python source files listed in each module's Related Files section.
+    Archive modules are excluded by default (use --include-archived to include).
     """
     # Health check only mode (for git hooks)
     if check_health_only:
@@ -931,7 +937,7 @@ def context(
                 console.print("[yellow]![/yellow] .memory/ not found, skipping interface update")
             else:
                 module_manager = ModuleManager()
-                modules = module_manager.list_modules(include_archived=False)
+                modules = module_manager.list_modules(include_archived=include_archived)
 
                 updated_count = 0
                 skipped_count = 0
@@ -1041,6 +1047,11 @@ def check(
         "-l",
         help="Use legacy grouped output format instead of standard error format",
     ),
+    include_archived: bool = typer.Option(
+        False,
+        "--include-archived",
+        help="Include archived modules in check",
+    ),
 ):
     """Check validity of Related Files paths in modules (mcheck command).
 
@@ -1051,6 +1062,7 @@ def check(
     - Smart path resolution (module dir -> project root -> .memory)
     - Standard compiler-style error format (file:line: error: message)
     - IDE-friendly output (VSCode terminal links)
+    - Archive modules excluded by default (use --include-archived to include)
     """
     checker = PathChecker()
 
@@ -1094,7 +1106,7 @@ def check(
 
         else:
             # Check all modules
-            summary = checker.check_all_modules()
+            summary = checker.check_all_modules(include_archived=include_archived)
 
             # Save to cache
             checker.save_cache(summary)

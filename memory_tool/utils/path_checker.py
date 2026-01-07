@@ -285,8 +285,11 @@ class PathChecker:
 
         return result
 
-    def check_all_modules(self) -> CheckSummary:
+    def check_all_modules(self, include_archived: bool = False) -> CheckSummary:
         """Check all modules in the project.
+
+        Args:
+            include_archived: Include archived modules (default: False)
 
         Returns:
             CheckSummary with all results
@@ -302,6 +305,12 @@ class PathChecker:
             module_name = str(
                 module_dir.relative_to(self.modules_path)
             ).replace("\\", "/")
+
+            # Skip archived modules unless explicitly included
+            if not include_archived:
+                # Check if module is in archive folder
+                if module_name.startswith("archive/") or "/archive/" in module_name:
+                    continue
 
             result = self.check_module(module_name)
             summary.results.append(result)
