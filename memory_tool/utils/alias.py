@@ -21,6 +21,8 @@ class AliasManager:
         "minit": ("init", "Initialize .memory/ structure"),
         "ms": ("search", "Search timeline and modules"),
         "mcontext": ("context", "Build Claude Code context"),
+        "mcheck": ("check", "Check Related Files paths"),
+        "mmap": ("map", "Generate code structure map"),
         "msort": ("sort", "Sort timeline by time"),
         "msummary": ("summary", "Summarize timeline or module"),
         "marchive": ("archive", "Archive documentation"),

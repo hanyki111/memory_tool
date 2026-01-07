@@ -91,6 +91,17 @@ class MemoryInitializer:
                 "default_scope": "local",
                 "include_archived": False,
             },
+            "codemap": {
+                "default_depth": "structure",  # overview, structure, api, docs
+                "include_private": False,
+                "include_tests": False,
+                "exclude_patterns": [
+                    "__pycache__",
+                    ".venv",
+                    "venv",
+                    "node_modules",
+                ],
+            },
         }
 
         with open(config_path, "w", encoding="utf-8") as f:
@@ -146,6 +157,12 @@ ms "query"
 
 # Build context for Claude Code
 mcontext
+
+# Generate code structure map
+mmap src/
+
+# Build context with code map
+mcontext --with-map
 ```
 
 ## Philosophy
@@ -254,6 +271,20 @@ ms --all "query"             # Search all projects
 **Context:**
 ```bash
 mcontext                     # Generate .claude/memory-context.md
+mcontext --with-map          # Include code structure map
+```
+
+**Code Structure:**
+```bash
+mmap src/                    # Generate code structure map
+mmap --depth api             # Full API signatures
+mmap --output code.md        # Save to file
+```
+
+**Verification:**
+```bash
+mcheck                       # Verify Related Files paths
+mcheck --verbose             # Show all checked paths
 ```
 
 **Important:** Run `mcontext` before starting Claude Code to ensure fresh context!
