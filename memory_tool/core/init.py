@@ -276,6 +276,7 @@ ms --all "query"             # Search all projects
 mcontext                     # Generate .claude/memory-context.md
 mcontext --with-map          # Include code structure map
 mcontext --update-interfaces # Update all module interface.md files
+mcontext -i --include-archived  # Include archived modules
 ```
 
 **Code Structure:**
@@ -289,10 +290,11 @@ mmap --interface=module-name # Generate interface.md for module
 ```bash
 mcheck                       # Verify Related Files paths
 mcheck --verbose             # Show all checked paths
+mcheck --include-archived    # Include archived modules
 ```
 
 **Important:** Run `mcontext` before starting Claude Code to ensure fresh context!
-**Tip:** Use `mcontext -i` to auto-update interface.md for all modules.
+**Tip:** Use `mcontext -i` to auto-update interface.md. Archive modules excluded by default.
 
 ---
 
