@@ -71,6 +71,7 @@ mbrowse = "memory_tool.cli:browse_cli"
 mcompletion = "memory_tool.cli:completion_cli"
 mplan = "memory_tool.cli:plan_cli"
 mtutorial = "memory_tool.cli:tutorial_cli"
+mmap = "memory_tool.cli:map_cli"
 
 [tool.setuptools.packages.find]
 where = ["."]
