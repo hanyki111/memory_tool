@@ -21,6 +21,11 @@ class PathCheckResult:
     exists: bool
     is_file: bool = False
     is_directory: bool = False
+    # Source tracking for error reporting
+    source_file: str = ""
+    line_number: int = 0
+    # Resolved path (where it was actually found)
+    resolved_path: str = ""
 
     @property
     def status_icon(self) -> str:
@@ -28,6 +33,14 @@ class PathCheckResult:
         if self.exists:
             return "[OK]"
         return "[X]"
+
+    def format_error(self) -> str:
+        """Format as standard error message (file:line: error: message)."""
+        if self.exists:
+            return ""
+        if self.source_file and self.line_number > 0:
+            return f"{self.source_file}:{self.line_number}: error: '{self.path}' not found"
+        return f"error: '{self.path}' not found"
 
 
 @dataclass
@@ -160,27 +173,81 @@ class PathChecker:
         self.cache_path = self.memory_path / self.CACHE_FILE
         self.parser = RelatedFilesParser()
 
-    def check_path(self, path_str: str) -> PathCheckResult:
-        """Check if a path exists.
+    def check_path(
+        self,
+        path_str: str,
+        module_path: Optional[Path] = None,
+        source_file: str = "",
+        line_number: int = 0,
+    ) -> PathCheckResult:
+        """Check if a path exists using smart resolution.
+
+        Resolution order:
+        1. Module directory (if module_path provided)
+        2. Project root (base_path)
+        3. .memory directory
 
         Args:
-            path_str: Path string (relative to base_path)
+            path_str: Path string to check
+            module_path: Optional module directory for relative resolution
+            source_file: Source file where path was referenced
+            line_number: Line number in source file
 
         Returns:
             PathCheckResult with existence info
         """
-        # Resolve path relative to base
-        full_path = self.base_path / path_str
+        # Normalize path (remove ./ prefix if present)
+        normalized_path = path_str.lstrip("./")
 
-        exists = full_path.exists()
-        is_file = full_path.is_file() if exists else False
-        is_directory = full_path.is_dir() if exists else False
+        # 1. Try module directory first (for relative paths like spec.md)
+        if module_path and module_path.exists():
+            module_full_path = module_path / normalized_path
+            if module_full_path.exists():
+                return PathCheckResult(
+                    path=path_str,
+                    exists=True,
+                    is_file=module_full_path.is_file(),
+                    is_directory=module_full_path.is_dir(),
+                    source_file=source_file,
+                    line_number=line_number,
+                    resolved_path=str(module_full_path),
+                )
 
+        # 2. Try project root
+        root_path = self.base_path / normalized_path
+        if root_path.exists():
+            return PathCheckResult(
+                path=path_str,
+                exists=True,
+                is_file=root_path.is_file(),
+                is_directory=root_path.is_dir(),
+                source_file=source_file,
+                line_number=line_number,
+                resolved_path=str(root_path),
+            )
+
+        # 3. Try .memory directory
+        memory_path = self.memory_path / normalized_path
+        if memory_path.exists():
+            return PathCheckResult(
+                path=path_str,
+                exists=True,
+                is_file=memory_path.is_file(),
+                is_directory=memory_path.is_dir(),
+                source_file=source_file,
+                line_number=line_number,
+                resolved_path=str(memory_path),
+            )
+
+        # Not found in any location
         return PathCheckResult(
             path=path_str,
-            exists=exists,
-            is_file=is_file,
-            is_directory=is_directory,
+            exists=False,
+            is_file=False,
+            is_directory=False,
+            source_file=source_file,
+            line_number=line_number,
+            resolved_path="",
         )
 
     def check_module(self, module_name: str) -> ModuleCheckResult:
@@ -195,15 +262,25 @@ class PathChecker:
         module_path = self.modules_path / module_name
         related_files = get_module_related_files(module_path)
 
+        # Determine source file path for error reporting
+        current_md_path = module_path / "current.md"
+        source_file = str(current_md_path.relative_to(self.base_path))
+
         result = ModuleCheckResult(
             module_name=module_name,
             module_path=module_path,
             related_files=related_files,
         )
 
-        # Check all paths
+        # Check all paths with smart resolution
         for path_str in related_files.all_paths():
-            path_result = self.check_path(path_str)
+            line_number = related_files.get_line_number(path_str)
+            path_result = self.check_path(
+                path_str,
+                module_path=module_path,
+                source_file=source_file,
+                line_number=line_number,
+            )
             result.path_results.append(path_result)
 
         return result
@@ -301,54 +378,75 @@ class PathChecker:
 
 def format_check_result(
     summary: CheckSummary,
-    verbose: bool = False
+    verbose: bool = False,
+    standard_format: bool = False,
 ) -> str:
     """Format check results for display.
 
     Args:
         summary: Check summary
         verbose: Show all paths, not just issues
+        standard_format: Use compiler-style error format (file:line: error: message)
 
     Returns:
         Formatted string for display
     """
     lines = []
 
-    for result in sorted(summary.results, key=lambda r: r.module_name):
-        # Module header
-        if result.has_related_files:
-            if verbose or result.has_issues:
-                lines.append(f"\n{result.status_icon} {result.module_name}")
-
-                # Show paths
+    if standard_format:
+        # Standard compiler-style error format
+        for result in sorted(summary.results, key=lambda r: r.module_name):
+            if result.has_related_files:
                 for path_result in result.path_results:
-                    if verbose or not path_result.exists:
-                        type_indicator = ""
-                        if path_result.exists:
-                            type_indicator = " (dir)" if path_result.is_directory else " (file)"
-                        lines.append(
-                            f"  {path_result.status_icon} {path_result.path}{type_indicator}"
-                        )
-        else:
-            # No Related Files section
-            lines.append(f"\n[!] {result.module_name}")
-            lines.append("  No Related Files section found")
-            if result.related_files.format_type == "legacy":
-                lines.append("  (using legacy Key Files format)")
+                    if not path_result.exists:
+                        lines.append(path_result.format_error())
+            else:
+                # No Related Files section - also report as error
+                source_file = f".memory/modules/{result.module_name}/current.md"
+                lines.append(f"{source_file}:1: warning: No Related Files section found")
 
-    # Summary
-    lines.append("")
-    lines.append("-" * 40)
-    lines.append("Summary:")
-    lines.append(f"  Modules checked: {summary.modules_checked}")
-    lines.append(f"  Valid paths: {summary.total_valid}")
+        # Summary at the end
+        if lines:
+            lines.append("")
+        lines.append(f"Checked {summary.modules_checked} modules: "
+                     f"{summary.total_valid} valid, {summary.total_missing} missing")
+    else:
+        # Original grouped format
+        for result in sorted(summary.results, key=lambda r: r.module_name):
+            # Module header
+            if result.has_related_files:
+                if verbose or result.has_issues:
+                    lines.append(f"\n{result.status_icon} {result.module_name}")
 
-    if summary.total_missing > 0:
-        lines.append(f"  Missing paths: {summary.total_missing}")
+                    # Show paths
+                    for path_result in result.path_results:
+                        if verbose or not path_result.exists:
+                            type_indicator = ""
+                            if path_result.exists:
+                                type_indicator = " (dir)" if path_result.is_directory else " (file)"
+                            lines.append(
+                                f"  {path_result.status_icon} {path_result.path}{type_indicator}"
+                            )
+            else:
+                # No Related Files section
+                lines.append(f"\n[!] {result.module_name}")
+                lines.append("  No Related Files section found")
+                if result.related_files.format_type == "legacy":
+                    lines.append("  (using legacy Key Files format)")
 
-    if summary.modules_without_related_files > 0:
-        lines.append(
-            f"  Modules without Related Files: {summary.modules_without_related_files}"
-        )
+        # Summary
+        lines.append("")
+        lines.append("-" * 40)
+        lines.append("Summary:")
+        lines.append(f"  Modules checked: {summary.modules_checked}")
+        lines.append(f"  Valid paths: {summary.total_valid}")
+
+        if summary.total_missing > 0:
+            lines.append(f"  Missing paths: {summary.total_missing}")
+
+        if summary.modules_without_related_files > 0:
+            lines.append(
+                f"  Modules without Related Files: {summary.modules_without_related_files}"
+            )
 
     return "\n".join(lines)

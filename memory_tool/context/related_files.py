@@ -7,6 +7,15 @@ from typing import Dict, List, Optional, Tuple
 
 
 @dataclass
+class PathEntry:
+    """Single path entry with metadata."""
+
+    path: str
+    line_number: int
+    category: str = "other"
+
+
+@dataclass
 class RelatedFiles:
     """Parsed Related Files data from a module."""
 
@@ -21,6 +30,9 @@ class RelatedFiles:
     # Metadata
     format_type: str = "none"  # "standard", "legacy", "none"
 
+    # Line number tracking: path -> line_number
+    line_numbers: Dict[str, int] = field(default_factory=dict)
+
     def all_paths(self) -> List[str]:
         """Get all paths from all categories."""
         paths = []
@@ -29,6 +41,39 @@ class RelatedFiles:
         paths.extend(self.docs)
         paths.extend(self.other)
         return paths
+
+    def all_entries(self) -> List[PathEntry]:
+        """Get all paths as PathEntry objects with line numbers."""
+        entries = []
+        for path in self.source:
+            entries.append(PathEntry(
+                path=path,
+                line_number=self.line_numbers.get(path, 0),
+                category="source"
+            ))
+        for path in self.tests:
+            entries.append(PathEntry(
+                path=path,
+                line_number=self.line_numbers.get(path, 0),
+                category="tests"
+            ))
+        for path in self.docs:
+            entries.append(PathEntry(
+                path=path,
+                line_number=self.line_numbers.get(path, 0),
+                category="docs"
+            ))
+        for path in self.other:
+            entries.append(PathEntry(
+                path=path,
+                line_number=self.line_numbers.get(path, 0),
+                category="other"
+            ))
+        return entries
+
+    def get_line_number(self, path: str) -> int:
+        """Get line number for a specific path."""
+        return self.line_numbers.get(path, 0)
 
     def is_empty(self) -> bool:
         """Check if no paths were found."""
@@ -112,12 +157,14 @@ class RelatedFilesParser:
         result = RelatedFiles()
 
         # Find the Related Files section
-        section_content = self._extract_section(content, self.STANDARD_HEADERS)
+        section_content, section_start_line = self._extract_section(
+            content, self.STANDARD_HEADERS
+        )
         if not section_content:
             return result
 
         # Parse each line
-        for line in section_content.split("\n"):
+        for line_offset, line in enumerate(section_content.split("\n")):
             match = self.CATEGORY_LINE_PATTERN.match(line)
             if match:
                 category = match.group(1).strip().lower()
@@ -129,17 +176,22 @@ class RelatedFilesParser:
                 if not path:
                     continue
 
+                # Calculate actual line number (1-based)
+                actual_line = section_start_line + line_offset
+
                 # Categorize
                 categorized = False
                 for std_cat, aliases in self.STANDARD_CATEGORIES.items():
                     if category in aliases:
                         getattr(result, std_cat).append(path)
+                        result.line_numbers[path] = actual_line
                         categorized = True
                         break
 
                 if not categorized:
                     # Put in "other" category
                     result.other.append(path)
+                    result.line_numbers[path] = actual_line
                     # Also store in raw with original category name
                     if category not in result.raw:
                         result.raw[category] = []
@@ -152,20 +204,25 @@ class RelatedFilesParser:
         result = RelatedFiles()
 
         # Find the Key Files section
-        section_content = self._extract_section(content, self.LEGACY_PATTERNS)
+        section_content, section_start_line = self._extract_section(
+            content, self.LEGACY_PATTERNS
+        )
         if not section_content:
             return result
 
         # Parse each line for paths
-        for line in section_content.split("\n"):
+        for line_offset, line in enumerate(section_content.split("\n")):
             match = self.PATH_LINE_PATTERN.match(line)
             if match:
                 # Get path from either group
                 path = match.group(1) or match.group(2)
                 if path:
                     path = path.strip()
+                    # Calculate actual line number (1-based)
+                    actual_line = section_start_line + line_offset
                     # Legacy format goes to "source" by default
                     result.source.append(path)
+                    result.line_numbers[path] = actual_line
 
         return result
 
@@ -173,7 +230,7 @@ class RelatedFilesParser:
         self,
         content: str,
         header_patterns: List[str]
-    ) -> Optional[str]:
+    ) -> Tuple[Optional[str], int]:
         """Extract a section from content based on header patterns.
 
         Args:
@@ -181,7 +238,8 @@ class RelatedFilesParser:
             header_patterns: Regex patterns to match section header
 
         Returns:
-            Section content (excluding header) or None if not found
+            Tuple of (section content excluding header, start line number)
+            Line numbers are 1-based for editor compatibility.
         """
         lines = content.split("\n")
 
@@ -196,7 +254,7 @@ class RelatedFilesParser:
                 break
 
         if start_idx is None:
-            return None
+            return None, 0
 
         # Find section end (next ## header or ---)
         end_idx = len(lines)
@@ -209,7 +267,8 @@ class RelatedFilesParser:
 
         # Extract section content
         section_lines = lines[start_idx:end_idx]
-        return "\n".join(section_lines)
+        # Return 1-based line number for the start of content
+        return "\n".join(section_lines), start_idx + 1
 
     def parse_file(self, file_path: Path) -> RelatedFiles:
         """Parse Related Files from a file.

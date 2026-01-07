@@ -874,11 +874,22 @@ def check(
         "-q",
         help="Quiet mode (exit code only)",
     ),
+    legacy: bool = typer.Option(
+        False,
+        "--legacy",
+        "-l",
+        help="Use legacy grouped output format instead of standard error format",
+    ),
 ):
     """Check validity of Related Files paths in modules (mcheck command).
 
     Validates that all paths specified in module Related Files sections
     actually exist in the project.
+
+    Features:
+    - Smart path resolution (module dir -> project root -> .memory)
+    - Standard compiler-style error format (file:line: error: message)
+    - IDE-friendly output (VSCode terminal links)
     """
     checker = PathChecker()
 
@@ -889,22 +900,32 @@ def check(
             result = checker.check_module(module_name)
 
             if not quiet:
-                if not result.has_related_files:
-                    console.print(f"[yellow]![/yellow] {module_name}")
-                    console.print(f"  No Related Files section found")
-                    if result.related_files.format_type == "legacy":
-                        console.print(f"  [dim](using legacy Key Files format)[/dim]")
+                if legacy:
+                    # Legacy format
+                    if not result.has_related_files:
+                        console.print(f"[yellow]![/yellow] {module_name}")
+                        console.print("  No Related Files section found")
+                        if result.related_files.format_type == "legacy":
+                            console.print("  [dim](using legacy Key Files format)[/dim]")
+                    else:
+                        console.print(f"{result.status_icon} {module_name}")
+                        for path_result in result.path_results:
+                            if verbose or not path_result.exists:
+                                type_ind = ""
+                                if path_result.exists:
+                                    type_ind = " (dir)" if path_result.is_directory else " (file)"
+                                console.print(f"  {path_result.status_icon} {path_result.path}{type_ind}")
+                    console.print()
+                    console.print(f"[dim]Valid: {result.valid_count}, Missing: {result.missing_count}[/dim]")
                 else:
-                    console.print(f"{result.status_icon} {module_name}")
+                    # Standard error format
                     for path_result in result.path_results:
-                        if verbose or not path_result.exists:
-                            type_ind = ""
-                            if path_result.exists:
-                                type_ind = " (dir)" if path_result.is_directory else " (file)"
-                            console.print(f"  {path_result.status_icon} {path_result.path}{type_ind}")
-
-                console.print()
-                console.print(f"[dim]Valid: {result.valid_count}, Missing: {result.missing_count}[/dim]")
+                        if not path_result.exists:
+                            console.print(f"[red]{path_result.format_error()}[/red]")
+                    if not result.has_related_files:
+                        source_file = f".memory/modules/{module_name}/current.md"
+                        console.print(f"[yellow]{source_file}:1: warning: No Related Files section found[/yellow]")
+                    console.print(f"\n[dim]Checked: {result.valid_count} valid, {result.missing_count} missing[/dim]")
 
             # Exit with error if issues found
             if result.has_issues:
@@ -918,7 +939,11 @@ def check(
             checker.save_cache(summary)
 
             if not quiet:
-                output = format_check_result(summary, verbose=verbose)
+                output = format_check_result(
+                    summary,
+                    verbose=verbose,
+                    standard_format=not legacy,
+                )
                 console.print(output)
 
             # Exit with error if issues found
