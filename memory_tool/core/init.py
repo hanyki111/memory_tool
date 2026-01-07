@@ -161,8 +161,11 @@ mcontext
 # Generate code structure map
 mmap src/
 
-# Build context with code map
-mcontext --with-map
+# Build context with code map and update interfaces
+mcontext --with-map --update-interfaces
+
+# Verify Related Files paths
+mcheck
 ```
 
 ## Philosophy
@@ -272,13 +275,14 @@ ms --all "query"             # Search all projects
 ```bash
 mcontext                     # Generate .claude/memory-context.md
 mcontext --with-map          # Include code structure map
+mcontext --update-interfaces # Update all module interface.md files
 ```
 
 **Code Structure:**
 ```bash
 mmap src/                    # Generate code structure map
 mmap --depth api             # Full API signatures
-mmap --output code.md        # Save to file
+mmap --interface=module-name # Generate interface.md for module
 ```
 
 **Verification:**
@@ -288,6 +292,7 @@ mcheck --verbose             # Show all checked paths
 ```
 
 **Important:** Run `mcontext` before starting Claude Code to ensure fresh context!
+**Tip:** Use `mcontext -i` to auto-update interface.md for all modules.
 
 ---
 
