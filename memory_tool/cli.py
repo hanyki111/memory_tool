@@ -790,11 +790,20 @@ def context(
         "-q",
         help="Quiet mode (minimal output)",
     ),
+    update_interfaces: bool = typer.Option(
+        False,
+        "--update-interfaces",
+        "-i",
+        help="Update interface.md for all modules based on Related Files",
+    ),
 ):
     """Build context for Claude Code (mcontext command).
 
     With --with-map, also generates code-context.md containing Python code
     structure (classes, methods, signatures) for AI-assisted development.
+
+    With --update-interfaces, updates interface.md for all modules by analyzing
+    the Python source files listed in each module's Related Files section.
     """
     # Health check only mode (for git hooks)
     if check_health_only:
@@ -910,6 +919,92 @@ def context(
                             stats = codemap.get_stats()
                             console.print(f"[green]OK[/green] Code map generated")
                             console.print(f"[dim]-> .claude/code-context.md ({stats['classes']} classes, {stats['methods']} methods)[/dim]")
+
+        # Update interface.md for all modules
+        if update_interfaces:
+            from memory_tool.codemap import PythonParser, CodeMapFormatter, DepthLevel
+            from memory_tool.context.related_files import get_module_related_files
+            from memory_tool.core.module import ModuleManager
+
+            memory_path = Path.cwd() / ".memory"
+            if not memory_path.exists():
+                console.print("[yellow]![/yellow] .memory/ not found, skipping interface update")
+            else:
+                module_manager = ModuleManager()
+                modules = module_manager.list_modules(include_archived=False)
+
+                updated_count = 0
+                skipped_count = 0
+
+                all_modules = modules.get("active", []) + modules.get("root", [])
+
+                for module_name in all_modules:
+                    module_path = memory_path / "modules" / module_name
+                    current_md = module_path / "current.md"
+
+                    if not current_md.exists():
+                        continue
+
+                    # Get Related Files from current.md
+                    related_files = get_module_related_files(module_path)
+
+                    if related_files.is_empty():
+                        skipped_count += 1
+                        continue
+
+                    # Filter for Python source files
+                    py_files = []
+                    project_root = Path.cwd()
+
+                    for path_str in related_files.source:
+                        # Try to resolve the path
+                        full_path = project_root / path_str
+                        if full_path.exists() and full_path.suffix == ".py":
+                            py_files.append(full_path)
+                        else:
+                            # Try relative to module directory
+                            module_relative = module_path / path_str
+                            if module_relative.exists() and module_relative.suffix == ".py":
+                                py_files.append(module_relative)
+
+                    if not py_files:
+                        skipped_count += 1
+                        continue
+
+                    # Parse Python files
+                    parser = PythonParser(include_private=False)
+                    from memory_tool.codemap.models import CodeMap
+
+                    parsed_modules = []
+                    for py_file in py_files:
+                        module_info = parser.parse_file(py_file)
+                        if module_info:
+                            # Adjust path to be relative to project root
+                            try:
+                                module_info.path = py_file.relative_to(project_root)
+                            except ValueError:
+                                module_info.path = py_file
+                            parsed_modules.append(module_info)
+
+                    if not parsed_modules:
+                        skipped_count += 1
+                        continue
+
+                    codemap = CodeMap(root_path=project_root, modules=parsed_modules)
+
+                    # Generate interface.md
+                    formatter = CodeMapFormatter(depth=DepthLevel.API, include_private=False)
+                    interface_content = formatter.format_for_interface(codemap)
+
+                    # Write to interface.md
+                    interface_file = module_path / "interface.md"
+                    interface_file.write_text(interface_content, encoding="utf-8")
+                    updated_count += 1
+
+                if not quiet:
+                    console.print(f"[green]OK[/green] Interface files updated: {updated_count} module(s)")
+                    if skipped_count > 0:
+                        console.print(f"[dim]Skipped {skipped_count} module(s) (no Python source files)[/dim]")
 
     except ContextError as e:
         console.print(f"[red]ERROR[/red] {e}")
