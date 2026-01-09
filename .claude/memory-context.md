@@ -1,6 +1,6 @@
 # Memory Context
 
-**Generated:** 2026-01-08 08:32
+**Generated:** 2026-01-10 01:41
 
 ---
 
@@ -28,50 +28,6 @@
 - **projects/memory-tool/project-management**: `./.memory\modules\projects\memory-tool\project-management\current.md`
 - **projects/memory-tool/search-system**: `./.memory\modules\projects\memory-tool\search-system\current.md`
 - **projects/memory-tool/ui-system**: `./.memory\modules\projects\memory-tool\ui-system\current.md`
-
----
-
-## Module-Source Mapping
-
-| Module | Source | Status |
-|--------|--------|--------|
-| archive/memory-system | *none* | ⚠️ no section |
-| memory-system.backup | *none* | ⚠️ no section |
-| projects/memory-tool | *none* | ⚠️ no section |
-| projects/memory-tool/core-system | `memory_tool/core/timeline.py`, `memory_tool/utils/migrate_timeline.py`, `.memory/timeline/daily/YYYY-MM/DD.md`, `.memory/timeline/YYYY-MM/DD.md` | ❌ 2 missing |
-| projects/memory-tool/knowledge-graph-system | *none* | ⚠️ no section |
-| projects/memory-tool/llm-integration | `memory_tool/llm/base.py`, `memory_tool/llm/anthropic_provider.py`, `memory_tool/llm/ollama_provider.py` | ❌ 3 missing |
-| projects/memory-tool/module-system | `memory_tool/core/module.py`, `memory_tool/core/connections.py`, `memory_tool/context/related_files.py`, `memory_tool/utils/path_checker.py` | ✅ |
-| projects/memory-tool/project-management | *none* | ⚠️ no section |
-| projects/memory-tool/search-system | `memory_tool/search/indexer.py`, `.memory/.search_index.db` | ❌ 2 missing |
-| projects/memory-tool/ui-system | `memory_tool/cli.py`, `memory_tool/commands/*.py` | ❌ 1 missing |
-
-### Quick Navigation
-
-**projects/memory-tool/core-system** → Core System - Timeline, Initialization, and Basic Data Structures
-- `memory_tool/core/timeline.py`
-- `memory_tool/utils/migrate_timeline.py`
-- `.memory/timeline/daily/YYYY-MM/DD.md`
-- `.memory/timeline/YYYY-MM/DD.md`
-
-**projects/memory-tool/llm-integration** → LLM Integration - AI-Powered Features Using Large Language Models
-- `memory_tool/llm/base.py`
-- `memory_tool/llm/anthropic_provider.py`
-- `memory_tool/llm/ollama_provider.py`
-
-**projects/memory-tool/module-system** → Module System - Hierarchical Modules with Wiki-Style Connections
-- `memory_tool/core/module.py`
-- `memory_tool/core/connections.py`
-- `memory_tool/context/related_files.py`
-- `memory_tool/utils/path_checker.py`
-
-**projects/memory-tool/search-system** → Search System - Multi-Backend Search with Text, Vector, and Hybrid Capabilities
-- `memory_tool/search/indexer.py`
-- `.memory/.search_index.db`
-
-**projects/memory-tool/ui-system** → UI System - Command-Line and Terminal User Interfaces
-- `memory_tool/cli.py`
-- `memory_tool/commands/*.py`
 
 ---
 
