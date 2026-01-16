@@ -229,6 +229,11 @@ class NotionWatcher:
         self._timeline_pull_count = 0
         self._last_timeline_content: dict = {}  # Track timeline content to find new entries
 
+        # Sync lock to prevent race conditions (duplicate page creation)
+        self._sync_lock = threading.Lock()
+        self._sync_in_progress = False
+        self._pending_modules: Set[str] = set()  # Modules waiting to sync
+
     def _find_memory_root(self) -> Path:
         """Find .memory directory from current working directory."""
         current = Path.cwd()
@@ -248,6 +253,9 @@ class NotionWatcher:
     def _on_module_change(self, event_type: str, module_paths: Set[str]):
         """Handle module change by syncing specific modules only.
 
+        Uses a lock to prevent race conditions where multiple syncs run
+        concurrently and create duplicate Notion pages.
+
         Args:
             event_type: Type of change (created, modified)
             module_paths: Set of module paths that changed
@@ -266,8 +274,30 @@ class NotionWatcher:
                 print(f"[{timestamp}] Would sync module: {mp}")
             return
 
+        # Check if sync is already in progress
+        with self._sync_lock:
+            if self._sync_in_progress:
+                # Add to pending and return - will be processed after current sync
+                self._pending_modules.update(module_paths)
+                print(f"[{timestamp}] Sync in progress, queued {len(module_paths)} module(s)")
+                return
+            self._sync_in_progress = True
+
         print(f"\n[{timestamp}] Module change detected: {len(module_paths)} module(s)")
 
+        try:
+            self._do_module_sync(module_paths, timestamp)
+        finally:
+            # Process any pending modules that accumulated during sync
+            self._process_pending_modules()
+
+    def _do_module_sync(self, module_paths: Set[str], timestamp: str):
+        """Execute the actual module sync.
+
+        Args:
+            module_paths: Set of module paths to sync
+            timestamp: Timestamp string for logging
+        """
         try:
             from memory_tool.notion.sync import ModuleSyncer
 
@@ -296,6 +326,21 @@ class NotionWatcher:
 
         except Exception as e:
             print(f"[{timestamp}] Module sync failed: {e}")
+
+    def _process_pending_modules(self):
+        """Process any modules that were queued during an active sync."""
+        while True:
+            with self._sync_lock:
+                if not self._pending_modules:
+                    self._sync_in_progress = False
+                    return
+                # Take all pending modules and clear the set
+                modules_to_sync = self._pending_modules.copy()
+                self._pending_modules.clear()
+
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            print(f"\n[{timestamp}] Processing {len(modules_to_sync)} queued module(s)")
+            self._do_module_sync(modules_to_sync, timestamp)
 
     def _on_timeline_change(self, event_type: str, file_path: str):
         """Handle timeline change by syncing new entries to Notion."""
