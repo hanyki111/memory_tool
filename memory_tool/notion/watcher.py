@@ -276,7 +276,22 @@ class NotionWatcher:
 
                 for entry in new_entries:
                     try:
-                        client.append_timeline_entry(page_id, entry['time'], entry['message'])
+                        # Create full datetime by combining date and time
+                        try:
+                            time_parts = entry['time'].split(':')
+                            entry_datetime = date_obj.replace(
+                                hour=int(time_parts[0]),
+                                minute=int(time_parts[1]),
+                                second=0,
+                                microsecond=0
+                            )
+                        except (ValueError, IndexError):
+                            entry_datetime = date_obj
+
+                        client.append_timeline_entry(
+                            page_id, entry['time'], entry['message'],
+                            date_obj=entry_datetime
+                        )
                         print(f"[{timestamp}] Synced: {entry['time']} | {entry['message'][:40]}...")
                     except NotionError as e:
                         print(f"[{timestamp}] Failed to sync entry: {e}")

@@ -170,13 +170,70 @@ class NotionClient:
         
         return day_page_id
 
-    def append_timeline_entry(self, page_id: str, time_str: str, message: str):
-        """Append a timeline entry: **HH:MM** | message."""
+    def append_timeline_entry(self, page_id: str, time_str: str, message: str, date_obj=None):
+        """Append a timeline entry with Notion date mention.
+
+        Args:
+            page_id: Target page ID
+            time_str: Time string (HH:MM) - used for fallback
+            message: Message content
+            date_obj: Optional datetime object for Notion date mention
+        """
         try:
+            from datetime import datetime
+
             # Extra strict cleaning to prevent any extra blocks
             # Remove all newlines and carriage returns from the message
             clean_message = message.strip().replace("\r", "").replace("\n", " ")
-            
+
+            # Build rich_text array
+            rich_text = []
+
+            # Use Notion date mention if date_obj is provided
+            if date_obj:
+                # Format: 2026-01-16T17:37:00
+                iso_datetime = date_obj.strftime("%Y-%m-%dT%H:%M:00")
+                rich_text.append({
+                    "type": "mention",
+                    "mention": {
+                        "type": "date",
+                        "date": {
+                            "start": iso_datetime,
+                            "end": None
+                        }
+                    }
+                })
+                rich_text.append({
+                    "type": "text",
+                    "text": {"content": " "}
+                })
+            else:
+                # Fallback to bold text format
+                rich_text.append({
+                    "type": "text",
+                    "text": {
+                        "content": f"{time_str} | ",
+                        "link": None
+                    },
+                    "annotations": {
+                        "bold": True,
+                        "italic": False,
+                        "strikethrough": False,
+                        "underline": False,
+                        "code": False,
+                        "color": "default"
+                    }
+                })
+
+            # Add message
+            rich_text.append({
+                "type": "text",
+                "text": {
+                    "content": clean_message,
+                    "link": None
+                }
+            })
+
             self.client.blocks.children.append(
                 block_id=page_id,
                 children=[
@@ -184,30 +241,7 @@ class NotionClient:
                         "object": "block",
                         "type": "paragraph",
                         "paragraph": {
-                            "rich_text": [
-                                {
-                                    "type": "text",
-                                    "text": {
-                                        "content": f"{time_str} | ",
-                                        "link": None
-                                    },
-                                    "annotations": {
-                                        "bold": True,
-                                        "italic": False,
-                                        "strikethrough": False,
-                                        "underline": False,
-                                        "code": False,
-                                        "color": "default"
-                                    }
-                                },
-                                {
-                                    "type": "text",
-                                    "text": {
-                                        "content": clean_message,
-                                        "link": None
-                                    }
-                                }
-                            ]
+                            "rich_text": rich_text
                         }
                     }
                 ]

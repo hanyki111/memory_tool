@@ -4205,7 +4205,7 @@ def notion_message(
             target_id = client.get_or_create_daily_page(now)
             
             time_str = now.strftime("%H:%M")
-            client.append_timeline_entry(target_id, time_str, message)
+            client.append_timeline_entry(target_id, time_str, message, date_obj=now)
             
             date_str = now.strftime("%Y-%m-%d")
             console.print(f"[green]OK[/green] Recorded to Notion at {date_str} {time_str}")
