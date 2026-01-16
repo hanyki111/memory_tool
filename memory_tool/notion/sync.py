@@ -292,7 +292,13 @@ class ModuleSyncer:
         # Get root page ID
         root_page_id = self.sync_config.root_page_id
         if not root_page_id:
-            root_page_id = self.config.get("notion", {}).get("default_page_id")
+            notion_config = self.config.get("notion", {})
+            mode = notion_config.get("mode", "default")
+            if mode == "pat":
+                # PAT mode: check pat.default_page_id first
+                root_page_id = notion_config.get("pat", {}).get("default_page_id")
+            if not root_page_id:
+                root_page_id = notion_config.get("default_page_id")
 
         if not root_page_id:
             raise NotionSyncError("No root page ID configured for sync")

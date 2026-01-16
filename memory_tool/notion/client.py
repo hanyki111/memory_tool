@@ -3,30 +3,83 @@ from notion_client import Client
 from memory_tool.utils.config import Config
 from memory_tool.notion.cache import NotionCache
 import httpx
+import os
 
 class NotionError(Exception):
     """Base exception for Notion operations."""
     pass
 
 class NotionClient:
+    """Notion API client with support for both default and PAT (proxy) modes.
+
+    Modes:
+        - "default": Standard Notion API (api.notion.com)
+        - "pat": Corporate proxy mode with custom base_url and notion_version
+
+    Config example:
+        notion:
+          mode: "default"  # or "pat"
+
+          # Default mode settings
+          api_key: "secret_xxx..."
+          default_page_id: "abc123..."
+
+          # PAT mode settings (used when mode: "pat")
+          pat:
+            api_key: "PAT_xxx..."
+            base_url: "https://notion-proxy.company.com/v1"
+            notion_version: "2025-09-03"
+            default_page_id: "abc123..."
+    """
+
     def __init__(self):
         self.config = Config()
         notion_config = self.config.get("notion", {})
 
-        self.api_key = notion_config.get("api_key")
-        self.default_page_id = notion_config.get("default_page_id")
-        self.base_url = notion_config.get("base_url")
-        self.notion_version = notion_config.get("notion_version")  # Custom Notion-Version header
+        # Determine mode: "default" or "pat"
+        self.mode = notion_config.get("mode", "default")
+
+        if self.mode == "pat":
+            # PAT mode: use settings from notion.pat section
+            pat_config = notion_config.get("pat", {})
+            self.api_key = pat_config.get("api_key")
+            self.default_page_id = pat_config.get("default_page_id") or notion_config.get("default_page_id")
+            self.base_url = pat_config.get("base_url")
+            self.notion_version = pat_config.get("notion_version")
+
+            # Fallback to env var
+            if not self.api_key:
+                self.api_key = os.environ.get("NOTION_PAT_KEY")
+
+            if not self.api_key:
+                raise NotionError(
+                    "PAT mode: API key not found. "
+                    "Configure 'notion.pat.api_key' in config.yaml or set NOTION_PAT_KEY env var."
+                )
+
+            if not self.base_url:
+                raise NotionError(
+                    "PAT mode: base_url is required. "
+                    "Configure 'notion.pat.base_url' in config.yaml."
+                )
+        else:
+            # Default mode: standard Notion API
+            self.api_key = notion_config.get("api_key")
+            self.default_page_id = notion_config.get("default_page_id")
+            self.base_url = None
+            self.notion_version = None
+
+            # Fallback to env var
+            if not self.api_key:
+                self.api_key = os.environ.get("NOTION_API_KEY")
+
+            if not self.api_key:
+                raise NotionError(
+                    "Notion API key not found. "
+                    "Configure 'notion.api_key' in config.yaml or set NOTION_API_KEY env var."
+                )
 
         self.cache = NotionCache()
-
-        if not self.api_key:
-            # Try getting from env var as fallback
-            import os
-            self.api_key = os.environ.get("NOTION_API_KEY")
-
-        if not self.api_key:
-            raise NotionError("Notion API key not found. Please configure 'notion.api_key' in config.yaml or set NOTION_API_KEY env var.")
 
         try:
             # Build client options
@@ -35,7 +88,7 @@ class NotionClient:
             if self.base_url:
                 client_kwargs["base_url"] = self.base_url
 
-            # If custom notion_version is specified, we need to use a custom httpx client
+            # If custom notion_version is specified, use a custom httpx client
             # to override the default Notion-Version header
             if self.notion_version:
                 custom_headers = {"Notion-Version": self.notion_version}
