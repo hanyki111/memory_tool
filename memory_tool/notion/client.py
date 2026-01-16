@@ -98,6 +98,10 @@ class NotionClient:
     def append_timeline_entry(self, page_id: str, time_str: str, message: str):
         """Append a timeline entry: **HH:MM** | message."""
         try:
+            # Extra strict cleaning to prevent any extra blocks
+            # Remove all newlines and carriage returns from the message
+            clean_message = message.strip().replace("\r", "").replace("\n", " ")
+            
             self.client.blocks.children.append(
                 block_id=page_id,
                 children=[
@@ -124,7 +128,7 @@ class NotionClient:
                                 {
                                     "type": "text",
                                     "text": {
-                                        "content": message,
+                                        "content": clean_message,
                                         "link": None
                                     }
                                 }
@@ -144,20 +148,25 @@ class NotionClient:
             
             for block in response.get("results", []):
                 block_type = block.get("type")
+                # Support both paragraph and bulleted_list_item (for backward compatibility)
+                rich_text = []
                 if block_type == "paragraph":
                     rich_text = block.get("paragraph", {}).get("rich_text", [])
+                elif block_type == "bulleted_list_item":
+                    rich_text = block.get("bulleted_list_item", {}).get("rich_text", [])
+                
+                if rich_text:
                     text_parts = []
                     for rt in rich_text:
                         content = rt.get("text", {}).get("content", "")
-                        # Simple markdown-like formatting for bold (time)
-                        if rt.get("annotations", {}).get("bold"):
-                            # If it looks like a time stamp (HH:MM | ), keep it clean
-                            # Otherwise maybe add **
-                            pass
                         text_parts.append(content)
                     
                     if text_parts:
-                        lines.append("".join(text_parts))
+                        line = "".join(text_parts)
+                        # No prefix for paragraph, only for list items if they still exist
+                        if block_type == "bulleted_list_item":
+                            line = f"- {line}"
+                        lines.append(line)
             
             return "\n".join(lines)
         except Exception as e:

@@ -79,6 +79,11 @@ ns = "memory_tool.cli:notion_search_cli"
 nt = "memory_tool.cli:notion_today_cli"
 nw = "memory_tool.cli:notion_week_cli"
 nsi = "memory_tool.cli:notion_search_inside_cli"
+노 = "memory_tool.cli:notion_message_cli"
+노검 = "memory_tool.cli:notion_search_inside_cli"
+노오 = "memory_tool.cli:notion_today_cli"
+노주 = "memory_tool.cli:notion_week_cli"
+노올 = "memory_tool.cli:notion_search_cli"
 
 [tool.setuptools.packages.find]
 where = ["."]

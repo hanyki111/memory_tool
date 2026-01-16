@@ -41,6 +41,11 @@ class AliasManager:
         "nt": ("nt", "Show Notion today"),
         "nw": ("nw", "Show Notion week"),
         "nsi": ("nsi", "Search inside Notion Daily Pages"),
+        "노": ("nm", "Record to Notion (Korean)"),
+        "노검": ("nsi", "Search inside Notion (Korean)"),
+        "노오": ("nt", "Show Notion today (Korean)"),
+        "노주": ("nw", "Show Notion week (Korean)"),
+        "노올": ("ns", "Search Notion (Korean)"),
     }
 
     def __init__(self):
