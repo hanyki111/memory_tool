@@ -2,6 +2,7 @@ from typing import List, Dict, Optional, Any
 from notion_client import Client
 from memory_tool.utils.config import Config
 from memory_tool.notion.cache import NotionCache
+import httpx
 
 class NotionError(Exception):
     """Base exception for Notion operations."""
@@ -11,26 +12,37 @@ class NotionClient:
     def __init__(self):
         self.config = Config()
         notion_config = self.config.get("notion", {})
-        
+
         self.api_key = notion_config.get("api_key")
         self.default_page_id = notion_config.get("default_page_id")
         self.base_url = notion_config.get("base_url")
-        
+        self.notion_version = notion_config.get("notion_version")  # Custom Notion-Version header
+
         self.cache = NotionCache()
-        
+
         if not self.api_key:
             # Try getting from env var as fallback
             import os
             self.api_key = os.environ.get("NOTION_API_KEY")
-            
+
         if not self.api_key:
             raise NotionError("Notion API key not found. Please configure 'notion.api_key' in config.yaml or set NOTION_API_KEY env var.")
-            
+
         try:
+            # Build client options
+            client_kwargs = {"auth": self.api_key}
+
             if self.base_url:
-                self.client = Client(auth=self.api_key, base_url=self.base_url)
-            else:
-                self.client = Client(auth=self.api_key)
+                client_kwargs["base_url"] = self.base_url
+
+            # If custom notion_version is specified, we need to use a custom httpx client
+            # to override the default Notion-Version header
+            if self.notion_version:
+                custom_headers = {"Notion-Version": self.notion_version}
+                http_client = httpx.Client(headers=custom_headers)
+                client_kwargs["client"] = http_client
+
+            self.client = Client(**client_kwargs)
         except Exception as e:
             raise NotionError(f"Failed to initialize Notion client: {e}")
 
