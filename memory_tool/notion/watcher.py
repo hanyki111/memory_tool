@@ -27,29 +27,33 @@ class ChangeHandler(FileSystemEventHandler):
 
     def __init__(
         self,
-        on_module_change: Callable[[str, str], None],
+        on_module_change: Callable[[str, Set[str]], None],
         on_timeline_change: Callable[[str, str], None],
         debounce_seconds: float = 2.0,
-        verbose: bool = False
+        verbose: bool = False,
+        modules_dir: Optional[Path] = None,
     ):
         """Initialize handler.
 
         Args:
-            on_module_change: Callback for module changes
+            on_module_change: Callback for module changes (event_type, module_paths)
             on_timeline_change: Callback for timeline changes
             debounce_seconds: Wait time before triggering sync
             verbose: Print verbose output
+            modules_dir: Path to modules directory for extracting module paths
         """
         super().__init__()
         self.on_module_change = on_module_change
         self.on_timeline_change = on_timeline_change
         self.debounce_seconds = debounce_seconds
         self.verbose = verbose
+        self.modules_dir = modules_dir
         self._lock = threading.Lock()
 
         # Separate debounce timers for modules and timeline
         self._module_timer: Optional[threading.Timer] = None
         self._timeline_timer: Optional[threading.Timer] = None
+        self._module_pending_paths: Set[str] = set()  # Track changed module paths
         self._timeline_pending_files: Set[str] = set()
 
     def _get_change_type(self, path: str) -> Optional[str]:
@@ -62,24 +66,54 @@ class ChangeHandler(FileSystemEventHandler):
             return "timeline"
         return None
 
+    def _extract_module_path(self, file_path: str) -> Optional[str]:
+        """Extract module path from file path.
+
+        Args:
+            file_path: Full path to the changed file
+
+        Returns:
+            Module path relative to modules directory (e.g., "게임 분석/니케")
+        """
+        if not self.modules_dir:
+            return None
+
+        try:
+            file_path_obj = Path(file_path)
+            # Get parent directory (the module directory containing the .md file)
+            module_dir = file_path_obj.parent
+            # Get relative path from modules_dir
+            rel_path = module_dir.relative_to(self.modules_dir)
+            return str(rel_path).replace("\\", "/")
+        except (ValueError, Exception):
+            return None
+
     def _schedule_module_sync(self, event_type: str, path: str):
         """Schedule module sync with debouncing."""
         with self._lock:
             if self._module_timer:
                 self._module_timer.cancel()
 
+            # Track the module path
+            module_path = self._extract_module_path(path)
+            if module_path:
+                self._module_pending_paths.add(module_path)
+
             self._module_timer = threading.Timer(
                 self.debounce_seconds,
                 self._trigger_module_sync,
-                args=[event_type, path]
+                args=[event_type]
             )
             self._module_timer.start()
 
-    def _trigger_module_sync(self, event_type: str, path: str):
+    def _trigger_module_sync(self, event_type: str):
         """Trigger module sync callback."""
         with self._lock:
             self._module_timer = None
-        self.on_module_change(event_type, path)
+            module_paths = self._module_pending_paths.copy()
+            self._module_pending_paths.clear()
+
+        self.on_module_change(event_type, module_paths)
 
     def _schedule_timeline_sync(self, event_type: str, path: str):
         """Schedule timeline sync with debouncing."""
@@ -211,33 +245,52 @@ class NotionWatcher:
             "Run 'minit' to initialize or navigate to a project with .memory/"
         )
 
-    def _on_module_change(self, event_type: str, file_path: str):
-        """Handle module change by triggering nsync."""
+    def _on_module_change(self, event_type: str, module_paths: Set[str]):
+        """Handle module change by syncing specific modules only.
+
+        Args:
+            event_type: Type of change (created, modified)
+            module_paths: Set of module paths that changed
+        """
         self._module_sync_count += 1
         timestamp = datetime.now().strftime("%H:%M:%S")
 
-        if self.dry_run:
-            print(f"\n[{timestamp}] Module change detected ({event_type})")
-            print(f"[{timestamp}] Would run: nsync")
+        if not module_paths:
+            if self.verbose:
+                print(f"[{timestamp}] No module paths to sync")
             return
 
-        print(f"\n[{timestamp}] Module change detected")
-        print(f"[{timestamp}] Running module sync...")
+        if self.dry_run:
+            print(f"\n[{timestamp}] Module change detected ({event_type})")
+            for mp in module_paths:
+                print(f"[{timestamp}] Would sync module: {mp}")
+            return
+
+        print(f"\n[{timestamp}] Module change detected: {len(module_paths)} module(s)")
 
         try:
             from memory_tool.notion.sync import ModuleSyncer
 
             syncer = ModuleSyncer()
-            result = syncer.sync(verbose=self.verbose)
+            total_pushed = 0
+            total_pulled = 0
+            total_errors = []
 
-            pushed = result.get("pushed", 0)
-            pulled = result.get("pulled", 0)
-            errors = result.get("errors", [])
+            for module_path in module_paths:
+                if self.verbose:
+                    print(f"[{timestamp}] Syncing module: {module_path}")
 
-            if errors:
-                print(f"[{timestamp}] Module sync: {pushed} pushed, {pulled} pulled, {len(errors)} errors")
-            elif pushed or pulled:
-                print(f"[{timestamp}] Module sync: {pushed} pushed, {pulled} pulled")
+                result = syncer.sync(module_path=module_path, verbose=self.verbose)
+
+                total_pushed += result.pushed
+                total_pulled += result.pulled
+                if result.failed > 0:
+                    total_errors.extend([r.message for r in result.results if not r.success])
+
+            if total_errors:
+                print(f"[{timestamp}] Module sync: {total_pushed} pushed, {total_pulled} pulled, {len(total_errors)} errors")
+            elif total_pushed or total_pulled:
+                print(f"[{timestamp}] Module sync: {total_pushed} pushed, {total_pulled} pulled")
             else:
                 print(f"[{timestamp}] No module changes to sync")
 
@@ -366,7 +419,8 @@ class NotionWatcher:
             on_module_change=self._on_module_change,
             on_timeline_change=self._on_timeline_change,
             debounce_seconds=self.debounce_seconds,
-            verbose=self.verbose
+            verbose=self.verbose,
+            modules_dir=self.modules_dir,
         )
 
         watched_dirs = []
