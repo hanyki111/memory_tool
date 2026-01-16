@@ -74,38 +74,71 @@ class MemoryInitializer:
         """
         config_path = self.memory_path / "config.yaml"
 
-        config = {
-            "version": "1.0",
-            "timeline": {
-                "auto_record": False,
-                "granularity": "medium",
-            },
-            "context": {
-                "auto_update": False,
-                "recent_days": 3,
-            },
-            "modules": {
-                "auto_update_current": False,
-            },
-            "search": {
-                "default_scope": "local",
-                "include_archived": False,
-            },
-            "codemap": {
-                "default_depth": "structure",  # overview, structure, api, docs
-                "include_private": False,
-                "include_tests": False,
-                "exclude_patterns": [
-                    "__pycache__",
-                    ".venv",
-                    "venv",
-                    "node_modules",
-                ],
-            },
-        }
+        # Write YAML with comments for better documentation
+        config_content = '''version: "1.0"
+
+timeline:
+  auto_record: false
+  granularity: medium
+
+context:
+  auto_update: false
+  recent_days: 3
+
+modules:
+  auto_update_current: false
+
+search:
+  default_scope: local
+  include_archived: false
+
+codemap:
+  default_depth: structure  # overview, structure, api, docs
+  include_private: false
+  include_tests: false
+  exclude_patterns:
+    - __pycache__
+    - .venv
+    - venv
+    - node_modules
+
+# ============================================================
+# Notion Integration (Optional)
+# ============================================================
+# Uncomment and configure to enable Notion sync
+#
+# notion:
+#   api_key: "secret_xxx..."           # Notion Integration Secret
+#   default_page_id: "abc123..."       # Timeline root page ID
+#
+#   sync:
+#     enabled: true
+#     root_page_id: "xyz789..."        # Module sync root page ID
+#
+#     targets:                          # Modules to sync
+#       - "projects/my-project"
+#       - "projects/my-project/**"      # Include submodules
+#
+#     exclude_patterns:
+#       - "archive/**"
+#
+#     conflict_resolution: "last-write-wins"
+#
+#     timeline:
+#       enabled: true
+#       bidirectional: true
+#       sync_days: 30
+#
+# Commands:
+#   nm "message"              - Record to Notion timeline
+#   nsync                     - Sync modules with Notion
+#   nsync --timeline          - Sync timeline entries
+#   nwatch                    - Watch for changes (Local -> Notion)
+#   nwatch --bidirectional    - Watch both directions
+'''
 
         with open(config_path, "w", encoding="utf-8") as f:
-            yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+            f.write(config_content)
 
         return config_path
 

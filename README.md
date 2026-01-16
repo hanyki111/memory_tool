@@ -190,15 +190,29 @@ nsync --status           # 싱크 상태 확인
 nsync --discover         # 노션에서 모듈 다운로드 (첫 설정)
 nsync --verbose          # 상세 진행 로그
 
+# 타임라인 일괄 싱크
+nsync --timeline                 # 오늘 타임라인 동기화
+nsync --timeline --days 7        # 최근 7일 동기화
+
 # 자동 동기화 (파일 변경 감지)
-nwatch                   # 기본 설정으로 감시 시작
-nwatch --debounce 5      # 5초 대기 후 동기화
-nwatch --dry-run         # 테스트 모드
+nwatch                           # Local → Notion 단방향
+nwatch --bidirectional           # 양방향 (Notion → Local polling 포함)
+nwatch -b -i 60                  # 양방향, 60초 polling 간격
+nwatch --debounce 5              # 5초 대기 후 동기화
+nwatch --modules-only            # 모듈만 감시
+nwatch --timeline-only           # 타임라인만 감시
+nwatch --dry-run                 # 테스트 모드
 ```
 
 **nwatch 설치:**
 ```bash
 pip install memory-tool[watch]
+```
+
+**참고:** WSL에서 Windows 마운트 드라이브(/mnt/...)를 감시할 경우, Windows에서 직접 실행하세요:
+```powershell
+# Windows PowerShell에서
+python -m memory_tool nwatch --bidirectional
 ```
 
 ### Notion Sync 구조
@@ -291,7 +305,7 @@ malias list                     # 상태 확인
 
 ```bash
 # 메시지 기록
-nm "작업 내용"                   # 노션 타임라인에 기록
+nm "작업 내용"                   # 노션 타임라인에 기록 (날짜/시간 자동)
 
 # 타임라인 보기
 nt                               # 오늘
@@ -312,9 +326,19 @@ nsync --discover                 # 노션에서 모듈 다운로드
 nsync --verbose                  # 상세 진행 로그
 nsync "projects/my-app"          # 특정 모듈만
 
+# 타임라인 일괄 싱크 (NEW)
+nsync --timeline                 # 오늘 타임라인 동기화
+nsync --timeline --days 7        # 최근 7일 동기화
+nsync --timeline --push          # 로컬 → 노션만
+nsync --timeline --pull          # 노션 → 로컬만
+
 # 자동 동기화 (파일 변경 감시)
-nwatch                           # 감시 시작 (Ctrl+C로 종료)
+nwatch                           # 감시 시작 (Local → Notion)
+nwatch --bidirectional           # 양방향 감시 (Notion → Local 포함)
+nwatch -b -i 60                  # 양방향, 60초 polling 간격
 nwatch --debounce 5              # 5초 대기 후 동기화
+nwatch --modules-only            # 모듈만 감시
+nwatch --timeline-only           # 타임라인만 감시
 nwatch --dry-run                 # 테스트 모드
 nwatch --quiet                   # 간결한 출력
 ```

@@ -3,7 +3,7 @@
 > Complete guide to memory_tool - Time-Space Integrated Knowledge System
 
 **Version:** 1.0.0-alpha
-**Last Updated:** 2025-11-15
+**Last Updated:** 2026-01-16
 
 ---
 
@@ -41,6 +41,12 @@
 - [config.yaml Reference](#configyaml-reference)
 - [Environment Variables](#environment-variables)
 - [Best Practices](#best-practices)
+
+### [Part 6: Notion Integration](#notion-integration)
+- [Setup](#setup)
+- [Commands](#commands)
+- [nwatch Modes](#nwatch-modes)
+- [Conflict Resolution](#conflict-resolution)
 
 ---
 
@@ -3558,6 +3564,93 @@ export MEMORY_TOOL_DISABLE_HOOKS=1
    python -m memory_tool module check-links
    python -m memory_tool module graph
    ```
+
+---
+
+## Notion Integration
+
+memory_tool integrates with Notion for cloud sync and collaboration.
+
+### Setup
+
+1. **Create Notion Integration**
+   - Go to [Notion Integrations](https://www.notion.so/my-integrations)
+   - Create new integration, copy the "Internal Integration Secret"
+
+2. **Get Page IDs**
+   - Open your Notion page → "..." → "Copy link"
+   - Extract page ID from URL: `https://www.notion.so/Page-Title-abc123...`
+
+3. **Connect Integration**
+   - Open your Notion page → "..." → "Connections" → Add your integration
+
+4. **Configure config.yaml**
+   ```yaml
+   notion:
+     api_key: "secret_xxx..."
+     default_page_id: "abc123..."    # Timeline root
+
+     sync:
+       enabled: true
+       root_page_id: "xyz789..."     # Module sync root
+       targets:
+         - "projects/my-project"
+         - "projects/my-project/**"  # Include submodules
+       conflict_resolution: "last-write-wins"
+   ```
+
+### Commands
+
+```bash
+# Timeline
+nm "message"                    # Record to Notion timeline
+nt                              # View today's Notion timeline
+nw                              # View this week
+
+# Search
+ns "keyword"                    # Search Notion pages
+nsi "keyword"                   # Search inside daily pages
+
+# Module Sync
+nsync                           # Bidirectional sync
+nsync --push                    # Local → Notion only
+nsync --pull                    # Notion → Local only
+nsync --dry-run                 # Preview changes
+nsync --status                  # Check sync status
+nsync --discover                # Download modules from Notion
+
+# Timeline Sync
+nsync --timeline                # Sync today's timeline
+nsync --timeline --days 7       # Sync last 7 days
+
+# Auto-sync (File Watcher)
+nwatch                          # Watch for changes (Local → Notion)
+nwatch --bidirectional          # Enable Notion → Local polling
+nwatch -b -i 60                 # Bidirectional, 60s poll interval
+nwatch --modules-only           # Watch only modules/
+nwatch --timeline-only          # Watch only timeline/
+```
+
+### nwatch Modes
+
+| Mode | Local → Notion | Notion → Local |
+|------|---------------|----------------|
+| `nwatch` | ✅ Instant (file events) | ❌ |
+| `nwatch -b` | ✅ Instant | ✅ Polling (120s default) |
+
+**WSL Note:** File watching on mounted Windows drives (/mnt/...) requires running from Windows:
+```powershell
+# Windows PowerShell
+python -m memory_tool nwatch --bidirectional
+```
+
+### Conflict Resolution
+
+When both local and Notion have changes:
+
+- **Last-Write-Wins** (default): Most recent modification wins
+- **Local Wins**: `nsync --conflict local`
+- **Notion Wins**: `nsync --conflict notion`
 
 ---
 
