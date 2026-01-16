@@ -118,8 +118,15 @@ class NotionClient:
         except Exception:
             return None
 
-    def get_or_create_subpage(self, parent_id: str, title: str, cache_key: Optional[str] = None) -> str:
-        """Get existing subpage or create new one."""
+    def get_or_create_subpage(self, parent_id: str, title: str, cache_key: Optional[str] = None, icon: Optional[str] = None) -> str:
+        """Get existing subpage or create new one.
+
+        Args:
+            parent_id: Parent page ID
+            title: Page title
+            cache_key: Cache key for storing page ID
+            icon: Emoji icon for the page (only used when creating new page)
+        """
         # 1. Check cache
         if cache_key:
             cached_id = self.cache.get_page_id(cache_key)
@@ -128,11 +135,11 @@ class NotionClient:
 
         # 2. Check Notion
         page_id = self.find_child_page(parent_id, title)
-        
+
         # 3. Create if not found
         if not page_id:
             try:
-                new_page = self.create_page(title, parent_id)
+                new_page = self.create_page(title, parent_id, icon=icon)
                 page_id = new_page["id"]
             except Exception as e:
                 raise NotionError(f"Failed to create subpage '{title}': {e}")
@@ -140,7 +147,7 @@ class NotionClient:
         # 4. Update cache
         if cache_key and page_id:
             self.cache.set_page_id(cache_key, page_id)
-            
+
         return page_id
 
     def get_or_create_daily_page(self, date_obj) -> str:
@@ -337,17 +344,23 @@ class NotionClient:
         except Exception as e:
             raise NotionError(f"Search failed: {e}")
 
-    def create_page(self, title: str, parent_id: Optional[str] = None) -> Dict[str, Any]:
-        """Create a new page in Notion."""
+    def create_page(self, title: str, parent_id: Optional[str] = None, icon: Optional[str] = None) -> Dict[str, Any]:
+        """Create a new page in Notion.
+
+        Args:
+            title: Page title
+            parent_id: Parent page ID (default: default_page_id)
+            icon: Emoji icon for the page (e.g., "📁", "📄")
+        """
         target_parent_id = parent_id or self.default_page_id
-        
+
         if not target_parent_id:
             raise NotionError("No parent page ID provided and no default configured.")
-            
+
         try:
-            new_page = self.client.pages.create(
-                parent={"page_id": target_parent_id},
-                properties={
+            page_data = {
+                "parent": {"page_id": target_parent_id},
+                "properties": {
                     "title": {
                         "title": [
                             {
@@ -358,7 +371,13 @@ class NotionClient:
                         ]
                     }
                 }
-            )
+            }
+
+            # Add icon if specified
+            if icon:
+                page_data["icon"] = {"type": "emoji", "emoji": icon}
+
+            new_page = self.client.pages.create(**page_data)
             return new_page
         except Exception as e:
             raise NotionError(f"Failed to create page: {e}")

@@ -333,7 +333,12 @@ class MarkdownNotionConverter:
                 if match_type == "link":
                     link_text = earliest_match.group(1)
                     link_url = earliest_match.group(2)
-                    segments.append(("link", link_text, {"url": link_url}))
+                    # Notion requires valid URLs starting with http:// or https://
+                    if link_url.startswith(("http://", "https://")):
+                        segments.append(("link", link_text, {"url": link_url}))
+                    else:
+                        # Invalid URL - render as plain text with brackets
+                        segments.append(("plain", f"[{link_text}]({link_url})", {}))
                 elif match_type == "bold":
                     fmt_text = earliest_match.group(1) or earliest_match.group(2)
                     segments.append(("bold", fmt_text, {}))

@@ -349,11 +349,12 @@ class ModuleSyncer:
             if sub_state.notion_page_id:
                 current_parent = sub_state.notion_page_id
             else:
-                # Create or find page
+                # Create or find page (📁 icon for module folders)
                 page_id = self.client.get_or_create_subpage(
                     current_parent,
                     part,
                     cache_key=f"module_{sub_path}",
+                    icon="📁",
                 )
                 sub_state.notion_page_id = page_id
                 self.state_manager.set_module_state(sub_path, sub_state)
@@ -544,8 +545,8 @@ class ModuleSyncer:
             self._replace_page_content(action.notion_page_id, blocks)
             page_id = action.notion_page_id
         else:
-            # Create new page
-            new_page = self.client.create_page(action.file_path, parent_page_id)
+            # Create new page (📄 icon for file pages)
+            new_page = self.client.create_page(action.file_path, parent_page_id, icon="📄")
             page_id = new_page["id"]
 
             # Add content blocks (batch by 100 due to Notion API limit)
