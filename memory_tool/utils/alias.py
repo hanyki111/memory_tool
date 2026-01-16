@@ -35,6 +35,12 @@ class AliasManager:
         "mcompletion": ("completion", "Manage shell completions"),
         "mplan": ("plan", "Manage plans and tasks"),
         "mtutorial": ("tutorial", "Interactive tutorial"),
+        "nm": ("nm", "Record to Notion"),
+        "nadd": ("nadd", "Add Notion page"),
+        "ns": ("ns", "Search Notion"),
+        "nt": ("nt", "Show Notion today"),
+        "nw": ("nw", "Show Notion week"),
+        "nsi": ("nsi", "Search inside Notion Daily Pages"),
     }
 
     def __init__(self):

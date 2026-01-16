@@ -52,6 +52,7 @@ from memory_tool.summary import (
     ModuleSummarizer,
 )
 from memory_tool.review import ReviewManager
+from memory_tool.notion.client import NotionClient, NotionError
 
 app = typer.Typer(
     name="memory-tool",
@@ -4082,6 +4083,193 @@ def main(
         )
 
 
+@app.command(name="nm")
+def notion_message(
+    message: str = typer.Argument(..., help="Message to append to Notion page"),
+    page_id: str = typer.Option(None, "--page", "-p", help="Target page ID (optional)"),
+):
+    """Append text to a Notion page (nm command)."""
+    try:
+        from datetime import datetime
+        client = NotionClient()
+        now = datetime.now()
+        
+        if page_id:
+            # Direct append to specific page
+            target_id = page_id
+            client.append_text(target_id, message)
+            console.print(f"[green]OK[/green] Appended to Notion page")
+            console.print(f"[dim]-> Page: {target_id}[/dim]")
+        else:
+            # Auto-daily mode (Root -> Month -> Day)
+            if not client.default_page_id:
+                console.print("[red]ERROR[/red] Default page ID not configured in config.yaml")
+                sys.exit(1)
+                
+            console.print("[dim]Locating daily page...[/dim]")
+            target_id = client.get_or_create_daily_page(now)
+            
+            time_str = now.strftime("%H:%M")
+            client.append_timeline_entry(target_id, time_str, message)
+            
+            date_str = now.strftime("%Y-%m-%d")
+            console.print(f"[green]OK[/green] Recorded to Notion at {date_str} {time_str}")
+            console.print(f"[dim]-> Page: {target_id} ({date_str})[/dim]")
+            console.print(f"   {message}")
+        
+    except NotionError as e:
+        console.print(f"[red]ERROR[/red] {e}")
+        sys.exit(1)
+
+
+@app.command(name="nadd")
+def notion_add(
+    title: str = typer.Argument(..., help="Title of the new page"),
+    parent_id: str = typer.Option(None, "--parent", "-p", help="Parent page ID (optional)"),
+):
+    """Create a new Notion page (nadd command)."""
+    try:
+        client = NotionClient()
+        new_page = client.create_page(title, parent_id)
+        console.print(f"[green]OK[/green] Created page: {title}")
+        console.print(f"[dim]-> {new_page.get('url')}[/dim]")
+        
+    except NotionError as e:
+        console.print(f"[red]ERROR[/red] {e}")
+        sys.exit(1)
+
+
+@app.command(name="ns")
+def notion_search(
+    query: str = typer.Argument(..., help="Search query"),
+):
+    """Search Notion pages (ns command)."""
+    try:
+        client = NotionClient()
+        results = client.search(query)
+        
+        if not results:
+            console.print("[yellow]No results found[/yellow]")
+            return
+            
+        console.print(f"[cyan]Notion Search Results ({len(results)}):[/cyan]\n")
+        for i, res in enumerate(results, 1):
+            console.print(f"{i}. {res['title']}")
+            console.print(f"   [dim]ID: {res['id']}[/dim]")
+            if res.get('url'):
+                console.print(f"   [dim]URL: {res['url']}[/dim]")
+            console.print()
+            
+    except NotionError as e:
+        console.print(f"[red]ERROR[/red] {e}")
+        sys.exit(1)
+
+
+@app.command(name="nt")
+def notion_today():
+    """Show today's Notion timeline (nt command)."""
+    try:
+        from datetime import datetime
+        client = NotionClient()
+        now = datetime.now()
+        date_str = now.strftime("%Y-%m-%d")
+        
+        console.print(f"[cyan]{date_str} Notion Timeline:[/cyan]\n")
+        
+        # We reuse get_or_create to find the ID easily (it caches too)
+        # If it creates an empty page, that's fine/expected behavior for 'today'
+        target_id = client.get_or_create_daily_page(now)
+        content = client.get_page_content(target_id)
+        
+        if content.strip():
+            console.print(content)
+        else:
+            console.print("[dim]No entries yet.[/dim]")
+            
+        console.print(f"\n[dim]Page ID: {target_id}[/dim]")
+            
+    except NotionError as e:
+        console.print(f"[red]ERROR[/red] {e}")
+        sys.exit(1)
+
+
+@app.command(name="nw")
+def notion_week():
+    """Show this week's Notion timeline (nw command)."""
+    try:
+        from datetime import datetime, timedelta
+        client = NotionClient()
+        today = datetime.now()
+        
+        # Calculate Monday
+        start_of_week = today - timedelta(days=today.weekday())
+        
+        console.print(f"[cyan]Notion Timeline (Week of {start_of_week.strftime('%Y-%m-%d')}):[/cyan]\n")
+        
+        found_any = False
+        
+        # Loop from Monday to Today
+        for i in range((today - start_of_week).days + 1):
+            current_date = start_of_week + timedelta(days=i)
+            date_str = current_date.strftime("%Y-%m-%d")
+            
+            # Using cache to find ID without API call if possible
+            # Note: get_or_create_daily_page might do API calls if not cached.
+            # For 'week' view, maybe we should only check cache or use search?
+            # But consistent structure suggests we check existence.
+            # To be safe/fast, we rely on cache primarily.
+            
+            # We use get_or_create because if we are checking the week,
+            # ensuring the pages exist is consistent with 'mweek' behavior logic
+            # (though mweek reads files).
+            # Limitation: This might take a few seconds for 5-7 days if not cached.
+            page_id = client.get_or_create_daily_page(current_date)
+            content = client.get_page_content(page_id)
+            
+            if content.strip():
+                found_any = True
+                console.print(f"[bold]{date_str}[/bold]")
+                console.print(content)
+                console.print("") # Separator
+        
+        if not found_any:
+            console.print("[dim]No entries found for this week.[/dim]")
+            
+    except NotionError as e:
+        console.print(f"[red]ERROR[/red] {e}")
+        sys.exit(1)
+
+
+@app.command(name="nsi")
+def notion_search_inside(
+    query: str = typer.Argument(..., help="Search query inside Daily Pages"),
+):
+    """Search inside Notion Daily Pages (nsi command)."""
+    try:
+        client = NotionClient()
+        console.print(f"[dim]Searching inside Daily Pages for '{query}'...[/dim]")
+        
+        results = client.search_content(query)
+        
+        if not results:
+            console.print("[yellow]No matching entries found in Daily Pages.[/yellow]")
+            return
+            
+        console.print(f"[cyan]Found matches in {len(results)} pages:[/cyan]\n")
+        
+        for res in results:
+            console.print(f"[bold]{res['date']}[/bold] [dim]({res['id']})[/dim]")
+            for line in res['matches']:
+                # Highlight the query
+                highlighted = line.replace(query, f"[yellow]{query}[/yellow]")
+                console.print(f"  {highlighted}")
+            console.print()
+            
+    except NotionError as e:
+        console.print(f"[red]ERROR[/red] {e}")
+        sys.exit(1)
+
+
 if __name__ == "__main__":
     app()
 
@@ -4199,3 +4387,46 @@ def map_cli():
     import sys
     sys.argv = ['memory_tool', 'map'] + sys.argv[1:]
     app()
+
+
+def notion_message_cli():
+    """Entry point for 'nm' command."""
+    import sys
+    sys.argv = ['memory_tool', 'nm'] + sys.argv[1:]
+    app()
+
+
+def notion_add_cli():
+    """Entry point for 'nadd' command."""
+    import sys
+    sys.argv = ['memory_tool', 'nadd'] + sys.argv[1:]
+    app()
+
+
+def notion_search_cli():
+    """Entry point for 'ns' command."""
+    import sys
+    sys.argv = ['memory_tool', 'ns'] + sys.argv[1:]
+    app()
+
+
+def notion_today_cli():
+    """Entry point for 'nt' command."""
+    import sys
+    sys.argv = ['memory_tool', 'nt'] + sys.argv[1:]
+    app()
+
+
+def notion_week_cli():
+    """Entry point for 'nw' command."""
+    import sys
+    sys.argv = ['memory_tool', 'nw'] + sys.argv[1:]
+    app()
+
+
+def notion_search_inside_cli():
+    """Entry point for 'nsi' command."""
+    import sys
+    sys.argv = ['memory_tool', 'nsi'] + sys.argv[1:]
+    app()
+

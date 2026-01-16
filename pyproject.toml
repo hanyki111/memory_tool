@@ -27,6 +27,7 @@ dependencies = [
     "typer>=0.9.0",
     "pyyaml>=6.0",
     "rich>=13.0.0",  # For beautiful CLI output
+    "notion-client>=2.0.0",
 ]
 
 [project.urls]
@@ -72,6 +73,12 @@ mcompletion = "memory_tool.cli:completion_cli"
 mplan = "memory_tool.cli:plan_cli"
 mtutorial = "memory_tool.cli:tutorial_cli"
 mmap = "memory_tool.cli:map_cli"
+nm = "memory_tool.cli:notion_message_cli"
+nadd = "memory_tool.cli:notion_add_cli"
+ns = "memory_tool.cli:notion_search_cli"
+nt = "memory_tool.cli:notion_today_cli"
+nw = "memory_tool.cli:notion_week_cli"
+nsi = "memory_tool.cli:notion_search_inside_cli"
 
 [tool.setuptools.packages.find]
 where = ["."]
