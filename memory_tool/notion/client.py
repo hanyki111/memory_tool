@@ -191,8 +191,17 @@ class NotionClient:
 
             # Use Notion date mention if date_obj is provided
             if date_obj:
-                # Format: 2026-01-16T17:37:00
-                iso_datetime = date_obj.strftime("%Y-%m-%dT%H:%M:00")
+                # Format: 2026-01-16T17:37:00+09:00 (with timezone)
+                # Get local timezone offset
+                import time
+                if time.daylight and time.localtime().tm_isdst > 0:
+                    utc_offset_sec = -time.altzone
+                else:
+                    utc_offset_sec = -time.timezone
+                utc_offset_hours = utc_offset_sec // 3600
+                utc_offset_mins = abs(utc_offset_sec % 3600) // 60
+                tz_str = f"{utc_offset_hours:+03d}:{utc_offset_mins:02d}"
+                iso_datetime = date_obj.strftime(f"%Y-%m-%dT%H:%M:00{tz_str}")
                 rich_text.append({
                     "type": "mention",
                     "mention": {

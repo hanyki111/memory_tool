@@ -4375,6 +4375,8 @@ def notion_sync(
     status: bool = typer.Option(False, "--status", "-s", help="Show sync status"),
     discover: bool = typer.Option(False, "--discover", "-d", help="Discover and download modules from Notion"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
+    timeline: bool = typer.Option(False, "--timeline", "-t", help="Sync timeline entries"),
+    days: int = typer.Option(1, "--days", help="Number of days to sync for timeline (default: 1 = today)"),
 ):
     """Bidirectional sync with Notion (nsync command).
 
@@ -4389,6 +4391,8 @@ def notion_sync(
         nsync --discover --dry-run  # Preview what would be downloaded
         nsync --dry-run          # Preview changes
         nsync --status           # Show sync status
+        nsync --timeline         # Sync today's timeline
+        nsync --timeline --days 7  # Sync last 7 days of timeline
     """
     try:
         from memory_tool.notion.sync import ModuleSyncer, NotionSyncError
@@ -4466,6 +4470,45 @@ def notion_sync(
                 if not to_push and not to_pull and not conflicts:
                     console.print("  [dim]All in sync[/dim]")
                 console.print()
+            return
+
+        # Timeline sync mode
+        if timeline:
+            from memory_tool.notion.timeline_sync import TimelineSyncer
+
+            timeline_syncer = TimelineSyncer()
+
+            if dry_run:
+                console.print(f"[cyan]Timeline sync (dry-run) - last {days} day(s):[/cyan]\n")
+            else:
+                console.print(f"[cyan]Syncing timeline (last {days} day(s))...[/cyan]\n")
+
+            result = timeline_syncer.sync(
+                days=days,
+                push_only=push,
+                pull_only=pull,
+                dry_run=dry_run,
+                verbose=verbose,
+            )
+
+            pushed = result.get("pushed", 0)
+            pulled = result.get("pulled", 0)
+            skipped = result.get("skipped", 0)
+            errors = result.get("errors", [])
+
+            console.print()
+            if pushed:
+                console.print(f"[green]Pushed:[/green] {pushed} entries to Notion")
+            if pulled:
+                console.print(f"[blue]Pulled:[/blue] {pulled} entries from Notion")
+            if skipped:
+                console.print(f"[dim]Skipped:[/dim] {skipped} entries (already synced)")
+            if errors:
+                console.print(f"[red]Errors:[/red] {len(errors)}")
+                for err in errors:
+                    console.print(f"  - {err}")
+            if not pushed and not pulled and not errors:
+                console.print("[dim]No changes to sync[/dim]")
             return
 
         # Sync mode
@@ -4690,6 +4733,8 @@ def notion_watch(
     quiet: bool = typer.Option(False, "--quiet", "-q", help="Less verbose output"),
     modules_only: bool = typer.Option(False, "--modules-only", "-m", help="Watch only modules/ directory"),
     timeline_only: bool = typer.Option(False, "--timeline-only", "-t", help="Watch only timeline/ directory"),
+    bidirectional: bool = typer.Option(False, "--bidirectional", "-b", help="Enable Notion -> Local sync (polling)"),
+    poll_interval: int = typer.Option(120, "--poll-interval", "-i", help="Notion polling interval in seconds (default: 120)"),
 ):
     """Watch local modules and timeline, auto-sync with Notion on changes.
 
@@ -4697,15 +4742,19 @@ def notion_watch(
     - modules/ changes -> triggers module sync (nsync)
     - timeline/ changes -> syncs new entries to Notion daily pages
 
+    With --bidirectional: Also polls Notion for changes and pulls to local.
+
     Uses debouncing to batch rapid changes.
 
     Examples:
-        nwatch                   # Watch both modules and timeline
-        nwatch --modules-only    # Watch only modules/
-        nwatch --timeline-only   # Watch only timeline/
-        nwatch --debounce 5      # Wait 5 seconds before syncing
-        nwatch --dry-run         # Show what would sync (no actual sync)
-        nwatch --quiet           # Less verbose output
+        nwatch                      # Watch both modules and timeline (Local -> Notion)
+        nwatch --bidirectional      # Enable Notion -> Local sync too
+        nwatch -b -i 60             # Bidirectional with 60s polling interval
+        nwatch --modules-only       # Watch only modules/
+        nwatch --timeline-only      # Watch only timeline/
+        nwatch --debounce 5         # Wait 5 seconds before syncing
+        nwatch --dry-run            # Show what would sync (no actual sync)
+        nwatch --quiet              # Less verbose output
 
     Requirements:
         pip install memory-tool[watch]
@@ -4730,6 +4779,8 @@ def notion_watch(
             dry_run=dry_run,
             watch_modules=watch_modules,
             watch_timeline=watch_timeline,
+            bidirectional=bidirectional,
+            poll_interval=poll_interval,
         )
 
         console.print("[cyan]Starting Notion sync watcher...[/cyan]\n")

@@ -13,7 +13,7 @@ from typing import Optional, Callable, Set
 from datetime import datetime
 
 try:
-    from watchdog.observers import Observer
+    from watchdog.observers.polling import PollingObserver as Observer
     from watchdog.events import FileSystemEventHandler
     WATCHDOG_AVAILABLE = True
 except ImportError:
@@ -107,19 +107,25 @@ class ChangeHandler(FileSystemEventHandler):
         if files:
             self.on_timeline_change(event_type, files[-1])
 
+    def on_any_event(self, event):
+        """Debug: Log all events."""
+        if self.verbose and not event.is_directory:
+            print(f"[watch:debug] Event: {event.event_type} -> {event.src_path}")
+
     def on_modified(self, event):
         """Handle file modification."""
         if event.is_directory:
             return
 
         change_type = self._get_change_type(event.src_path)
+        if self.verbose:
+            print(f"[watch:debug] Modified change_type={change_type} path={event.src_path}")
+
         if change_type == "module":
-            if self.verbose:
-                print(f"[watch] Module modified: {Path(event.src_path).name}")
+            print(f"[watch] Module modified: {Path(event.src_path).name}")
             self._schedule_module_sync("modified", event.src_path)
         elif change_type == "timeline":
-            if self.verbose:
-                print(f"[watch] Timeline modified: {Path(event.src_path).name}")
+            print(f"[watch] Timeline modified: {Path(event.src_path).name}")
             self._schedule_timeline_sync("modified", event.src_path)
 
     def on_created(self, event):
@@ -128,13 +134,14 @@ class ChangeHandler(FileSystemEventHandler):
             return
 
         change_type = self._get_change_type(event.src_path)
+        if self.verbose:
+            print(f"[watch:debug] Created change_type={change_type} path={event.src_path}")
+
         if change_type == "module":
-            if self.verbose:
-                print(f"[watch] Module created: {Path(event.src_path).name}")
+            print(f"[watch] Module created: {Path(event.src_path).name}")
             self._schedule_module_sync("created", event.src_path)
         elif change_type == "timeline":
-            if self.verbose:
-                print(f"[watch] Timeline created: {Path(event.src_path).name}")
+            print(f"[watch] Timeline created: {Path(event.src_path).name}")
             self._schedule_timeline_sync("created", event.src_path)
 
 
@@ -149,6 +156,8 @@ class NotionWatcher:
         dry_run: bool = False,
         watch_modules: bool = True,
         watch_timeline: bool = True,
+        bidirectional: bool = False,
+        poll_interval: int = 120,
     ):
         """Initialize watcher.
 
@@ -159,6 +168,8 @@ class NotionWatcher:
             dry_run: Only show what would sync, don't actually sync
             watch_modules: Watch modules directory
             watch_timeline: Watch timeline directory
+            bidirectional: Enable Notion -> Local sync via polling
+            poll_interval: Seconds between Notion polling (default: 120)
         """
         if not WATCHDOG_AVAILABLE:
             raise ImportError(
@@ -174,10 +185,14 @@ class NotionWatcher:
         self.dry_run = dry_run
         self.watch_modules = watch_modules
         self.watch_timeline = watch_timeline
+        self.bidirectional = bidirectional
+        self.poll_interval = poll_interval
         self._observer: Optional[Observer] = None
+        self._poll_thread: Optional[threading.Thread] = None
         self._running = False
         self._module_sync_count = 0
         self._timeline_sync_count = 0
+        self._timeline_pull_count = 0
         self._last_timeline_content: dict = {}  # Track timeline content to find new entries
 
     def _find_memory_root(self) -> Path:
@@ -374,9 +389,21 @@ class NotionWatcher:
         self._observer.start()
         self._running = True
 
+        # Start polling thread if bidirectional
+        if self.bidirectional:
+            self._poll_thread = threading.Thread(target=self._poll_notion_loop, daemon=True)
+            self._poll_thread.start()
+
         mode = "(dry-run)" if self.dry_run else ""
-        print(f"Watching: {', '.join(watched_dirs)} {mode}")
+        bidir_mode = "(bidirectional)" if self.bidirectional else "(Local -> Notion)"
+        print(f"Watching: {', '.join(watched_dirs)} {mode} {bidir_mode}")
         print(f"Debounce: {self.debounce_seconds}s")
+        if self.bidirectional:
+            print(f"Notion poll interval: {self.poll_interval}s")
+        if self.verbose:
+            print(f"[debug] Memory root: {self.memory_root}")
+            print(f"[debug] Modules dir: {self.modules_dir} (exists: {self.modules_dir.exists()})")
+            print(f"[debug] Timeline dir: {self.timeline_dir} (exists: {self.timeline_dir.exists()})")
         print("Press Ctrl+C to stop\n")
 
     def _preload_timeline_content(self):
@@ -388,13 +415,70 @@ class NotionWatcher:
             except Exception:
                 pass
 
+    def _poll_notion_loop(self):
+        """Polling loop to check Notion for changes."""
+        while self._running:
+            try:
+                self._poll_notion()
+            except Exception as e:
+                if self.verbose:
+                    timestamp = datetime.now().strftime("%H:%M:%S")
+                    print(f"[{timestamp}] Notion poll error: {e}")
+
+            # Sleep in small increments to allow quick shutdown
+            for _ in range(self.poll_interval):
+                if not self._running:
+                    break
+                time.sleep(1)
+
+    def _poll_notion(self):
+        """Poll Notion for timeline changes and pull to local."""
+        timestamp = datetime.now().strftime("%H:%M:%S")
+
+        if self.verbose:
+            print(f"[{timestamp}] Polling Notion for changes...")
+
+        try:
+            from memory_tool.notion.timeline_sync import TimelineSyncer
+
+            syncer = TimelineSyncer(memory_root=self.memory_root)
+
+            # Only sync today's timeline for polling (to minimize API calls)
+            result = syncer.sync(
+                days=1,
+                pull_only=True,
+                dry_run=self.dry_run,
+                verbose=False,  # Don't spam verbose during polling
+            )
+
+            pulled = result.get("pulled", 0)
+            errors = result.get("errors", [])
+
+            if pulled > 0:
+                self._timeline_pull_count += pulled
+                print(f"[{timestamp}] Pulled {pulled} entries from Notion")
+                # Reload timeline content to avoid pushing back what we just pulled
+                self._preload_timeline_content()
+
+            if errors and self.verbose:
+                for err in errors:
+                    print(f"[{timestamp}] Poll error: {err}")
+
+        except Exception as e:
+            if self.verbose:
+                print(f"[{timestamp}] Notion poll failed: {e}")
+
     def stop(self):
         """Stop watching."""
+        self._running = False
         if self._observer:
             self._observer.stop()
             self._observer.join()
-            self._running = False
-            print(f"\nStopped. Module syncs: {self._module_sync_count}, Timeline syncs: {self._timeline_sync_count}")
+
+        stats = f"Module syncs: {self._module_sync_count}, Timeline syncs: {self._timeline_sync_count}"
+        if self.bidirectional:
+            stats += f", Timeline pulls: {self._timeline_pull_count}"
+        print(f"\nStopped. {stats}")
 
     def run_forever(self):
         """Run watcher until interrupted."""
