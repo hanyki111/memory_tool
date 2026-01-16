@@ -53,6 +53,7 @@ from memory_tool.summary import (
 )
 from memory_tool.review import ReviewManager
 from memory_tool.notion.client import NotionClient, NotionError
+from memory_tool.notion.models import SyncDirection
 
 app = typer.Typer(
     name="memory-tool",
@@ -4270,6 +4271,120 @@ def notion_search_inside(
         sys.exit(1)
 
 
+@app.command(name="nsync")
+def notion_sync(
+    module: str = typer.Argument(None, help="Module path to sync (optional)"),
+    push: bool = typer.Option(False, "--push", "-p", help="Only push local changes to Notion"),
+    pull: bool = typer.Option(False, "--pull", "-l", help="Only pull Notion changes to local"),
+    force: bool = typer.Option(False, "--force", "-f", help="Force sync regardless of timestamps"),
+    dry_run: bool = typer.Option(False, "--dry-run", "-n", help="Show what would happen without syncing"),
+    status: bool = typer.Option(False, "--status", "-s", help="Show sync status"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
+):
+    """Bidirectional sync with Notion (nsync command).
+
+    Syncs local modules with Notion pages. Configure targets in config.yaml.
+
+    Examples:
+        nsync                    # Sync all configured targets
+        nsync projects/my-mod    # Sync specific module
+        nsync --push             # Only push local to Notion
+        nsync --pull             # Only pull Notion to local
+        nsync --dry-run          # Preview changes
+        nsync --status           # Show sync status
+    """
+    try:
+        from memory_tool.notion.sync import ModuleSyncer, NotionSyncError
+
+        syncer = ModuleSyncer()
+
+        # Check if sync is enabled
+        if not syncer.sync_config.enabled:
+            console.print("[yellow]Notion sync is not enabled.[/yellow]")
+            console.print("[dim]Enable it in config.yaml: notion.sync.enabled: true[/dim]")
+            return
+
+        # Status mode
+        if status:
+            status_info = syncer.get_status(module)
+
+            last_sync = status_info.get("last_full_sync")
+            if last_sync:
+                console.print(f"[cyan]Last full sync:[/cyan] {last_sync}")
+            else:
+                console.print("[dim]No sync history yet[/dim]")
+            console.print()
+
+            for mod_path, mod_status in status_info.get("modules", {}).items():
+                console.print(f"[bold]{mod_path}[/bold]")
+
+                if mod_status.get("last_sync"):
+                    console.print(f"  Last sync: {mod_status['last_sync']}")
+
+                to_push = mod_status.get("to_push", [])
+                to_pull = mod_status.get("to_pull", [])
+                in_sync = mod_status.get("in_sync", [])
+                conflicts = mod_status.get("conflicts", [])
+
+                if to_push:
+                    console.print(f"  [green]To push:[/green] {', '.join(to_push)}")
+                if to_pull:
+                    console.print(f"  [blue]To pull:[/blue] {', '.join(to_pull)}")
+                if conflicts:
+                    console.print(f"  [red]Conflicts:[/red] {', '.join(conflicts)}")
+                if in_sync and verbose:
+                    console.print(f"  [dim]In sync:[/dim] {', '.join(in_sync)}")
+                if not to_push and not to_pull and not conflicts:
+                    console.print("  [dim]All in sync[/dim]")
+                console.print()
+            return
+
+        # Sync mode
+        if dry_run:
+            console.print("[cyan]Dry run - showing what would happen:[/cyan]\n")
+        else:
+            console.print("[cyan]Syncing with Notion...[/cyan]\n")
+
+        summary = syncer.sync(
+            module_path=module,
+            push_only=push,
+            pull_only=pull,
+            force=force,
+            dry_run=dry_run,
+        )
+
+        # Display results
+        for result in summary.results:
+            if result.action.direction == SyncDirection.SKIP:
+                if verbose:
+                    console.print(f"[dim]SKIP[/dim]  {result.action.module_path}/{result.action.file_path}")
+                continue
+
+            if result.success:
+                if result.action.direction == SyncDirection.PUSH:
+                    console.print(f"[green]PUSH[/green] {result.action.module_path}/{result.action.file_path} -> Notion")
+                elif result.action.direction == SyncDirection.PULL:
+                    console.print(f"[blue]PULL[/blue] {result.action.module_path}/{result.action.file_path} <- Notion")
+            else:
+                console.print(f"[red]FAIL[/red] {result.action.module_path}/{result.action.file_path}: {result.message}")
+
+        console.print()
+        console.print(f"[cyan]{summary}[/cyan]")
+
+    except NotionSyncError as e:
+        console.print(f"[red]Sync Error:[/red] {e}")
+        sys.exit(1)
+    except NotionError as e:
+        console.print(f"[red]Notion Error:[/red] {e}")
+        sys.exit(1)
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        if verbose:
+            import traceback
+            console.print(traceback.format_exc())
+        sys.exit(1)
+
+
 if __name__ == "__main__":
     app()
 
@@ -4428,5 +4543,12 @@ def notion_search_inside_cli():
     """Entry point for 'nsi' command."""
     import sys
     sys.argv = ['memory_tool', 'nsi'] + sys.argv[1:]
+    app()
+
+
+def notion_sync_cli():
+    """Entry point for 'nsync' command."""
+    import sys
+    sys.argv = ['memory_tool', 'nsync'] + sys.argv[1:]
     app()
 
