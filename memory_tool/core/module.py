@@ -55,12 +55,13 @@ class ModuleManager:
             if not part:
                 raise ModuleError(f"Invalid module path: {name}. Empty path component.")
 
-            # Check for valid characters (word characters including Unicode, dash)
+            # Check for valid characters (word characters including Unicode, space, dash)
             # \w matches alphanumeric + underscore + Unicode letters (Korean, Japanese, etc.)
-            if not re.match(r'^[\w-]+$', part):
+            # \s allows spaces in module names
+            if not re.match(r'^[\w\s-]+$', part):
                 raise ModuleError(
                     f"Invalid module path component: {part}. "
-                    f"Use only letters, numbers, dashes, and underscores."
+                    f"Use only letters, numbers, spaces, dashes, and underscores."
                 )
 
             # Check for reserved names
