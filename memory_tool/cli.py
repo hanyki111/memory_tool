@@ -4688,14 +4688,21 @@ def notion_watch(
     debounce: float = typer.Option(2.0, "--debounce", "-d", help="Debounce time in seconds"),
     dry_run: bool = typer.Option(False, "--dry-run", "-n", help="Show what would sync without syncing"),
     quiet: bool = typer.Option(False, "--quiet", "-q", help="Less verbose output"),
+    modules_only: bool = typer.Option(False, "--modules-only", "-m", help="Watch only modules/ directory"),
+    timeline_only: bool = typer.Option(False, "--timeline-only", "-t", help="Watch only timeline/ directory"),
 ):
-    """Watch local modules and auto-sync with Notion on changes.
+    """Watch local modules and timeline, auto-sync with Notion on changes.
 
-    Monitors .memory/modules/ for file changes and automatically runs
-    nsync when changes are detected. Uses debouncing to batch rapid changes.
+    Monitors .memory/modules/ and .memory/timeline/ for file changes:
+    - modules/ changes -> triggers module sync (nsync)
+    - timeline/ changes -> syncs new entries to Notion daily pages
+
+    Uses debouncing to batch rapid changes.
 
     Examples:
-        nwatch                   # Start watching with defaults
+        nwatch                   # Watch both modules and timeline
+        nwatch --modules-only    # Watch only modules/
+        nwatch --timeline-only   # Watch only timeline/
         nwatch --debounce 5      # Wait 5 seconds before syncing
         nwatch --dry-run         # Show what would sync (no actual sync)
         nwatch --quiet           # Less verbose output
@@ -4713,10 +4720,16 @@ def notion_watch(
 
         verbose = not quiet
 
+        # Determine what to watch
+        watch_modules = not timeline_only
+        watch_timeline = not modules_only
+
         watcher = NotionWatcher(
             debounce_seconds=debounce,
             verbose=verbose,
-            dry_run=dry_run
+            dry_run=dry_run,
+            watch_modules=watch_modules,
+            watch_timeline=watch_timeline,
         )
 
         console.print("[cyan]Starting Notion sync watcher...[/cyan]\n")
