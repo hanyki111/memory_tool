@@ -87,6 +87,7 @@ Memory Tool은 Notion과 완전히 통합됩니다:
 - **ns**: 노션 페이지 검색
 - **nt/nw**: 노션 오늘/이번 주 타임라인
 - **nsync**: 로컬 모듈 ↔ 노션 양방향 싱크
+- **nwatch**: 파일 변경 감지 시 자동 동기화
 
 ### Linux에서 Notion Sync 설정 가이드
 
@@ -186,6 +187,18 @@ nsync --push             # 로컬 → 노션
 nsync --pull             # 노션 → 로컬
 nsync --dry-run          # 변경 사항만 확인
 nsync --status           # 싱크 상태 확인
+nsync --discover         # 노션에서 모듈 다운로드 (첫 설정)
+nsync --verbose          # 상세 진행 로그
+
+# 자동 동기화 (파일 변경 감지)
+nwatch                   # 기본 설정으로 감시 시작
+nwatch --debounce 5      # 5초 대기 후 동기화
+nwatch --dry-run         # 테스트 모드
+```
+
+**nwatch 설치:**
+```bash
+pip install memory-tool[watch]
 ```
 
 ### Notion Sync 구조
@@ -203,8 +216,8 @@ nsync --status           # 싱크 상태 확인
     └── ...                         │      └── ...
 ```
 
-- **모듈 페이지**: 모든 .md 파일 내용 통합 뷰 + 하위 페이지 링크
-- **파일 페이지**: 개별 파일 편집용
+- **모듈 페이지**: 하위 파일 페이지들의 컨테이너
+- **파일 페이지**: 개별 .md 파일 내용 (편집 가능)
 - **충돌 해결**: Last-Write-Wins (마지막 수정이 우선)
 
 ---
@@ -295,7 +308,15 @@ nsync --pull                     # 노션 → 로컬
 nsync --dry-run                  # 미리보기
 nsync --status                   # 상태 확인
 nsync --force                    # 타임스탬프 무시, 강제 싱크
+nsync --discover                 # 노션에서 모듈 다운로드
+nsync --verbose                  # 상세 진행 로그
 nsync "projects/my-app"          # 특정 모듈만
+
+# 자동 동기화 (파일 변경 감시)
+nwatch                           # 감시 시작 (Ctrl+C로 종료)
+nwatch --debounce 5              # 5초 대기 후 동기화
+nwatch --dry-run                 # 테스트 모드
+nwatch --quiet                   # 간결한 출력
 ```
 
 ### LLM 기반 요약 (msummary)

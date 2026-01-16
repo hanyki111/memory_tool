@@ -142,6 +142,7 @@ class ModuleSyncer:
         pull_only: bool = False,
         force: bool = False,
         dry_run: bool = False,
+        verbose: bool = False,
     ) -> SyncSummary:
         """Perform bidirectional sync.
 
@@ -151,6 +152,7 @@ class ModuleSyncer:
             pull_only: Only pull Notion changes to local
             force: Force sync regardless of timestamps
             dry_run: Only show what would happen
+            verbose: Print progress logs
 
         Returns:
             SyncSummary with results
@@ -170,14 +172,20 @@ class ModuleSyncer:
         if not targets:
             return summary
 
+        if verbose:
+            print(f"[sync] Found {len(targets)} target(s) to sync")
+
         # Sync each target
-        for target in targets:
+        for i, target in enumerate(targets, 1):
+            if verbose:
+                print(f"\n[sync] ({i}/{len(targets)}) Syncing module: {target.module_path}")
             target_summary = self._sync_module(
                 target,
                 push_only=push_only,
                 pull_only=pull_only,
                 force=force,
                 dry_run=dry_run,
+                verbose=verbose,
             )
             for result in target_summary.results:
                 summary.add_result(result)
@@ -194,6 +202,7 @@ class ModuleSyncer:
         pull_only: bool = False,
         force: bool = False,
         dry_run: bool = False,
+        verbose: bool = False,
     ) -> SyncSummary:
         """Sync a single module.
 
@@ -203,6 +212,7 @@ class ModuleSyncer:
             pull_only: Only pull
             force: Force sync
             dry_run: Dry run mode
+            verbose: Print progress logs
 
         Returns:
             SyncSummary for this module
@@ -212,6 +222,8 @@ class ModuleSyncer:
         local_path = Path(target.local_path)
 
         if not local_path.exists():
+            if verbose:
+                print(f"  [skip] Local path not found: {local_path}")
             return summary
 
         # Get module state
@@ -219,16 +231,24 @@ class ModuleSyncer:
 
         # Get or create Notion module page
         if not dry_run:
+            if verbose:
+                print(f"  [notion] Ensuring module page exists...")
             notion_page_id = self._ensure_module_page(module_path, module_state)
             module_state.notion_page_id = notion_page_id
+            if verbose:
+                print(f"  [notion] Module page ID: {notion_page_id[:8]}...")
         else:
             notion_page_id = module_state.notion_page_id
 
         # Get local files
         local_files = self._get_local_files(local_path)
+        if verbose:
+            print(f"  [local] Found {len(local_files)} file(s)")
 
         # Get Notion file pages
         notion_files = self._get_notion_file_pages(notion_page_id) if notion_page_id else {}
+        if verbose:
+            print(f"  [notion] Found {len(notion_files)} existing page(s)")
 
         # Determine actions for each file
         actions = self._determine_actions(
@@ -240,6 +260,10 @@ class ModuleSyncer:
         )
 
         # Execute actions
+        action_count = len([a for a in actions if a.direction != SyncDirection.SKIP])
+        if verbose and action_count > 0:
+            print(f"  [sync] {action_count} file(s) to sync")
+
         for action in actions:
             if action.direction == SyncDirection.SKIP:
                 summary.add_result(SyncResult(
@@ -254,6 +278,10 @@ class ModuleSyncer:
             if pull_only and action.direction == SyncDirection.PUSH:
                 continue
 
+            if verbose:
+                direction = "PUSH" if action.direction == SyncDirection.PUSH else "PULL"
+                print(f"    [{direction}] {action.file_path}")
+
             if dry_run:
                 summary.add_result(SyncResult(
                     success=True,
@@ -263,9 +291,16 @@ class ModuleSyncer:
             else:
                 result = self._execute_action(action, local_path, notion_page_id, module_state)
                 summary.add_result(result)
+                if verbose:
+                    if result.success:
+                        print(f"           -> OK")
+                    else:
+                        print(f"           -> FAIL: {result.message}")
 
-        # Update module page (integrated view) after file syncs
+        # Update module page after file syncs
         if not dry_run and notion_page_id:
+            if verbose:
+                print(f"  [notion] Updating module page...")
             self._update_module_page(module_path, local_path, notion_page_id, module_state)
             module_state.last_sync = datetime.now()
             self.state_manager.set_module_state(module_path, module_state)
@@ -318,7 +353,7 @@ class ModuleSyncer:
                 page_id = self.client.get_or_create_subpage(
                     current_parent,
                     part,
-                    cache_key=f"module_{sub_path}"
+                    cache_key=f"module_{sub_path}",
                 )
                 sub_state.notion_page_id = page_id
                 self.state_manager.set_module_state(sub_path, sub_state)
@@ -513,12 +548,15 @@ class ModuleSyncer:
             new_page = self.client.create_page(action.file_path, parent_page_id)
             page_id = new_page["id"]
 
-            # Add content blocks
+            # Add content blocks (batch by 100 due to Notion API limit)
             if blocks:
-                self.client.client.blocks.children.append(
-                    block_id=page_id,
-                    children=blocks
-                )
+                BATCH_SIZE = 100
+                for i in range(0, len(blocks), BATCH_SIZE):
+                    batch = blocks[i:i + BATCH_SIZE]
+                    self.client.client.blocks.children.append(
+                        block_id=page_id,
+                        children=batch
+                    )
 
         # Update state
         file_state = module_state.files.get(action.file_path, FileSyncState())
@@ -598,12 +636,15 @@ class ModuleSyncer:
                     except Exception:
                         pass
 
-            # Add new blocks
+            # Add new blocks (batch by 100 due to Notion API limit)
             if new_blocks:
-                self.client.client.blocks.children.append(
-                    block_id=page_id,
-                    children=new_blocks
-                )
+                BATCH_SIZE = 100
+                for i in range(0, len(new_blocks), BATCH_SIZE):
+                    batch = new_blocks[i:i + BATCH_SIZE]
+                    self.client.client.blocks.children.append(
+                        block_id=page_id,
+                        children=batch
+                    )
         except Exception as e:
             raise NotionSyncError(f"Failed to replace page content: {e}")
 
@@ -629,7 +670,7 @@ class ModuleSyncer:
         page_id: str,
         module_state: ModuleSyncState,
     ):
-        """Update the module page with integrated view.
+        """Update the module page (clear content, keep child pages).
 
         Args:
             module_path: Module path
@@ -637,40 +678,22 @@ class ModuleSyncer:
             page_id: Module page ID
             module_state: Module state
         """
-        # Collect file contents
-        files = {}
-        file_links = {}
+        # Just clear old content blocks (child_page blocks are preserved)
+        # The module page stays empty - file contents are in child pages
+        try:
+            response = self.client.client.blocks.children.list(block_id=page_id)
+            existing_blocks = response.get("results", [])
 
-        for filename, file_state in module_state.files.items():
-            file_path = local_path / filename
-            if file_path.exists():
-                files[filename] = file_path.read_text(encoding="utf-8")
-                if file_state.notion_page_id:
-                    # Build Notion URL
-                    clean_id = file_state.notion_page_id.replace("-", "")
-                    file_links[filename] = f"https://notion.so/{clean_id}"
+            # Delete only non-child_page blocks (paragraphs, etc.)
+            for block in existing_blocks:
+                if block.get("type") != "child_page":
+                    try:
+                        self.client.client.blocks.delete(block_id=block["id"])
+                    except Exception:
+                        pass
+        except Exception:
+            pass  # Ignore errors when clearing
 
-        # Get submodule links
-        submodule_links = {}
-        for subdir in local_path.iterdir():
-            if subdir.is_dir() and self._is_module(subdir):
-                submodule_name = subdir.name
-                sub_path = f"{module_path}/{submodule_name}"
-                sub_state = self.state_manager.get_module_state(sub_path)
-                if sub_state.notion_page_id:
-                    clean_id = sub_state.notion_page_id.replace("-", "")
-                    submodule_links[submodule_name] = f"https://notion.so/{clean_id}"
-
-        # Create integrated view blocks
-        blocks = self.converter.create_module_page_content(
-            module_path.split("/")[-1],
-            files,
-            file_links,
-            submodule_links,
-        )
-
-        # Replace page content
-        self._replace_page_content(page_id, blocks)
 
     def get_status(
         self,

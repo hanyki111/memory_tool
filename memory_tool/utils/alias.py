@@ -42,6 +42,7 @@ class AliasManager:
         "nw": ("nw", "Show Notion week"),
         "nsi": ("nsi", "Search inside Notion Daily Pages"),
         "nsync": ("nsync", "Sync modules with Notion"),
+        "nwatch": ("nwatch", "Watch and auto-sync with Notion"),
         "노": ("nm", "Record to Notion (Korean)"),
         "노검": ("nsi", "Search inside Notion (Korean)"),
         "노오": ("nt", "Show Notion today (Korean)"),

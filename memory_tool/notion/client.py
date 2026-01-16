@@ -105,8 +105,11 @@ class NotionClient:
             # Note: blocks.children.list is paginated. For simplicity/speed, checking first 100.
             # A more robust solution would paginate, but for a month list it's usually fine.
             response = self.client.blocks.children.list(block_id=parent_id)
-            
+
             for block in response.get("results", []):
+                # Skip archived blocks
+                if block.get("archived", False):
+                    continue
                 if block.get("type") == "child_page":
                     child_title = block.get("child_page", {}).get("title", "")
                     if child_title == title:

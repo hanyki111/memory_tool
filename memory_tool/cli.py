@@ -4480,6 +4480,7 @@ def notion_sync(
             pull_only=pull,
             force=force,
             dry_run=dry_run,
+            verbose=verbose,
         )
 
         # Display results
@@ -4679,5 +4680,62 @@ def notion_sync_cli():
     """Entry point for 'nsync' command."""
     import sys
     sys.argv = ['memory_tool', 'nsync'] + sys.argv[1:]
+    app()
+
+
+@app.command(name="nwatch")
+def notion_watch(
+    debounce: float = typer.Option(2.0, "--debounce", "-d", help="Debounce time in seconds"),
+    dry_run: bool = typer.Option(False, "--dry-run", "-n", help="Show what would sync without syncing"),
+    quiet: bool = typer.Option(False, "--quiet", "-q", help="Less verbose output"),
+):
+    """Watch local modules and auto-sync with Notion on changes.
+
+    Monitors .memory/modules/ for file changes and automatically runs
+    nsync when changes are detected. Uses debouncing to batch rapid changes.
+
+    Examples:
+        nwatch                   # Start watching with defaults
+        nwatch --debounce 5      # Wait 5 seconds before syncing
+        nwatch --dry-run         # Show what would sync (no actual sync)
+        nwatch --quiet           # Less verbose output
+
+    Requirements:
+        pip install memory-tool[watch]
+    """
+    try:
+        from memory_tool.notion.watcher import NotionWatcher, check_watchdog_available
+
+        if not check_watchdog_available():
+            console.print("[red]Error:[/red] watchdog is required for file watching.")
+            console.print("[dim]Install with: pip install memory-tool[watch][/dim]")
+            raise typer.Exit(1)
+
+        verbose = not quiet
+
+        watcher = NotionWatcher(
+            debounce_seconds=debounce,
+            verbose=verbose,
+            dry_run=dry_run
+        )
+
+        console.print("[cyan]Starting Notion sync watcher...[/cyan]\n")
+        watcher.run_forever()
+
+    except FileNotFoundError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1)
+    except ImportError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1)
+
+
+def notion_watch_cli():
+    """Entry point for 'nwatch' command."""
+    import sys
+    sys.argv = ['memory_tool', 'nwatch'] + sys.argv[1:]
     app()
 
