@@ -1346,10 +1346,19 @@ def status():
 def alias(
     action: str = typer.Argument(..., help="Action: install, uninstall, list"),
     name: str = typer.Argument(None, help="Alias name (optional, default: all)"),
-    directory: Optional[str] = typer.Option(None, "--dir", "-d", help="Installation directory (for batch files)"),
-    powershell: bool = typer.Option(False, "--powershell", "--ps", help="Use PowerShell profile (works in all terminals)"),
+    directory: Optional[str] = typer.Option(None, "--dir", "-d", help="Installation directory (for script files)"),
+    powershell: bool = typer.Option(False, "--powershell", "--ps", help="Use PowerShell profile (Windows)"),
+    bash: bool = typer.Option(False, "--bash", help="Use Bash profile (~/.bashrc)"),
+    zsh: bool = typer.Option(False, "--zsh", help="Use Zsh profile (~/.zshrc)"),
 ):
-    """Manage command aliases (malias command)."""
+    """Manage command aliases (malias command).
+
+    Examples:
+        malias install --powershell    # Windows PowerShell
+        malias install --bash          # Linux/macOS Bash
+        malias install --zsh           # Linux/macOS Zsh
+        malias list                    # Show all aliases
+    """
     # Safely convert Typer OptionInfo to str/None
     directory = _opt_str(directory)
 
@@ -1358,9 +1367,47 @@ def alias(
     # Parse directory
     install_dir = Path(directory) if directory else None
 
+    # Determine shell type
+    shell_type = None
+    if bash:
+        shell_type = "bash"
+    elif zsh:
+        shell_type = "zsh"
+
     try:
         if action == "install":
-            if powershell:
+            if bash or zsh:
+                # Install to Unix shell profile (Bash/Zsh)
+                shell_name = "Bash" if bash else "Zsh"
+                if name:
+                    profile_path, was_added = manager.install_shell_alias(name, shell=shell_type)
+                    if was_added:
+                        console.print(f"[green]OK[/green] Installed alias to {shell_name} profile: {name}")
+                    else:
+                        console.print(f"[yellow]![/yellow] Alias already exists: {name}")
+                    console.print(f"[dim]-> {profile_path}[/dim]")
+                else:
+                    installed = manager.install_all_shell(shell=shell_type)
+                    added_count = sum(1 for was_added in installed.values() if was_added)
+                    console.print(f"[green]OK[/green] Installed {added_count} aliases to {shell_name} profile")
+
+                    profile_path = manager.get_shell_profile_path(shell_type)
+                    console.print(f"[dim]Profile: {profile_path}[/dim]\n")
+
+                    for alias_name, was_added in installed.items():
+                        command, description = manager.ALIASES[alias_name]
+                        if was_added:
+                            console.print(f"[green]  + {alias_name:10}[/green] -> {command:10} ({description})")
+                        else:
+                            console.print(f"[dim]  = {alias_name:10} -> {command:10} (already exists)[/dim]")
+
+                # Show reload instructions
+                profile_file = "~/.bashrc" if bash else "~/.zshrc"
+                console.print(f"\n[cyan]To use aliases, reload your shell profile:[/cyan]")
+                console.print(f"[dim]  source {profile_file}[/dim]")
+                console.print("[dim]Or restart your terminal[/dim]")
+
+            elif powershell:
                 # Install to PowerShell profile
                 if name:
                     # Install single alias
@@ -1435,6 +1482,31 @@ def alias(
                 console.print("\n[cyan]To apply changes, reload your PowerShell profile:[/cyan]")
                 console.print("[dim]  . $PROFILE[/dim]")
                 console.print("[dim]Or restart your terminal[/dim]")
+            elif bash or zsh:
+                # Uninstall from Unix shell profile (Bash/Zsh)
+                shell_name = "Bash" if bash else "Zsh"
+                if name:
+                    profile_path, was_removed = manager.uninstall_shell_alias(name, shell=shell_type)
+                    if was_removed:
+                        console.print(f"[green]OK[/green] Uninstalled alias from {shell_name} profile: {name}")
+                        if profile_path:
+                            console.print(f"[dim]-> {profile_path}[/dim]")
+                    else:
+                        console.print(f"[yellow]![/yellow] Alias not found: {name}")
+                else:
+                    removed = manager.uninstall_all_shell(shell=shell_type)
+                    if removed:
+                        console.print(f"[green]OK[/green] Uninstalled {len(removed)} aliases from {shell_name} profile")
+                        for alias_name in removed:
+                            console.print(f"[dim]  {alias_name}[/dim]")
+                    else:
+                        console.print("[yellow]![/yellow] No aliases found to uninstall")
+
+                # Show reload instructions
+                profile_file = "~/.bashrc" if bash else "~/.zshrc"
+                console.print(f"\n[cyan]To apply changes, reload your shell profile:[/cyan]")
+                console.print(f"[dim]  source {profile_file}[/dim]")
+                console.print("[dim]Or restart your terminal[/dim]")
             else:
                 # Uninstall batch files (original behavior)
                 if name:
@@ -1477,6 +1549,28 @@ def alias(
                         console.print("[dim]Run 'malias install --powershell' to install[/dim]")
                 else:
                     console.print("[red]ERROR[/red] PowerShell not available")
+            elif bash or zsh:
+                # List Unix shell profile aliases (Bash/Zsh)
+                shell_name = "Bash" if bash else "Zsh"
+                shell_status_map = manager.list_shell_installed(shell=shell_type)
+                shell_profile = manager.get_shell_profile_path(shell_type)
+
+                if shell_profile:
+                    console.print(f"[cyan]{shell_name} Profile:[/cyan] {shell_profile}\n")
+
+                    for alias_name, installed in shell_status_map.items():
+                        command, description = manager.ALIASES[alias_name]
+                        status_icon = "[green]OK[/green]" if installed else "[dim]--[/dim]"
+                        console.print(f"  {status_icon} {alias_name:10} -> {command:10} ({description})")
+
+                    console.print("")
+                    if any(shell_status_map.values()):
+                        console.print(f"[green]OK[/green] Aliases are configured in {shell_name} profile")
+                    else:
+                        console.print(f"[yellow]![/yellow] No aliases found in {shell_name} profile")
+                        console.print(f"[dim]Run 'malias install --{shell_type}' to install[/dim]")
+                else:
+                    console.print(f"[red]ERROR[/red] {shell_name} profile not found (not on Unix?)")
             else:
                 # List batch file aliases (original behavior) and PowerShell status
                 # Show batch files

@@ -1,4 +1,4 @@
-"""Alias management for Windows batch files and PowerShell profiles."""
+"""Alias management for Windows batch files, PowerShell profiles, and Unix shells."""
 
 import os
 import sys
@@ -614,3 +614,435 @@ Then you can use:
             status[alias_name] = self.is_alias_in_profile(profile_content, alias_name)
 
         return status
+
+    # ============================================================================
+    # Unix Shell (Bash/Zsh) Support
+    # ============================================================================
+
+    def get_shell_profile_path(self, shell: Optional[str] = None) -> Optional[Path]:
+        """Get shell profile path for Bash or Zsh.
+
+        Args:
+            shell: Shell name ('bash', 'zsh', or None for auto-detect)
+
+        Returns:
+            Path to shell profile, or None if not available
+        """
+        if sys.platform == "win32":
+            return None
+
+        # Auto-detect shell if not specified
+        if shell is None:
+            shell_env = os.environ.get("SHELL", "")
+            if "zsh" in shell_env:
+                shell = "zsh"
+            elif "bash" in shell_env:
+                shell = "bash"
+            else:
+                # Default to bash
+                shell = "bash"
+
+        home = Path.home()
+
+        if shell == "zsh":
+            return home / ".zshrc"
+        elif shell == "bash":
+            # Check for .bash_profile first (macOS), then .bashrc (Linux)
+            bash_profile = home / ".bash_profile"
+            bashrc = home / ".bashrc"
+
+            # On macOS, .bash_profile is typically used for login shells
+            if sys.platform == "darwin" and bash_profile.exists():
+                return bash_profile
+
+            # On Linux, .bashrc is more common
+            return bashrc
+        else:
+            return None
+
+    def generate_shell_function(self, alias_name: str, command: str) -> str:
+        """Generate shell function for an alias.
+
+        Args:
+            alias_name: Name of the alias (e.g., "m")
+            command: Memory tool command name (e.g., "record")
+
+        Returns:
+            Shell function definition
+        """
+        return f'{alias_name}() {{ python3 -m {self.package_name} {command} "$@"; }}'
+
+    def generate_shell_script(self, command: str) -> str:
+        """Generate shell script content for a command.
+
+        Args:
+            command: Memory tool command name (e.g., "record")
+
+        Returns:
+            Shell script content
+        """
+        return f'''#!/usr/bin/env bash
+# Memory Tool alias - auto-generated
+python3 -m {self.package_name} {command} "$@"
+'''
+
+    def read_shell_profile(self, profile_path: Path) -> str:
+        """Read shell profile content.
+
+        Args:
+            profile_path: Path to profile file
+
+        Returns:
+            Profile content (empty string if file doesn't exist)
+        """
+        if not profile_path.exists():
+            return ""
+
+        try:
+            return profile_path.read_text(encoding="utf-8")
+        except Exception:
+            return ""
+
+    def write_shell_profile(self, profile_path: Path, content: str) -> None:
+        """Write shell profile content.
+
+        Args:
+            profile_path: Path to profile file
+            content: Content to write
+
+        Raises:
+            AliasError: If write fails
+        """
+        try:
+            profile_path.parent.mkdir(parents=True, exist_ok=True)
+            profile_path.write_text(content, encoding="utf-8")
+        except Exception as e:
+            raise AliasError(f"Failed to write shell profile: {e}")
+
+    def is_alias_in_shell_profile(self, profile_content: str, alias_name: str) -> bool:
+        """Check if alias is already defined in shell profile.
+
+        Args:
+            profile_content: Content of shell profile
+            alias_name: Name of alias to check
+
+        Returns:
+            True if alias is defined
+        """
+        # Look for function definition
+        marker = f"{alias_name}()"
+        return marker in profile_content
+
+    def install_shell_alias(
+        self,
+        alias_name: str,
+        profile_path: Optional[Path] = None,
+        shell: Optional[str] = None,
+    ) -> Tuple[Path, bool]:
+        """Install alias to shell profile (Bash/Zsh).
+
+        Args:
+            alias_name: Name of the alias (e.g., "m")
+            profile_path: Custom profile path (default: auto-detect)
+            shell: Shell type ('bash', 'zsh', or None for auto)
+
+        Returns:
+            Tuple of (profile_path, was_added)
+            was_added is False if alias already existed
+
+        Raises:
+            AliasError: If installation fails
+        """
+        if alias_name not in self.ALIASES:
+            raise AliasError(f"Unknown alias: {alias_name}")
+
+        # Get profile path
+        if profile_path is None:
+            profile_path = self.get_shell_profile_path(shell)
+            if profile_path is None:
+                raise AliasError("Shell profile path not found (not on Unix?)")
+
+        command, _ = self.ALIASES[alias_name]
+
+        # Read existing profile
+        profile_content = self.read_shell_profile(profile_path)
+
+        # Check if already installed
+        if self.is_alias_in_shell_profile(profile_content, alias_name):
+            return (profile_path, False)
+
+        # Add function definition
+        function_def = self.generate_shell_function(alias_name, command)
+
+        # Add to profile with section marker
+        if not profile_content:
+            new_content = f"""# Memory Tool aliases (auto-generated)
+{function_def}
+"""
+        else:
+            if not profile_content.endswith("\n"):
+                profile_content += "\n"
+
+            if "# Memory Tool aliases" in profile_content:
+                # Add to existing section
+                lines = profile_content.split("\n")
+                insert_index = -1
+                for i, line in enumerate(lines):
+                    if "# Memory Tool aliases" in line:
+                        for j in range(i + 1, len(lines)):
+                            if lines[j].strip().endswith("()") or (lines[j].strip() and self.package_name in lines[j]):
+                                insert_index = j + 1
+                            elif lines[j].strip() and not lines[j].strip().endswith("()"):
+                                break
+
+                if insert_index > 0:
+                    lines.insert(insert_index, function_def)
+                    new_content = "\n".join(lines)
+                else:
+                    new_content = profile_content.replace(
+                        "# Memory Tool aliases (auto-generated)",
+                        f"# Memory Tool aliases (auto-generated)\n{function_def}",
+                    )
+            else:
+                new_content = f"""{profile_content}
+# Memory Tool aliases (auto-generated)
+{function_def}
+"""
+
+        # Write updated profile
+        self.write_shell_profile(profile_path, new_content)
+
+        return (profile_path, True)
+
+    def uninstall_shell_alias(
+        self,
+        alias_name: str,
+        profile_path: Optional[Path] = None,
+        shell: Optional[str] = None,
+    ) -> Tuple[Optional[Path], bool]:
+        """Uninstall alias from shell profile.
+
+        Args:
+            alias_name: Name of the alias
+            profile_path: Custom profile path (default: auto-detect)
+            shell: Shell type ('bash', 'zsh', or None for auto)
+
+        Returns:
+            Tuple of (profile_path, was_removed)
+        """
+        if profile_path is None:
+            profile_path = self.get_shell_profile_path(shell)
+            if profile_path is None:
+                return (None, False)
+
+        if not profile_path.exists():
+            return (profile_path, False)
+
+        profile_content = self.read_shell_profile(profile_path)
+
+        if not self.is_alias_in_shell_profile(profile_content, alias_name):
+            return (profile_path, False)
+
+        command, _ = self.ALIASES.get(alias_name, ("", ""))
+        function_def = self.generate_shell_function(alias_name, command)
+
+        # Remove the line
+        lines = profile_content.split("\n")
+        new_lines = [line for line in lines if line.strip() != function_def.strip()]
+
+        # Clean up empty section
+        cleaned_lines = []
+        skip_next_empty = False
+        for i, line in enumerate(new_lines):
+            if "# Memory Tool aliases" in line:
+                section_empty = True
+                for j in range(i + 1, len(new_lines)):
+                    if new_lines[j].strip():
+                        if self.package_name in new_lines[j]:
+                            section_empty = False
+                            break
+                        else:
+                            break
+
+                if section_empty:
+                    skip_next_empty = True
+                    continue
+
+            if skip_next_empty and not line.strip():
+                skip_next_empty = False
+                continue
+
+            cleaned_lines.append(line)
+
+        new_content = "\n".join(cleaned_lines)
+        self.write_shell_profile(profile_path, new_content)
+
+        return (profile_path, True)
+
+    def install_all_shell(
+        self,
+        profile_path: Optional[Path] = None,
+        shell: Optional[str] = None,
+    ) -> Dict[str, bool]:
+        """Install all aliases to shell profile.
+
+        Args:
+            profile_path: Custom profile path (default: auto-detect)
+            shell: Shell type ('bash', 'zsh', or None for auto)
+
+        Returns:
+            Dictionary mapping alias names to whether they were added
+        """
+        installed = {}
+
+        for alias_name in self.ALIASES.keys():
+            _, was_added = self.install_shell_alias(alias_name, profile_path, shell)
+            installed[alias_name] = was_added
+
+        return installed
+
+    def uninstall_all_shell(
+        self,
+        profile_path: Optional[Path] = None,
+        shell: Optional[str] = None,
+    ) -> List[str]:
+        """Uninstall all aliases from shell profile.
+
+        Args:
+            profile_path: Custom profile path (default: auto-detect)
+            shell: Shell type ('bash', 'zsh', or None for auto)
+
+        Returns:
+            List of removed alias names
+        """
+        removed = []
+
+        for alias_name in self.ALIASES.keys():
+            _, was_removed = self.uninstall_shell_alias(alias_name, profile_path, shell)
+            if was_removed:
+                removed.append(alias_name)
+
+        return removed
+
+    def list_shell_installed(
+        self,
+        profile_path: Optional[Path] = None,
+        shell: Optional[str] = None,
+    ) -> Dict[str, bool]:
+        """List installation status of aliases in shell profile.
+
+        Args:
+            profile_path: Custom profile path (default: auto-detect)
+            shell: Shell type ('bash', 'zsh', or None for auto)
+
+        Returns:
+            Dictionary mapping alias names to installation status
+        """
+        if profile_path is None:
+            profile_path = self.get_shell_profile_path(shell)
+            if profile_path is None:
+                return {alias: False for alias in self.ALIASES.keys()}
+
+        if not profile_path.exists():
+            return {alias: False for alias in self.ALIASES.keys()}
+
+        profile_content = self.read_shell_profile(profile_path)
+
+        status = {}
+        for alias_name in self.ALIASES.keys():
+            status[alias_name] = self.is_alias_in_shell_profile(profile_content, alias_name)
+
+        return status
+
+    def install_shell_script(
+        self,
+        alias_name: str,
+        install_dir: Optional[Path] = None,
+    ) -> Path:
+        """Install alias as executable shell script (Unix alternative to batch files).
+
+        Args:
+            alias_name: Name of the alias (e.g., "m")
+            install_dir: Installation directory (default: ~/.local/bin)
+
+        Returns:
+            Path to created script file
+
+        Raises:
+            AliasError: If installation fails
+        """
+        if alias_name not in self.ALIASES:
+            raise AliasError(f"Unknown alias: {alias_name}")
+
+        command, _ = self.ALIASES[alias_name]
+
+        if install_dir is None:
+            install_dir = self.get_default_install_dir()
+
+        install_dir.mkdir(parents=True, exist_ok=True)
+
+        script_file = install_dir / alias_name
+        content = self.generate_shell_script(command)
+
+        try:
+            script_file.write_text(content, encoding="utf-8")
+            # Make executable
+            script_file.chmod(0o755)
+        except Exception as e:
+            raise AliasError(f"Failed to create shell script: {e}")
+
+        return script_file
+
+    def install_all_shell_scripts(
+        self,
+        install_dir: Optional[Path] = None,
+    ) -> Dict[str, Path]:
+        """Install all aliases as executable shell scripts.
+
+        Args:
+            install_dir: Installation directory (default: ~/.local/bin)
+
+        Returns:
+            Dictionary mapping alias names to script paths
+        """
+        installed = {}
+
+        for alias_name in self.ALIASES.keys():
+            script_file = self.install_shell_script(alias_name, install_dir)
+            installed[alias_name] = script_file
+
+        return installed
+
+    def get_unix_path_instructions(self, install_dir: Path) -> str:
+        """Get instructions for adding directory to PATH on Unix.
+
+        Args:
+            install_dir: Installation directory
+
+        Returns:
+            Instructions text
+        """
+        if self.is_in_path(install_dir):
+            return f"✓ {install_dir} is already in PATH"
+
+        return f"""
+To use aliases, add this directory to your PATH:
+
+Bash (~/.bashrc or ~/.bash_profile):
+  export PATH="$PATH:{install_dir}"
+
+Zsh (~/.zshrc):
+  export PATH="$PATH:{install_dir}"
+
+Fish (~/.config/fish/config.fish):
+  set -gx PATH $PATH {install_dir}
+
+Then reload your shell:
+  source ~/.bashrc  # or ~/.zshrc
+
+After that you can use:
+  m "message"
+  ms "query"
+  mcontext
+  etc.
+"""
