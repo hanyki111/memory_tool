@@ -734,3 +734,185 @@ class ModuleSyncer:
             "in_sync": [a.file_path for a in actions if a.direction == SyncDirection.SKIP],
             "conflicts": [a.file_path for a in actions if a.direction == SyncDirection.CONFLICT],
         }
+
+    def discover_from_notion(
+        self,
+        dry_run: bool = False,
+        verbose: bool = False,
+    ) -> Dict[str, Any]:
+        """Discover and pull modules from Notion (when local is empty).
+
+        This method is useful when you have modules in Notion but no local
+        .memory/modules directory yet. It will:
+        1. List all child pages under root_page_id
+        2. Create corresponding local module directories
+        3. Download all .md files from Notion
+
+        Args:
+            dry_run: If True, only show what would be downloaded
+            verbose: If True, show detailed progress
+
+        Returns:
+            Dict with discovered modules and results
+        """
+        self._ensure_client()
+
+        # Get root page ID
+        notion_config = self.config.get("notion", {})
+        mode = notion_config.get("mode", "default")
+
+        root_page_id = self.sync_config.root_page_id
+        if not root_page_id:
+            if mode == "pat":
+                root_page_id = notion_config.get("pat", {}).get("default_page_id")
+            if not root_page_id:
+                root_page_id = notion_config.get("default_page_id")
+
+        if not root_page_id:
+            raise NotionSyncError("No root page ID configured for sync")
+
+        result = {
+            "discovered": [],
+            "downloaded": [],
+            "errors": [],
+            "dry_run": dry_run,
+        }
+
+        # Discover pages recursively
+        discovered_pages = self._discover_pages_recursive(root_page_id, "", verbose)
+        result["discovered"] = discovered_pages
+
+        if dry_run:
+            return result
+
+        # Ensure modules directory exists
+        self.modules_path.mkdir(parents=True, exist_ok=True)
+
+        # Download each discovered module
+        for page_info in discovered_pages:
+            try:
+                module_path = page_info["path"]
+                page_id = page_info["id"]
+
+                if verbose:
+                    print(f"  Downloading: {module_path}")
+
+                # Create local directory
+                local_dir = self.modules_path / module_path
+                local_dir.mkdir(parents=True, exist_ok=True)
+
+                # Get file pages under this module
+                file_pages = self._get_notion_file_pages(page_id)
+
+                for filename, file_info in file_pages.items():
+                    file_page_id = file_info.get("page_id")
+                    if file_page_id:
+                        # Download content
+                        content = self._get_page_markdown(file_page_id)
+                        local_file = local_dir / filename
+                        local_file.write_text(content, encoding="utf-8")
+
+                        if verbose:
+                            print(f"    -> {filename}")
+
+                # Update state
+                module_state = ModuleSyncState(
+                    notion_page_id=page_id,
+                    last_sync=datetime.now().isoformat(),
+                )
+                self.state_manager.save_module_state(module_path, module_state)
+
+                result["downloaded"].append(module_path)
+
+            except Exception as e:
+                result["errors"].append({
+                    "module": page_info.get("path", "unknown"),
+                    "error": str(e)
+                })
+
+        return result
+
+    def _discover_pages_recursive(
+        self,
+        parent_id: str,
+        parent_path: str,
+        verbose: bool = False,
+        depth: int = 0,
+        max_depth: int = 10,
+    ) -> List[Dict[str, Any]]:
+        """Recursively discover child pages from Notion.
+
+        Args:
+            parent_id: Parent page ID
+            parent_path: Path prefix for discovered pages
+            verbose: Show progress
+            depth: Current recursion depth
+            max_depth: Maximum recursion depth
+
+        Returns:
+            List of discovered page info dicts
+        """
+        if depth > max_depth:
+            return []
+
+        discovered = []
+
+        try:
+            # List children of parent page
+            response = self.client.client.blocks.children.list(block_id=parent_id)
+
+            for block in response.get("results", []):
+                if block.get("type") == "child_page":
+                    title = block.get("child_page", {}).get("title", "")
+                    page_id = block["id"]
+
+                    # Skip file-like pages (*.md)
+                    if title.endswith(".md"):
+                        continue
+
+                    # Build path
+                    if parent_path:
+                        page_path = f"{parent_path}/{title}"
+                    else:
+                        page_path = title
+
+                    if verbose:
+                        print(f"  Found: {page_path}")
+
+                    discovered.append({
+                        "id": page_id,
+                        "title": title,
+                        "path": page_path,
+                    })
+
+                    # Recurse into children
+                    children = self._discover_pages_recursive(
+                        page_id,
+                        page_path,
+                        verbose,
+                        depth + 1,
+                        max_depth,
+                    )
+                    discovered.extend(children)
+
+        except Exception as e:
+            if verbose:
+                print(f"  Error listing {parent_path}: {e}")
+
+        return discovered
+
+    def _get_page_markdown(self, page_id: str) -> str:
+        """Get page content as Markdown.
+
+        Args:
+            page_id: Notion page ID
+
+        Returns:
+            Markdown content
+        """
+        try:
+            response = self.client.client.blocks.children.list(block_id=page_id)
+            blocks = response.get("results", [])
+            return self.converter.blocks_to_markdown(blocks)
+        except Exception as e:
+            raise NotionSyncError(f"Failed to get page content: {e}")

@@ -4373,6 +4373,7 @@ def notion_sync(
     force: bool = typer.Option(False, "--force", "-f", help="Force sync regardless of timestamps"),
     dry_run: bool = typer.Option(False, "--dry-run", "-n", help="Show what would happen without syncing"),
     status: bool = typer.Option(False, "--status", "-s", help="Show sync status"),
+    discover: bool = typer.Option(False, "--discover", "-d", help="Discover and download modules from Notion"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
 ):
     """Bidirectional sync with Notion (nsync command).
@@ -4384,6 +4385,8 @@ def notion_sync(
         nsync projects/my-mod    # Sync specific module
         nsync --push             # Only push local to Notion
         nsync --pull             # Only pull Notion to local
+        nsync --discover         # Download modules from Notion (first time)
+        nsync --discover --dry-run  # Preview what would be downloaded
         nsync --dry-run          # Preview changes
         nsync --status           # Show sync status
     """
@@ -4396,6 +4399,38 @@ def notion_sync(
         if not syncer.sync_config.enabled:
             console.print("[yellow]Notion sync is not enabled.[/yellow]")
             console.print("[dim]Enable it in config.yaml: notion.sync.enabled: true[/dim]")
+            return
+
+        # Discover mode - download modules from Notion
+        if discover:
+            if dry_run:
+                console.print("[cyan]Discovering modules from Notion (dry-run)...[/cyan]\n")
+            else:
+                console.print("[cyan]Discovering and downloading modules from Notion...[/cyan]\n")
+
+            result = syncer.discover_from_notion(dry_run=dry_run, verbose=verbose)
+
+            discovered = result.get("discovered", [])
+            downloaded = result.get("downloaded", [])
+            errors = result.get("errors", [])
+
+            if discovered:
+                console.print(f"[green]Found {len(discovered)} module(s) in Notion:[/green]")
+                for page in discovered:
+                    console.print(f"  - {page['path']}")
+                console.print()
+
+                if dry_run:
+                    console.print("[dim]Use --discover without --dry-run to download[/dim]")
+                else:
+                    console.print(f"[green]Downloaded {len(downloaded)} module(s)[/green]")
+                    if errors:
+                        console.print(f"[red]Errors: {len(errors)}[/red]")
+                        for err in errors:
+                            console.print(f"  - {err['module']}: {err['error']}")
+            else:
+                console.print("[yellow]No modules found in Notion under root page[/yellow]")
+                console.print("[dim]Make sure root_page_id points to a page with child pages[/dim]")
             return
 
         # Status mode
