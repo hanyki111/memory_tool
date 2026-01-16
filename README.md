@@ -247,6 +247,8 @@ python -m memory_tool nwatch --bidirectional
 | `mcontext` | Claude 컨텍스트 생성 | `mcontext` |
 | `mtoday` | 오늘 작업 보기 | `mtoday` |
 | `mweek` | 이번 주 작업 보기 | `mweek` |
+| `mmonth` | 이번 달 작업 보기 | `mmonth` |
+| `mdays` | 최근 N일 작업 보기 | `mdays 7` |
 
 ### 기록 명령어
 
@@ -299,6 +301,39 @@ malias list --zsh               # Zsh 상태 확인
 # 배치 파일 (Windows 레거시)
 malias install                  # 배치 파일 생성
 malias list                     # 상태 확인
+```
+
+### 한글 별칭
+
+로컬 타임라인용 한글 별칭:
+
+| 한글 | 영문 | 설명 |
+|------|------|------|
+| `기` | `m` | 타임라인 기록 |
+| `검` | `ms` | 검색 |
+| `오늘` | `mtoday` | 오늘 타임라인 |
+| `주간` | `mweek` | 이번 주 타임라인 |
+| `월간` | `mmonth` | 이번 달 타임라인 |
+| `일수` | `mdays` | 최근 N일 타임라인 |
+
+Notion용 한글 별칭:
+
+| 한글 | 영문 | 설명 |
+|------|------|------|
+| `노` | `nm` | Notion 기록 |
+| `노검` | `nsi` | Notion 검색 |
+| `노오` | `nt` | Notion 오늘 |
+| `노주` | `nw` | Notion 주간 |
+| `노올` | `ns` | Notion 전체 검색 |
+
+```bash
+# 사용 예시
+기 "작업 완료"        # m "작업 완료"
+검 "OAuth"           # ms "OAuth"
+오늘                 # mtoday
+주간                 # mweek
+월간                 # mmonth
+일수 7               # mdays 7
 ```
 
 ### Notion 명령어
@@ -385,6 +420,28 @@ marchive decisions --suggest           # 제안 확인
 # Current/Plans 아카이브
 marchive current --phase 5
 marchive plans
+```
+
+### 모듈 관리 (mmodule)
+
+```bash
+# 모듈 생성 (한글/유니코드 지원)
+mmodule create my-module --desc "설명"
+mmodule create "한글-모듈" --desc "한글 모듈명 지원"
+mmodule create projects/sub-module --tags "tag1,tag2"
+
+# 모듈 목록
+mmodule list                     # 활성 모듈
+mmodule list --archived          # 아카이브 포함
+mmodule tree                     # 트리 구조
+
+# 모듈 이름 변경
+mmodule rename old-name --to new-name
+mmodule rename "한글-이름" --to "새-이름"
+
+# 모듈 아카이브
+mmodule archive my-module --reason "완료"
+mmodule unarchive my-module
 ```
 
 ### 계획 관리 (mplan)
