@@ -1723,10 +1723,11 @@ def sort(
 
 @app.command()
 def module(
-    action: str = typer.Argument(..., help="Action: create, list, tree, archive, unarchive, connections, graph, rebuild-graph, check-links, suggest-links, suggest-ai, ai-organize, auto-tag, graph-history, graph-diff, graph-snapshot, from-text"),
+    action: str = typer.Argument(..., help="Action: create, list, tree, rename, archive, unarchive, connections, graph, rebuild-graph, check-links, suggest-links, suggest-ai, ai-organize, auto-tag, graph-history, graph-diff, graph-snapshot, from-text"),
     name: str = typer.Argument(None, help="Module name or path (e.g., 'projects/website')"),
     description: str = typer.Option("", "--desc", "-d", help="Module description"),
     reason: str = typer.Option("", "--reason", "-r", help="Reason for archiving"),
+    to: Optional[str] = typer.Option(None, "--to", help="New name for rename action"),
     tags: str = typer.Option("", "--tags", "-t", help="Module tags (comma-separated)"),
     archived: bool = typer.Option(False, "--archived", "-a", help="Include archived modules in list"),
     format: Optional[str] = typer.Option(None, "--format", "-f", help="Export format: mermaid, graphviz, json (for graph action)"),
@@ -1858,6 +1859,30 @@ def module(
                         print_tree(children, prefix + extension, is_last_item)
 
             print_tree(tree)
+
+        elif action.lower() == "rename":
+            # Rename module
+            if not name:
+                console.print("[red]ERROR[/red] Module name is required for rename")
+                console.print("[dim]Usage: module rename <name> --to <new-name>[/dim]")
+                sys.exit(1)
+
+            new_name = _opt_str(to)
+            if not new_name:
+                console.print("[red]ERROR[/red] New name is required for rename")
+                console.print("[dim]Usage: module rename <name> --to <new-name>[/dim]")
+                sys.exit(1)
+
+            # Resolve old module name
+            resolved_name = _resolve_module_name(name)
+
+            console.print(f"[cyan]Renaming module '{resolved_name}' -> '{new_name}'...[/cyan]")
+            new_path = manager.rename(resolved_name, new_name)
+
+            # Success
+            rel_path = new_path.relative_to(Path.cwd())
+            console.print(f"\n[green]OK[/green] Module renamed: {resolved_name} -> {new_name}")
+            console.print(f"[dim]New location: {rel_path}[/dim]")
 
         elif action.lower() == "connections":
             # Show connections for a module

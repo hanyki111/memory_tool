@@ -55,11 +55,12 @@ class ModuleManager:
             if not part:
                 raise ModuleError(f"Invalid module path: {name}. Empty path component.")
 
-            # Check for valid characters (alphanumeric, dash, underscore)
-            if not re.match(r'^[a-zA-Z0-9_-]+$', part):
+            # Check for valid characters (word characters including Unicode, dash)
+            # \w matches alphanumeric + underscore + Unicode letters (Korean, Japanese, etc.)
+            if not re.match(r'^[\w-]+$', part):
                 raise ModuleError(
                     f"Invalid module path component: {part}. "
-                    f"Use only alphanumeric characters, dashes, and underscores."
+                    f"Use only letters, numbers, dashes, and underscores."
                 )
 
             # Check for reserved names
@@ -533,3 +534,68 @@ TODO: Add usage examples
                 pass
 
         return module_path
+
+    def rename(self, old_name: str, new_name: str) -> Path:
+        """Rename a module.
+
+        Args:
+            old_name: Current module name/path
+            new_name: New module name/path
+
+        Returns:
+            Path to renamed module
+
+        Raises:
+            ModuleError: If renaming fails
+        """
+        if not self.is_initialized():
+            raise ModuleError(
+                f"Modules directory not found at {self.modules_path}. "
+                f"Run 'minit' to initialize."
+            )
+
+        # Validate new name
+        self._validate_module_name(new_name)
+
+        # Check if old module exists
+        old_path = self.modules_path / old_name
+        if not old_path.exists():
+            raise ModuleError(f"Module not found: {old_name}")
+
+        # Check if new module already exists
+        new_path = self.modules_path / new_name
+        if new_path.exists():
+            raise ModuleError(f"Module already exists: {new_name}")
+
+        # Create parent directory for new path if needed
+        new_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Move module
+        import shutil
+        try:
+            shutil.move(str(old_path), str(new_path))
+        except Exception as e:
+            raise ModuleError(f"Failed to rename module: {e}")
+
+        # Update module.md with new name
+        module_md_path = new_path / "module.md"
+        if module_md_path.exists():
+            try:
+                content = module_md_path.read_text(encoding="utf-8")
+                # Update the title if it contains the old name
+                old_basename = Path(old_name).name
+                new_basename = Path(new_name).name
+                content = content.replace(
+                    f"# Module: {old_basename}",
+                    f"# Module: {new_basename}"
+                )
+                content = content.replace(
+                    f"# Module: {old_name}",
+                    f"# Module: {new_name}"
+                )
+                module_md_path.write_text(content, encoding="utf-8")
+            except Exception:
+                # Non-fatal: module renamed but content not updated
+                pass
+
+        return new_path
