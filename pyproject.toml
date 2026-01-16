@@ -68,6 +68,8 @@ mcontext = "memory_tool.cli:context_cli"
 mcheck = "memory_tool.cli:check_cli"
 mtoday = "memory_tool.cli:today_cli"
 mweek = "memory_tool.cli:week_cli"
+mmonth = "memory_tool.cli:month_cli"
+mdays = "memory_tool.cli:days_cli"
 mstatus = "memory_tool.cli:status_cli"
 malias = "memory_tool.cli:alias_cli"
 msummary = "memory_tool.cli:summary_cli"
@@ -89,6 +91,13 @@ nwatch = "memory_tool.cli:notion_watch_cli"
 "노오" = "memory_tool.cli:notion_today_cli"
 "노주" = "memory_tool.cli:notion_week_cli"
 "노올" = "memory_tool.cli:notion_search_cli"
+# Local memory tool Korean aliases
+"기" = "memory_tool.cli:record_cli"
+"검" = "memory_tool.cli:search_cli"
+"오늘" = "memory_tool.cli:today_cli"
+"주간" = "memory_tool.cli:week_cli"
+"월간" = "memory_tool.cli:month_cli"
+"일수" = "memory_tool.cli:days_cli"
 
 [tool.setuptools.packages.find]
 where = ["."]

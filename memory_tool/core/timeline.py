@@ -333,3 +333,54 @@ class Timeline:
             current_date += timedelta(days=1)
 
         return results
+
+    def get_month(self) -> list[Tuple[Path, str]]:
+        """Get this month's timeline files (1st to today).
+
+        Returns:
+            List of (file_path, content) tuples, sorted by date
+            Empty list if no timeline files exist
+        """
+        today = datetime.now()
+
+        # First day of current month
+        first_day = today.replace(day=1)
+
+        # Collect files from 1st to today
+        results = []
+        current_date = first_day
+        while current_date <= today:
+            file_path = self.get_timeline_file(current_date, create=False)
+            if file_path.exists():
+                content = file_path.read_text(encoding="utf-8")
+                results.append((file_path, content))
+            current_date += timedelta(days=1)
+
+        return results
+
+    def get_days(self, days: int = 14) -> list[Tuple[Path, str]]:
+        """Get timeline files for the last N days (including today).
+
+        Args:
+            days: Number of days to retrieve (default: 14)
+
+        Returns:
+            List of (file_path, content) tuples, sorted by date
+            Empty list if no timeline files exist
+        """
+        today = datetime.now()
+
+        # Start date is (days-1) days ago
+        start_date = today - timedelta(days=days - 1)
+
+        # Collect files from start_date to today
+        results = []
+        current_date = start_date
+        while current_date <= today:
+            file_path = self.get_timeline_file(current_date, create=False)
+            if file_path.exists():
+                content = file_path.read_text(encoding="utf-8")
+                results.append((file_path, content))
+            current_date += timedelta(days=1)
+
+        return results

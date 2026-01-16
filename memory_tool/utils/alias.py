@@ -28,6 +28,8 @@ class AliasManager:
         "marchive": ("archive", "Archive documentation"),
         "mtoday": ("today", "Show today's timeline"),
         "mweek": ("week", "Show this week's timeline"),
+        "mmonth": ("month", "Show this month's timeline"),
+        "mdays": ("days", "Show last N days timeline"),
         "mstatus": ("status", "Show statistics"),
         "mmodule": ("module", "Manage modules and connections"),
         "mhooks": ("hooks", "Manage git hooks"),
@@ -48,6 +50,13 @@ class AliasManager:
         "노오": ("nt", "Show Notion today (Korean)"),
         "노주": ("nw", "Show Notion week (Korean)"),
         "노올": ("ns", "Search Notion (Korean)"),
+        # Local memory tool Korean aliases
+        "기": ("record", "Record to timeline (Korean)"),
+        "검": ("search", "Search timeline and modules (Korean)"),
+        "오늘": ("today", "Show today's timeline (Korean)"),
+        "주간": ("week", "Show this week's timeline (Korean)"),
+        "월간": ("month", "Show this month's timeline (Korean)"),
+        "일수": ("days", "Show last N days timeline (Korean)"),
     }
 
     def __init__(self):

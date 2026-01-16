@@ -1199,6 +1199,90 @@ def week():
 
 
 @app.command()
+def month():
+    """Show this month's timeline (mmonth command)."""
+    timeline = Timeline()
+
+    try:
+        month_files = timeline.get_month()
+
+        if not month_files:
+            console.print("[yellow]![/yellow] No timeline entries for this month yet")
+            console.print(f"[dim]Use: m \"your message\" to start recording[/dim]")
+            return
+
+        # Display month's timeline
+        from datetime import datetime
+        today = datetime.now()
+        month_name = today.strftime('%Y-%m')
+
+        console.print(f"[cyan]{month_name} Timeline:[/cyan]\n")
+
+        for file_path, content in month_files:
+            # Extract date from path (YYYY-MM/DD.md)
+            year_month = file_path.parent.name
+            day = file_path.stem
+            date_str = f"{year_month}-{day}"
+
+            console.print(f"[bold]{date_str}[/bold]")
+            console.print(sanitize_output(content))
+            console.print("")  # Blank line between days
+
+        total_days = len(month_files)
+        console.print(f"[dim]{total_days} day(s) with entries this month[/dim]")
+
+    except Exception as e:
+        console.print(f"[red]ERROR[/red] Failed to read month's timeline: {e}")
+        sys.exit(1)
+
+
+@app.command()
+def days(
+    num_days: int = typer.Argument(14, help="Number of days to show (default: 14)"),
+):
+    """Show timeline for the last N days (mdays command).
+
+    Examples:
+        mdays        # Show last 14 days (default)
+        mdays 7      # Show last 7 days
+        mdays 30     # Show last 30 days
+    """
+    timeline = Timeline()
+
+    try:
+        days_files = timeline.get_days(num_days)
+
+        if not days_files:
+            console.print(f"[yellow]![/yellow] No timeline entries for the last {num_days} days")
+            console.print(f"[dim]Use: m \"your message\" to start recording[/dim]")
+            return
+
+        # Display timeline
+        from datetime import datetime
+        today = datetime.now()
+        start_date = today - timedelta(days=num_days - 1)
+
+        console.print(f"[cyan]Timeline: Last {num_days} days ({start_date.strftime('%Y-%m-%d')} ~ {today.strftime('%Y-%m-%d')}):[/cyan]\n")
+
+        for file_path, content in days_files:
+            # Extract date from path (YYYY-MM/DD.md)
+            year_month = file_path.parent.name
+            day = file_path.stem
+            date_str = f"{year_month}-{day}"
+
+            console.print(f"[bold]{date_str}[/bold]")
+            console.print(sanitize_output(content))
+            console.print("")  # Blank line between days
+
+        total_days_with_entries = len(days_files)
+        console.print(f"[dim]{total_days_with_entries} day(s) with entries in the last {num_days} days[/dim]")
+
+    except Exception as e:
+        console.print(f"[red]ERROR[/red] Failed to read timeline: {e}")
+        sys.exit(1)
+
+
+@app.command()
 def status():
     """Show statistics (mstatus command)."""
     base_path = Path.cwd()
@@ -4643,6 +4727,20 @@ def week_cli():
     """Entry point for 'mweek' command."""
     import sys
     sys.argv = ['memory_tool', 'week'] + sys.argv[1:]
+    app()
+
+
+def month_cli():
+    """Entry point for 'mmonth' command."""
+    import sys
+    sys.argv = ['memory_tool', 'month'] + sys.argv[1:]
+    app()
+
+
+def days_cli():
+    """Entry point for 'mdays' command."""
+    import sys
+    sys.argv = ['memory_tool', 'days'] + sys.argv[1:]
     app()
 
 
