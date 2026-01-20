@@ -356,7 +356,7 @@ class NotionWatcher:
             content = timeline_path.read_text(encoding="utf-8")
 
             # Parse timeline entries (format: "- HH:MM | message")
-            new_entries = self._find_new_entries(file_path, content)
+            new_entries = self._find_new_entries(file_path, content, event_type)
 
             if not new_entries:
                 if self.verbose:
@@ -415,8 +415,14 @@ class NotionWatcher:
         except Exception as e:
             print(f"[{timestamp}] Timeline sync error: {e}")
 
-    def _find_new_entries(self, file_path: str, content: str) -> list:
-        """Find new timeline entries that haven't been synced yet."""
+    def _find_new_entries(self, file_path: str, content: str, event_type: str = "modified") -> list:
+        """Find new timeline entries that haven't been synced yet.
+
+        Args:
+            file_path: Path to the timeline file
+            content: Current file content
+            event_type: "created" or "modified" - created files sync all entries
+        """
         # Parse all entries from content
         entry_pattern = re.compile(r"^- (\d{1,2}:\d{2})\s*\|\s*(.+)$", re.MULTILINE)
         current_entries = []
@@ -434,9 +440,15 @@ class NotionWatcher:
         # Update cached content
         self._last_timeline_content[file_path] = content
 
-        # If first time seeing this file, don't sync (avoid re-syncing existing entries)
+        # For newly created files (not preloaded), sync all entries
+        # This ensures the first entry of a new day's timeline is synced
         if not prev_content:
-            return []
+            if event_type == "created":
+                # New file created during watch - sync all entries
+                return current_entries
+            else:
+                # File existed before watch started (preloaded) - skip to avoid re-sync
+                return []
 
         # Find entries that are new (not in previous content)
         prev_entries_raw = set()

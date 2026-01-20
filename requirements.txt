@@ -1,0 +1,7 @@
+# Memory Tool - Core Dependencies
+# Install with: pip install -r requirements.txt
+
+typer>=0.9.0
+pyyaml>=6.0
+rich>=13.0.0
+notion-client>=2.0.0
