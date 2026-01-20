@@ -6,23 +6,17 @@ typer>=0.9.0
 pyyaml>=6.0
 rich>=13.0.0
 notion-client>=2.0.0
+watchdog>=3.0.0
 
 # Vector search (semantic search)
 sentence-transformers>=2.2.0
 torch>=2.0.0
-
-# LLM integration (summarization)
-anthropic>=0.18.0
-ollama>=0.3.0
 
 # TUI (terminal UI browser)
 textual>=0.47.0
 
 # Shell completion
 shtab>=1.6.0
-
-# File watcher (nwatch)
-watchdog>=3.0.0
 
 # Development
 pytest>=7.0
