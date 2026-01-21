@@ -4,7 +4,7 @@ Provides daily task planning with weekly plan integration.
 """
 
 import re
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from pathlib import Path
 from typing import Optional, List, Tuple
 
@@ -113,6 +113,28 @@ class DailyPlan:
         plan_path.write_text(content, encoding='utf-8')
 
         return plan_path
+
+    def parse_date_keyword(self, keyword: str) -> Optional[date]:
+        """Parse date keyword like 'yesterday' or date string.
+
+        Args:
+            keyword: Date keyword or YYYY-MM-DD format
+
+        Returns:
+            Parsed date or None if invalid
+        """
+        keyword_lower = keyword.lower()
+
+        if keyword_lower == "yesterday":
+            return date.today() - timedelta(days=1)
+        elif keyword_lower == "today":
+            return date.today()
+        else:
+            # Try to parse as date
+            try:
+                return datetime.strptime(keyword, "%Y-%m-%d").date()
+            except ValueError:
+                return None
 
     def show_plan(self, target_date: Optional[date] = None, auto_update: bool = True) -> str:
         """Show daily plan content.
@@ -298,3 +320,64 @@ class DailyPlan:
         )
 
         return content
+
+    def get_incomplete_tasks(self, target_date: Optional[date] = None) -> List[str]:
+        """Extract incomplete tasks (- [ ] ...) from plan.
+
+        Args:
+            target_date: Target date (yesterday if None)
+
+        Returns:
+            List of incomplete task texts
+        """
+        if target_date is None:
+            target_date = date.today() - timedelta(days=1)
+
+        plan_path = self.get_plan_path(target_date)
+
+        if not plan_path.exists():
+            return []
+
+        content = plan_path.read_text(encoding='utf-8')
+
+        # Extract incomplete tasks
+        tasks = []
+        for match in re.finditer(r'^- \[ \] (.+)$', content, re.MULTILINE):
+            task_text = match.group(1).strip()
+            # Remove any timestamp suffix if present
+            task_text = re.sub(r'\s*\[\d{1,2}:\d{2}\]$', '', task_text)
+            tasks.append(task_text)
+
+        return tasks
+
+    def carryover_tasks(
+        self,
+        tasks: List[str],
+        from_date: Optional[date] = None,
+        to_date: Optional[date] = None
+    ) -> int:
+        """Move selected tasks from one plan to another.
+
+        Args:
+            tasks: List of task texts to carry over
+            from_date: Source date (yesterday if None)
+            to_date: Target date (today if None)
+
+        Returns:
+            Number of tasks carried over
+        """
+        if from_date is None:
+            from_date = date.today() - timedelta(days=1)
+        if to_date is None:
+            to_date = date.today()
+
+        if not tasks:
+            return 0
+
+        # Add tasks to target plan
+        carried = 0
+        for task in tasks:
+            self.add_task(task, to_date)
+            carried += 1
+
+        return carried

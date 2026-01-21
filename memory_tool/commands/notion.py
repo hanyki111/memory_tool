@@ -181,7 +181,7 @@ def notion_search_inside(
 
 @app.command(name="nsync")
 def notion_sync(
-    module: str = typer.Argument(None, help="Module path to sync (optional)"),
+    module_path: str = typer.Argument(None, help="Module path to sync (optional)"),
     push: bool = typer.Option(False, "--push", "-p", help="Only push local changes to Notion"),
     pull: bool = typer.Option(False, "--pull", "-l", help="Only pull Notion changes to local"),
     force: bool = typer.Option(False, "--force", "-f", help="Force sync regardless of timestamps"),
@@ -189,34 +189,71 @@ def notion_sync(
     status: bool = typer.Option(False, "--status", "-s", help="Show sync status"),
     discover: bool = typer.Option(False, "--discover", "-d", help="Discover and download modules from Notion"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
-    timeline: bool = typer.Option(False, "--timeline", "-t", help="Sync timeline entries"),
-    days: int = typer.Option(1, "--days", help="Number of days to sync for timeline (default: 1 = today)"),
+    # Type selection flags
+    module_flag: bool = typer.Option(False, "--module", "-m", help="Sync modules only"),
+    timeline: bool = typer.Option(False, "--timeline", "-t", help="Sync timeline only"),
+    plan: bool = typer.Option(False, "--plan", help="Sync plans only"),
+    # Plan-specific options
+    daily: bool = typer.Option(False, "--daily", help="Sync daily plans only (requires --plan)"),
+    weekly: bool = typer.Option(False, "--weekly", help="Sync weekly plans only (requires --plan)"),
+    monthly: bool = typer.Option(False, "--monthly", help="Sync monthly plans only (requires --plan)"),
+    # Days option
+    days: int = typer.Option(7, "--days", help="Number of days to sync for timeline/daily plans (default: 7)"),
 ):
     """Bidirectional sync with Notion (nsync command).
 
-    Syncs local modules with Notion pages. Configure targets in config.yaml.
+    Default: Syncs all configured types (modules + timeline + plan).
+    Use flags to sync specific types only.
 
     Examples:
-        nsync                    # Sync all configured targets
+        nsync                    # Sync all types (modules + timeline + plan)
+        nsync --module           # Sync modules only
+        nsync --timeline         # Sync timeline only
+        nsync --plan             # Sync plans only
+        nsync --plan --daily     # Sync daily plans only
+        nsync --plan --weekly    # Sync weekly plans only
+        nsync --module --timeline  # Sync modules + timeline (no plans)
+
         nsync projects/my-mod    # Sync specific module
         nsync --push             # Only push local to Notion
         nsync --pull             # Only pull Notion to local
         nsync --discover         # Download modules from Notion (first time)
-        nsync --discover --dry-run  # Preview what would be downloaded
         nsync --dry-run          # Preview changes
         nsync --status           # Show sync status
-        nsync --timeline         # Sync today's timeline
-        nsync --timeline --days 7  # Sync last 7 days of timeline
+        nsync --days 7           # Sync last 7 days of timeline/daily plans
     """
     try:
         from memory_tool.notion.sync import ModuleSyncer, NotionSyncError
 
         syncer = ModuleSyncer()
 
-        if not syncer.sync_config.enabled:
-            console.print("[yellow]Notion sync is not enabled.[/yellow]")
+        # Determine which types to sync
+        # If no type flags specified, sync all
+        sync_modules = not (timeline or plan) or module_flag
+        sync_timeline = not (module_flag or plan) or timeline
+        sync_plans = not (module_flag or timeline) or plan
+
+        # If specific type flags are given, override defaults
+        if module_flag or timeline or plan:
+            sync_modules = module_flag
+            sync_timeline = timeline
+            sync_plans = plan
+
+        # Determine plan type if syncing plans
+        plan_type = "all"
+        if plan:
+            if daily and not weekly and not monthly:
+                plan_type = "daily"
+            elif weekly and not daily and not monthly:
+                plan_type = "weekly"
+            elif monthly and not daily and not weekly:
+                plan_type = "monthly"
+
+        if not syncer.sync_config.enabled and sync_modules:
+            console.print("[yellow]Notion module sync is not enabled.[/yellow]")
             console.print("[dim]Enable it in config.yaml: notion.sync.enabled: true[/dim]")
-            return
+            if not sync_timeline and not sync_plans:
+                return
 
         if discover:
             if dry_run:
@@ -250,40 +287,66 @@ def notion_sync(
             return
 
         if status:
-            status_info = syncer.get_status(module)
+            console.print("[bold cyan]Sync Status:[/bold cyan]\n")
 
-            last_sync = status_info.get("last_full_sync")
-            if last_sync:
-                console.print(f"[cyan]Last full sync:[/cyan] {last_sync}")
-            else:
-                console.print("[dim]No sync history yet[/dim]")
-            console.print()
+            # Module status
+            if sync_modules:
+                console.print("[cyan]Modules:[/cyan]")
+                status_info = syncer.get_status(module_path)
 
-            for mod_path, mod_status in status_info.get("modules", {}).items():
-                console.print(f"[bold]{mod_path}[/bold]")
+                last_sync = status_info.get("last_full_sync")
+                if last_sync:
+                    console.print(f"  Last full sync: {last_sync}")
+                else:
+                    console.print("  [dim]No sync history yet[/dim]")
 
-                if mod_status.get("last_sync"):
-                    console.print(f"  Last sync: {mod_status['last_sync']}")
+                for mod_path, mod_status in status_info.get("modules", {}).items():
+                    console.print(f"  [bold]{mod_path}[/bold]")
 
-                to_push = mod_status.get("to_push", [])
-                to_pull = mod_status.get("to_pull", [])
-                in_sync = mod_status.get("in_sync", [])
-                conflicts = mod_status.get("conflicts", [])
+                    if mod_status.get("last_sync"):
+                        console.print(f"    Last sync: {mod_status['last_sync']}")
 
-                if to_push:
-                    console.print(f"  [green]To push:[/green] {', '.join(to_push)}")
-                if to_pull:
-                    console.print(f"  [blue]To pull:[/blue] {', '.join(to_pull)}")
-                if conflicts:
-                    console.print(f"  [red]Conflicts:[/red] {', '.join(conflicts)}")
-                if in_sync and verbose:
-                    console.print(f"  [dim]In sync:[/dim] {', '.join(in_sync)}")
-                if not to_push and not to_pull and not conflicts:
-                    console.print("  [dim]All in sync[/dim]")
+                    to_push = mod_status.get("to_push", [])
+                    to_pull = mod_status.get("to_pull", [])
+                    in_sync = mod_status.get("in_sync", [])
+                    conflicts = mod_status.get("conflicts", [])
+
+                    if to_push:
+                        console.print(f"    [green]To push:[/green] {', '.join(to_push)}")
+                    if to_pull:
+                        console.print(f"    [blue]To pull:[/blue] {', '.join(to_pull)}")
+                    if conflicts:
+                        console.print(f"    [red]Conflicts:[/red] {', '.join(conflicts)}")
+                    if in_sync and verbose:
+                        console.print(f"    [dim]In sync:[/dim] {', '.join(in_sync)}")
+                    if not to_push and not to_pull and not conflicts:
+                        console.print("    [dim]All in sync[/dim]")
                 console.print()
+
+            # Plan status
+            if sync_plans:
+                from memory_tool.notion.plan_sync import PlanSyncer
+                plan_syncer = PlanSyncer()
+                plan_status = plan_syncer.get_status()
+
+                console.print("[cyan]Plans:[/cyan]")
+                console.print(f"  Enabled: {plan_status['enabled']}")
+                if plan_status.get('root_page_id'):
+                    console.print(f"  Root page: {plan_status['root_page_id'][:8]}...")
+                console.print(f"  Daily: {plan_status['sync_daily']}, Weekly: {plan_status['sync_weekly']}, Monthly: {plan_status['sync_monthly']}")
+                console.print(f"  Status: {plan_status['message']}")
+                console.print()
+
             return
 
-        if timeline:
+        # Sync timeline if requested
+        total_pushed = 0
+        total_pulled = 0
+        total_updated = 0
+        total_skipped = 0
+        all_errors = []
+
+        if sync_timeline:
             from memory_tool.notion.timeline_sync import TimelineSyncer
 
             timeline_syncer = TimelineSyncer()
@@ -301,56 +364,101 @@ def notion_sync(
                 verbose=verbose,
             )
 
-            pushed = result.get("pushed", 0)
-            pulled = result.get("pulled", 0)
-            skipped = result.get("skipped", 0)
-            errors = result.get("errors", [])
+            total_pushed += result.get("pushed", 0)
+            total_pulled += result.get("pulled", 0)
+            total_skipped += result.get("skipped", 0)
+            all_errors.extend(result.get("errors", []))
 
+            if verbose:
+                console.print(f"[dim]Timeline: pushed={result.get('pushed', 0)}, pulled={result.get('pulled', 0)}[/dim]")
             console.print()
-            if pushed:
-                console.print(f"[green]Pushed:[/green] {pushed} entries to Notion")
-            if pulled:
-                console.print(f"[blue]Pulled:[/blue] {pulled} entries from Notion")
-            if skipped:
-                console.print(f"[dim]Skipped:[/dim] {skipped} entries (already synced)")
-            if errors:
-                console.print(f"[red]Errors:[/red] {len(errors)}")
-                for err in errors:
-                    console.print(f"  - {err}")
-            if not pushed and not pulled and not errors:
-                console.print("[dim]No changes to sync[/dim]")
-            return
 
-        if dry_run:
-            console.print("[cyan]Dry run - showing what would happen:[/cyan]\n")
-        else:
-            console.print("[cyan]Syncing with Notion...[/cyan]\n")
+        # Sync plans if requested
+        if sync_plans:
+            from memory_tool.notion.plan_sync import PlanSyncer
 
-        summary = syncer.sync(
-            module_path=module,
-            push_only=push,
-            pull_only=pull,
-            force=force,
-            dry_run=dry_run,
-            verbose=verbose,
-        )
+            plan_syncer = PlanSyncer()
 
-        for result in summary.results:
-            if result.action.direction == SyncDirection.SKIP:
+            if plan_syncer.enabled:
+                if dry_run:
+                    console.print(f"[cyan]Plan sync (dry-run) - {plan_type}:[/cyan]\n")
+                else:
+                    console.print(f"[cyan]Syncing plans ({plan_type})...[/cyan]\n")
+
+                result = plan_syncer.sync(
+                    plan_type=plan_type,
+                    days=days,
+                    push_only=push,
+                    pull_only=pull,
+                    dry_run=dry_run,
+                    verbose=verbose,
+                )
+
+                total_pushed += result.get("pushed", 0)
+                total_pulled += result.get("pulled", 0)
+                total_updated += result.get("updated", 0)
+                total_skipped += result.get("skipped", 0)
+                all_errors.extend(result.get("errors", []))
+
                 if verbose:
-                    console.print(f"[dim]SKIP[/dim]  {result.action.module_path}/{result.action.file_path}")
-                continue
-
-            if result.success:
-                if result.action.direction == SyncDirection.PUSH:
-                    console.print(f"[green]PUSH[/green] {result.action.module_path}/{result.action.file_path} -> Notion")
-                elif result.action.direction == SyncDirection.PULL:
-                    console.print(f"[blue]PULL[/blue] {result.action.module_path}/{result.action.file_path} <- Notion")
+                    console.print(f"[dim]Plans: pushed={result.get('pushed', 0)}, pulled={result.get('pulled', 0)}, updated={result.get('updated', 0)}[/dim]")
+                console.print()
             else:
-                console.print(f"[red]FAIL[/red] {result.action.module_path}/{result.action.file_path}: {result.message}")
+                console.print("[yellow]Plan sync not enabled[/yellow]")
+                console.print("[dim]Enable it in config.yaml: notion.sync.plan.enabled: true[/dim]")
+                console.print()
 
-        console.print()
-        console.print(f"[cyan]{summary}[/cyan]")
+        # Sync modules if requested
+        if sync_modules and syncer.sync_config.enabled:
+            if dry_run:
+                console.print("[cyan]Module sync (dry-run):[/cyan]\n")
+            else:
+                console.print("[cyan]Syncing modules...[/cyan]\n")
+
+            summary = syncer.sync(
+                module_path=module_path,
+                push_only=push,
+                pull_only=pull,
+                force=force,
+                dry_run=dry_run,
+                verbose=verbose,
+            )
+
+            for result in summary.results:
+                if result.action.direction == SyncDirection.SKIP:
+                    if verbose:
+                        console.print(f"[dim]SKIP[/dim]  {result.action.module_path}/{result.action.file_path}")
+                    continue
+
+                if result.success:
+                    if result.action.direction == SyncDirection.PUSH:
+                        console.print(f"[green]PUSH[/green] {result.action.module_path}/{result.action.file_path} -> Notion")
+                    elif result.action.direction == SyncDirection.PULL:
+                        console.print(f"[blue]PULL[/blue] {result.action.module_path}/{result.action.file_path} <- Notion")
+                else:
+                    console.print(f"[red]FAIL[/red] {result.action.module_path}/{result.action.file_path}: {result.message}")
+
+            total_pushed += summary.pushed
+            total_pulled += summary.pulled
+            total_skipped += summary.skipped
+            console.print()
+
+        # Print summary
+        console.print("[bold cyan]Summary:[/bold cyan]")
+        if total_pushed:
+            console.print(f"  [green]Pushed:[/green] {total_pushed}")
+        if total_pulled:
+            console.print(f"  [blue]Pulled:[/blue] {total_pulled}")
+        if total_updated:
+            console.print(f"  [yellow]Updated:[/yellow] {total_updated}")
+        if total_skipped and verbose:
+            console.print(f"  [dim]Skipped:[/dim] {total_skipped}")
+        if all_errors:
+            console.print(f"  [red]Errors:[/red] {len(all_errors)}")
+            for err in all_errors:
+                console.print(f"    - {err}")
+        if not total_pushed and not total_pulled and not total_updated and not all_errors:
+            console.print("  [dim]No changes to sync[/dim]")
 
     except NotionError as e:
         console.print(f"[red]Notion Error:[/red] {e}")
@@ -370,25 +478,30 @@ def notion_watch(
     quiet: bool = typer.Option(False, "--quiet", "-q", help="Less verbose output"),
     modules_only: bool = typer.Option(False, "--modules-only", "-m", help="Watch only modules/ directory"),
     timeline_only: bool = typer.Option(False, "--timeline-only", "-t", help="Watch only timeline/ directory"),
+    plans_only: bool = typer.Option(False, "--plans-only", "-p", help="Watch only plans/ directory"),
+    no_plans: bool = typer.Option(False, "--no-plans", help="Exclude plans/ from watching"),
     bidirectional: bool = typer.Option(False, "--bidirectional", "-b", help="Enable Notion -> Local sync (polling)"),
     poll_interval: int = typer.Option(120, "--poll-interval", "-i", help="Notion polling interval in seconds (default: 120)"),
 ):
-    """Watch local modules and timeline, auto-sync with Notion on changes.
+    """Watch local modules, timeline, and plans, auto-sync with Notion on changes.
 
-    Monitors .memory/modules/ and .memory/timeline/ for file changes:
+    Monitors .memory/ subdirectories for file changes:
     - modules/ changes -> triggers module sync (nsync)
     - timeline/ changes -> syncs new entries to Notion daily pages
+    - plans/ changes -> syncs plans to Notion
 
     With --bidirectional: Also polls Notion for changes and pulls to local.
 
     Uses debouncing to batch rapid changes.
 
     Examples:
-        nwatch                      # Watch both modules and timeline (Local -> Notion)
+        nwatch                      # Watch all (modules + timeline + plans)
         nwatch --bidirectional      # Enable Notion -> Local sync too
         nwatch -b -i 60             # Bidirectional with 60s polling interval
         nwatch --modules-only       # Watch only modules/
         nwatch --timeline-only      # Watch only timeline/
+        nwatch --plans-only         # Watch only plans/
+        nwatch --no-plans           # Watch modules + timeline (exclude plans)
         nwatch --debounce 5         # Wait 5 seconds before syncing
         nwatch --dry-run            # Show what would sync (no actual sync)
         nwatch --quiet              # Less verbose output
@@ -406,8 +519,24 @@ def notion_watch(
 
         verbose = not quiet
 
-        watch_modules = not timeline_only
-        watch_timeline = not modules_only
+        # Determine what to watch
+        if modules_only:
+            watch_modules = True
+            watch_timeline = False
+            watch_plans = False
+        elif timeline_only:
+            watch_modules = False
+            watch_timeline = True
+            watch_plans = False
+        elif plans_only:
+            watch_modules = False
+            watch_timeline = False
+            watch_plans = True
+        else:
+            # Default: watch all
+            watch_modules = True
+            watch_timeline = True
+            watch_plans = not no_plans
 
         watcher = NotionWatcher(
             debounce_seconds=debounce,
@@ -415,6 +544,7 @@ def notion_watch(
             dry_run=dry_run,
             watch_modules=watch_modules,
             watch_timeline=watch_timeline,
+            watch_plans=watch_plans,
             bidirectional=bidirectional,
             poll_interval=poll_interval,
         )

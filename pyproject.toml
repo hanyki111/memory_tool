@@ -86,6 +86,9 @@ nw = "memory_tool.cli:notion_week_cli"
 nsi = "memory_tool.cli:notion_search_inside_cli"
 nsync = "memory_tool.cli:notion_sync_cli"
 nwatch = "memory_tool.cli:notion_watch_cli"
+mask = "memory_tool.cli:ask_cli"
+mproviders = "memory_tool.cli:providers_cli"
+mhelp = "memory_tool.cli:help_cli"
 "노" = "memory_tool.cli:notion_message_cli"
 "노검" = "memory_tool.cli:notion_search_inside_cli"
 "노오" = "memory_tool.cli:notion_today_cli"
@@ -98,6 +101,7 @@ nwatch = "memory_tool.cli:notion_watch_cli"
 "주간" = "memory_tool.cli:week_cli"
 "월간" = "memory_tool.cli:month_cli"
 "일수" = "memory_tool.cli:days_cli"
+"질문" = "memory_tool.cli:ask_cli"
 
 [tool.setuptools.packages.find]
 where = ["."]

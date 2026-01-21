@@ -55,6 +55,9 @@ class Config:
         "summary": {
             "default_language": "ko",  # ko, en, or auto
         },
+        "help": {
+            "language": "en",  # en, ko
+        },
     }
 
     VALID_GRANULARITIES = {"low", "medium", "high"}

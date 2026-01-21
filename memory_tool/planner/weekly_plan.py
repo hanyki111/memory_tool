@@ -142,16 +142,58 @@ class WeeklyPlan:
 
         return plan_path
 
+    def parse_week_keyword(self, keyword: str) -> Optional[date]:
+        """Parse week keyword like 'lastweek' or week ID.
+
+        Args:
+            keyword: Week keyword (lastweek), week ID (W03), or None
+
+        Returns:
+            A date within the target week, or None if invalid
+        """
+        keyword_lower = keyword.lower()
+
+        if keyword_lower == "lastweek":
+            return date.today() - timedelta(weeks=1)
+        elif keyword_lower == "thisweek":
+            return date.today()
+        elif keyword_lower.startswith("w"):
+            # Handle W## format - return None to let show_plan handle it
+            return None
+        else:
+            return None
+
     def show_plan(self, week_id: Optional[str] = None, auto_update: bool = True) -> str:
         """Show weekly plan content.
 
         Args:
-            week_id: Week ID (e.g., "W47") or None for current week
+            week_id: Week ID (e.g., "W47"), keyword ("lastweek"), or None for current week
             auto_update: If True, automatically update progress before showing
 
         Returns:
             Plan content
         """
+        # Handle keywords
+        if week_id and week_id.lower() in ("lastweek", "thisweek"):
+            target_date = self.parse_week_keyword(week_id)
+            if target_date:
+                plan_path = self.get_plan_path(target_date)
+                if not plan_path.exists():
+                    year, week, _, _ = self.get_week_info(target_date)
+                    return f"No weekly plan found for W{week:02d}\nCreate one with: mplan weekly"
+
+                if auto_update:
+                    try:
+                        content = plan_path.read_text(encoding='utf-8')
+                        updated_content = self._update_progress(content)
+                        if updated_content != content:
+                            plan_path.write_text(updated_content, encoding='utf-8')
+                        return updated_content
+                    except Exception:
+                        return plan_path.read_text(encoding='utf-8')
+
+                return plan_path.read_text(encoding='utf-8')
+
         if week_id:
             # Parse W## format
             match = re.match(r'W(\d+)', week_id, re.IGNORECASE)
@@ -340,3 +382,74 @@ class WeeklyPlan:
         )
 
         return content
+
+    def get_incomplete_goals(self, target_date: Optional[date] = None) -> list:
+        """Extract incomplete goals (- [ ] ...) from weekly plan.
+
+        Args:
+            target_date: A date within the target week (last week if None)
+
+        Returns:
+            List of incomplete goal texts
+        """
+        if target_date is None:
+            target_date = date.today() - timedelta(weeks=1)
+
+        plan_path = self.get_plan_path(target_date)
+
+        if not plan_path.exists():
+            return []
+
+        content = plan_path.read_text(encoding='utf-8')
+
+        # Extract incomplete goals from "## Weekly Goals" section only
+        goals = []
+        in_goals_section = False
+
+        for line in content.split('\n'):
+            if line.startswith("## Weekly Goals"):
+                in_goals_section = True
+                continue
+            elif line.startswith("##"):
+                in_goals_section = False
+                continue
+
+            if in_goals_section:
+                match = re.match(r'^- \[ \] (.+)$', line)
+                if match:
+                    goal_text = match.group(1).strip()
+                    goals.append(goal_text)
+
+        return goals
+
+    def carryover_goals(
+        self,
+        goals: list,
+        from_date: Optional[date] = None,
+        to_date: Optional[date] = None
+    ) -> int:
+        """Move selected goals from one week to another.
+
+        Args:
+            goals: List of goal texts to carry over
+            from_date: A date within the source week (last week if None)
+            to_date: A date within the target week (this week if None)
+
+        Returns:
+            Number of goals carried over
+        """
+        if from_date is None:
+            from_date = date.today() - timedelta(weeks=1)
+        if to_date is None:
+            to_date = date.today()
+
+        if not goals:
+            return 0
+
+        # Add goals to target plan
+        carried = 0
+        for goal in goals:
+            self.add_goal(goal, to_date)
+            carried += 1
+
+        return carried

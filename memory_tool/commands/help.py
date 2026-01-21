@@ -1,0 +1,1411 @@
+"""Detailed help system with bilingual support."""
+
+from typing import Optional
+import typer
+from memory_tool.commands.common import app, console
+
+
+# Detailed help content (bilingual)
+HELP_CONTENT = {
+    # ================================================================
+    # Core Commands
+    # ================================================================
+    "record": {
+        "en": {
+            "name": "m / record",
+            "summary": "Record an entry to today's timeline",
+            "description": """
+Records a timestamped entry to today's timeline file.
+The entry is automatically saved to .memory/timeline/daily/YYYY-MM/DD.md
+
+This is the most frequently used command - capture thoughts, progress,
+decisions, or any information instantly.
+            """,
+            "examples": [
+                'm "Fixed login bug in auth.py"',
+                'm "Decision: Using PostgreSQL for the database"',
+                'm "Started working on feature X"',
+                'm "Meeting notes: discussed API design with team"',
+            ],
+            "options": [
+                ("--date, -d", "Record to a specific date (YYYY-MM-DD)"),
+                ("--time, -t", "Override timestamp (HH:MM)"),
+            ],
+        },
+        "ko": {
+            "name": "m / record (기)",
+            "summary": "오늘 타임라인에 기록 추가",
+            "description": """
+타임스탬프와 함께 오늘의 타임라인 파일에 기록합니다.
+기록은 자동으로 .memory/timeline/daily/YYYY-MM/DD.md에 저장됩니다.
+
+가장 자주 사용하는 명령어입니다 - 생각, 진행 상황, 결정 사항,
+또는 어떤 정보든 즉시 기록하세요.
+            """,
+            "examples": [
+                'm "auth.py 로그인 버그 수정"',
+                'm "결정: 데이터베이스로 PostgreSQL 사용"',
+                'm "기능 X 작업 시작"',
+                'm "회의 노트: 팀과 API 설계 논의"',
+            ],
+            "options": [
+                ("--date, -d", "특정 날짜에 기록 (YYYY-MM-DD)"),
+                ("--time, -t", "타임스탬프 직접 지정 (HH:MM)"),
+            ],
+        },
+    },
+
+    "search": {
+        "en": {
+            "name": "ms / search",
+            "summary": "Search timeline and modules",
+            "description": """
+Searches through your memory (timeline, modules, plans) using
+keyword matching, semantic search, or hybrid mode.
+
+Supports regex patterns, date filtering, and result ranking.
+            """,
+            "examples": [
+                'ms "bug fix"                    # Basic keyword search',
+                'ms "authentication" --hybrid   # Keyword + semantic search',
+                'ms "API" --date this-week      # Search this week only',
+                'ms "decision" --type modules   # Search modules only',
+                'ms "refactor" --boost-recent   # Boost recent results',
+            ],
+            "options": [
+                ("--hybrid", "Combine keyword and semantic search"),
+                ("--semantic, -s", "Use semantic (meaning-based) search"),
+                ("--date", "Date filter: today, yesterday, this-week, last-N-days"),
+                ("--type", "File type: timeline, modules, decisions, plans"),
+                ("--boost-recent", "Prioritize recent results"),
+            ],
+        },
+        "ko": {
+            "name": "ms / search (검)",
+            "summary": "타임라인과 모듈 검색",
+            "description": """
+메모리(타임라인, 모듈, 계획) 전체를 키워드 매칭,
+시맨틱 검색, 또는 하이브리드 모드로 검색합니다.
+
+정규식 패턴, 날짜 필터링, 결과 랭킹을 지원합니다.
+            """,
+            "examples": [
+                'ms "버그 수정"                    # 기본 키워드 검색',
+                'ms "인증" --hybrid               # 키워드 + 시맨틱 검색',
+                'ms "API" --date this-week       # 이번 주만 검색',
+                'ms "결정" --type modules        # 모듈만 검색',
+                'ms "리팩토링" --boost-recent    # 최근 결과 우선',
+            ],
+            "options": [
+                ("--hybrid", "키워드와 시맨틱 검색 결합"),
+                ("--semantic, -s", "시맨틱(의미 기반) 검색 사용"),
+                ("--date", "날짜 필터: today, yesterday, this-week, last-N-days"),
+                ("--type", "파일 유형: timeline, modules, decisions, plans"),
+                ("--boost-recent", "최근 결과 우선 표시"),
+            ],
+        },
+    },
+
+    "ask": {
+        "en": {
+            "name": "mask / ask",
+            "summary": "Ask questions about your memory (RAG)",
+            "description": """
+Uses AI to answer questions about your memory content.
+The agent interprets your question, selects appropriate tools,
+gathers information, and synthesizes an answer.
+
+Available tools: get_timeline, search, get_plan, get_module, list_modules
+            """,
+            "examples": [
+                'mask "What did I work on yesterday?"',
+                'mask "What decisions were made about the database?"',
+                'mask "Summarize last week\'s progress"',
+                'mask "What modules are related to authentication?"',
+                'mask "지난주에 무엇을 했나요?" --verbose',
+            ],
+            "options": [
+                ("--verbose, -v", "Show agent's reasoning and tool calls"),
+                ("--simple, -s", "Use simple keyword search (faster)"),
+                ("--provider, -p", "LLM provider: claude-cli, gemini-cli, etc."),
+            ],
+        },
+        "ko": {
+            "name": "mask / ask (질문)",
+            "summary": "메모리에 대해 AI에게 질문 (RAG)",
+            "description": """
+AI를 사용하여 메모리 내용에 대한 질문에 답변합니다.
+에이전트가 질문을 해석하고, 적절한 도구를 선택하여
+정보를 수집한 후 답변을 생성합니다.
+
+사용 가능한 도구: get_timeline, search, get_plan, get_module, list_modules
+            """,
+            "examples": [
+                'mask "어제 무엇을 했나요?"',
+                'mask "데이터베이스 관련 결정 사항은?"',
+                'mask "지난주 진행 상황 요약해줘"',
+                'mask "인증 관련 모듈은 무엇이 있나요?"',
+                'mask "What did I do yesterday?" --verbose',
+            ],
+            "options": [
+                ("--verbose, -v", "에이전트의 추론 과정과 도구 호출 표시"),
+                ("--simple, -s", "단순 키워드 검색 사용 (더 빠름)"),
+                ("--provider, -p", "LLM 제공자: claude-cli, gemini-cli 등"),
+            ],
+        },
+    },
+
+    "today": {
+        "en": {
+            "name": "mtoday / today",
+            "summary": "Show today's timeline",
+            "description": "Displays all entries recorded today in chronological order.",
+            "examples": [
+                "mtoday                # Show today's entries",
+                "mtoday --yesterday    # Show yesterday's entries",
+            ],
+            "options": [
+                ("--yesterday", "Show yesterday instead"),
+            ],
+        },
+        "ko": {
+            "name": "mtoday / today (오늘)",
+            "summary": "오늘 타임라인 보기",
+            "description": "오늘 기록된 모든 항목을 시간순으로 표시합니다.",
+            "examples": [
+                "mtoday                # 오늘 기록 보기",
+                "mtoday --yesterday    # 어제 기록 보기",
+            ],
+            "options": [
+                ("--yesterday", "어제 기록 보기"),
+            ],
+        },
+    },
+
+    "plan": {
+        "en": {
+            "name": "mplan / plan",
+            "summary": "Manage daily and weekly plans",
+            "description": """
+Create, view, and manage your daily and weekly plans.
+Supports task tracking with checkboxes and carryover of incomplete tasks.
+            """,
+            "examples": [
+                "mplan daily                    # Show/create today's plan",
+                "mplan daily yesterday          # Show yesterday's plan",
+                "mplan daily carryover          # Carry over incomplete tasks",
+                "mplan weekly                   # Show/create this week's plan",
+                "mplan weekly lastweek          # Show last week's plan",
+            ],
+            "options": [
+                ("daily", "Daily plan operations"),
+                ("weekly", "Weekly plan operations"),
+                ("carryover", "Carry over incomplete tasks"),
+            ],
+        },
+        "ko": {
+            "name": "mplan / plan",
+            "summary": "일일/주간 계획 관리",
+            "description": """
+일일 및 주간 계획을 생성, 조회, 관리합니다.
+체크박스로 작업 추적이 가능하고, 미완료 작업 이관을 지원합니다.
+            """,
+            "examples": [
+                "mplan daily                    # 오늘 계획 보기/생성",
+                "mplan daily yesterday          # 어제 계획 보기",
+                "mplan daily carryover          # 미완료 작업 이관",
+                "mplan weekly                   # 이번 주 계획 보기/생성",
+                "mplan weekly lastweek          # 지난주 계획 보기",
+            ],
+            "options": [
+                ("daily", "일일 계획 작업"),
+                ("weekly", "주간 계획 작업"),
+                ("carryover", "미완료 작업 이관"),
+            ],
+        },
+    },
+
+    "nsync": {
+        "en": {
+            "name": "nsync",
+            "summary": "Sync with Notion",
+            "description": """
+Synchronize local memory content with Notion.
+Supports modules, timeline, and plans synchronization.
+            """,
+            "examples": [
+                "nsync                     # Sync all (modules + timeline + plans)",
+                "nsync --module            # Sync modules only",
+                "nsync --timeline          # Sync timeline only",
+                "nsync --plan              # Sync plans only",
+                "nsync --push              # Push local to Notion",
+                "nsync --pull              # Pull from Notion to local",
+                "nsync --status            # Show sync status",
+            ],
+            "options": [
+                ("--module", "Sync modules only"),
+                ("--timeline", "Sync timeline only"),
+                ("--plan", "Sync plans only"),
+                ("--push", "Push local changes to Notion"),
+                ("--pull", "Pull changes from Notion"),
+                ("--status", "Show synchronization status"),
+            ],
+        },
+        "ko": {
+            "name": "nsync",
+            "summary": "Notion과 동기화",
+            "description": """
+로컬 메모리 내용을 Notion과 동기화합니다.
+모듈, 타임라인, 계획 동기화를 지원합니다.
+            """,
+            "examples": [
+                "nsync                     # 전체 동기화 (모듈 + 타임라인 + 계획)",
+                "nsync --module            # 모듈만 동기화",
+                "nsync --timeline          # 타임라인만 동기화",
+                "nsync --plan              # 계획만 동기화",
+                "nsync --push              # 로컬 → Notion 푸시",
+                "nsync --pull              # Notion → 로컬 풀",
+                "nsync --status            # 동기화 상태 확인",
+            ],
+            "options": [
+                ("--module", "모듈만 동기화"),
+                ("--timeline", "타임라인만 동기화"),
+                ("--plan", "계획만 동기화"),
+                ("--push", "로컬 변경사항을 Notion에 푸시"),
+                ("--pull", "Notion에서 변경사항 풀"),
+                ("--status", "동기화 상태 표시"),
+            ],
+        },
+    },
+
+    # ================================================================
+    # Core Commands (additional)
+    # ================================================================
+    "init": {
+        "en": {
+            "name": "minit / init",
+            "summary": "Initialize .memory/ structure",
+            "description": """
+Creates the .memory/ directory structure for a new project.
+Also creates .claude/ directory for Claude Code integration.
+
+Run this command once in your project root to start using Memory Tool.
+            """,
+            "examples": [
+                "minit                      # Initialize in current directory",
+                "minit --force              # Reinitialize (overwrites existing)",
+                "minit --kb /path/to/kb     # Set knowledge base path",
+                "minit --update-docs        # Update documentation templates only",
+            ],
+            "options": [
+                ("--force, -f", "Force reinitialize (overwrites existing)"),
+                ("--kb", "Path to knowledge base directory"),
+                ("--update-docs", "Update documentation templates only"),
+                ("--update-all", "Update all templates (creates backups)"),
+            ],
+        },
+        "ko": {
+            "name": "minit / init",
+            "summary": ".memory/ 구조 초기화",
+            "description": """
+새 프로젝트를 위한 .memory/ 디렉토리 구조를 생성합니다.
+Claude Code 연동을 위한 .claude/ 디렉토리도 생성합니다.
+
+Memory Tool 사용을 시작하려면 프로젝트 루트에서 이 명령어를 한 번 실행하세요.
+            """,
+            "examples": [
+                "minit                      # 현재 디렉토리에 초기화",
+                "minit --force              # 재초기화 (기존 파일 덮어쓰기)",
+                "minit --kb /path/to/kb     # 지식 베이스 경로 설정",
+                "minit --update-docs        # 문서 템플릿만 업데이트",
+            ],
+            "options": [
+                ("--force, -f", "강제 재초기화 (기존 파일 덮어쓰기)"),
+                ("--kb", "지식 베이스 디렉토리 경로"),
+                ("--update-docs", "문서 템플릿만 업데이트"),
+                ("--update-all", "모든 템플릿 업데이트 (백업 생성)"),
+            ],
+        },
+    },
+
+    "status": {
+        "en": {
+            "name": "mstatus / status",
+            "summary": "Show memory statistics",
+            "description": """
+Displays statistics about your memory content including:
+- Timeline entries count and latest date
+- Number of modules and concepts
+- Plan progress (daily/weekly)
+- Storage size
+            """,
+            "examples": [
+                "mstatus                    # Show all statistics",
+            ],
+            "options": [],
+        },
+        "ko": {
+            "name": "mstatus / status",
+            "summary": "메모리 통계 보기",
+            "description": """
+메모리 내용에 대한 통계를 표시합니다:
+- 타임라인 항목 수와 최근 날짜
+- 모듈 및 개념 수
+- 계획 진행 상황 (일일/주간)
+- 저장소 크기
+            """,
+            "examples": [
+                "mstatus                    # 모든 통계 보기",
+            ],
+            "options": [],
+        },
+    },
+
+    "tutorial": {
+        "en": {
+            "name": "mtutorial / tutorial",
+            "summary": "Interactive tutorial",
+            "description": """
+Step-by-step interactive tutorial to learn Memory Tool.
+Covers basic commands, timeline usage, modules, and search.
+            """,
+            "examples": [
+                "mtutorial                  # Start interactive tutorial",
+                "mtutorial basics           # Show basics lesson",
+                "mtutorial --list           # List all lessons",
+            ],
+            "options": [
+                ("--list, -l", "List all available lessons"),
+            ],
+        },
+        "ko": {
+            "name": "mtutorial / tutorial",
+            "summary": "대화형 튜토리얼",
+            "description": """
+Memory Tool을 배우기 위한 단계별 대화형 튜토리얼입니다.
+기본 명령어, 타임라인 사용법, 모듈, 검색을 다룹니다.
+            """,
+            "examples": [
+                "mtutorial                  # 대화형 튜토리얼 시작",
+                "mtutorial basics           # 기초 레슨 보기",
+                "mtutorial --list           # 모든 레슨 나열",
+            ],
+            "options": [
+                ("--list, -l", "사용 가능한 모든 레슨 나열"),
+            ],
+        },
+    },
+
+    # ================================================================
+    # Timeline (additional)
+    # ================================================================
+    "week": {
+        "en": {
+            "name": "mweek / week",
+            "summary": "Show this week's timeline",
+            "description": """
+Displays all timeline entries from Monday to today.
+Entries are grouped by date for easy scanning.
+            """,
+            "examples": [
+                "mweek                      # Show this week's entries",
+            ],
+            "options": [],
+        },
+        "ko": {
+            "name": "mweek / week (주간)",
+            "summary": "이번 주 타임라인 보기",
+            "description": """
+월요일부터 오늘까지의 모든 타임라인 항목을 표시합니다.
+날짜별로 그룹화되어 쉽게 확인할 수 있습니다.
+            """,
+            "examples": [
+                "mweek                      # 이번 주 항목 보기",
+            ],
+            "options": [],
+        },
+    },
+
+    "month": {
+        "en": {
+            "name": "mmonth / month",
+            "summary": "Show this month's timeline",
+            "description": """
+Displays all timeline entries for the current month.
+Entries are grouped by date.
+            """,
+            "examples": [
+                "mmonth                     # Show this month's entries",
+            ],
+            "options": [],
+        },
+        "ko": {
+            "name": "mmonth / month (월간)",
+            "summary": "이번 달 타임라인 보기",
+            "description": """
+이번 달의 모든 타임라인 항목을 표시합니다.
+날짜별로 그룹화됩니다.
+            """,
+            "examples": [
+                "mmonth                     # 이번 달 항목 보기",
+            ],
+            "options": [],
+        },
+    },
+
+    "days": {
+        "en": {
+            "name": "mdays / days",
+            "summary": "Show last N days timeline",
+            "description": """
+Displays timeline entries for the last N days.
+Default is 7 days if not specified.
+            """,
+            "examples": [
+                "mdays                      # Show last 7 days",
+                "mdays 3                    # Show last 3 days",
+                "mdays 30                   # Show last 30 days",
+            ],
+            "options": [],
+        },
+        "ko": {
+            "name": "mdays / days (일수)",
+            "summary": "최근 N일 타임라인 보기",
+            "description": """
+최근 N일간의 타임라인 항목을 표시합니다.
+지정하지 않으면 기본값은 7일입니다.
+            """,
+            "examples": [
+                "mdays                      # 최근 7일 보기",
+                "mdays 3                    # 최근 3일 보기",
+                "mdays 30                   # 최근 30일 보기",
+            ],
+            "options": [],
+        },
+    },
+
+    "sort": {
+        "en": {
+            "name": "msort / sort",
+            "summary": "Sort timeline entries by time",
+            "description": """
+Sorts timeline entries within a day by timestamp.
+Useful when entries were recorded out of order.
+            """,
+            "examples": [
+                "msort                      # Sort today's entries",
+                "msort --date 2026-01-20    # Sort specific date",
+                "msort --all                # Sort all timeline files",
+            ],
+            "options": [
+                ("--date", "Specific date to sort (YYYY-MM-DD)"),
+                ("--all", "Sort all timeline files"),
+            ],
+        },
+        "ko": {
+            "name": "msort / sort",
+            "summary": "타임라인 시간순 정렬",
+            "description": """
+하루 내의 타임라인 항목을 타임스탬프 순으로 정렬합니다.
+순서가 뒤바뀐 항목을 정리할 때 유용합니다.
+            """,
+            "examples": [
+                "msort                      # 오늘 항목 정렬",
+                "msort --date 2026-01-20    # 특정 날짜 정렬",
+                "msort --all                # 모든 타임라인 파일 정렬",
+            ],
+            "options": [
+                ("--date", "정렬할 특정 날짜 (YYYY-MM-DD)"),
+                ("--all", "모든 타임라인 파일 정렬"),
+            ],
+        },
+    },
+
+    # ================================================================
+    # Search (additional)
+    # ================================================================
+    "browse": {
+        "en": {
+            "name": "mbrowse / browse",
+            "summary": "Interactive search browser",
+            "description": """
+Opens an interactive TUI (Text User Interface) for browsing
+and searching your memory content.
+            """,
+            "examples": [
+                "mbrowse                    # Open interactive browser",
+            ],
+            "options": [],
+        },
+        "ko": {
+            "name": "mbrowse / browse",
+            "summary": "대화형 검색 브라우저",
+            "description": """
+메모리 내용을 탐색하고 검색하기 위한 대화형 TUI
+(텍스트 사용자 인터페이스)를 엽니다.
+            """,
+            "examples": [
+                "mbrowse                    # 대화형 브라우저 열기",
+            ],
+            "options": [],
+        },
+    },
+
+    "check": {
+        "en": {
+            "name": "mcheck / check",
+            "summary": "Check wiki links and paths",
+            "description": """
+Validates wiki links ([[link]]) and file paths in your memory.
+Reports broken links and missing files.
+            """,
+            "examples": [
+                "mcheck                     # Check all links",
+                "mcheck --module projects   # Check specific module",
+            ],
+            "options": [
+                ("--module", "Check specific module only"),
+            ],
+        },
+        "ko": {
+            "name": "mcheck / check",
+            "summary": "위키 링크 및 경로 확인",
+            "description": """
+메모리 내의 위키 링크 ([[link]])와 파일 경로를 검증합니다.
+깨진 링크와 누락된 파일을 보고합니다.
+            """,
+            "examples": [
+                "mcheck                     # 모든 링크 확인",
+                "mcheck --module projects   # 특정 모듈만 확인",
+            ],
+            "options": [
+                ("--module", "특정 모듈만 확인"),
+            ],
+        },
+    },
+
+    # ================================================================
+    # Modules
+    # ================================================================
+    "module": {
+        "en": {
+            "name": "mmodule / module",
+            "summary": "Manage modules",
+            "description": """
+Create, view, and manage knowledge modules.
+Modules are the spatial organization of your knowledge.
+
+Each module contains:
+- current.md: Current state and ongoing work
+- decisions.md: Important decisions and rationale
+- archive/: Historical records
+            """,
+            "examples": [
+                "mmodule list               # List all modules",
+                "mmodule show myproject     # Show module details",
+                "mmodule create newproject  # Create new module",
+                "mmodule edit myproject     # Edit module files",
+            ],
+            "options": [
+                ("list", "List all modules"),
+                ("show", "Show module details"),
+                ("create", "Create new module"),
+                ("edit", "Edit module files"),
+            ],
+        },
+        "ko": {
+            "name": "mmodule / module",
+            "summary": "모듈 관리",
+            "description": """
+지식 모듈을 생성, 조회, 관리합니다.
+모듈은 지식의 공간적 조직입니다.
+
+각 모듈에는 다음이 포함됩니다:
+- current.md: 현재 상태와 진행 중인 작업
+- decisions.md: 중요한 결정 사항과 근거
+- archive/: 과거 기록
+            """,
+            "examples": [
+                "mmodule list               # 모든 모듈 나열",
+                "mmodule show myproject     # 모듈 상세 정보 보기",
+                "mmodule create newproject  # 새 모듈 생성",
+                "mmodule edit myproject     # 모듈 파일 편집",
+            ],
+            "options": [
+                ("list", "모든 모듈 나열"),
+                ("show", "모듈 상세 정보 보기"),
+                ("create", "새 모듈 생성"),
+                ("edit", "모듈 파일 편집"),
+            ],
+        },
+    },
+
+    "archive": {
+        "en": {
+            "name": "marchive / archive",
+            "summary": "Archive old content",
+            "description": """
+Archive old decisions and content to keep modules clean.
+Supports interactive selection of items to archive.
+            """,
+            "examples": [
+                "marchive decisions         # Archive old decisions",
+                "marchive --module myproj   # Archive specific module",
+                "marchive --interactive     # Interactive selection",
+                "marchive --suggest         # Show archiving suggestions",
+            ],
+            "options": [
+                ("--module", "Target specific module"),
+                ("--interactive, -i", "Interactive selection mode"),
+                ("--suggest", "Show archiving suggestions"),
+            ],
+        },
+        "ko": {
+            "name": "marchive / archive",
+            "summary": "오래된 콘텐츠 아카이브",
+            "description": """
+오래된 결정 사항과 콘텐츠를 아카이브하여 모듈을 깔끔하게 유지합니다.
+아카이브할 항목의 대화형 선택을 지원합니다.
+            """,
+            "examples": [
+                "marchive decisions         # 오래된 결정 사항 아카이브",
+                "marchive --module myproj   # 특정 모듈 아카이브",
+                "marchive --interactive     # 대화형 선택",
+                "marchive --suggest         # 아카이브 제안 보기",
+            ],
+            "options": [
+                ("--module", "특정 모듈 대상"),
+                ("--interactive, -i", "대화형 선택 모드"),
+                ("--suggest", "아카이브 제안 보기"),
+            ],
+        },
+    },
+
+    "context": {
+        "en": {
+            "name": "mcontext / context",
+            "summary": "Build Claude Code context",
+            "description": """
+Generates .claude/memory-context.md for Claude Code integration.
+Includes recent timeline, active plans, and module status.
+            """,
+            "examples": [
+                "mcontext                   # Generate context file",
+                "mcontext --days 7          # Include last 7 days",
+            ],
+            "options": [
+                ("--days", "Number of recent days to include"),
+            ],
+        },
+        "ko": {
+            "name": "mcontext / context",
+            "summary": "Claude Code 컨텍스트 생성",
+            "description": """
+Claude Code 연동을 위한 .claude/memory-context.md를 생성합니다.
+최근 타임라인, 활성 계획, 모듈 상태가 포함됩니다.
+            """,
+            "examples": [
+                "mcontext                   # 컨텍스트 파일 생성",
+                "mcontext --days 7          # 최근 7일 포함",
+            ],
+            "options": [
+                ("--days", "포함할 최근 일수"),
+            ],
+        },
+    },
+
+    "map": {
+        "en": {
+            "name": "mmap / map",
+            "summary": "Generate code structure map",
+            "description": """
+Generates a map of your codebase structure.
+Useful for understanding project organization.
+            """,
+            "examples": [
+                "mmap                       # Generate code map",
+                "mmap --output map.md       # Save to specific file",
+            ],
+            "options": [
+                ("--output, -o", "Output file path"),
+            ],
+        },
+        "ko": {
+            "name": "mmap / map",
+            "summary": "코드 구조 맵 생성",
+            "description": """
+코드베이스 구조의 맵을 생성합니다.
+프로젝트 구조를 이해하는 데 유용합니다.
+            """,
+            "examples": [
+                "mmap                       # 코드 맵 생성",
+                "mmap --output map.md       # 특정 파일에 저장",
+            ],
+            "options": [
+                ("--output, -o", "출력 파일 경로"),
+            ],
+        },
+    },
+
+    # ================================================================
+    # Planning (additional)
+    # ================================================================
+    "summary": {
+        "en": {
+            "name": "msummary / summary",
+            "summary": "Summarize timeline or module",
+            "description": """
+Uses LLM to generate summaries of your timeline or module content.
+Supports daily, weekly, and module summaries.
+            """,
+            "examples": [
+                "msummary                   # Summarize today",
+                "msummary --week            # Summarize this week",
+                "msummary --module myproj   # Summarize module",
+            ],
+            "options": [
+                ("--week", "Summarize this week"),
+                ("--module", "Summarize specific module"),
+                ("--days", "Number of days to summarize"),
+            ],
+        },
+        "ko": {
+            "name": "msummary / summary",
+            "summary": "타임라인 또는 모듈 요약",
+            "description": """
+LLM을 사용하여 타임라인이나 모듈 내용의 요약을 생성합니다.
+일일, 주간, 모듈 요약을 지원합니다.
+            """,
+            "examples": [
+                "msummary                   # 오늘 요약",
+                "msummary --week            # 이번 주 요약",
+                "msummary --module myproj   # 모듈 요약",
+            ],
+            "options": [
+                ("--week", "이번 주 요약"),
+                ("--module", "특정 모듈 요약"),
+                ("--days", "요약할 일수"),
+            ],
+        },
+    },
+
+    # ================================================================
+    # AI & LLM (additional)
+    # ================================================================
+    "providers": {
+        "en": {
+            "name": "mproviders / providers",
+            "summary": "List LLM providers",
+            "description": """
+Shows available LLM providers and their status.
+Checks which providers are configured and accessible.
+            """,
+            "examples": [
+                "mproviders                 # List all providers",
+            ],
+            "options": [],
+        },
+        "ko": {
+            "name": "mproviders / providers",
+            "summary": "LLM 제공자 목록",
+            "description": """
+사용 가능한 LLM 제공자와 상태를 표시합니다.
+어떤 제공자가 설정되어 있고 접근 가능한지 확인합니다.
+            """,
+            "examples": [
+                "mproviders                 # 모든 제공자 목록",
+            ],
+            "options": [],
+        },
+    },
+
+    # ================================================================
+    # Notion (additional)
+    # ================================================================
+    "nm": {
+        "en": {
+            "name": "nm",
+            "summary": "Record to Notion",
+            "description": """
+Records a message to Notion (similar to 'm' command but syncs to Notion).
+            """,
+            "examples": [
+                'nm "Meeting notes"         # Record to Notion',
+            ],
+            "options": [],
+        },
+        "ko": {
+            "name": "nm (노)",
+            "summary": "Notion에 기록",
+            "description": """
+Notion에 메시지를 기록합니다 ('m' 명령어와 유사하지만 Notion에 동기화).
+            """,
+            "examples": [
+                'nm "회의 노트"              # Notion에 기록',
+            ],
+            "options": [],
+        },
+    },
+
+    "nadd": {
+        "en": {
+            "name": "nadd",
+            "summary": "Add Notion page",
+            "description": """
+Adds a new page to Notion under specified parent.
+            """,
+            "examples": [
+                "nadd 'Page Title'          # Add new page",
+            ],
+            "options": [
+                ("--parent", "Parent page ID"),
+            ],
+        },
+        "ko": {
+            "name": "nadd",
+            "summary": "Notion 페이지 추가",
+            "description": """
+지정된 상위 페이지 아래에 새 Notion 페이지를 추가합니다.
+            """,
+            "examples": [
+                "nadd '페이지 제목'          # 새 페이지 추가",
+            ],
+            "options": [
+                ("--parent", "상위 페이지 ID"),
+            ],
+        },
+    },
+
+    "ns": {
+        "en": {
+            "name": "ns (노올)",
+            "summary": "Search Notion",
+            "description": """
+Searches Notion pages by title or content.
+            """,
+            "examples": [
+                'ns "meeting"               # Search for "meeting"',
+            ],
+            "options": [],
+        },
+        "ko": {
+            "name": "ns (노올)",
+            "summary": "Notion 검색",
+            "description": """
+제목이나 내용으로 Notion 페이지를 검색합니다.
+            """,
+            "examples": [
+                'ns "회의"                   # "회의" 검색',
+            ],
+            "options": [],
+        },
+    },
+
+    "nt": {
+        "en": {
+            "name": "nt (노오)",
+            "summary": "Show Notion today",
+            "description": """
+Shows today's entries from Notion timeline.
+            """,
+            "examples": [
+                "nt                         # Show today's Notion entries",
+            ],
+            "options": [],
+        },
+        "ko": {
+            "name": "nt (노오)",
+            "summary": "Notion 오늘 보기",
+            "description": """
+Notion 타임라인에서 오늘 항목을 표시합니다.
+            """,
+            "examples": [
+                "nt                         # 오늘의 Notion 항목 보기",
+            ],
+            "options": [],
+        },
+    },
+
+    "nw": {
+        "en": {
+            "name": "nw (노주)",
+            "summary": "Show Notion week",
+            "description": """
+Shows this week's entries from Notion timeline.
+            """,
+            "examples": [
+                "nw                         # Show this week's Notion entries",
+            ],
+            "options": [],
+        },
+        "ko": {
+            "name": "nw (노주)",
+            "summary": "Notion 주간 보기",
+            "description": """
+Notion 타임라인에서 이번 주 항목을 표시합니다.
+            """,
+            "examples": [
+                "nw                         # 이번 주 Notion 항목 보기",
+            ],
+            "options": [],
+        },
+    },
+
+    "nsi": {
+        "en": {
+            "name": "nsi (노검)",
+            "summary": "Search inside Notion pages",
+            "description": """
+Searches inside Notion page content (not just titles).
+            """,
+            "examples": [
+                'nsi "API design"           # Search inside pages',
+            ],
+            "options": [],
+        },
+        "ko": {
+            "name": "nsi (노검)",
+            "summary": "Notion 페이지 내 검색",
+            "description": """
+Notion 페이지 내용 안에서 검색합니다 (제목뿐만 아니라).
+            """,
+            "examples": [
+                'nsi "API 설계"             # 페이지 내부 검색',
+            ],
+            "options": [],
+        },
+    },
+
+    "nwatch": {
+        "en": {
+            "name": "nwatch",
+            "summary": "Watch and auto-sync with Notion (bidirectional)",
+            "description": """
+Watches local files for changes and automatically syncs with Notion.
+Runs continuously until stopped (Ctrl+C).
+
+Default mode: Local -> Notion (push only)
+Bidirectional mode (-b): Local <-> Notion (push and pull)
+  - modules: bidirectional sync
+  - timeline: bidirectional sync
+  - plans: bidirectional sync
+            """,
+            "examples": [
+                "nwatch                     # Watch all, Local -> Notion",
+                "nwatch -b                  # Bidirectional (all)",
+                "nwatch -b -i 60            # Bidirectional, poll every 60s",
+                "nwatch --modules-only      # Watch modules only",
+                "nwatch --timeline-only     # Watch timeline only",
+                "nwatch --plans-only        # Watch plans only",
+                "nwatch --dry-run           # Preview without syncing",
+            ],
+            "options": [
+                ("--bidirectional, -b", "Enable Notion -> Local sync (polling)"),
+                ("--poll-interval, -i", "Polling interval in seconds (default: 120)"),
+                ("--modules-only", "Watch modules only"),
+                ("--timeline-only", "Watch timeline only"),
+                ("--plans-only", "Watch plans only"),
+                ("--dry-run, -n", "Show what would sync without syncing"),
+            ],
+        },
+        "ko": {
+            "name": "nwatch",
+            "summary": "Notion과 양방향 자동 동기화",
+            "description": """
+로컬 파일의 변경을 감시하고 자동으로 Notion과 동기화합니다.
+중지할 때까지(Ctrl+C) 계속 실행됩니다.
+
+기본 모드: Local -> Notion (push만)
+양방향 모드 (-b): Local <-> Notion (push + pull)
+  - modules: 양방향 동기화
+  - timeline: 양방향 동기화
+  - plans: 양방향 동기화
+            """,
+            "examples": [
+                "nwatch                     # 전체 감시, Local -> Notion",
+                "nwatch -b                  # 양방향 (전체)",
+                "nwatch -b -i 60            # 양방향, 60초마다 polling",
+                "nwatch --modules-only      # 모듈만 감시",
+                "nwatch --timeline-only     # 타임라인만 감시",
+                "nwatch --plans-only        # 계획만 감시",
+                "nwatch --dry-run           # 동기화 없이 미리보기",
+            ],
+            "options": [
+                ("--bidirectional, -b", "Notion -> Local 동기화 활성화 (polling)"),
+                ("--poll-interval, -i", "Polling 간격 (초, 기본값: 120)"),
+                ("--modules-only", "모듈만 감시"),
+                ("--timeline-only", "타임라인만 감시"),
+                ("--plans-only", "계획만 감시"),
+                ("--dry-run, -n", "동기화 없이 미리보기"),
+            ],
+        },
+    },
+
+    # ================================================================
+    # System (additional)
+    # ================================================================
+    "alias": {
+        "en": {
+            "name": "malias / alias",
+            "summary": "Manage command aliases",
+            "description": """
+Install and manage short command aliases.
+Supports batch files (Windows), PowerShell, Bash, and Zsh.
+            """,
+            "examples": [
+                "malias list                # Show all aliases",
+                "malias list --lang ko      # Show with Korean descriptions",
+                "malias install             # Install batch files (Windows)",
+                "malias install --powershell # Install to PowerShell",
+                "malias install --bash      # Install to Bash",
+            ],
+            "options": [
+                ("list", "Show all aliases and status"),
+                ("install", "Install aliases"),
+                ("uninstall", "Remove aliases"),
+                ("--powershell", "Target PowerShell profile"),
+                ("--bash", "Target Bash profile"),
+                ("--zsh", "Target Zsh profile"),
+            ],
+        },
+        "ko": {
+            "name": "malias / alias",
+            "summary": "명령어 별칭 관리",
+            "description": """
+짧은 명령어 별칭을 설치하고 관리합니다.
+배치 파일(Windows), PowerShell, Bash, Zsh를 지원합니다.
+            """,
+            "examples": [
+                "malias list                # 모든 별칭 보기",
+                "malias list --lang ko      # 한국어 설명으로 보기",
+                "malias install             # 배치 파일 설치 (Windows)",
+                "malias install --powershell # PowerShell에 설치",
+                "malias install --bash      # Bash에 설치",
+            ],
+            "options": [
+                ("list", "모든 별칭과 상태 보기"),
+                ("install", "별칭 설치"),
+                ("uninstall", "별칭 제거"),
+                ("--powershell", "PowerShell 프로필 대상"),
+                ("--bash", "Bash 프로필 대상"),
+                ("--zsh", "Zsh 프로필 대상"),
+            ],
+        },
+    },
+
+    "hooks": {
+        "en": {
+            "name": "mhooks / hooks",
+            "summary": "Manage git hooks",
+            "description": """
+Install and manage git hooks for Memory Tool.
+Includes document health check and graph rebuild hooks.
+            """,
+            "examples": [
+                "mhooks list                # List installed hooks",
+                "mhooks install pre-commit  # Install pre-commit hook",
+                "mhooks install document-health  # Install health check",
+                "mhooks uninstall pre-commit # Remove hook",
+            ],
+            "options": [
+                ("list", "List installed hooks"),
+                ("install", "Install a hook"),
+                ("uninstall", "Remove a hook"),
+            ],
+        },
+        "ko": {
+            "name": "mhooks / hooks",
+            "summary": "Git 훅 관리",
+            "description": """
+Memory Tool을 위한 git 훅을 설치하고 관리합니다.
+문서 상태 확인 및 그래프 재빌드 훅이 포함됩니다.
+            """,
+            "examples": [
+                "mhooks list                # 설치된 훅 나열",
+                "mhooks install pre-commit  # pre-commit 훅 설치",
+                "mhooks install document-health  # 상태 확인 훅 설치",
+                "mhooks uninstall pre-commit # 훅 제거",
+            ],
+            "options": [
+                ("list", "설치된 훅 나열"),
+                ("install", "훅 설치"),
+                ("uninstall", "훅 제거"),
+            ],
+        },
+    },
+
+    "completion": {
+        "en": {
+            "name": "mcompletion / completion",
+            "summary": "Manage shell completions",
+            "description": """
+Generate and install shell completion scripts.
+Supports Bash, Zsh, and PowerShell.
+            """,
+            "examples": [
+                "mcompletion status         # Check installation status",
+                "mcompletion generate bash  # Generate bash completion",
+                "mcompletion install bash   # Install bash completion",
+                "mcompletion uninstall bash # Remove completion",
+            ],
+            "options": [
+                ("generate", "Generate completion script"),
+                ("install", "Install completion"),
+                ("uninstall", "Remove completion"),
+                ("status", "Check installation status"),
+            ],
+        },
+        "ko": {
+            "name": "mcompletion / completion",
+            "summary": "셸 자동완성 관리",
+            "description": """
+셸 자동완성 스크립트를 생성하고 설치합니다.
+Bash, Zsh, PowerShell을 지원합니다.
+            """,
+            "examples": [
+                "mcompletion status         # 설치 상태 확인",
+                "mcompletion generate bash  # bash 자동완성 생성",
+                "mcompletion install bash   # bash 자동완성 설치",
+                "mcompletion uninstall bash # 자동완성 제거",
+            ],
+            "options": [
+                ("generate", "자동완성 스크립트 생성"),
+                ("install", "자동완성 설치"),
+                ("uninstall", "자동완성 제거"),
+                ("status", "설치 상태 확인"),
+            ],
+        },
+    },
+
+    "config": {
+        "en": {
+            "name": "mconfig / config",
+            "summary": "Manage config.yaml settings",
+            "description": """
+View and modify Memory Tool configuration.
+Settings include timeline, search, LLM, Notion, and help language.
+            """,
+            "examples": [
+                "mconfig list               # Show all settings",
+                "mconfig get help.language  # Get specific setting",
+                "mconfig set help.language ko  # Set to Korean",
+            ],
+            "options": [
+                ("list", "Show all settings"),
+                ("get", "Get specific setting"),
+                ("set", "Set a value"),
+            ],
+        },
+        "ko": {
+            "name": "mconfig / config (설정)",
+            "summary": "config.yaml 설정 관리",
+            "description": """
+Memory Tool 설정을 확인하고 수정합니다.
+타임라인, 검색, LLM, Notion, 도움말 언어 설정이 포함됩니다.
+            """,
+            "examples": [
+                "mconfig list               # 모든 설정 보기",
+                "mconfig get help.language  # 특정 설정 가져오기",
+                "mconfig set help.language ko  # 한국어로 설정",
+            ],
+            "options": [
+                ("list", "모든 설정 보기"),
+                ("get", "특정 설정 가져오기"),
+                ("set", "값 설정"),
+            ],
+        },
+    },
+}
+
+# Command categories for listing
+COMMAND_CATEGORIES = {
+    "en": {
+        "core": ("Core Commands", ["record", "init", "status", "tutorial"]),
+        "timeline": ("Timeline", ["today", "week", "month", "days", "sort"]),
+        "search": ("Search", ["search", "browse", "check"]),
+        "module": ("Modules", ["module", "archive", "context", "map"]),
+        "plan": ("Planning", ["plan", "summary"]),
+        "llm": ("AI & LLM", ["ask", "providers"]),
+        "notion": ("Notion", ["nm", "nadd", "ns", "nt", "nw", "nsi", "nsync", "nwatch"]),
+        "system": ("System", ["alias", "config", "hooks", "completion"]),
+    },
+    "ko": {
+        "core": ("핵심 명령어", ["record", "init", "status", "tutorial"]),
+        "timeline": ("타임라인", ["today", "week", "month", "days", "sort"]),
+        "search": ("검색", ["search", "browse", "check"]),
+        "module": ("모듈 관리", ["module", "archive", "context", "map"]),
+        "plan": ("계획", ["plan", "summary"]),
+        "llm": ("AI 기능", ["ask", "providers"]),
+        "notion": ("노션 연동", ["nm", "nadd", "ns", "nt", "nw", "nsi", "nsync", "nwatch"]),
+        "system": ("시스템", ["alias", "config", "hooks", "completion"]),
+    },
+}
+
+
+def _get_config_language() -> str:
+    """Get help language from config.yaml."""
+    try:
+        from memory_tool.utils.config import Config
+        cfg = Config()
+        return cfg.get("help.language", "en")
+    except Exception:
+        return "en"
+
+
+def _set_config_language(lang: str) -> bool:
+    """Set help language in config.yaml permanently."""
+    import yaml
+    from pathlib import Path
+
+    try:
+        memory_path = Path.cwd() / ".memory"
+        config_path = memory_path / "config.yaml"
+
+        if not memory_path.exists():
+            return False
+
+        # Load existing config
+        if config_path.exists():
+            with open(config_path, "r", encoding="utf-8") as f:
+                config_data = yaml.safe_load(f) or {}
+        else:
+            config_data = {}
+
+        # Set help.language
+        if "help" not in config_data:
+            config_data["help"] = {}
+        config_data["help"]["language"] = lang
+
+        # Write back
+        with open(config_path, "w", encoding="utf-8") as f:
+            yaml.dump(config_data, f, default_flow_style=False, allow_unicode=True)
+
+        return True
+    except Exception:
+        return False
+
+
+@app.command(name="help")
+def show_help(
+    command: Optional[str] = typer.Argument(None, help="Command name to get help for"),
+    lang: Optional[str] = typer.Option(None, "--lang", "-l", help="Language for this invocation: en, ko"),
+    set_lang: Optional[str] = typer.Option(None, "--set-lang", help="Permanently set default language: en, ko"),
+    list_all: bool = typer.Option(False, "--list", help="List all commands"),
+):
+    """Show detailed help for commands (mhelp).
+
+    Language defaults to help.language setting in config.yaml.
+
+    Examples:
+        mhelp                       # Show command list
+        mhelp record                # Help for record command
+        mhelp search --lang ko      # Help in Korean (this time only)
+        mhelp --set-lang ko         # Permanently set language to Korean
+        mhelp --list                # List all commands
+    """
+    # Handle permanent language change
+    if set_lang:
+        set_lang = set_lang.lower()
+        if set_lang not in ("en", "ko"):
+            console.print(f"[red]ERROR[/red] Invalid language: {set_lang}")
+            console.print("[dim]Valid options: en, ko[/dim]")
+            return
+
+        if _set_config_language(set_lang):
+            lang_name = "Korean" if set_lang == "ko" else "English"
+            console.print(f"[green]OK[/green] Help language set to {lang_name} ({set_lang})")
+            console.print("[dim]This affects mhelp and --help output[/dim]")
+        else:
+            console.print("[red]ERROR[/red] Failed to update config.yaml")
+            console.print("[dim]Make sure .memory/ exists (run minit)[/dim]")
+        return
+
+    # Use config language as default if not specified
+    if lang is None:
+        lang = _get_config_language()
+    lang = lang.lower()
+    if lang not in ("en", "ko"):
+        lang = "en"
+
+    if list_all or command is None:
+        _show_command_list(lang)
+    else:
+        _show_command_help(command, lang)
+
+
+def _show_command_list(lang: str):
+    """Show list of all commands."""
+    if lang == "ko":
+        console.print("[bold cyan]Memory Tool 명령어 목록[/bold cyan]\n")
+        console.print("상세 도움말: mhelp <명령어> --lang ko\n")
+    else:
+        console.print("[bold cyan]Memory Tool Commands[/bold cyan]\n")
+        console.print("Detailed help: mhelp <command>\n")
+
+    categories = COMMAND_CATEGORIES.get(lang, COMMAND_CATEGORIES["en"])
+
+    for cat_key, (cat_name, commands) in categories.items():
+        console.print(f"[bold yellow]{cat_name}[/bold yellow]")
+
+        for cmd in commands:
+            if cmd in HELP_CONTENT:
+                help_data = HELP_CONTENT[cmd].get(lang, HELP_CONTENT[cmd]["en"])
+                console.print(f"  {help_data['name']:20} {help_data['summary']}")
+            else:
+                console.print(f"  {cmd:20} (no detailed help)")
+
+        console.print("")
+
+
+def _show_command_help(command: str, lang: str):
+    """Show detailed help for a specific command."""
+    # Normalize command name
+    cmd_map = {
+        "m": "record", "기": "record",
+        "ms": "search", "검": "search",
+        "mask": "ask", "질문": "ask",
+        "mtoday": "today", "오늘": "today",
+        "mplan": "plan",
+    }
+    cmd = cmd_map.get(command, command)
+
+    if cmd not in HELP_CONTENT:
+        if lang == "ko":
+            console.print(f"[yellow]'{command}' 명령어에 대한 상세 도움말이 없습니다.[/yellow]")
+            console.print(f"[dim]기본 도움말: {command} --help[/dim]")
+        else:
+            console.print(f"[yellow]No detailed help for '{command}'.[/yellow]")
+            console.print(f"[dim]Try: {command} --help[/dim]")
+        return
+
+    help_data = HELP_CONTENT[cmd].get(lang, HELP_CONTENT[cmd]["en"])
+
+    # Header
+    console.print(f"[bold cyan]{help_data['name']}[/bold cyan]")
+    console.print(f"[dim]{help_data['summary']}[/dim]\n")
+
+    # Description
+    if lang == "ko":
+        console.print("[bold]설명:[/bold]")
+    else:
+        console.print("[bold]Description:[/bold]")
+    console.print(help_data['description'].strip())
+    console.print("")
+
+    # Examples
+    if lang == "ko":
+        console.print("[bold]예시:[/bold]")
+    else:
+        console.print("[bold]Examples:[/bold]")
+    for example in help_data.get('examples', []):
+        console.print(f"  [green]{example}[/green]")
+    console.print("")
+
+    # Options
+    if help_data.get('options'):
+        if lang == "ko":
+            console.print("[bold]옵션:[/bold]")
+        else:
+            console.print("[bold]Options:[/bold]")
+        for opt_name, opt_desc in help_data['options']:
+            console.print(f"  [cyan]{opt_name:20}[/cyan] {opt_desc}")

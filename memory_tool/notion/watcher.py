@@ -3,6 +3,7 @@
 Watches local .memory/ directory for changes and triggers sync:
 - modules/ changes -> nsync (module sync)
 - timeline/ changes -> nm (timeline mirror to Notion)
+- plans/ changes -> plan sync to Notion
 """
 
 import time
@@ -29,41 +30,55 @@ class ChangeHandler(FileSystemEventHandler):
         self,
         on_module_change: Callable[[str, Set[str]], None],
         on_timeline_change: Callable[[str, str], None],
+        on_plan_change: Optional[Callable[[str, str, str], None]] = None,
         debounce_seconds: float = 2.0,
         verbose: bool = False,
         modules_dir: Optional[Path] = None,
+        plans_dir: Optional[Path] = None,
     ):
         """Initialize handler.
 
         Args:
             on_module_change: Callback for module changes (event_type, module_paths)
             on_timeline_change: Callback for timeline changes
+            on_plan_change: Callback for plan changes (event_type, plan_type, file_path)
             debounce_seconds: Wait time before triggering sync
             verbose: Print verbose output
             modules_dir: Path to modules directory for extracting module paths
+            plans_dir: Path to plans directory for extracting plan paths
         """
         super().__init__()
         self.on_module_change = on_module_change
         self.on_timeline_change = on_timeline_change
+        self.on_plan_change = on_plan_change
         self.debounce_seconds = debounce_seconds
         self.verbose = verbose
         self.modules_dir = modules_dir
+        self.plans_dir = plans_dir
         self._lock = threading.Lock()
 
-        # Separate debounce timers for modules and timeline
+        # Separate debounce timers for modules, timeline, and plans
         self._module_timer: Optional[threading.Timer] = None
         self._timeline_timer: Optional[threading.Timer] = None
+        self._plan_timer: Optional[threading.Timer] = None
         self._module_pending_paths: Set[str] = set()  # Track changed module paths
         self._timeline_pending_files: Set[str] = set()
+        self._plan_pending_files: Set[tuple] = set()  # (plan_type, file_path)
 
     def _get_change_type(self, path: str) -> Optional[str]:
-        """Determine if path is module or timeline change."""
+        """Determine if path is module, timeline, or plan change."""
         path_str = str(path).replace("\\", "/")
 
         if "/modules/" in path_str and path_str.endswith(".md"):
             return "module"
         elif "/timeline/" in path_str and path_str.endswith(".md"):
             return "timeline"
+        elif "/plans/daily/" in path_str and path_str.endswith(".md"):
+            return "plan_daily"
+        elif "/plans/weekly/" in path_str and path_str.endswith(".md"):
+            return "plan_weekly"
+        elif "/plans/monthly/" in path_str and path_str.endswith(".md"):
+            return "plan_monthly"
         return None
 
     def _extract_module_path(self, file_path: str) -> Optional[str]:
@@ -141,6 +156,36 @@ class ChangeHandler(FileSystemEventHandler):
         if files:
             self.on_timeline_change(event_type, files[-1])
 
+    def _schedule_plan_sync(self, event_type: str, plan_type: str, path: str):
+        """Schedule plan sync with debouncing."""
+        if not self.on_plan_change:
+            return
+
+        with self._lock:
+            if self._plan_timer:
+                self._plan_timer.cancel()
+
+            self._plan_pending_files.add((plan_type, path))
+
+            self._plan_timer = threading.Timer(
+                self.debounce_seconds,
+                self._trigger_plan_sync,
+                args=[event_type]
+            )
+            self._plan_timer.start()
+
+    def _trigger_plan_sync(self, event_type: str):
+        """Trigger plan sync callback."""
+        with self._lock:
+            self._plan_timer = None
+            pending = list(self._plan_pending_files)
+            self._plan_pending_files.clear()
+
+        # Call callback for each pending plan file
+        if pending and self.on_plan_change:
+            for plan_type, file_path in pending:
+                self.on_plan_change(event_type, plan_type, file_path)
+
     def on_any_event(self, event):
         """Debug: Log all events."""
         if self.verbose and not event.is_directory:
@@ -161,6 +206,10 @@ class ChangeHandler(FileSystemEventHandler):
         elif change_type == "timeline":
             print(f"[watch] Timeline modified: {Path(event.src_path).name}")
             self._schedule_timeline_sync("modified", event.src_path)
+        elif change_type and change_type.startswith("plan_"):
+            plan_type = change_type.replace("plan_", "")
+            print(f"[watch] Plan ({plan_type}) modified: {Path(event.src_path).name}")
+            self._schedule_plan_sync("modified", plan_type, event.src_path)
 
     def on_created(self, event):
         """Handle file creation."""
@@ -177,10 +226,14 @@ class ChangeHandler(FileSystemEventHandler):
         elif change_type == "timeline":
             print(f"[watch] Timeline created: {Path(event.src_path).name}")
             self._schedule_timeline_sync("created", event.src_path)
+        elif change_type and change_type.startswith("plan_"):
+            plan_type = change_type.replace("plan_", "")
+            print(f"[watch] Plan ({plan_type}) created: {Path(event.src_path).name}")
+            self._schedule_plan_sync("created", plan_type, event.src_path)
 
 
 class NotionWatcher:
-    """Watch local modules and timeline, sync with Notion on changes."""
+    """Watch local modules, timeline, and plans, sync with Notion on changes."""
 
     def __init__(
         self,
@@ -190,6 +243,7 @@ class NotionWatcher:
         dry_run: bool = False,
         watch_modules: bool = True,
         watch_timeline: bool = True,
+        watch_plans: bool = True,
         bidirectional: bool = False,
         poll_interval: int = 120,
     ):
@@ -202,6 +256,7 @@ class NotionWatcher:
             dry_run: Only show what would sync, don't actually sync
             watch_modules: Watch modules directory
             watch_timeline: Watch timeline directory
+            watch_plans: Watch plans directory
             bidirectional: Enable Notion -> Local sync via polling
             poll_interval: Seconds between Notion polling (default: 120)
         """
@@ -214,19 +269,24 @@ class NotionWatcher:
         self.memory_root = memory_root or self._find_memory_root()
         self.modules_dir = self.memory_root / "modules"
         self.timeline_dir = self.memory_root / "timeline"
+        self.plans_dir = self.memory_root / "plans"
         self.debounce_seconds = debounce_seconds
         self.verbose = verbose
         self.dry_run = dry_run
         self.watch_modules = watch_modules
         self.watch_timeline = watch_timeline
+        self.watch_plans = watch_plans
         self.bidirectional = bidirectional
         self.poll_interval = poll_interval
         self._observer: Optional[Observer] = None
         self._poll_thread: Optional[threading.Thread] = None
         self._running = False
         self._module_sync_count = 0
+        self._module_pull_count = 0
         self._timeline_sync_count = 0
         self._timeline_pull_count = 0
+        self._plan_sync_count = 0
+        self._plan_pull_count = 0
         self._last_timeline_content: dict = {}  # Track timeline content to find new entries
 
         # Sync lock to prevent race conditions (duplicate page creation)
@@ -469,15 +529,64 @@ class NotionWatcher:
             return f"{year_month}-{day}"
         return None
 
+    def _on_plan_change(self, event_type: str, plan_type: str, file_path: str):
+        """Handle plan change by syncing to Notion."""
+        self._plan_sync_count += 1
+        timestamp = datetime.now().strftime("%H:%M:%S")
+
+        if self.dry_run:
+            print(f"\n[{timestamp}] Plan ({plan_type}) change detected ({event_type})")
+            print(f"[{timestamp}] Would sync: {Path(file_path).name}")
+            return
+
+        print(f"\n[{timestamp}] Plan ({plan_type}) change detected: {Path(file_path).name}")
+
+        try:
+            from memory_tool.notion.plan_sync import PlanSyncer
+
+            plan_syncer = PlanSyncer()
+
+            if not plan_syncer.enabled:
+                if self.verbose:
+                    print(f"[{timestamp}] Plan sync not enabled, skipping")
+                return
+
+            # Extract date from file path and sync that specific plan
+            result = plan_syncer.sync(
+                plan_type=plan_type,
+                days=1,  # Only sync today's changes
+                push_only=True,  # Only push local changes
+                dry_run=self.dry_run,
+                verbose=self.verbose,
+            )
+
+            pushed = result.get("pushed", 0)
+            updated = result.get("updated", 0)
+            errors = result.get("errors", [])
+
+            if pushed or updated:
+                print(f"[{timestamp}] Plan sync: {pushed} pushed, {updated} updated")
+            elif errors:
+                print(f"[{timestamp}] Plan sync errors: {len(errors)}")
+                for err in errors:
+                    print(f"  - {err}")
+            else:
+                print(f"[{timestamp}] No plan changes to sync")
+
+        except Exception as e:
+            print(f"[{timestamp}] Plan sync failed: {e}")
+
     def start(self):
         """Start watching for file changes."""
         self._observer = Observer()
         handler = ChangeHandler(
             on_module_change=self._on_module_change,
             on_timeline_change=self._on_timeline_change,
+            on_plan_change=self._on_plan_change if self.watch_plans else None,
             debounce_seconds=self.debounce_seconds,
             verbose=self.verbose,
             modules_dir=self.modules_dir,
+            plans_dir=self.plans_dir,
         )
 
         watched_dirs = []
@@ -492,9 +601,13 @@ class NotionWatcher:
             # Pre-load existing timeline content to avoid re-syncing
             self._preload_timeline_content()
 
+        if self.watch_plans and self.plans_dir.exists():
+            self._observer.schedule(handler, str(self.plans_dir), recursive=True)
+            watched_dirs.append(f"plans/")
+
         if not watched_dirs:
             raise FileNotFoundError(
-                "No directories to watch. Ensure modules/ or timeline/ exist in .memory/"
+                "No directories to watch. Ensure modules/, timeline/, or plans/ exist in .memory/"
             )
 
         self._observer.start()
@@ -543,41 +656,109 @@ class NotionWatcher:
                 time.sleep(1)
 
     def _poll_notion(self):
-        """Poll Notion for timeline changes and pull to local."""
+        """Poll Notion for changes and pull to local (modules + timeline)."""
         timestamp = datetime.now().strftime("%H:%M:%S")
 
         if self.verbose:
             print(f"[{timestamp}] Polling Notion for changes...")
 
-        try:
-            from memory_tool.notion.timeline_sync import TimelineSyncer
+        total_pulled = 0
+        all_errors = []
 
-            syncer = TimelineSyncer(memory_root=self.memory_root)
+        # 1. Pull modules from Notion
+        if self.watch_modules:
+            try:
+                from memory_tool.notion.sync import ModuleSyncer
 
-            # Only sync today's timeline for polling (to minimize API calls)
-            result = syncer.sync(
-                days=1,
-                pull_only=True,
-                dry_run=self.dry_run,
-                verbose=False,  # Don't spam verbose during polling
-            )
+                module_syncer = ModuleSyncer(base_path=self.memory_root.parent)
+                result = module_syncer.sync(
+                    pull_only=True,
+                    dry_run=self.dry_run,
+                    verbose=False,
+                )
 
-            pulled = result.get("pulled", 0)
-            errors = result.get("errors", [])
+                if result.pulled > 0:
+                    self._module_pull_count += result.pulled
+                    total_pulled += result.pulled
+                    print(f"[{timestamp}] Pulled {result.pulled} module file(s) from Notion")
 
-            if pulled > 0:
-                self._timeline_pull_count += pulled
-                print(f"[{timestamp}] Pulled {pulled} entries from Notion")
-                # Reload timeline content to avoid pushing back what we just pulled
-                self._preload_timeline_content()
+                if result.failed > 0:
+                    all_errors.extend([r.message for r in result.results if not r.success])
 
-            if errors and self.verbose:
-                for err in errors:
-                    print(f"[{timestamp}] Poll error: {err}")
+            except Exception as e:
+                if self.verbose:
+                    print(f"[{timestamp}] Module poll failed: {e}")
 
-        except Exception as e:
-            if self.verbose:
-                print(f"[{timestamp}] Notion poll failed: {e}")
+        # 2. Pull timeline from Notion
+        if self.watch_timeline:
+            try:
+                from memory_tool.notion.timeline_sync import TimelineSyncer
+
+                timeline_syncer = TimelineSyncer(memory_root=self.memory_root)
+
+                # Only sync today's timeline for polling (to minimize API calls)
+                result = timeline_syncer.sync(
+                    days=1,
+                    pull_only=True,
+                    dry_run=self.dry_run,
+                    verbose=False,
+                )
+
+                pulled = result.get("pulled", 0)
+                errors = result.get("errors", [])
+
+                if pulled > 0:
+                    self._timeline_pull_count += pulled
+                    total_pulled += pulled
+                    print(f"[{timestamp}] Pulled {pulled} timeline entry(ies) from Notion")
+                    # Reload timeline content to avoid pushing back what we just pulled
+                    self._preload_timeline_content()
+
+                if errors:
+                    all_errors.extend(errors)
+
+            except Exception as e:
+                if self.verbose:
+                    print(f"[{timestamp}] Timeline poll failed: {e}")
+
+        # 3. Pull plans from Notion
+        if self.watch_plans:
+            try:
+                from memory_tool.notion.plan_sync import PlanSyncer
+
+                plan_syncer = PlanSyncer(memory_root=self.memory_root)
+
+                if plan_syncer.enabled:
+                    result = plan_syncer.sync(
+                        plan_type="all",
+                        days=1,  # Only today's plan for polling
+                        pull_only=True,
+                        dry_run=self.dry_run,
+                        verbose=False,
+                    )
+
+                    pulled = result.get("pulled", 0)
+                    errors = result.get("errors", [])
+
+                    if pulled > 0:
+                        self._plan_pull_count += pulled
+                        total_pulled += pulled
+                        print(f"[{timestamp}] Pulled {pulled} plan task(s) from Notion")
+
+                    if errors:
+                        all_errors.extend(errors)
+
+            except Exception as e:
+                if self.verbose:
+                    print(f"[{timestamp}] Plan poll failed: {e}")
+
+        # Summary
+        if total_pulled == 0 and self.verbose:
+            print(f"[{timestamp}] No changes from Notion")
+
+        if all_errors and self.verbose:
+            for err in all_errors:
+                print(f"[{timestamp}] Poll error: {err}")
 
     def stop(self):
         """Stop watching."""
@@ -587,8 +768,18 @@ class NotionWatcher:
             self._observer.join()
 
         stats = f"Module syncs: {self._module_sync_count}, Timeline syncs: {self._timeline_sync_count}"
+        if self._plan_sync_count:
+            stats += f", Plan syncs: {self._plan_sync_count}"
         if self.bidirectional:
-            stats += f", Timeline pulls: {self._timeline_pull_count}"
+            pulls = []
+            if self._module_pull_count:
+                pulls.append(f"Module pulls: {self._module_pull_count}")
+            if self._timeline_pull_count:
+                pulls.append(f"Timeline pulls: {self._timeline_pull_count}")
+            if self._plan_pull_count:
+                pulls.append(f"Plan pulls: {self._plan_pull_count}")
+            if pulls:
+                stats += ", " + ", ".join(pulls)
         print(f"\nStopped. {stats}")
 
     def run_forever(self):

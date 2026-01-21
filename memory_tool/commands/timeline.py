@@ -20,14 +20,24 @@ from memory_tool.utils.config import Config
 from memory_tool.review import ReviewManager
 
 
-@app.command()
+@app.command(
+    epilog="For detailed help: [bold]mhelp record[/bold]  |  Korean: [bold]mconfig set help.language ko[/bold]"
+)
 def record(
     message: str = typer.Argument(..., help="Message to record in timeline"),
-    date: Optional[str] = typer.Option(None, "--date", help="Date (YYYY-MM-DD)"),
-    time: Optional[str] = typer.Option(None, "--time", help="Time (HH:MM)"),
-    force: bool = typer.Option(False, "--force", "-f", help="Force recording (skip warnings)"),
+    date: Optional[str] = typer.Option(None, "--date", help="Date (YYYY-MM-DD), defaults to today"),
+    time: Optional[str] = typer.Option(None, "--time", help="Time (HH:MM), defaults to current time"),
+    force: bool = typer.Option(False, "--force", "-f", help="Force recording (skip warnings for old dates)"),
 ):
-    """Record a message to timeline (m command)."""
+    """Record a message to timeline (m command).
+
+    Records a timestamped entry to your timeline. Entries are automatically
+    organized by date and can be searched later with ms command.
+
+    Examples:
+        m "Started working on feature X"
+        m "Fixed bug" --date 2026-01-20 --time 14:30
+    """
     message = arg_str(message)
     date = opt_str(date)
     time = opt_str(time)
@@ -83,9 +93,17 @@ def record(
         sys.exit(1)
 
 
-@app.command()
+@app.command(
+    epilog="For detailed help: [bold]mhelp today[/bold]"
+)
 def today():
-    """Show today's timeline (mtoday command)."""
+    """Show today's timeline (mtoday command).
+
+    Displays all timeline entries recorded today, sorted by time.
+
+    Examples:
+        mtoday               # Show today's entries
+    """
     timeline = Timeline()
 
     try:
@@ -106,9 +124,17 @@ def today():
         sys.exit(1)
 
 
-@app.command()
+@app.command(
+    epilog="For detailed help: [bold]mhelp week[/bold]"
+)
 def week():
-    """Show this week's timeline (mweek command)."""
+    """Show this week's timeline (mweek command).
+
+    Displays timeline entries from Monday to today, grouped by date.
+
+    Examples:
+        mweek                # Show this week's entries
+    """
     timeline = Timeline()
 
     try:

@@ -1,7 +1,7 @@
 """Planning-related CLI commands (plan, summary)."""
 
 import sys
-from datetime import datetime
+from datetime import datetime, date
 from pathlib import Path
 from typing import List, Optional
 
@@ -10,6 +10,50 @@ import typer
 from memory_tool.commands.common import app, console, opt_str, arg_str, resolve_module_name
 from memory_tool.llm.client import LLMClient
 from memory_tool.summary import TimelineSummarizer, ModuleSummarizer
+
+
+def _interactive_carryover(tasks: List[str], task_type: str = "task") -> List[str]:
+    """Interactive selection of tasks/goals to carry over.
+
+    Args:
+        tasks: List of task/goal texts
+        task_type: "task" or "goal" for display purposes
+
+    Returns:
+        List of selected task/goal texts
+    """
+    if not tasks:
+        return []
+
+    console.print(f"\nIncomplete {task_type}s:")
+    for i, task in enumerate(tasks, 1):
+        console.print(f"  [{i}] 📋 {task}")
+
+    console.print(f"\n[dim]Select {task_type}s to carry over (e.g., 1,2,3 or 'all' or 'none'):[/dim]")
+
+    try:
+        selection = input("> ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        return []
+
+    if selection == "none" or selection == "":
+        return []
+
+    if selection == "all":
+        return tasks
+
+    # Parse comma-separated numbers
+    selected = []
+    try:
+        indices = [int(x.strip()) for x in selection.split(",")]
+        for idx in indices:
+            if 1 <= idx <= len(tasks):
+                selected.append(tasks[idx - 1])
+    except ValueError:
+        console.print("[red]Invalid selection[/red]")
+        return []
+
+    return selected
 
 
 @app.command()
@@ -220,11 +264,17 @@ def plan(
 
     Examples (Time-based Plans):
         mplan daily              # Show today's plan
+        mplan daily yesterday    # Show yesterday's plan
+        mplan daily show 2026-01-15  # Show specific date
         mplan daily add "Task"   # Add task to today
         mplan daily done "Task"  # Mark task as done
+        mplan daily carryover    # Move yesterday's incomplete to today
 
         mplan weekly             # Show this week's plan
+        mplan weekly lastweek    # Show last week's plan
+        mplan weekly show W03    # Show specific week
         mplan weekly add "Goal"  # Add goal to this week
+        mplan weekly carryover   # Move last week's incomplete to this week
 
         mplan monthly            # Show this month's plan
 
@@ -254,7 +304,23 @@ def plan(
                 plan_mgr = DailyPlan(base_path=memory_path)
 
                 if name is None or name == "show":
-                    content = plan_mgr.show_plan()
+                    # mplan daily OR mplan daily show [date]
+                    target_date = None
+                    if title:
+                        # mplan daily show 2026-01-15 OR mplan daily show yesterday
+                        target_date = plan_mgr.parse_date_keyword(title)
+                        if target_date is None:
+                            console.print(f"[red]ERROR[/red] Invalid date: {title}")
+                            console.print("[dim]Use YYYY-MM-DD or 'yesterday'[/dim]")
+                            sys.exit(1)
+                    content = plan_mgr.show_plan(target_date)
+                    console.print(content)
+
+                elif name == "yesterday":
+                    # mplan daily yesterday
+                    from datetime import timedelta
+                    yesterday = date.today() - timedelta(days=1)
+                    content = plan_mgr.show_plan(yesterday)
                     console.print(content)
 
                 elif name == "add":
@@ -280,7 +346,37 @@ def plan(
                         console.print(f"[red]ERROR[/red] Task not found: {title}")
                         sys.exit(1)
 
+                elif name == "carryover":
+                    # mplan daily carryover
+                    from datetime import timedelta
+                    yesterday = date.today() - timedelta(days=1)
+                    incomplete = plan_mgr.get_incomplete_tasks(yesterday)
+
+                    if not incomplete:
+                        console.print(f"[yellow]No incomplete tasks from yesterday ({yesterday.strftime('%Y-%m-%d')})[/yellow]")
+                        return
+
+                    console.print(f"[cyan]Yesterday's incomplete tasks ({yesterday.strftime('%Y-%m-%d')}):[/cyan]")
+                    selected = _interactive_carryover(incomplete, "task")
+
+                    if not selected:
+                        console.print("[dim]No tasks selected[/dim]")
+                        return
+
+                    count = plan_mgr.carryover_tasks(selected, yesterday, date.today())
+                    console.print(f"\n[green]OK[/green] Carried over {count} task(s) to today's plan")
+                    for task in selected:
+                        console.print(f"  - {task}")
+
                 else:
+                    # Try to parse name as date keyword (mplan daily 2026-01-15)
+                    target_date = plan_mgr.parse_date_keyword(name)
+                    if target_date:
+                        content = plan_mgr.show_plan(target_date)
+                        console.print(content)
+                        return
+
+                    # Default: create plan
                     plan_path = plan_mgr.create_plan()
                     console.print(f"[green]OK[/green] Daily plan ready")
                     console.print(f"  → {plan_path.relative_to(Path.cwd())}")
@@ -295,8 +391,14 @@ def plan(
                 plan_mgr = WeeklyPlan(base_path=memory_path)
 
                 if name is None or name == "show":
+                    # mplan weekly OR mplan weekly show [W03|lastweek]
                     week_id = title if title else None
                     content = plan_mgr.show_plan(week_id)
+                    console.print(content)
+
+                elif name == "lastweek":
+                    # mplan weekly lastweek
+                    content = plan_mgr.show_plan("lastweek")
                     console.print(content)
 
                 elif name == "add":
@@ -322,7 +424,37 @@ def plan(
                         console.print(f"[red]ERROR[/red] Goal not found: {title}")
                         sys.exit(1)
 
+                elif name == "carryover":
+                    # mplan weekly carryover
+                    from datetime import timedelta
+                    last_week_date = date.today() - timedelta(weeks=1)
+                    incomplete = plan_mgr.get_incomplete_goals(last_week_date)
+                    _, week_num, _, _ = plan_mgr.get_week_info(last_week_date)
+
+                    if not incomplete:
+                        console.print(f"[yellow]No incomplete goals from last week (W{week_num:02d})[/yellow]")
+                        return
+
+                    console.print(f"[cyan]Last week's incomplete goals (W{week_num:02d}):[/cyan]")
+                    selected = _interactive_carryover(incomplete, "goal")
+
+                    if not selected:
+                        console.print("[dim]No goals selected[/dim]")
+                        return
+
+                    count = plan_mgr.carryover_goals(selected, last_week_date, date.today())
+                    _, this_week_num, _, _ = plan_mgr.get_week_info()
+                    console.print(f"\n[green]OK[/green] Carried over {count} goal(s) to this week (W{this_week_num:02d})")
+                    for goal in selected:
+                        console.print(f"  - {goal}")
+
                 else:
+                    # Try as week ID (W03, lastweek, etc.)
+                    if name.lower().startswith("w") or name.lower() == "lastweek":
+                        content = plan_mgr.show_plan(name)
+                        console.print(content)
+                        return
+
                     plan_path = plan_mgr.create_plan()
                     console.print(f"[green]OK[/green] Weekly plan ready")
                     console.print(f"  → {plan_path.relative_to(Path.cwd())}")

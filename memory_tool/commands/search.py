@@ -14,9 +14,11 @@ from memory_tool.core.search import MemorySearcher, SearchError
 from memory_tool.utils.path_checker import PathChecker, format_check_result
 
 
-@app.command()
+@app.command(
+    epilog="For detailed help: [bold]mhelp search[/bold]"
+)
 def search(
-    query: str = typer.Argument(..., help="Search query (regex pattern or semantic)"),
+    query: str = typer.Argument(..., help="Search query (keyword, regex, or semantic)"),
     with_kb: bool = typer.Option(False, "--with-kb", help="Include personal KB"),
     all: bool = typer.Option(False, "--all", help="Search all projects"),
     case_sensitive: bool = typer.Option(False, "--case", "-c", help="Case sensitive search"),
@@ -36,20 +38,23 @@ def search(
     tag: List[str] = typer.Option(None, "--tag", help="Filter by tags (can use multiple times)"),
     show_score: bool = typer.Option(False, "--show-score", help="Show relevance scores"),
     summary: bool = typer.Option(False, "--summary", help="Show summary statistics"),
-    hybrid: bool = typer.Option(False, "--hybrid", help="Hybrid search (text + semantic)"),
-    text_weight: float = typer.Option(0.7, "--text-weight", help="Text weight for hybrid search (default: 0.7)"),
-    semantic_weight: float = typer.Option(0.3, "--semantic-weight", help="Semantic weight for hybrid search (default: 0.3)"),
+    hybrid: bool = typer.Option(False, "--hybrid", help="Hybrid search (keyword + semantic combined)"),
+    text_weight: float = typer.Option(0.7, "--text-weight", help="Keyword weight for hybrid (default: 0.7)"),
+    semantic_weight: float = typer.Option(0.3, "--semantic-weight", help="Semantic weight for hybrid (default: 0.3)"),
     no_cache: bool = typer.Option(False, "--no-cache", help="Disable result caching"),
-    cache_ttl: int = typer.Option(3600, "--cache-ttl", help="Cache TTL in seconds (default: 3600 / 1 hour)"),
+    cache_ttl: int = typer.Option(3600, "--cache-ttl", help="Cache TTL in seconds (default: 3600)"),
 ):
     """Search timeline and modules (ms command).
 
+    Supports keyword search (default), semantic search (--semantic),
+    and hybrid search (--hybrid) combining both approaches.
+
     Examples:
-        ms "bug fix" --rank bm25 --boost-recent
-        ms "feature" --date this-week --type timeline
-        ms "decision" --show-score --summary
-        ms "implementation" --hybrid --text-weight 0.5 --semantic-weight 0.5
-        ms "query" --no-cache
+        ms "bug fix"                        # Keyword search
+        ms "authentication" --semantic      # Semantic search
+        ms "login" --hybrid                 # Hybrid search
+        ms "feature" --date this-week       # Filter by date
+        ms "refactor" --type timeline       # Filter by file type
     """
     query = arg_str(query)
     from_date = opt_str(from_date)

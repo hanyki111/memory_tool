@@ -9,18 +9,25 @@ import typer
 from memory_tool.commands.common import app, console, opt_str, resolve_module_name
 
 
-@app.command()
+@app.command(
+    epilog="For detailed help: [bold]mhelp init[/bold]"
+)
 def init(
     path: str = typer.Argument(".", help="Path to initialize .memory/ structure"),
-    force: bool = typer.Option(False, "--force", "-f", help="Force reinitialize"),
-    kb: Optional[str] = typer.Option(None, "--kb", help="Path to knowledge base"),
-    update_docs: bool = typer.Option(False, "--update-docs", help="Update documentation templates in existing project"),
-    update_all: bool = typer.Option(False, "--update-all", help="Update all templates including guidelines (backs up existing)"),
+    force: bool = typer.Option(False, "--force", "-f", help="Force reinitialize (overwrites existing)"),
+    kb: Optional[str] = typer.Option(None, "--kb", help="Path to knowledge base directory"),
+    update_docs: bool = typer.Option(False, "--update-docs", help="Update documentation templates only"),
+    update_all: bool = typer.Option(False, "--update-all", help="Update all templates (creates backups)"),
 ):
     """Initialize .memory/ structure (minit command).
 
-    Use --update-docs to update documentation templates in an existing project.
-    Use --update-all to also update .claude/guidelines.md (creates backup).
+    Creates the .memory/ directory structure with timeline, modules, plans,
+    and configuration files. Also creates .claude/ for Claude Code integration.
+
+    Examples:
+        minit                      # Initialize in current directory
+        minit --force              # Reinitialize (overwrites)
+        minit --update-docs        # Update documentation templates
     """
     from memory_tool.core.init import (
         MemoryInitializer,
@@ -230,6 +237,89 @@ def status():
         sys.exit(1)
 
 
+def _display_aliases_grouped(manager, status_map, lang=None):
+    """Display aliases grouped by category."""
+    from collections import defaultdict
+
+    # Group aliases by category
+    groups = defaultdict(list)
+    for alias_name, alias_info in manager.ALIASES_EXT.items():
+        command, desc_en, desc_ko, category = alias_info
+        groups[category].append((alias_name, command, desc_en, desc_ko))
+
+    # Display order
+    group_order = ["core", "timeline", "search", "module", "plan", "llm", "notion", "system"]
+
+    for group_key in group_order:
+        if group_key not in groups:
+            continue
+
+        group_title = manager.ALIAS_GROUPS.get(group_key, group_key)
+        console.print(f"[bold yellow]{group_title}[/bold yellow]")
+
+        # Separate English and Korean aliases
+        english_aliases = []
+        korean_aliases = []
+
+        for alias_name, command, desc_en, desc_ko in groups[group_key]:
+            # Check if Korean (contains Hangul)
+            is_korean = any('\uac00' <= c <= '\ud7a3' for c in alias_name)
+            if is_korean:
+                korean_aliases.append((alias_name, command, desc_en, desc_ko))
+            else:
+                english_aliases.append((alias_name, command, desc_en, desc_ko))
+
+        # Display English aliases first
+        for alias_name, command, desc_en, desc_ko in sorted(english_aliases, key=lambda x: x[0]):
+            installed = status_map.get(alias_name, False)
+            status_icon = "[green]OK[/green]" if installed else "[dim]--[/dim]"
+
+            # Choose description based on language
+            if lang == "ko":
+                desc = desc_ko
+            elif lang == "en":
+                desc = desc_en
+            else:
+                desc = f"{desc_en} / {desc_ko}"
+
+            console.print(f"  {status_icon} {alias_name:12} -> {command:12} {desc}")
+
+        # Display Korean aliases
+        if korean_aliases:
+            for alias_name, command, desc_en, desc_ko in sorted(korean_aliases, key=lambda x: x[0]):
+                installed = status_map.get(alias_name, False)
+                status_icon = "[green]OK[/green]" if installed else "[dim]--[/dim]"
+
+                if lang == "ko":
+                    desc = desc_ko
+                elif lang == "en":
+                    desc = desc_en
+                else:
+                    desc = desc_ko  # Korean aliases show Korean description by default
+
+                console.print(f"  {status_icon} [dim]{alias_name:12}[/dim] -> {command:12} [dim]{desc}[/dim]")
+
+        console.print("")  # Empty line between groups
+
+
+def _display_aliases_flat(manager, status_map, lang=None):
+    """Display aliases in flat list (legacy format)."""
+    for alias_name, installed in status_map.items():
+        if hasattr(manager, 'ALIASES_EXT') and alias_name in manager.ALIASES_EXT:
+            command, desc_en, desc_ko, _ = manager.ALIASES_EXT[alias_name]
+            if lang == "ko":
+                desc = desc_ko
+            elif lang == "en":
+                desc = desc_en
+            else:
+                desc = desc_en
+        else:
+            command, desc = manager.ALIASES.get(alias_name, ("?", "?"))
+
+        status_icon = "[green]OK[/green]" if installed else "[dim]--[/dim]"
+        console.print(f"  {status_icon} {alias_name:12} -> {command:12} ({desc})")
+
+
 @app.command()
 def alias(
     action: str = typer.Argument(..., help="Action: install, uninstall, list"),
@@ -238,14 +328,18 @@ def alias(
     powershell: bool = typer.Option(False, "--powershell", "--ps", help="Use PowerShell profile (Windows)"),
     bash: bool = typer.Option(False, "--bash", help="Use Bash profile (~/.bashrc)"),
     zsh: bool = typer.Option(False, "--zsh", help="Use Zsh profile (~/.zshrc)"),
+    lang: Optional[str] = typer.Option(None, "--lang", "-l", help="Language for descriptions: en, ko (default: both)"),
+    flat: bool = typer.Option(False, "--flat", help="Show flat list instead of grouped"),
 ):
     """Manage command aliases (malias command).
 
     Examples:
+        malias list                    # Show all aliases (grouped)
+        malias list --lang ko          # Show with Korean descriptions
+        malias list --flat             # Show flat list (not grouped)
         malias install --powershell    # Windows PowerShell
         malias install --bash          # Linux/macOS Bash
         malias install --zsh           # Linux/macOS Zsh
-        malias list                    # Show all aliases
     """
     from memory_tool.utils.alias import AliasManager, AliasError
 
@@ -417,70 +511,58 @@ def alias(
                         console.print("[yellow]![/yellow] No aliases found to uninstall")
 
         elif action == "list":
+            # Get status map based on platform
             if powershell:
-                # List PowerShell profile aliases
-                ps_status_map = manager.list_powershell_installed()
-                ps_profile = manager.get_powershell_profile_path()
-
-                if ps_profile:
-                    console.print(f"[cyan]PowerShell Profile:[/cyan] {ps_profile}\n")
-
-                    for alias_name, installed in ps_status_map.items():
-                        command, description = manager.ALIASES[alias_name]
-                        status_icon = "[green]OK[/green]" if installed else "[dim]--[/dim]"
-                        console.print(f"  {status_icon} {alias_name:10} -> {command:10} ({description})")
-
-                    console.print("")
-                    if any(ps_status_map.values()):
-                        console.print("[green]OK[/green] Aliases are configured in PowerShell profile")
-                        console.print("[dim]Works in: PowerShell, VSCode, Windows Terminal, etc.[/dim]")
-                    else:
-                        console.print("[yellow]![/yellow] No aliases found in PowerShell profile")
-                        console.print("[dim]Run 'malias install --powershell' to install[/dim]")
-                else:
-                    console.print("[red]ERROR[/red] PowerShell not available")
+                status_map = manager.list_powershell_installed()
+                profile_path = manager.get_powershell_profile_path()
+                platform_name = "PowerShell Profile"
             elif bash or zsh:
-                # List Unix shell profile aliases (Bash/Zsh)
                 shell_name = "Bash" if bash else "Zsh"
-                shell_status_map = manager.list_shell_installed(shell=shell_type)
-                shell_profile = manager.get_shell_profile_path(shell_type)
-
-                if shell_profile:
-                    console.print(f"[cyan]{shell_name} Profile:[/cyan] {shell_profile}\n")
-
-                    for alias_name, installed in shell_status_map.items():
-                        command, description = manager.ALIASES[alias_name]
-                        status_icon = "[green]OK[/green]" if installed else "[dim]--[/dim]"
-                        console.print(f"  {status_icon} {alias_name:10} -> {command:10} ({description})")
-
-                    console.print("")
-                    if any(shell_status_map.values()):
-                        console.print(f"[green]OK[/green] Aliases are configured in {shell_name} profile")
-                    else:
-                        console.print(f"[yellow]![/yellow] No aliases found in {shell_name} profile")
-                        console.print(f"[dim]Run 'malias install --{shell_type}' to install[/dim]")
-                else:
-                    console.print(f"[red]ERROR[/red] {shell_name} profile not found (not on Unix?)")
+                status_map = manager.list_shell_installed(shell=shell_type)
+                profile_path = manager.get_shell_profile_path(shell_type)
+                platform_name = f"{shell_name} Profile"
             else:
-                # List batch file aliases (original behavior) and PowerShell status
-                # Show batch files
                 status_map = manager.list_installed(install_dir)
                 target_dir = install_dir or manager.get_default_install_dir()
+                profile_path = target_dir
+                platform_name = "Batch Files"
 
-                console.print(f"[cyan]Batch Files:[/cyan] {target_dir}\n")
+            # Display header
+            console.print(f"[bold cyan]{platform_name}:[/bold cyan] {profile_path}\n")
 
-                for alias_name, installed in status_map.items():
-                    command, description = manager.ALIASES[alias_name]
-                    status_icon = "[green]OK[/green]" if installed else "[dim]--[/dim]"
-                    console.print(f"  {status_icon} {alias_name:10} -> {command:10} ({description})")
+            # Get language preference
+            lang_pref = opt_str(lang)
 
-                console.print("")
+            if not flat and hasattr(manager, 'ALIASES_EXT') and hasattr(manager, 'ALIAS_GROUPS'):
+                # Grouped display
+                _display_aliases_grouped(manager, status_map, lang_pref)
+            else:
+                # Flat display (legacy)
+                _display_aliases_flat(manager, status_map, lang_pref)
+
+            # Show status summary
+            console.print("")
+            installed_count = sum(1 for v in status_map.values() if v)
+            total_count = len(status_map)
+            console.print(f"[dim]Installed: {installed_count}/{total_count}[/dim]")
+
+            if powershell:
+                if any(status_map.values()):
+                    console.print("[green]OK[/green] Aliases configured in PowerShell profile")
+                else:
+                    console.print("[dim]Run 'malias install --powershell' to install[/dim]")
+            elif bash or zsh:
+                if any(status_map.values()):
+                    console.print(f"[green]OK[/green] Aliases configured in {shell_name} profile")
+                else:
+                    console.print(f"[dim]Run 'malias install --{shell_type}' to install[/dim]")
+            else:
                 in_path = manager.is_in_path(target_dir)
                 if in_path:
                     console.print("[green]OK[/green] Directory is in PATH")
                 else:
-                    console.print("[yellow]![/yellow] Directory is NOT in PATH (aliases won't work)")
-                    console.print("[dim]Run 'malias install' to see PATH setup instructions[/dim]")
+                    console.print("[yellow]![/yellow] Directory NOT in PATH")
+                    console.print("[dim]Run 'malias install' for setup instructions[/dim]")
 
                 # Also show PowerShell profile status
                 ps_profile = manager.get_powershell_profile_path()
@@ -855,6 +937,134 @@ def migrate_timeline(
 
     except Exception as e:
         console.print(f"[red]ERROR[/red] Migration failed: {e}")
+        import traceback
+        console.print(f"[dim]{traceback.format_exc()}[/dim]")
+        sys.exit(1)
+
+
+@app.command(
+    epilog="For detailed help: [bold]mhelp config[/bold]"
+)
+def config(
+    action: str = typer.Argument(..., help="Action: list, get, set"),
+    key: str = typer.Argument(None, help="Config key path (e.g., help.language)"),
+    value: str = typer.Argument(None, help="Value to set (for 'set' action)"),
+):
+    """Manage config.yaml settings (mconfig command).
+
+    View and modify configuration settings including timeline, search,
+    LLM, Notion integration, and help language preferences.
+
+    Examples:
+        mconfig list                      # Show all settings
+        mconfig get help.language         # Get help language
+        mconfig set help.language ko      # Set to Korean
+        mconfig set llm.provider ollama   # Set LLM provider
+    """
+    import yaml
+    from memory_tool.utils.config import Config
+
+    base_path = Path.cwd()
+    memory_path = base_path / ".memory"
+    config_path = memory_path / "config.yaml"
+
+    if not memory_path.exists():
+        console.print("[red]ERROR[/red] .memory/ not found in current directory")
+        console.print("[dim]Run 'minit' to initialize[/dim]")
+        sys.exit(1)
+
+    try:
+        if action == "list":
+            # List all config values
+            cfg = Config(memory_path)
+            config_data = cfg.load()
+
+            console.print("[bold cyan]Configuration:[/bold cyan]\n")
+
+            def print_config(data, prefix=""):
+                for k, v in data.items():
+                    full_key = f"{prefix}.{k}" if prefix else k
+                    if isinstance(v, dict):
+                        console.print(f"[yellow]{full_key}:[/yellow]")
+                        print_config(v, full_key)
+                    else:
+                        console.print(f"  {full_key}: [green]{v}[/green]")
+
+            print_config(config_data)
+            console.print(f"\n[dim]Config file: {config_path}[/dim]")
+
+        elif action == "get":
+            if not key:
+                console.print("[red]ERROR[/red] Key path required for 'get' action")
+                console.print("[dim]Example: mconfig get help.language[/dim]")
+                sys.exit(1)
+
+            cfg = Config(memory_path)
+            result = cfg.get(key)
+
+            if result is None:
+                console.print(f"[yellow]Key not found:[/yellow] {key}")
+            else:
+                console.print(f"{key}: [green]{result}[/green]")
+
+        elif action == "set":
+            if not key:
+                console.print("[red]ERROR[/red] Key path required for 'set' action")
+                console.print("[dim]Example: mconfig set help.language ko[/dim]")
+                sys.exit(1)
+
+            if value is None:
+                console.print("[red]ERROR[/red] Value required for 'set' action")
+                console.print(f"[dim]Example: mconfig set {key} <value>[/dim]")
+                sys.exit(1)
+
+            # Load existing config or start fresh
+            if config_path.exists():
+                with open(config_path, "r", encoding="utf-8") as f:
+                    config_data = yaml.safe_load(f) or {}
+            else:
+                config_data = {}
+
+            # Parse value (convert to appropriate type)
+            parsed_value = value
+            if value.lower() == "true":
+                parsed_value = True
+            elif value.lower() == "false":
+                parsed_value = False
+            elif value.isdigit():
+                parsed_value = int(value)
+            elif value.replace(".", "", 1).isdigit():
+                parsed_value = float(value)
+
+            # Set nested key
+            keys = key.split(".")
+            current = config_data
+            for k in keys[:-1]:
+                if k not in current:
+                    current[k] = {}
+                elif not isinstance(current[k], dict):
+                    current[k] = {}
+                current = current[k]
+
+            old_value = current.get(keys[-1])
+            current[keys[-1]] = parsed_value
+
+            # Write back to config file
+            with open(config_path, "w", encoding="utf-8") as f:
+                yaml.dump(config_data, f, default_flow_style=False, allow_unicode=True)
+
+            if old_value is not None:
+                console.print(f"[green]OK[/green] {key}: [dim]{old_value}[/dim] -> [green]{parsed_value}[/green]")
+            else:
+                console.print(f"[green]OK[/green] {key}: [green]{parsed_value}[/green]")
+
+        else:
+            console.print(f"[red]ERROR[/red] Unknown action: {action}")
+            console.print("[dim]Valid actions: get, set, list[/dim]")
+            sys.exit(1)
+
+    except Exception as e:
+        console.print(f"[red]ERROR[/red] Config operation failed: {e}")
         import traceback
         console.print(f"[dim]{traceback.format_exc()}[/dim]")
         sys.exit(1)

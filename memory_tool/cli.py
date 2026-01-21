@@ -278,3 +278,31 @@ def notion_watch_cli():
     import sys
     sys.argv = ['memory_tool', 'nwatch'] + sys.argv[1:]
     app()
+
+
+def ask_cli():
+    """Entry point for 'mask' command."""
+    import sys
+    sys.argv = ['memory_tool', 'ask'] + sys.argv[1:]
+    app()
+
+
+def providers_cli():
+    """Entry point for 'mproviders' command."""
+    import sys
+    sys.argv = ['memory_tool', 'providers'] + sys.argv[1:]
+    app()
+
+
+def help_cli():
+    """Entry point for 'mhelp' command."""
+    import sys
+    sys.argv = ['memory_tool', 'help'] + sys.argv[1:]
+    app()
+
+
+def config_cli():
+    """Entry point for 'mconfig' command."""
+    import sys
+    sys.argv = ['memory_tool', 'config'] + sys.argv[1:]
+    app()

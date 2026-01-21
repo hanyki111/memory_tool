@@ -15,49 +15,111 @@ class AliasError(Exception):
 class AliasManager:
     """Manager for command aliases."""
 
-    # Alias definitions: alias_name -> (command_name, description)
-    ALIASES = {
-        "m": ("record", "Record to timeline"),
-        "minit": ("init", "Initialize .memory/ structure"),
-        "ms": ("search", "Search timeline and modules"),
-        "mcontext": ("context", "Build Claude Code context"),
-        "mcheck": ("check", "Check Related Files paths"),
-        "mmap": ("map", "Generate code structure map"),
-        "msort": ("sort", "Sort timeline by time"),
-        "msummary": ("summary", "Summarize timeline or module"),
-        "marchive": ("archive", "Archive documentation"),
-        "mtoday": ("today", "Show today's timeline"),
-        "mweek": ("week", "Show this week's timeline"),
-        "mmonth": ("month", "Show this month's timeline"),
-        "mdays": ("days", "Show last N days timeline"),
-        "mstatus": ("status", "Show statistics"),
-        "mmodule": ("module", "Manage modules and connections"),
-        "mhooks": ("hooks", "Manage git hooks"),
-        "mbrowse": ("browse", "Interactive search browser"),
-        "mcompletion": ("completion", "Manage shell completions"),
-        "mplan": ("plan", "Manage plans and tasks"),
-        "mtutorial": ("tutorial", "Interactive tutorial"),
-        "nm": ("nm", "Record to Notion"),
-        "nadd": ("nadd", "Add Notion page"),
-        "ns": ("ns", "Search Notion"),
-        "nt": ("nt", "Show Notion today"),
-        "nw": ("nw", "Show Notion week"),
-        "nsi": ("nsi", "Search inside Notion Daily Pages"),
-        "nsync": ("nsync", "Sync modules with Notion"),
-        "nwatch": ("nwatch", "Watch and auto-sync with Notion"),
-        "노": ("nm", "Record to Notion (Korean)"),
-        "노검": ("nsi", "Search inside Notion (Korean)"),
-        "노오": ("nt", "Show Notion today (Korean)"),
-        "노주": ("nw", "Show Notion week (Korean)"),
-        "노올": ("ns", "Search Notion (Korean)"),
-        # Local memory tool Korean aliases
-        "기": ("record", "Record to timeline (Korean)"),
-        "검": ("search", "Search timeline and modules (Korean)"),
-        "오늘": ("today", "Show today's timeline (Korean)"),
-        "주간": ("week", "Show this week's timeline (Korean)"),
-        "월간": ("month", "Show this month's timeline (Korean)"),
-        "일수": ("days", "Show last N days timeline (Korean)"),
+    # Alias definitions organized by category
+    # Format: alias_name -> (command_name, description_en, description_ko, category)
+    ALIAS_GROUPS = {
+        "core": "Core Commands / 핵심 명령어",
+        "timeline": "Timeline / 타임라인",
+        "search": "Search & Browse / 검색",
+        "module": "Modules / 모듈 관리",
+        "plan": "Planning / 계획",
+        "llm": "AI & LLM / AI 기능",
+        "notion": "Notion Integration / 노션 연동",
+        "system": "System / 시스템",
     }
+
+    # Extended alias definitions with bilingual descriptions
+    # Format: alias_name -> (command, desc_en, desc_ko, category)
+    ALIASES_EXT = {
+        # ============================================================
+        # Core Commands / 핵심 명령어
+        # ============================================================
+        "m": ("record", "Record to timeline", "타임라인에 기록", "core"),
+        "minit": ("init", "Initialize .memory/ structure", ".memory/ 구조 초기화", "core"),
+        "mstatus": ("status", "Show statistics", "통계 보기", "core"),
+        "mtutorial": ("tutorial", "Interactive tutorial", "대화형 튜토리얼", "core"),
+        # Korean
+        "기": ("record", "Record to timeline", "타임라인에 기록", "core"),
+
+        # ============================================================
+        # Timeline / 타임라인
+        # ============================================================
+        "mtoday": ("today", "Show today's timeline", "오늘 타임라인 보기", "timeline"),
+        "mweek": ("week", "Show this week's timeline", "이번 주 타임라인 보기", "timeline"),
+        "mmonth": ("month", "Show this month's timeline", "이번 달 타임라인 보기", "timeline"),
+        "mdays": ("days", "Show last N days timeline", "최근 N일 타임라인 보기", "timeline"),
+        "msort": ("sort", "Sort timeline by time", "타임라인 시간순 정렬", "timeline"),
+        # Korean
+        "오늘": ("today", "Show today's timeline", "오늘 타임라인 보기", "timeline"),
+        "주간": ("week", "Show this week's timeline", "이번 주 타임라인 보기", "timeline"),
+        "월간": ("month", "Show this month's timeline", "이번 달 타임라인 보기", "timeline"),
+        "일수": ("days", "Show last N days timeline", "최근 N일 타임라인 보기", "timeline"),
+
+        # ============================================================
+        # Search & Browse / 검색
+        # ============================================================
+        "ms": ("search", "Search timeline and modules", "타임라인/모듈 검색", "search"),
+        "mbrowse": ("browse", "Interactive search browser", "대화형 검색 브라우저", "search"),
+        "mcheck": ("check", "Check Related Files paths", "관련 파일 경로 확인", "search"),
+        # Korean
+        "검": ("search", "Search timeline and modules", "타임라인/모듈 검색", "search"),
+
+        # ============================================================
+        # Modules / 모듈 관리
+        # ============================================================
+        "mmodule": ("module", "Manage modules and connections", "모듈 및 연결 관리", "module"),
+        "marchive": ("archive", "Archive documentation", "문서 아카이브", "module"),
+        "mcontext": ("context", "Build Claude Code context", "Claude Code 컨텍스트 생성", "module"),
+        "mmap": ("map", "Generate code structure map", "코드 구조 맵 생성", "module"),
+
+        # ============================================================
+        # Planning / 계획
+        # ============================================================
+        "mplan": ("plan", "Manage plans and tasks", "계획 및 작업 관리", "plan"),
+        "msummary": ("summary", "Summarize timeline or module", "타임라인/모듈 요약", "plan"),
+
+        # ============================================================
+        # AI & LLM / AI 기능
+        # ============================================================
+        "mask": ("ask", "Ask questions about memory (RAG)", "메모리 기반 질문 (RAG)", "llm"),
+        "mproviders": ("providers", "List available LLM providers", "사용 가능한 LLM 목록", "llm"),
+        # Korean
+        "질문": ("ask", "Ask questions about memory (RAG)", "메모리 기반 질문 (RAG)", "llm"),
+
+        # ============================================================
+        # Notion Integration / 노션 연동
+        # ============================================================
+        "nm": ("nm", "Record to Notion", "노션에 기록", "notion"),
+        "nadd": ("nadd", "Add Notion page", "노션 페이지 추가", "notion"),
+        "ns": ("ns", "Search Notion", "노션 검색", "notion"),
+        "nt": ("nt", "Show Notion today", "노션 오늘 보기", "notion"),
+        "nw": ("nw", "Show Notion week", "노션 주간 보기", "notion"),
+        "nsi": ("nsi", "Search inside Notion pages", "노션 페이지 내 검색", "notion"),
+        "nsync": ("nsync", "Sync with Notion", "노션과 동기화", "notion"),
+        "nwatch": ("nwatch", "Watch and auto-sync", "변경 감시 및 자동 동기화", "notion"),
+        # Korean
+        "노": ("nm", "Record to Notion", "노션에 기록", "notion"),
+        "노검": ("nsi", "Search inside Notion", "노션 페이지 내 검색", "notion"),
+        "노오": ("nt", "Show Notion today", "노션 오늘 보기", "notion"),
+        "노주": ("nw", "Show Notion week", "노션 주간 보기", "notion"),
+        "노올": ("ns", "Search Notion", "노션 검색", "notion"),
+
+        # ============================================================
+        # System / 시스템
+        # ============================================================
+        "malias": ("alias", "Manage command aliases", "명령어 별칭 관리", "system"),
+        "mconfig": ("config", "Manage config.yaml settings", "config.yaml 설정 관리", "system"),
+        "mhelp": ("help", "Show detailed help", "상세 도움말 보기", "system"),
+        "mhooks": ("hooks", "Manage git hooks", "Git 훅 관리", "system"),
+        "mcompletion": ("completion", "Manage shell completions", "셸 자동완성 관리", "system"),
+        # Korean
+        "설정": ("config", "Manage config.yaml settings", "config.yaml 설정 관리", "system"),
+        "도움": ("help", "Show detailed help", "상세 도움말 보기", "system"),
+    }
+
+    # Legacy format for backward compatibility
+    # alias_name -> (command_name, description)
+    ALIASES = {k: (v[0], v[1]) for k, v in ALIASES_EXT.items()}
 
     def __init__(self):
         """Initialize alias manager."""
@@ -270,7 +332,7 @@ REM Memory Tool alias - auto-generated
             Instructions text
         """
         if self.is_in_path(install_dir):
-            return f"✓ {install_dir} is already in PATH"
+            return f"OK: {install_dir} is already in PATH"
 
         return f"""
 To use aliases, add this directory to your PATH:
@@ -1033,7 +1095,7 @@ python3 -m {self.package_name} {command} "$@"
             Instructions text
         """
         if self.is_in_path(install_dir):
-            return f"✓ {install_dir} is already in PATH"
+            return f"OK: {install_dir} is already in PATH"
 
         return f"""
 To use aliases, add this directory to your PATH:

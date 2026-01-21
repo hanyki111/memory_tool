@@ -75,66 +75,164 @@ class MemoryInitializer:
         config_path = self.memory_path / "config.yaml"
 
         # Write YAML with comments for better documentation
-        config_content = '''version: "1.0"
+        config_content = '''# ============================================================
+# Memory Tool Configuration
+# ============================================================
+version: "1.0"
 
+# ------------------------------------------------------------
+# Timeline Settings
+# ------------------------------------------------------------
 timeline:
-  auto_record: false
-  granularity: medium
+  auto_record: false           # Auto-record on certain events
+  granularity: medium          # low, medium, high
+  warn_old_days: 365           # Warn if recording to old dates
 
+# ------------------------------------------------------------
+# Context Settings (for Claude Code integration)
+# ------------------------------------------------------------
 context:
-  auto_update: false
-  recent_days: 3
+  auto_update: false           # Auto-update .claude/memory-context.md
+  recent_days: 3               # Days of timeline to include
 
+# ------------------------------------------------------------
+# Help & Language Settings
+# ------------------------------------------------------------
+help:
+  language: en                 # Help language: en, ko (affects --help output)
+  # Change with: python -m memory_tool config set help.language ko
+
+# ------------------------------------------------------------
+# Module Settings
+# ------------------------------------------------------------
 modules:
-  auto_update_current: false
+  auto_update_current: false   # Auto-update current.md on changes
 
+# ------------------------------------------------------------
+# Search Settings
+# ------------------------------------------------------------
 search:
-  default_scope: local
-  include_archived: false
+  default_scope: local         # local, kb, all
+  include_archived: false      # Include archived content
+  max_file_size: 1048576       # Max file size to search (1MB)
+  exclude_patterns: []         # Patterns to exclude from search
 
+# ------------------------------------------------------------
+# Code Map Settings (mmap command)
+# ------------------------------------------------------------
 codemap:
-  default_depth: structure  # overview, structure, api, docs
-  include_private: false
-  include_tests: false
+  default_depth: structure     # overview, structure, api, docs
+  include_private: false       # Include private members
+  include_tests: false         # Include test files
   exclude_patterns:
     - __pycache__
     - .venv
     - venv
     - node_modules
+    - .git
+
+# ============================================================
+# LLM Integration (Optional)
+# ============================================================
+# Configure LLM provider for summary, Q&A (mask), and AI features
+#
+# Uncomment ONE provider section to enable:
+
+# llm:
+#   provider: gemini-cli       # Options: anthropic, ollama, claude-cli, gemini-cli
+#
+#   # --- Claude CLI (recommended, uses CLI auth) ---
+#   claude_cli:
+#     command: claude          # CLI command name
+#     model: null              # null = use CLI default
+#
+#   # --- Gemini CLI (uses CLI auth) ---
+#   gemini_cli:
+#     command: gemini          # CLI command name
+#     model: null              # null = use CLI default
+#
+#   # --- Anthropic API (requires API key) ---
+#   # anthropic:
+#   #   api_key: null          # Or set ANTHROPIC_API_KEY env var
+#   #   model: claude-3-5-sonnet-20241022
+#
+#   # --- Ollama (local LLM) ---
+#   # ollama:
+#   #   host: http://localhost:11434
+#   #   model: llama3.2
+#
+# Commands:
+#   mask "question"            - Ask questions about memory (RAG)
+#   mproviders                 - List available LLM providers
+#   msummary                   - Summarize timeline or module
 
 # ============================================================
 # Notion Integration (Optional)
 # ============================================================
-# Uncomment and configure to enable Notion sync
+# Enable sync between local memory and Notion
 #
+# Two modes available:
+#   - "default": Standard Notion Integration (api_key required)
+#   - "pat": Personal Access Token via proxy (for enterprise)
+
 # notion:
-#   api_key: "secret_xxx..."           # Notion Integration Secret
-#   default_page_id: "abc123..."       # Timeline root page ID
+#   mode: "default"            # "default" or "pat"
 #
+#   # --- Default Mode (Standard Notion Integration) ---
+#   api_key: "secret_xxx..."             # Notion Integration Secret
+#   default_page_id: "abc123..."         # Timeline mirror page ID
+#
+#   # --- PAT Mode (Enterprise/Proxy) ---
+#   # pat:
+#   #   api_key: "PAT_xxx..."            # Personal Access Token
+#   #   notion_version: "2022-06-28"     # API version
+#   #   base_url: "https://proxy.example.com/v1"  # Proxy URL
+#   #   default_page_id: "xyz789..."     # Default page for PAT mode
+#
+#   # --- Module Sync Settings ---
 #   sync:
 #     enabled: true
-#     root_page_id: "xyz789..."        # Module sync root page ID
+#     root_page_id: "xyz789..."          # Module sync root page ID
 #
-#     targets:                          # Modules to sync
-#       - "projects/my-project"
-#       - "projects/my-project/**"      # Include submodules
+#     # Sync targets (glob patterns supported)
+#     targets:
+#       # - "projects/my-project"        # Specific module
+#       # - "projects/my-project/**"     # Module + all children
+#       - "**"                           # All modules (caution: may be many)
 #
+#     # Exclude patterns
 #     exclude_patterns:
 #       - "archive/**"
+#       - "*.backup"
 #
-#     conflict_resolution: "last-write-wins"
+#     # Conflict resolution policy
+#     conflict_resolution: "last-write-wins"  # or "manual"
 #
+#     # Timeline sync settings
 #     timeline:
 #       enabled: true
-#       bidirectional: true
-#       sync_days: 30
+#       bidirectional: true              # Notion <-> Local both directions
+#       sync_days: 30                    # Days of timeline to sync
+#
+#     # Plan sync settings (daily/weekly plans)
+#     plan:
+#       enabled: false
+#       root_page_id: null               # Plans root page ID
+#       daily: true
+#       weekly: true
+#       monthly: false
 #
 # Commands:
-#   nm "message"              - Record to Notion timeline
-#   nsync                     - Sync modules with Notion
-#   nsync --timeline          - Sync timeline entries
-#   nwatch                    - Watch for changes (Local -> Notion)
-#   nwatch --bidirectional    - Watch both directions
+#   nm "message"               - Record to Notion timeline
+#   ns "query"                 - Search Notion
+#   nt                         - Show Notion today
+#   nw                         - Show Notion week
+#   nsi "query"                - Search inside Notion pages
+#   nsync                      - Sync all (modules + timeline + plans)
+#   nsync --module             - Sync modules only
+#   nsync --timeline           - Sync timeline only
+#   nsync --plan               - Sync plans only
+#   nwatch                     - Watch and auto-sync on changes
 '''
 
         with open(config_path, "w", encoding="utf-8") as f:
