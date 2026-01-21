@@ -109,6 +109,13 @@ class MemoryAgent:
             },
             "examples": ["get_help(command='search')", "get_help(command='all')", "get_help(command='plan')"]
         },
+        "get_config_guide": {
+            "description": "Get configuration guide for config.yaml settings",
+            "args": {
+                "section": "Config section: 'all', 'notion', 'timeline', 'search', 'llm', 'help', or specific key path"
+            },
+            "examples": ["get_config_guide(section='notion')", "get_config_guide(section='all')", "get_config_guide(section='notion.sync.timeline')"]
+        },
     }
 
     def __init__(self, base_path: Optional[Path] = None):
@@ -173,6 +180,8 @@ Tool Selection Rules:
 - "모든 모듈/list modules" → list_modules()
 - "사용법/help/어떻게 사용/how to use" → get_help(command="...")
 - "명령어 목록/command list" → get_help(command="all")
+- "설정/config/config.yaml/어떻게 설정" → get_config_guide(section="...")
+- "notion 설정/notion sync 설정" → get_config_guide(section="notion.sync")
 
 CRITICAL: For search tool:
 1. Extract ONLY the search keyword, not the full question
@@ -613,6 +622,365 @@ Rules:
 
         return "\n".join(lines)
 
+    def _tool_get_config_guide(self, section: str = "all") -> str:
+        """Get configuration guide for config.yaml settings.
+
+        Args:
+            section: Config section name or 'all' for complete guide
+        """
+        # Configuration documentation
+        CONFIG_GUIDE = {
+            "overview": """# config.yaml 설정 가이드
+
+config.yaml 파일은 .memory/ 디렉토리에 위치하며, Memory Tool의 모든 설정을 관리합니다.
+
+## 주요 섹션
+- timeline: 타임라인 기록 설정
+- context: Claude Code 컨텍스트 설정
+- search: 검색 설정
+- llm: AI/LLM 제공자 설정
+- help: 도움말 언어 설정
+- notion: Notion 동기화 설정
+
+각 섹션에 대한 상세 정보는 해당 섹션을 질문하세요.""",
+
+            "timeline": """# timeline 설정
+
+```yaml
+timeline:
+  auto_record: false      # 자동 기록 활성화 여부
+  granularity: medium     # 기록 상세도: low, medium, high
+  warn_old_days: 365      # N일 이전 기록 시 경고
+```
+
+## 옵션 설명
+- **auto_record**: true 시 특정 이벤트에 자동 기록
+- **granularity**: 기록 상세 수준
+  - low: 간단한 기록만
+  - medium: 기본 (권장)
+  - high: 상세 기록
+- **warn_old_days**: 오래된 날짜에 기록 시 경고 표시""",
+
+            "context": """# context 설정
+
+```yaml
+context:
+  auto_update: false      # 기록 시 컨텍스트 자동 업데이트
+  recent_days: 3          # 컨텍스트에 포함할 최근 일수
+```
+
+## 옵션 설명
+- **auto_update**: true 시 `m` 명령 후 자동으로 `mcontext` 실행
+- **recent_days**: memory-context.md에 포함할 최근 타임라인 일수""",
+
+            "search": """# search 설정
+
+```yaml
+search:
+  default_scope: local    # 기본 검색 범위: local, kb, all
+  include_archived: false # 아카이브 포함 여부
+  max_file_size: 1048576  # 검색할 최대 파일 크기 (bytes)
+  exclude_patterns: []    # 검색 제외 패턴
+```
+
+## 옵션 설명
+- **default_scope**: 검색 범위
+  - local: .memory/ 내부만
+  - kb: 지식 베이스만
+  - all: 모두
+- **include_archived**: true 시 archive/ 폴더도 검색
+- **max_file_size**: 이 크기보다 큰 파일은 검색 제외
+- **exclude_patterns**: 검색 제외할 glob 패턴 목록""",
+
+            "llm": """# llm 설정
+
+```yaml
+llm:
+  provider: anthropic     # 기본 제공자: anthropic, ollama, claude-cli, gemini-cli
+  ollama_host: "http://localhost:11434"
+  ollama_model: "llama3.2"
+  anthropic_api_key: null # 또는 환경변수 ANTHROPIC_API_KEY 사용
+  anthropic_model: "claude-3-5-sonnet-20241022"
+  max_tokens: 4096
+  temperature: 0.7
+```
+
+## 제공자별 설정
+1. **claude-cli** (권장): Claude Code 환경에서 자동 사용
+2. **gemini-cli**: Gemini CLI 사용
+3. **anthropic**: API 키 필요
+4. **ollama**: 로컬 LLM (Ollama 서버 필요)
+
+## 환경변수
+- ANTHROPIC_API_KEY: Anthropic API 키
+- GOOGLE_API_KEY: Gemini API 키""",
+
+            "help": """# help 설정
+
+```yaml
+help:
+  language: en            # 도움말 언어: en, ko
+```
+
+## 옵션 설명
+- **language**: mhelp 명령어의 기본 출력 언어
+  - en: 영어 (기본값)
+  - ko: 한국어
+
+## 언어 변경 방법
+```bash
+mconfig set help.language ko    # 한국어로 변경
+mhelp --set-lang ko             # 동일한 효과
+```""",
+
+            "notion": """# notion 설정
+
+Notion 연동을 위한 설정입니다.
+
+```yaml
+notion:
+  mode: default           # 인증 모드: default, pat
+  api_key: null          # Notion API 키 (또는 NOTION_API_KEY 환경변수)
+  default_page_id: null  # 기본 페이지 ID (레거시)
+
+  # PAT 모드 (Personal Access Token)
+  pat:
+    token: null          # PAT 토큰
+    default_page_id: null
+
+  # 동기화 설정
+  sync:
+    # 모듈 동기화
+    module:
+      enabled: false
+      root_page_id: null    # 모듈 동기화 루트 페이지
+      targets: []           # 동기화할 모듈 경로 목록
+      exclude_patterns: []  # 제외할 패턴
+      conflict_resolution: last-write-wins
+
+    # 타임라인 동기화
+    timeline:
+      enabled: false
+      root_page_id: null    # 타임라인 루트 페이지
+      bidirectional: false  # 양방향 동기화
+      sync_days: 30         # 동기화할 일수
+
+    # 플랜 동기화
+    plan:
+      enabled: false
+      root_page_id: null    # 플랜 루트 페이지
+      daily: true           # 일간 플랜 동기화
+      weekly: true          # 주간 플랜 동기화
+      monthly: true         # 월간 플랜 동기화
+```""",
+
+            "notion.sync": """# notion.sync 상세 설정
+
+## 모듈 동기화 (notion.sync.module)
+```yaml
+notion:
+  sync:
+    module:
+      enabled: true
+      root_page_id: "abc123..."  # Notion 페이지 ID
+      targets:                    # 동기화할 모듈
+        - "projects/memory-tool"
+        - "concepts"
+      exclude_patterns:
+        - "*.tmp"
+        - "archive/*"
+      conflict_resolution: last-write-wins  # 또는 local-wins, notion-wins
+```
+
+## 타임라인 동기화 (notion.sync.timeline)
+```yaml
+notion:
+  sync:
+    timeline:
+      enabled: true
+      root_page_id: "def456..."  # 타임라인 루트 페이지
+      bidirectional: true        # Notion에서 수정 시 로컬에도 반영
+      sync_days: 30              # 최근 30일 동기화
+```
+
+## 플랜 동기화 (notion.sync.plan)
+```yaml
+notion:
+  sync:
+    plan:
+      enabled: true
+      root_page_id: "ghi789..."  # 플랜 루트 페이지
+      daily: true
+      weekly: true
+      monthly: true
+```
+
+## 페이지 ID 찾는 방법
+1. Notion에서 페이지 열기
+2. 우측 상단 "..." → "Copy link"
+3. URL에서 마지막 32자가 페이지 ID
+   예: notion.so/My-Page-**abc123def456...**""",
+
+            "notion.sync.module": """# 모듈 동기화 설정 (notion.sync.module)
+
+```yaml
+notion:
+  sync:
+    module:
+      enabled: true              # 모듈 동기화 활성화
+      root_page_id: "페이지ID"   # Notion 루트 페이지
+      targets:                   # 동기화 대상 모듈
+        - "projects/memory-tool"
+        - "projects/memory-tool/core-system"
+        - "concepts"
+      exclude_patterns:          # 제외할 파일 패턴
+        - "*.tmp"
+        - "archive/*"
+      conflict_resolution: last-write-wins
+```
+
+## conflict_resolution 옵션
+- **last-write-wins**: 가장 최근 수정된 것이 우선 (기본값)
+- **local-wins**: 로컬 파일이 항상 우선
+- **notion-wins**: Notion이 항상 우선
+
+## 사용 예시
+```bash
+nsync --module            # 모듈 동기화 실행
+nsync --module --push     # 로컬 → Notion
+nsync --module --pull     # Notion → 로컬
+```""",
+
+            "notion.sync.timeline": """# 타임라인 동기화 설정 (notion.sync.timeline)
+
+```yaml
+notion:
+  sync:
+    timeline:
+      enabled: true              # 타임라인 동기화 활성화
+      root_page_id: "페이지ID"   # Notion 타임라인 루트 페이지
+      bidirectional: true        # 양방향 동기화 활성화
+      sync_days: 30              # 최근 30일 동기화
+```
+
+## 옵션 설명
+- **enabled**: true로 설정 시 타임라인 동기화 활성화
+- **root_page_id**: Notion에서 타임라인을 저장할 페이지 ID
+- **bidirectional**: true 시 Notion에서 수정한 내용도 로컬에 반영
+- **sync_days**: 동기화할 최근 일수 (기본 30일)
+
+## 사용 예시
+```bash
+nsync --timeline          # 타임라인 동기화
+nm "기록 내용"            # Notion에 직접 기록 (동기화 포함)
+nwatch --timeline-only    # 타임라인 변경 감시
+```""",
+
+            "notion.sync.plan": """# 플랜 동기화 설정 (notion.sync.plan)
+
+```yaml
+notion:
+  sync:
+    plan:
+      enabled: true              # 플랜 동기화 활성화
+      root_page_id: "페이지ID"   # Notion 플랜 루트 페이지
+      daily: true                # 일간 플랜 동기화
+      weekly: true               # 주간 플랜 동기화
+      monthly: true              # 월간 플랜 동기화
+```
+
+## 페이지 구조
+Notion에 다음 구조로 페이지가 생성됩니다:
+```
+Plans (root_page_id)
+├── 📅 Daily Plans/
+│   └── 2026-01/
+│       ├── 21
+│       └── 22
+├── 📆 Weekly Plans/
+│   └── 2026/
+│       ├── W04
+│       └── W05
+└── 📆 Monthly Plans/
+    └── 2026/
+        └── 01
+```
+
+## 사용 예시
+```bash
+nsync --plan              # 플랜 동기화
+np "작업 내용"            # Notion 플랜에 직접 추가
+np "작업" --weekly        # 주간 플랜에 추가
+nwatch --plans-only       # 플랜 변경 감시
+```""",
+
+            "summary": """# summary 설정
+
+```yaml
+summary:
+  default_language: ko    # 요약 언어: ko, en, auto
+```
+
+## 옵션 설명
+- **default_language**: msummary 명령의 출력 언어
+  - ko: 한국어
+  - en: 영어
+  - auto: 입력 내용에 따라 자동 선택""",
+
+            "modules": """# modules 설정
+
+```yaml
+modules:
+  auto_update_current: false  # current.md 자동 업데이트
+```
+
+## 옵션 설명
+- **auto_update_current**: true 시 모듈 관련 기록 후 current.md 자동 업데이트""",
+        }
+
+        section = section.lower().strip()
+
+        # Handle 'all' - return overview
+        if section == "all":
+            overview = CONFIG_GUIDE["overview"]
+            # Also include section list
+            sections = "\n\n## 사용 가능한 섹션\n"
+            for key in sorted(CONFIG_GUIDE.keys()):
+                if key != "overview":
+                    sections += f"- {key}\n"
+            return overview + sections
+
+        # Try exact match first
+        if section in CONFIG_GUIDE:
+            return CONFIG_GUIDE[section]
+
+        # Try partial match (e.g., "notion.sync" matches "notion.sync.module")
+        matches = [k for k in CONFIG_GUIDE.keys() if section in k or k in section]
+        if matches:
+            # Return most specific match
+            best_match = max(matches, key=len)
+            return CONFIG_GUIDE[best_match]
+
+        # If not found, return overview with suggestion
+        return f"""설정 섹션 '{section}'을 찾을 수 없습니다.
+
+사용 가능한 섹션:
+- all (전체 개요)
+- timeline
+- context
+- search
+- llm
+- help
+- summary
+- modules
+- notion
+- notion.sync
+- notion.sync.module
+- notion.sync.timeline
+- notion.sync.plan
+
+예: get_config_guide(section='notion.sync.timeline')"""
+
     def _execute_tool(self, tool_call: ToolCall) -> ToolResult:
         """Execute a single tool call."""
         tool_name = tool_call.tool
@@ -638,6 +1006,8 @@ Rules:
                 result = self._tool_list_modules()
             elif tool_name == "get_help":
                 result = self._tool_get_help(args.get("command", "all"))
+            elif tool_name == "get_config_guide":
+                result = self._tool_get_config_guide(args.get("section", "all"))
             else:
                 return ToolResult(
                     tool=tool_name,
