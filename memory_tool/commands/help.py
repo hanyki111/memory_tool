@@ -189,17 +189,29 @@ AI를 사용하여 메모리 내용에 대한 질문에 답변합니다.
             "description": """
 Create, view, and manage your daily and weekly plans.
 Supports task tracking with checkboxes and carryover of incomplete tasks.
+
+Smart task completion (done command):
+  - Numeric index: 'done 1' completes 1st incomplete task
+  - Prefix match: 'done "Wri"' matches "Write docs" if unique
+  - Contains match: Fallback to substring if prefix not found
+  - Shows list with indices if multiple tasks match
             """,
             "examples": [
                 "mplan daily                    # Show/create today's plan",
+                "mplan daily add \"Task\"         # Add task to today",
+                "mplan daily done 1             # Complete 1st task by index",
+                "mplan daily done \"Write\"       # Complete by prefix match",
                 "mplan daily yesterday          # Show yesterday's plan",
                 "mplan daily carryover          # Carry over incomplete tasks",
                 "mplan weekly                   # Show/create this week's plan",
+                "mplan weekly done 1            # Complete 1st goal by index",
                 "mplan weekly lastweek          # Show last week's plan",
             ],
             "options": [
                 ("daily", "Daily plan operations"),
                 ("weekly", "Weekly plan operations"),
+                ("add <task>", "Add task/goal to plan"),
+                ("done <task|index>", "Mark task complete (supports index/prefix)"),
                 ("carryover", "Carry over incomplete tasks"),
             ],
         },
@@ -209,17 +221,29 @@ Supports task tracking with checkboxes and carryover of incomplete tasks.
             "description": """
 일일 및 주간 계획을 생성, 조회, 관리합니다.
 체크박스로 작업 추적이 가능하고, 미완료 작업 이관을 지원합니다.
+
+스마트 작업 완료 (done 명령):
+  - 숫자 인덱스: 'done 1'로 첫 번째 미완료 작업 완료
+  - Prefix 매칭: 'done "작"'이 "작업 완료"에 유일하게 매칭
+  - Contains 매칭: Prefix 실패 시 부분 문자열 매칭
+  - 다중 매칭 시 인덱스 번호 목록 표시
             """,
             "examples": [
                 "mplan daily                    # 오늘 계획 보기/생성",
+                "mplan daily add \"작업\"         # 오늘 계획에 작업 추가",
+                "mplan daily done 1             # 인덱스로 첫 번째 작업 완료",
+                "mplan daily done \"문서\"        # Prefix 매칭으로 완료",
                 "mplan daily yesterday          # 어제 계획 보기",
                 "mplan daily carryover          # 미완료 작업 이관",
                 "mplan weekly                   # 이번 주 계획 보기/생성",
+                "mplan weekly done 1            # 인덱스로 첫 번째 목표 완료",
                 "mplan weekly lastweek          # 지난주 계획 보기",
             ],
             "options": [
                 ("daily", "일일 계획 작업"),
                 ("weekly", "주간 계획 작업"),
+                ("add <task>", "작업/목표 추가"),
+                ("done <task|index>", "작업 완료 (인덱스/Prefix 지원)"),
                 ("carryover", "미완료 작업 이관"),
             ],
         },
