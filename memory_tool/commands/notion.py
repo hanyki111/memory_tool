@@ -179,6 +179,119 @@ def notion_search_inside(
         sys.exit(1)
 
 
+@app.command(name="np")
+def notion_plan(
+    task: str = typer.Argument(..., help="Task to add to the plan"),
+    daily: bool = typer.Option(True, "--daily", "-d", help="Add to daily plan (default)"),
+    weekly: bool = typer.Option(False, "--weekly", "-w", help="Add to weekly plan"),
+    monthly: bool = typer.Option(False, "--monthly", "-m", help="Add to monthly plan"),
+    date_str: str = typer.Option(None, "--date", help="Target date (YYYY-MM-DD for daily, W## for weekly, MM for monthly)"),
+    completed: bool = typer.Option(False, "--done", "-x", help="Mark task as completed"),
+):
+    """Add a task to Notion plan page (np command).
+
+    Adds a task (checkbox) to the specified plan type on Notion.
+    Default is today's daily plan.
+
+    Examples:
+        np "Write documentation"              # Add to today's daily plan
+        np "Review PR" --weekly               # Add to this week's weekly plan
+        np "Complete project" --monthly       # Add to this month's monthly plan
+        np "Fix bug" --date 2026-01-25        # Add to specific date's daily plan
+        np "Deploy feature" --weekly --date W05  # Add to specific week
+        np "Task done" --done                 # Add as already completed
+    """
+    from datetime import date
+    from memory_tool.notion.plan_sync import PlanSyncer
+
+    try:
+        syncer = PlanSyncer()
+
+        if not syncer.enabled:
+            console.print("[red]ERROR[/red] Plan sync not enabled in config.yaml")
+            console.print("[dim]Enable it: notion.sync.plan.enabled: true[/dim]")
+            console.print("[dim]Set root_page_id: notion.sync.plan.root_page_id: <page_id>[/dim]")
+            sys.exit(1)
+
+        # Determine plan type (priority: monthly > weekly > daily)
+        if monthly:
+            plan_type = "monthly"
+        elif weekly:
+            plan_type = "weekly"
+        else:
+            plan_type = "daily"
+
+        # Parse target date
+        today = date.today()
+        target_date = today
+
+        if date_str:
+            if plan_type == "daily":
+                # Parse YYYY-MM-DD
+                try:
+                    from datetime import datetime as dt
+                    target_date = dt.strptime(date_str, "%Y-%m-%d").date()
+                except ValueError:
+                    console.print(f"[red]ERROR[/red] Invalid date format: {date_str}")
+                    console.print("[dim]Use YYYY-MM-DD format (e.g., 2026-01-25)[/dim]")
+                    sys.exit(1)
+            elif plan_type == "weekly":
+                # Parse W## (week number)
+                if date_str.upper().startswith("W"):
+                    try:
+                        week_num = int(date_str[1:])
+                        # Get first day of that week in current year
+                        year = today.year
+                        target_date = date.fromisocalendar(year, week_num, 1)
+                    except (ValueError, IndexError):
+                        console.print(f"[red]ERROR[/red] Invalid week format: {date_str}")
+                        console.print("[dim]Use W## format (e.g., W05)[/dim]")
+                        sys.exit(1)
+                else:
+                    console.print(f"[red]ERROR[/red] Invalid week format: {date_str}")
+                    console.print("[dim]Use W## format (e.g., W05)[/dim]")
+                    sys.exit(1)
+            elif plan_type == "monthly":
+                # Parse MM or YYYY-MM
+                try:
+                    if "-" in date_str:
+                        from datetime import datetime as dt
+                        target_date = dt.strptime(date_str + "-01", "%Y-%m-%d").date()
+                    else:
+                        month_num = int(date_str)
+                        target_date = date(today.year, month_num, 1)
+                except ValueError:
+                    console.print(f"[red]ERROR[/red] Invalid month format: {date_str}")
+                    console.print("[dim]Use MM or YYYY-MM format (e.g., 03 or 2026-03)[/dim]")
+                    sys.exit(1)
+
+        # Get the appropriate page
+        if plan_type == "daily":
+            page_id = syncer._get_daily_plan_page(target_date)
+            date_display = target_date.strftime("%Y-%m-%d")
+        elif plan_type == "weekly":
+            page_id = syncer._get_weekly_plan_page(target_date)
+            iso_cal = target_date.isocalendar()
+            date_display = f"{iso_cal[0]} W{iso_cal[1]:02d}"
+        else:  # monthly
+            page_id = syncer._get_monthly_plan_page(target_date)
+            date_display = target_date.strftime("%Y-%m")
+
+        # Add task to Notion
+        syncer._append_notion_task(page_id, task, completed)
+
+        status = "[x]" if completed else "[ ]"
+        console.print(f"[green]OK[/green] Added to {plan_type} plan ({date_display})")
+        console.print(f"[dim]-> {status} {task}[/dim]")
+
+    except NotionError as e:
+        console.print(f"[red]ERROR[/red] {e}")
+        sys.exit(1)
+    except Exception as e:
+        console.print(f"[red]ERROR[/red] {e}")
+        sys.exit(1)
+
+
 @app.command(name="nsync")
 def notion_sync(
     module_path: str = typer.Argument(None, help="Module path to sync (optional)"),

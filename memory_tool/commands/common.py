@@ -67,6 +67,7 @@ def show_bilingual_help(ctx: click.Context, command_name: str) -> None:
         "mconfig": "config",
         "mhooks": "hooks",
         "mcompletion": "completion",
+        "노플": "np",
     }
     cmd = cmd_map.get(command_name, command_name)
 

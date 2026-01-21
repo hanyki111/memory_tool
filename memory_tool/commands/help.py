@@ -1041,6 +1041,63 @@ Bidirectional mode (-b): Local <-> Notion (push and pull)
         },
     },
 
+    "np": {
+        "en": {
+            "name": "np (Notion Plan)",
+            "summary": "Add a task to Notion plan page",
+            "description": """
+Adds a task (checkbox) directly to a Notion plan page.
+Default is today's daily plan. Supports daily, weekly, and monthly plans.
+
+Requires plan sync to be configured in config.yaml:
+  notion.sync.plan.enabled: true
+  notion.sync.plan.root_page_id: <your_page_id>
+            """,
+            "examples": [
+                'np "Write documentation"              # Add to today\'s daily plan',
+                'np "Review PR" --weekly               # Add to this week\'s weekly plan',
+                'np "Complete project" --monthly       # Add to this month\'s monthly plan',
+                'np "Fix bug" --date 2026-01-25        # Add to specific date',
+                'np "Deploy feature" --weekly --date W05  # Add to specific week',
+                'np "Task done" --done                 # Add as completed',
+            ],
+            "options": [
+                ("--daily, -d", "Add to daily plan (default)"),
+                ("--weekly, -w", "Add to weekly plan"),
+                ("--monthly, -m", "Add to monthly plan"),
+                ("--date", "Target date (YYYY-MM-DD, W##, or MM)"),
+                ("--done, -x", "Mark task as completed"),
+            ],
+        },
+        "ko": {
+            "name": "np (노션 플랜)",
+            "summary": "Notion 플랜 페이지에 작업 추가",
+            "description": """
+Notion 플랜 페이지에 직접 작업(체크박스)을 추가합니다.
+기본값은 오늘의 일간 플랜입니다. 일간, 주간, 월간 플랜을 지원합니다.
+
+config.yaml에 플랜 동기화가 설정되어 있어야 합니다:
+  notion.sync.plan.enabled: true
+  notion.sync.plan.root_page_id: <your_page_id>
+            """,
+            "examples": [
+                'np "문서 작성"                        # 오늘 일간 플랜에 추가',
+                'np "PR 검토" --weekly                 # 이번 주 주간 플랜에 추가',
+                'np "프로젝트 완료" --monthly           # 이번 달 월간 플랜에 추가',
+                'np "버그 수정" --date 2026-01-25      # 특정 날짜에 추가',
+                'np "배포" --weekly --date W05        # 특정 주에 추가',
+                'np "완료된 작업" --done               # 완료 상태로 추가',
+            ],
+            "options": [
+                ("--daily, -d", "일간 플랜에 추가 (기본값)"),
+                ("--weekly, -w", "주간 플랜에 추가"),
+                ("--monthly, -m", "월간 플랜에 추가"),
+                ("--date", "대상 날짜 (YYYY-MM-DD, W##, 또는 MM)"),
+                ("--done, -x", "완료 상태로 추가"),
+            ],
+        },
+    },
+
     # ================================================================
     # System (additional)
     # ================================================================
@@ -1226,7 +1283,7 @@ COMMAND_CATEGORIES = {
         "module": ("Modules", ["module", "archive", "context", "map"]),
         "plan": ("Planning", ["plan", "summary"]),
         "llm": ("AI & LLM", ["ask", "providers"]),
-        "notion": ("Notion", ["nm", "nadd", "ns", "nt", "nw", "nsi", "nsync", "nwatch"]),
+        "notion": ("Notion", ["nm", "nadd", "np", "ns", "nt", "nw", "nsi", "nsync", "nwatch"]),
         "system": ("System", ["alias", "config", "hooks", "completion"]),
     },
     "ko": {
@@ -1236,7 +1293,7 @@ COMMAND_CATEGORIES = {
         "module": ("모듈 관리", ["module", "archive", "context", "map"]),
         "plan": ("계획", ["plan", "summary"]),
         "llm": ("AI 기능", ["ask", "providers"]),
-        "notion": ("노션 연동", ["nm", "nadd", "ns", "nt", "nw", "nsi", "nsync", "nwatch"]),
+        "notion": ("노션 연동", ["nm", "nadd", "np", "ns", "nt", "nw", "nsi", "nsync", "nwatch"]),
         "system": ("시스템", ["alias", "config", "hooks", "completion"]),
     },
 }

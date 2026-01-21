@@ -97,8 +97,10 @@ class AliasManager:
         "nsi": ("nsi", "Search inside Notion pages", "노션 페이지 내 검색", "notion"),
         "nsync": ("nsync", "Sync with Notion", "노션과 동기화", "notion"),
         "nwatch": ("nwatch", "Watch and auto-sync", "변경 감시 및 자동 동기화", "notion"),
+        "np": ("np", "Add task to Notion plan", "노션 플랜에 작업 추가", "notion"),
         # Korean
         "노": ("nm", "Record to Notion", "노션에 기록", "notion"),
+        "노플": ("np", "Add task to Notion plan", "노션 플랜에 작업 추가", "notion"),
         "노검": ("nsi", "Search inside Notion", "노션 페이지 내 검색", "notion"),
         "노오": ("nt", "Show Notion today", "노션 오늘 보기", "notion"),
         "노주": ("nw", "Show Notion week", "노션 주간 보기", "notion"),
