@@ -335,15 +335,34 @@ def plan(
 
                 elif name == "done":
                     if not title:
-                        console.print("[red]ERROR[/red] Task title required")
-                        console.print("[dim]Usage: mplan daily done <task>[/dim]")
+                        console.print("[red]ERROR[/red] Task title or index required")
+                        console.print("[dim]Usage: mplan daily done <task|index>[/dim]")
+                        console.print("[dim]Examples:[/dim]")
+                        console.print("[dim]  mplan daily done 1          # Complete 1st task[/dim]")
+                        console.print("[dim]  mplan daily done \"Write\"    # Prefix match[/dim]")
                         sys.exit(1)
 
-                    if plan_mgr.mark_done(title):
+                    success, result = plan_mgr.mark_done(title)
+                    if success:
                         console.print(f"[green]OK[/green] Task marked as completed")
-                        console.print(f"  - [x] {title}")
+                        console.print(f"  - [x] {result}")
+                    elif result == "ambiguous":
+                        # Show matching tasks for user to choose
+                        console.print(f"[yellow]Multiple tasks match '{title}':[/yellow]")
+                        tasks = plan_mgr.get_tasks(incomplete_only=True)
+                        for t in tasks:
+                            if title.lower() in t['text'].lower():
+                                console.print(f"  {t['index']}. {t['text']}")
+                        console.print(f"\n[dim]Use index number: mplan daily done <number>[/dim]")
+                        sys.exit(1)
                     else:
                         console.print(f"[red]ERROR[/red] Task not found: {title}")
+                        # Show available tasks
+                        tasks = plan_mgr.get_tasks(incomplete_only=True)
+                        if tasks:
+                            console.print(f"\n[dim]Available tasks:[/dim]")
+                            for t in tasks:
+                                console.print(f"  {t['index']}. {t['text']}")
                         sys.exit(1)
 
                 elif name == "carryover":
@@ -413,15 +432,34 @@ def plan(
 
                 elif name == "done":
                     if not title:
-                        console.print("[red]ERROR[/red] Goal required")
-                        console.print("[dim]Usage: mplan weekly done <goal>[/dim]")
+                        console.print("[red]ERROR[/red] Goal title or index required")
+                        console.print("[dim]Usage: mplan weekly done <goal|index>[/dim]")
+                        console.print("[dim]Examples:[/dim]")
+                        console.print("[dim]  mplan weekly done 1          # Complete 1st goal[/dim]")
+                        console.print("[dim]  mplan weekly done \"Review\"   # Prefix match[/dim]")
                         sys.exit(1)
 
-                    if plan_mgr.mark_done(title):
+                    success, result = plan_mgr.mark_done(title)
+                    if success:
                         console.print(f"[green]OK[/green] Goal marked as completed")
-                        console.print(f"  - [x] {title}")
+                        console.print(f"  - [x] {result}")
+                    elif result == "ambiguous":
+                        # Show matching goals for user to choose
+                        console.print(f"[yellow]Multiple goals match '{title}':[/yellow]")
+                        goals = plan_mgr.get_goals(incomplete_only=True)
+                        for g in goals:
+                            if title.lower() in g['text'].lower():
+                                console.print(f"  {g['index']}. {g['text']}")
+                        console.print(f"\n[dim]Use index number: mplan weekly done <number>[/dim]")
+                        sys.exit(1)
                     else:
                         console.print(f"[red]ERROR[/red] Goal not found: {title}")
+                        # Show available goals
+                        goals = plan_mgr.get_goals(incomplete_only=True)
+                        if goals:
+                            console.print(f"\n[dim]Available goals:[/dim]")
+                            for g in goals:
+                                console.print(f"  {g['index']}. {g['text']}")
                         sys.exit(1)
 
                 elif name == "carryover":
@@ -649,8 +687,11 @@ def plan(
 
         elif action == "done":
             if not name or not title:
-                console.print("[red]ERROR[/red] Plan name and task title required")
-                console.print("[dim]Usage: mplan done <plan-name> <task-title>[/dim]")
+                console.print("[red]ERROR[/red] Plan name and task title/index required")
+                console.print("[dim]Usage: mplan done <plan-name> <task|index>[/dim]")
+                console.print("[dim]Examples:[/dim]")
+                console.print("[dim]  mplan done myplan 1          # Complete 1st task[/dim]")
+                console.print("[dim]  mplan done myplan \"Write\"    # Prefix match[/dim]")
                 sys.exit(1)
 
             plans = manager.list_plans()
@@ -666,20 +707,68 @@ def plan(
 
             plan_obj = manager.load_plan(plan_file)
 
-            task_found = False
-            for task in plan_obj.tasks:
-                if task.title.lower() == title.lower():
-                    task.mark_completed()
-                    task_found = True
-                    break
+            # Get incomplete tasks
+            incomplete_tasks = [t for t in plan_obj.tasks if not t.completed]
 
-            if not task_found:
-                console.print(f"[red]ERROR[/red] Task not found: {title}")
+            if not incomplete_tasks:
+                console.print(f"[yellow]No incomplete tasks in '{plan_obj.name}'[/yellow]")
                 sys.exit(1)
 
+            # Find matching task
+            target_task = None
+            matched_text = None
+
+            # Check if title is a numeric index
+            if title.isdigit():
+                index = int(title)
+                if 1 <= index <= len(incomplete_tasks):
+                    target_task = incomplete_tasks[index - 1]
+                    matched_text = target_task.title
+            else:
+                title_lower = title.lower()
+
+                # 1. Exact match
+                for task in incomplete_tasks:
+                    if task.title.lower() == title_lower:
+                        target_task = task
+                        matched_text = task.title
+                        break
+
+                # 2. Prefix match (if unique)
+                if target_task is None:
+                    prefix_matches = [t for t in incomplete_tasks if t.title.lower().startswith(title_lower)]
+                    if len(prefix_matches) == 1:
+                        target_task = prefix_matches[0]
+                        matched_text = target_task.title
+
+                # 3. Contains match (if unique)
+                if target_task is None:
+                    contains_matches = [t for t in incomplete_tasks if title_lower in t.title.lower()]
+                    if len(contains_matches) == 1:
+                        target_task = contains_matches[0]
+                        matched_text = target_task.title
+                    elif len(contains_matches) > 1:
+                        # Ambiguous match
+                        console.print(f"[yellow]Multiple tasks match '{title}':[/yellow]")
+                        for i, t in enumerate(incomplete_tasks, 1):
+                            if title_lower in t.title.lower():
+                                console.print(f"  {i}. {t.title}")
+                        console.print(f"\n[dim]Use index number: mplan done {name} <number>[/dim]")
+                        sys.exit(1)
+
+            if target_task is None:
+                console.print(f"[red]ERROR[/red] Task not found: {title}")
+                # Show available tasks
+                if incomplete_tasks:
+                    console.print(f"\n[dim]Available tasks:[/dim]")
+                    for i, t in enumerate(incomplete_tasks, 1):
+                        console.print(f"  {i}. {t.title}")
+                sys.exit(1)
+
+            target_task.mark_completed()
             manager.save_plan(plan_obj, filename=plan_file)
             console.print(f"[green]OK[/green] Task completed in '{plan_obj.name}'")
-            console.print(f"  - [x] {title}")
+            console.print(f"  - [x] {matched_text}")
 
         elif action == "delete":
             if not name:

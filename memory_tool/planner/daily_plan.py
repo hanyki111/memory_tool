@@ -212,15 +212,15 @@ class DailyPlan:
         plan_path.write_text(updated_content, encoding='utf-8')
         return True
 
-    def mark_done(self, task: str, target_date: Optional[date] = None) -> bool:
-        """Mark task as completed.
+    def get_tasks(self, target_date: Optional[date] = None, incomplete_only: bool = False) -> List[dict]:
+        """Get list of tasks from plan.
 
         Args:
-            task: Task description (partial match)
             target_date: Target date (today if None)
+            incomplete_only: Only return incomplete tasks
 
         Returns:
-            True if marked, False if not found
+            List of task dicts with 'index', 'text', 'completed', 'line_num'
         """
         if target_date is None:
             target_date = date.today()
@@ -228,25 +228,139 @@ class DailyPlan:
         plan_path = self.get_plan_path(target_date)
 
         if not plan_path.exists():
-            return False
+            return []
 
         content = plan_path.read_text(encoding='utf-8')
         lines = content.split('\n')
+        tasks = []
+        index = 1
 
-        # Find and mark task
-        marked = False
+        for line_num, line in enumerate(lines):
+            stripped = line.strip()
+            if stripped.startswith('- [ ]'):
+                # Incomplete task
+                text = stripped[5:].strip()
+                tasks.append({
+                    'index': index,
+                    'text': text,
+                    'completed': False,
+                    'line_num': line_num
+                })
+                index += 1
+            elif stripped.startswith('- [x]'):
+                # Completed task
+                if not incomplete_only:
+                    text = stripped[5:].strip()
+                    # Remove timestamp suffix if present
+                    text = re.sub(r'\s*\[\d{1,2}:\d{2}\]$', '', text)
+                    tasks.append({
+                        'index': index,
+                        'text': text,
+                        'completed': True,
+                        'line_num': line_num
+                    })
+                index += 1
+
+        return tasks
+
+    def _find_matching_task(self, query: str, tasks: List[dict]) -> Optional[dict]:
+        """Find a task matching the query (prefix or contains).
+
+        Matching priority:
+        1. Exact match (case-insensitive)
+        2. Unique prefix match (if query is a unique prefix)
+        3. Contains match (if only one task contains the query)
+
+        Args:
+            query: Search query
+            tasks: List of task dicts (incomplete only)
+
+        Returns:
+            Matching task dict, or None if not found or ambiguous
+        """
+        query_lower = query.lower()
+        incomplete_tasks = [t for t in tasks if not t['completed']]
+
+        # 1. Exact match
+        for task in incomplete_tasks:
+            if task['text'].lower() == query_lower:
+                return task
+
+        # 2. Prefix match - find all tasks that start with query
+        prefix_matches = [t for t in incomplete_tasks if t['text'].lower().startswith(query_lower)]
+        if len(prefix_matches) == 1:
+            return prefix_matches[0]
+
+        # 3. Contains match - find all tasks that contain query
+        contains_matches = [t for t in incomplete_tasks if query_lower in t['text'].lower()]
+        if len(contains_matches) == 1:
+            return contains_matches[0]
+
+        return None
+
+    def mark_done(self, task: str, target_date: Optional[date] = None) -> Tuple[bool, Optional[str]]:
+        """Mark task as completed.
+
+        Supports:
+        - Numeric index: "1", "2", "3" marks 1st, 2nd, 3rd incomplete task
+        - Exact match: Full task text
+        - Prefix match: Unique prefix of task text
+        - Contains match: Unique substring match
+
+        Args:
+            task: Task description, index, or partial match
+            target_date: Target date (today if None)
+
+        Returns:
+            Tuple of (success, matched_task_text)
+            - (True, "task text") if marked successfully
+            - (False, None) if not found
+            - (False, "ambiguous") if multiple matches
+        """
+        if target_date is None:
+            target_date = date.today()
+
+        plan_path = self.get_plan_path(target_date)
+
+        if not plan_path.exists():
+            return (False, None)
+
+        # Get all tasks
+        all_tasks = self.get_tasks(target_date)
+        incomplete_tasks = [t for t in all_tasks if not t['completed']]
+
+        if not incomplete_tasks:
+            return (False, None)
+
+        # Check if task is a numeric index
+        target_task = None
+        if task.isdigit():
+            index = int(task)
+            if 1 <= index <= len(incomplete_tasks):
+                target_task = incomplete_tasks[index - 1]
+        else:
+            # Try to find matching task
+            target_task = self._find_matching_task(task, all_tasks)
+
+        if target_task is None:
+            # Check if there are multiple matches (ambiguous)
+            query_lower = task.lower()
+            matches = [t for t in incomplete_tasks if query_lower in t['text'].lower()]
+            if len(matches) > 1:
+                return (False, "ambiguous")
+            return (False, None)
+
+        # Mark the task as done
+        content = plan_path.read_text(encoding='utf-8')
+        lines = content.split('\n')
+
         completion_time = datetime.now()
         timestamp = completion_time.strftime("%H:%M")
+        line_num = target_task['line_num']
+        matched_text = target_task['text']
 
-        for i, line in enumerate(lines):
-            if line.strip().startswith('- [ ]') and task.lower() in line.lower():
-                # Mark as completed with timestamp
-                lines[i] = line.replace('- [ ]', f'- [x]') + f" [{timestamp}]"
-                marked = True
-                break
-
-        if not marked:
-            return False
+        # Mark as completed with timestamp
+        lines[line_num] = lines[line_num].replace('- [ ]', '- [x]') + f" [{timestamp}]"
 
         # Update progress
         updated_content = '\n'.join(lines)
@@ -259,7 +373,7 @@ class DailyPlan:
             from .integration import PlanTimelineIntegration
             integration = PlanTimelineIntegration(self.base_path)
             integration.record_task_completion(
-                task=task,
+                task=matched_text,
                 plan_type='daily',
                 plan_date=target_date,
                 completion_time=completion_time
@@ -268,7 +382,7 @@ class DailyPlan:
             # Silent failure - integration is optional
             pass
 
-        return True
+        return (True, matched_text)
 
     def get_progress(self, target_date: Optional[date] = None) -> Tuple[int, int]:
         """Get progress statistics.

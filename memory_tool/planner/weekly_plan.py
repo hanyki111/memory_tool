@@ -6,7 +6,7 @@ Provides weekly goal planning with daily plan integration.
 import re
 from datetime import datetime, date, timedelta
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 
 
 class WeeklyPlan:
@@ -276,15 +276,15 @@ class WeeklyPlan:
         plan_path.write_text(updated_content, encoding='utf-8')
         return True
 
-    def mark_done(self, goal: str, target_date: Optional[date] = None) -> bool:
-        """Mark goal as completed.
+    def get_goals(self, target_date: Optional[date] = None, incomplete_only: bool = False) -> List[dict]:
+        """Get list of goals from plan.
 
         Args:
-            goal: Goal description (partial match)
             target_date: Target date (today if None)
+            incomplete_only: Only return incomplete goals
 
         Returns:
-            True if marked, False if not found
+            List of goal dicts with 'index', 'text', 'completed', 'line_num'
         """
         if target_date is None:
             target_date = date.today()
@@ -292,23 +292,136 @@ class WeeklyPlan:
         plan_path = self.get_plan_path(target_date)
 
         if not plan_path.exists():
-            return False
+            return []
 
         content = plan_path.read_text(encoding='utf-8')
         lines = content.split('\n')
+        goals = []
+        index = 1
 
-        # Find and mark goal
-        marked = False
+        for line_num, line in enumerate(lines):
+            stripped = line.strip()
+            if stripped.startswith('- [ ]'):
+                # Incomplete goal
+                text = stripped[5:].strip()
+                goals.append({
+                    'index': index,
+                    'text': text,
+                    'completed': False,
+                    'line_num': line_num
+                })
+                index += 1
+            elif stripped.startswith('- [x]'):
+                # Completed goal
+                if not incomplete_only:
+                    text = stripped[5:].strip()
+                    goals.append({
+                        'index': index,
+                        'text': text,
+                        'completed': True,
+                        'line_num': line_num
+                    })
+                index += 1
+
+        return goals
+
+    def _find_matching_goal(self, query: str, goals: List[dict]) -> Optional[dict]:
+        """Find a goal matching the query (prefix or contains).
+
+        Matching priority:
+        1. Exact match (case-insensitive)
+        2. Unique prefix match (if query is a unique prefix)
+        3. Contains match (if only one goal contains the query)
+
+        Args:
+            query: Search query
+            goals: List of goal dicts (incomplete only)
+
+        Returns:
+            Matching goal dict, or None if not found or ambiguous
+        """
+        query_lower = query.lower()
+        incomplete_goals = [g for g in goals if not g['completed']]
+
+        # 1. Exact match
+        for goal in incomplete_goals:
+            if goal['text'].lower() == query_lower:
+                return goal
+
+        # 2. Prefix match - find all goals that start with query
+        prefix_matches = [g for g in incomplete_goals if g['text'].lower().startswith(query_lower)]
+        if len(prefix_matches) == 1:
+            return prefix_matches[0]
+
+        # 3. Contains match - find all goals that contain query
+        contains_matches = [g for g in incomplete_goals if query_lower in g['text'].lower()]
+        if len(contains_matches) == 1:
+            return contains_matches[0]
+
+        return None
+
+    def mark_done(self, goal: str, target_date: Optional[date] = None) -> Tuple[bool, Optional[str]]:
+        """Mark goal as completed.
+
+        Supports:
+        - Numeric index: "1", "2", "3" marks 1st, 2nd, 3rd incomplete goal
+        - Exact match: Full goal text
+        - Prefix match: Unique prefix of goal text
+        - Contains match: Unique substring match
+
+        Args:
+            goal: Goal description, index, or partial match
+            target_date: Target date (today if None)
+
+        Returns:
+            Tuple of (success, matched_goal_text)
+            - (True, "goal text") if marked successfully
+            - (False, None) if not found
+            - (False, "ambiguous") if multiple matches
+        """
+        if target_date is None:
+            target_date = date.today()
+
+        plan_path = self.get_plan_path(target_date)
+
+        if not plan_path.exists():
+            return (False, None)
+
+        # Get all goals
+        all_goals = self.get_goals(target_date)
+        incomplete_goals = [g for g in all_goals if not g['completed']]
+
+        if not incomplete_goals:
+            return (False, None)
+
+        # Check if goal is a numeric index
+        target_goal = None
+        if goal.isdigit():
+            index = int(goal)
+            if 1 <= index <= len(incomplete_goals):
+                target_goal = incomplete_goals[index - 1]
+        else:
+            # Try to find matching goal
+            target_goal = self._find_matching_goal(goal, all_goals)
+
+        if target_goal is None:
+            # Check if there are multiple matches (ambiguous)
+            query_lower = goal.lower()
+            matches = [g for g in incomplete_goals if query_lower in g['text'].lower()]
+            if len(matches) > 1:
+                return (False, "ambiguous")
+            return (False, None)
+
+        # Mark the goal as done
+        content = plan_path.read_text(encoding='utf-8')
+        lines = content.split('\n')
+
         completion_time = datetime.now()
+        line_num = target_goal['line_num']
+        matched_text = target_goal['text']
 
-        for i, line in enumerate(lines):
-            if line.strip().startswith('- [ ]') and goal.lower() in line.lower():
-                lines[i] = line.replace('- [ ]', '- [x]')
-                marked = True
-                break
-
-        if not marked:
-            return False
+        # Mark as completed
+        lines[line_num] = lines[line_num].replace('- [ ]', '- [x]')
 
         # Update progress
         updated_content = '\n'.join(lines)
@@ -321,7 +434,7 @@ class WeeklyPlan:
             from .integration import PlanTimelineIntegration
             integration = PlanTimelineIntegration(self.base_path)
             integration.record_task_completion(
-                task=goal,
+                task=matched_text,
                 plan_type='weekly',
                 plan_date=target_date,
                 completion_time=completion_time
@@ -330,7 +443,7 @@ class WeeklyPlan:
             # Silent failure - integration is optional
             pass
 
-        return True
+        return (True, matched_text)
 
     def get_progress(self, target_date: Optional[date] = None) -> Tuple[int, int]:
         """Get progress statistics.
