@@ -1,6 +1,6 @@
 # Memory Context
 
-**Generated:** 2026-01-17 07:50
+**Generated:** 2026-01-21 11:58
 
 ---
 
@@ -19,7 +19,6 @@
 ## Module Status
 
 - **archive/memory-system**: `./.memory\modules\archive\memory-system\current.md`
-- **memory-system.backup**: `./.memory\modules\memory-system.backup\current.md`
 - **projects/memory-tool**: `./.memory\modules\projects\memory-tool\current.md`
 - **projects/memory-tool/core-system**: `./.memory\modules\projects\memory-tool\core-system\current.md`
 - **projects/memory-tool/knowledge-graph-system**: `./.memory\modules\projects\memory-tool\knowledge-graph-system\current.md`
@@ -35,8 +34,6 @@
 
 ### 🔴 CRITICAL (>600/400 lines)
 
-- **memory-system.backup/decisions.md**: 692 lines - ⚠️ Very large, should archive soon
-  - Quick action: `marchive decisions --module memory-system.backup --interactive`
 - **archive/memory-system/decisions.md**: 692 lines - ⚠️ Very large, should archive soon
   - Quick action: `marchive decisions --module archive/memory-system --interactive`
 - **projects/memory-tool/module-system/current.md**: 641 lines - ⚠️ Very large, should archive soon
@@ -48,7 +45,6 @@
 
 ### 🟡 WARNING (300-600/200-400 lines)
 
-- **memory-system.backup/current.md**: 234 lines - Consider reviewing
 - **archive/memory-system/current.md**: 234 lines - Consider reviewing
 - **projects/memory-tool/current.md**: 337 lines - Consider reviewing
 - **projects/memory-tool/core-system/current.md**: 277 lines - Consider reviewing
