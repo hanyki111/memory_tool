@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any
 
 from memory_tool.notion.client import NotionClient, NotionError
+from memory_tool.notion.models import PlanSyncConfig
 from memory_tool.utils.config import Config
 
 
@@ -39,16 +40,17 @@ class PlanSyncer:
         self.config = Config()
         self.client = NotionClient()
 
-        # Get plan sync config
+        # Get plan sync config using PlanSyncConfig model
         notion_config = self.config.get("notion", {})
         sync_config = notion_config.get("sync", {})
-        self.plan_config = sync_config.get("plan", {})
+        self.plan_config = PlanSyncConfig.from_dict(sync_config, notion_config)
 
-        self.enabled = self.plan_config.get("enabled", False)
-        self.root_page_id = self.plan_config.get("root_page_id")
-        self.sync_daily = self.plan_config.get("daily", True)
-        self.sync_weekly = self.plan_config.get("weekly", True)
-        self.sync_monthly = self.plan_config.get("monthly", True)
+        # Expose config values (for backward compatibility)
+        self.enabled = self.plan_config.enabled
+        self.root_page_id = self.plan_config.root_page_id
+        self.sync_daily = self.plan_config.daily
+        self.sync_weekly = self.plan_config.weekly
+        self.sync_monthly = self.plan_config.monthly
 
         # Task pattern: "- [ ] task" or "- [x] task"
         self.task_pattern = re.compile(r"^- \[([ x])\] (.+)$", re.MULTILINE)

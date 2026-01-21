@@ -7,6 +7,7 @@ from typing import Dict, List, Optional, Any, Set
 import time as time_module
 
 from memory_tool.notion.client import NotionClient, NotionError
+from memory_tool.notion.models import TimelineSyncConfig
 from memory_tool.utils.config import Config
 
 
@@ -23,6 +24,11 @@ class TimelineSyncer:
         self.timeline_dir = self.memory_root / "timeline" / "daily"
         self.config = Config()
         self.client = NotionClient()
+
+        # Load timeline sync config with legacy fallback
+        notion_config = self.config.get("notion", {})
+        sync_config = notion_config.get("sync", {})
+        self.timeline_config = TimelineSyncConfig.from_dict(sync_config, notion_config)
 
         # Entry pattern: "- HH:MM | message"
         self.entry_pattern = re.compile(r"^- (\d{1,2}:\d{2})\s*\|\s*(.+)$", re.MULTILINE)
@@ -259,9 +265,9 @@ class TimelineSyncer:
         local_entries = self._parse_local_entries(date)
         local_keys = {self._entry_key(e["time"], e["message"]): e for e in local_entries}
 
-        # Get or create Notion page
+        # Get or create Notion page (using timeline-specific root_page_id)
         try:
-            page_id = self.client.get_or_create_daily_page(date)
+            page_id = self.client.get_or_create_daily_page(date, self.timeline_config.root_page_id)
         except NotionError as e:
             result["errors"].append(f"Failed to get Notion page: {e}")
             return result
@@ -381,7 +387,7 @@ class TimelineSyncer:
             List of pulled entries
         """
         try:
-            page_id = self.client.get_or_create_daily_page(date)
+            page_id = self.client.get_or_create_daily_page(date, self.timeline_config.root_page_id)
             return self._parse_notion_entries(page_id)
         except NotionError as e:
             if verbose:

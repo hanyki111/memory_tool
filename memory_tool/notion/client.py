@@ -150,11 +150,16 @@ class NotionClient:
 
         return page_id
 
-    def get_or_create_daily_page(self, date_obj) -> str:
-        """Get or create hierarchy: Root -> Month(YYYY-MM) -> Day(YYYY-MM-DD)."""
-        root_id = self.default_page_id
+    def get_or_create_daily_page(self, date_obj, root_page_id: str = None) -> str:
+        """Get or create hierarchy: Root -> Month(YYYY-MM) -> Day(YYYY-MM-DD).
+
+        Args:
+            date_obj: Date object for the daily page
+            root_page_id: Optional root page ID. Falls back to default_page_id if not provided.
+        """
+        root_id = root_page_id or self.default_page_id
         if not root_id:
-            raise NotionError("Default page ID not configured.")
+            raise NotionError("Timeline root page ID not configured. Set notion.sync.timeline.root_page_id in config.yaml")
 
         # 1. Month Page (e.g., "2026-01")
         month_str = date_obj.strftime("%Y-%m")

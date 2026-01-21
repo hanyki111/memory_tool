@@ -51,7 +51,7 @@ class ModuleSyncer:
         """Load sync configuration from config.yaml."""
         notion_config = self.config.get("notion", {})
         sync_data = notion_config.get("sync", {})
-        return SyncConfig.from_dict(sync_data)
+        return SyncConfig.from_dict(sync_data, notion_config)
 
     def _ensure_client(self):
         """Ensure Notion client is initialized."""
@@ -324,19 +324,21 @@ class ModuleSyncer:
         if module_state.notion_page_id:
             return module_state.notion_page_id
 
-        # Get root page ID
-        root_page_id = self.sync_config.root_page_id
+        # Get root page ID (use module config with built-in legacy fallback)
+        root_page_id = self.sync_config.module.root_page_id if self.sync_config.module else None
         if not root_page_id:
-            notion_config = self.config.get("notion", {})
-            mode = notion_config.get("mode", "default")
-            if mode == "pat":
-                # PAT mode: check pat.default_page_id first
-                root_page_id = notion_config.get("pat", {}).get("default_page_id")
+            # Additional fallback for legacy configs
+            root_page_id = self.sync_config.root_page_id
             if not root_page_id:
-                root_page_id = notion_config.get("default_page_id")
+                notion_config = self.config.get("notion", {})
+                mode = notion_config.get("mode", "default")
+                if mode == "pat":
+                    root_page_id = notion_config.get("pat", {}).get("default_page_id")
+                if not root_page_id:
+                    root_page_id = notion_config.get("default_page_id")
 
         if not root_page_id:
-            raise NotionSyncError("No root page ID configured for sync")
+            raise NotionSyncError("No root page ID configured for module sync. Set notion.sync.module.root_page_id in config.yaml")
 
         # Create hierarchy: root -> ... -> module
         parts = module_path.split("/")
@@ -781,19 +783,20 @@ class ModuleSyncer:
         """
         self._ensure_client()
 
-        # Get root page ID
-        notion_config = self.config.get("notion", {})
-        mode = notion_config.get("mode", "default")
-
-        root_page_id = self.sync_config.root_page_id
+        # Get root page ID (use module config with built-in legacy fallback)
+        root_page_id = self.sync_config.module.root_page_id if self.sync_config.module else None
         if not root_page_id:
-            if mode == "pat":
-                root_page_id = notion_config.get("pat", {}).get("default_page_id")
+            notion_config = self.config.get("notion", {})
+            mode = notion_config.get("mode", "default")
+            root_page_id = self.sync_config.root_page_id
             if not root_page_id:
-                root_page_id = notion_config.get("default_page_id")
+                if mode == "pat":
+                    root_page_id = notion_config.get("pat", {}).get("default_page_id")
+                if not root_page_id:
+                    root_page_id = notion_config.get("default_page_id")
 
         if not root_page_id:
-            raise NotionSyncError("No root page ID configured for sync")
+            raise NotionSyncError("No root page ID configured for module sync. Set notion.sync.module.root_page_id in config.yaml")
 
         result = {
             "discovered": [],

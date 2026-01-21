@@ -182,8 +182,146 @@ class SyncSummary:
 
 
 @dataclass
+class ModuleSyncConfig:
+    """Configuration for module sync operations.
+
+    New config structure (recommended):
+        notion.sync.module.enabled
+        notion.sync.module.root_page_id
+        notion.sync.module.targets
+        notion.sync.module.exclude_patterns
+        notion.sync.module.conflict_resolution
+
+    Legacy fallback:
+        notion.sync.module.root_page_id -> notion.sync.root_page_id -> notion.default_page_id
+        notion.sync.module.enabled -> notion.sync.enabled
+        notion.sync.module.targets -> notion.sync.targets
+    """
+    enabled: bool = False
+    root_page_id: Optional[str] = None
+    targets: List[str] = field(default_factory=list)
+    exclude_patterns: List[str] = field(default_factory=list)
+    conflict_resolution: ConflictResolution = ConflictResolution.LAST_WRITE_WINS
+
+    @classmethod
+    def from_dict(cls, sync_data: Dict[str, Any], notion_config: Dict[str, Any] = None) -> "ModuleSyncConfig":
+        """Create from config dictionary with legacy fallback.
+
+        Args:
+            sync_data: notion.sync section of config
+            notion_config: Full notion section for legacy fallback
+        """
+        notion_config = notion_config or {}
+        module_config = sync_data.get("module", {})
+
+        # Resolution
+        resolution_str = (
+            module_config.get("conflict_resolution") or
+            sync_data.get("conflict_resolution", "last-write-wins")
+        )
+        try:
+            resolution = ConflictResolution(resolution_str)
+        except ValueError:
+            resolution = ConflictResolution.LAST_WRITE_WINS
+
+        # root_page_id with legacy fallback
+        root_page_id = (
+            module_config.get("root_page_id") or  # New: notion.sync.module.root_page_id
+            sync_data.get("root_page_id") or      # Legacy: notion.sync.root_page_id
+            notion_config.get("default_page_id")  # Legacy: notion.default_page_id
+        )
+
+        return cls(
+            enabled=module_config.get("enabled", sync_data.get("enabled", False)),
+            root_page_id=root_page_id,
+            targets=module_config.get("targets", sync_data.get("targets", [])),
+            exclude_patterns=module_config.get("exclude_patterns", sync_data.get("exclude_patterns", [])),
+            conflict_resolution=resolution,
+        )
+
+
+@dataclass
+class TimelineSyncConfig:
+    """Configuration for timeline sync operations.
+
+    New config structure (recommended):
+        notion.sync.timeline.enabled
+        notion.sync.timeline.root_page_id
+        notion.sync.timeline.bidirectional
+        notion.sync.timeline.sync_days
+
+    Legacy fallback:
+        notion.sync.timeline.root_page_id -> notion.default_page_id (or pat.default_page_id)
+    """
+    enabled: bool = False
+    root_page_id: Optional[str] = None
+    bidirectional: bool = False
+    sync_days: int = 30
+
+    @classmethod
+    def from_dict(cls, sync_data: Dict[str, Any], notion_config: Dict[str, Any] = None) -> "TimelineSyncConfig":
+        """Create from config dictionary with legacy fallback.
+
+        Args:
+            sync_data: notion.sync section of config
+            notion_config: Full notion section for legacy fallback
+        """
+        notion_config = notion_config or {}
+        timeline_config = sync_data.get("timeline", {})
+
+        # root_page_id with legacy fallback
+        root_page_id = timeline_config.get("root_page_id")
+        if not root_page_id:
+            # Legacy fallback: notion.default_page_id (respects PAT mode)
+            mode = notion_config.get("mode", "default")
+            if mode == "pat":
+                root_page_id = notion_config.get("pat", {}).get("default_page_id")
+            if not root_page_id:
+                root_page_id = notion_config.get("default_page_id")
+
+        return cls(
+            enabled=timeline_config.get("enabled", False),
+            root_page_id=root_page_id,
+            bidirectional=timeline_config.get("bidirectional", False),
+            sync_days=timeline_config.get("sync_days", 30),
+        )
+
+
+@dataclass
+class PlanSyncConfig:
+    """Configuration for plan sync operations.
+
+    Config structure:
+        notion.sync.plan.enabled
+        notion.sync.plan.root_page_id
+        notion.sync.plan.daily
+        notion.sync.plan.weekly
+        notion.sync.plan.monthly
+    """
+    enabled: bool = False
+    root_page_id: Optional[str] = None
+    daily: bool = True
+    weekly: bool = True
+    monthly: bool = True
+
+    @classmethod
+    def from_dict(cls, sync_data: Dict[str, Any], notion_config: Dict[str, Any] = None) -> "PlanSyncConfig":
+        """Create from config dictionary."""
+        plan_config = sync_data.get("plan", {})
+
+        return cls(
+            enabled=plan_config.get("enabled", False),
+            root_page_id=plan_config.get("root_page_id"),
+            daily=plan_config.get("daily", True),
+            weekly=plan_config.get("weekly", True),
+            monthly=plan_config.get("monthly", True),
+        )
+
+
+@dataclass
 class SyncConfig:
-    """Configuration for sync operations."""
+    """Configuration for sync operations (aggregates all sync configs)."""
+    # Legacy fields (still used for backward compatibility)
     enabled: bool = False
     root_page_id: Optional[str] = None
     targets: List[str] = field(default_factory=list)
@@ -193,9 +331,15 @@ class SyncConfig:
     timeline_bidirectional: bool = False
     timeline_sync_days: int = 30
 
+    # New structured configs
+    module: Optional[ModuleSyncConfig] = None
+    timeline: Optional[TimelineSyncConfig] = None
+    plan: Optional[PlanSyncConfig] = None
+
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "SyncConfig":
+    def from_dict(cls, data: Dict[str, Any], notion_config: Dict[str, Any] = None) -> "SyncConfig":
         """Create from config dictionary."""
+        notion_config = notion_config or {}
         timeline_config = data.get("timeline", {})
 
         resolution_str = data.get("conflict_resolution", "last-write-wins")
@@ -204,7 +348,13 @@ class SyncConfig:
         except ValueError:
             resolution = ConflictResolution.LAST_WRITE_WINS
 
+        # Create structured configs
+        module_config = ModuleSyncConfig.from_dict(data, notion_config)
+        timeline_sync_config = TimelineSyncConfig.from_dict(data, notion_config)
+        plan_config = PlanSyncConfig.from_dict(data, notion_config)
+
         return cls(
+            # Legacy fields
             enabled=data.get("enabled", False),
             root_page_id=data.get("root_page_id"),
             targets=data.get("targets", []),
@@ -213,4 +363,8 @@ class SyncConfig:
             timeline_enabled=timeline_config.get("enabled", False),
             timeline_bidirectional=timeline_config.get("bidirectional", False),
             timeline_sync_days=timeline_config.get("sync_days", 30),
+            # New structured configs
+            module=module_config,
+            timeline=timeline_sync_config,
+            plan=plan_config,
         )
