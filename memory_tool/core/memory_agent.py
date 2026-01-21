@@ -102,6 +102,13 @@ class MemoryAgent:
             "args": {},
             "examples": ["list_modules()"]
         },
+        "get_help": {
+            "description": "Get usage information about memory_tool commands",
+            "args": {
+                "command": "Command name (e.g., 'record', 'search', 'plan') or 'all' for overview"
+            },
+            "examples": ["get_help(command='search')", "get_help(command='all')", "get_help(command='plan')"]
+        },
     }
 
     def __init__(self, base_path: Optional[Path] = None):
@@ -164,6 +171,8 @@ Tool Selection Rules:
 - "모듈/module + 이름" → get_module(name="...")
 - "찾아/검색/search + 키워드" → search(query="키워드만", mode="hybrid")
 - "모든 모듈/list modules" → list_modules()
+- "사용법/help/어떻게 사용/how to use" → get_help(command="...")
+- "명령어 목록/command list" → get_help(command="all")
 
 CRITICAL: For search tool:
 1. Extract ONLY the search keyword, not the full question
@@ -532,6 +541,78 @@ Rules:
 
         return "Available modules:\n" + "\n".join(f"- {m}" for m in sorted(modules))
 
+    def _tool_get_help(self, command: str = "all") -> str:
+        """Get usage information about memory_tool commands.
+
+        Args:
+            command: Command name or 'all' for overview
+        """
+        from memory_tool.commands.help import HELP_CONTENT, COMMAND_CATEGORIES
+
+        # Get language from config
+        try:
+            lang = self.config.get("help.language", "en")
+        except Exception:
+            lang = "en"
+
+        if command.lower() == "all":
+            # Return overview of all commands
+            categories = COMMAND_CATEGORIES.get(lang, COMMAND_CATEGORIES["en"])
+            lines = ["Memory Tool Commands Overview:\n"]
+
+            for cat_key, (cat_name, commands) in categories.items():
+                lines.append(f"\n## {cat_name}")
+                for cmd in commands:
+                    if cmd in HELP_CONTENT:
+                        help_data = HELP_CONTENT[cmd].get(lang, HELP_CONTENT[cmd]["en"])
+                        lines.append(f"- {help_data['name']}: {help_data['summary']}")
+
+            lines.append("\n\nFor detailed help on a specific command, ask about that command.")
+            return "\n".join(lines)
+
+        # Normalize command name
+        cmd_map = {
+            "m": "record", "기": "record",
+            "ms": "search", "검": "search",
+            "mask": "ask", "질문": "ask",
+            "mtoday": "today", "오늘": "today",
+            "mplan": "plan",
+            "mweek": "week", "mmonth": "month",
+            "mdays": "days", "msort": "sort",
+            "mmodule": "module", "marchive": "archive",
+            "mcontext": "context", "mmap": "map",
+            "msummary": "summary", "mproviders": "providers",
+            "minit": "init", "mstatus": "status",
+            "mtutorial": "tutorial", "mhelp": "help",
+            "malias": "alias", "mconfig": "config",
+            "mhooks": "hooks", "mcompletion": "completion",
+            "mbrowse": "browse", "mcheck": "check",
+        }
+        cmd = cmd_map.get(command.lower(), command.lower())
+
+        if cmd not in HELP_CONTENT:
+            return f"No detailed help found for '{command}'. Use get_help(command='all') for command overview."
+
+        help_data = HELP_CONTENT[cmd].get(lang, HELP_CONTENT[cmd]["en"])
+
+        # Format help content
+        lines = [
+            f"# {help_data['name']}",
+            f"{help_data['summary']}\n",
+            "## Description",
+            help_data['description'].strip(),
+            "\n## Examples",
+        ]
+        for example in help_data.get('examples', []):
+            lines.append(f"  {example}")
+
+        if help_data.get('options'):
+            lines.append("\n## Options")
+            for opt_name, opt_desc in help_data['options']:
+                lines.append(f"  {opt_name}: {opt_desc}")
+
+        return "\n".join(lines)
+
     def _execute_tool(self, tool_call: ToolCall) -> ToolResult:
         """Execute a single tool call."""
         tool_name = tool_call.tool
@@ -555,6 +636,8 @@ Rules:
                 result = self._tool_get_module(args.get("name", ""))
             elif tool_name == "list_modules":
                 result = self._tool_list_modules()
+            elif tool_name == "get_help":
+                result = self._tool_get_help(args.get("command", "all"))
             else:
                 return ToolResult(
                     tool=tool_name,
