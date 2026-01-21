@@ -147,26 +147,37 @@ nano .memory/config.yaml
 ```yaml
 notion:
   api_key: "secret_xxx..."           # Integration Secret
-  default_page_id: "abc123..."       # Timeline 루트 페이지 ID
+  mode: default                      # default 또는 pat (기업용)
 
   sync:
-    enabled: true
-    root_page_id: "xyz789..."        # 모듈 싱크 루트 페이지 ID
-
-    targets:                          # 싱크할 모듈 지정
-      - "projects/my-project"
-      - "projects/my-project/**"      # 하위 모듈 포함
-
-    exclude_patterns:                 # 제외 패턴
-      - "archive/**"
-
     conflict_resolution: "last-write-wins"
+    exclude_patterns:
+      - "archive/**"
+    targets:
+      - "**"                         # 모든 모듈 (또는 특정 경로)
 
+    # 모듈 동기화 설정
+    module:
+      enabled: true
+      root_page_id: "abc123..."      # 모듈 루트 페이지 ID
+
+    # 타임라인 동기화 설정
     timeline:
       enabled: true
+      root_page_id: "def456..."      # 타임라인 루트 페이지 ID
       bidirectional: true
       sync_days: 30
+
+    # 플랜 동기화 설정
+    plan:
+      enabled: true
+      root_page_id: "ghi789..."      # 플랜 루트 페이지 ID
+      daily: true
+      weekly: true
+      monthly: true
 ```
+
+**레거시 호환:** 기존 `default_page_id`, `sync.root_page_id` 설정도 자동 인식됩니다.
 
 #### 6단계: 사용
 
@@ -249,6 +260,9 @@ python -m memory_tool nwatch --bidirectional
 | `mweek` | 이번 주 작업 보기 | `mweek` |
 | `mmonth` | 이번 달 작업 보기 | `mmonth` |
 | `mdays` | 최근 N일 작업 보기 | `mdays 7` |
+| `mask` | 메모리 기반 Q&A (RAG) | `mask "최근 결정 사항?"` |
+| `mconfig` | 설정 관리 | `mconfig get help.language` |
+| `mhelp` | 상세 도움말 | `mhelp plan` |
 
 ### 기록 명령어
 
@@ -303,6 +317,21 @@ malias install                  # 배치 파일 생성
 malias list                     # 상태 확인
 ```
 
+### 이중언어 도움말
+
+도움말이 설정된 언어로 표시됩니다:
+
+```bash
+# 언어 설정
+mconfig set help.language ko     # 한국어
+mconfig set help.language en     # English
+
+# 도움말 보기
+mhelp plan                       # 상세 도움말
+mplan --help                     # 명령어 도움말 (설정 언어로 표시)
+mhelp --list                     # 전체 명령어 목록
+```
+
 ### 한글 별칭
 
 로컬 타임라인용 한글 별칭:
@@ -321,10 +350,19 @@ Notion용 한글 별칭:
 | 한글 | 영문 | 설명 |
 |------|------|------|
 | `노` | `nm` | Notion 기록 |
+| `노플` | `np` | Notion 플랜 추가 |
 | `노검` | `nsi` | Notion 검색 |
 | `노오` | `nt` | Notion 오늘 |
 | `노주` | `nw` | Notion 주간 |
 | `노올` | `ns` | Notion 전체 검색 |
+
+기타:
+
+| 한글 | 영문 | 설명 |
+|------|------|------|
+| `질문` | `mask` | RAG Q&A |
+| `설정` | `mconfig` | 설정 관리 |
+| `도움` | `mhelp` | 상세 도움말 |
 
 ```bash
 # 사용 예시
@@ -341,6 +379,11 @@ Notion용 한글 별칭:
 ```bash
 # 메시지 기록
 nm "작업 내용"                   # 노션 타임라인에 기록 (날짜/시간 자동)
+
+# 플랜 추가 (NEW)
+np "작업"                        # 오늘 daily plan에 추가
+np "목표" --weekly               # 이번 주 weekly plan에 추가
+np "프로젝트" --monthly          # 이번 달 monthly plan에 추가
 
 # 타임라인 보기
 nt                               # 오늘
@@ -368,14 +411,42 @@ nsync --timeline --push          # 로컬 → 노션만
 nsync --timeline --pull          # 노션 → 로컬만
 
 # 자동 동기화 (파일 변경 감시)
-nwatch                           # 감시 시작 (Local → Notion)
-nwatch --bidirectional           # 양방향 감시 (Notion → Local 포함)
+nwatch                           # 감시 시작 (modules + timeline + plans)
+nwatch --bidirectional           # 양방향 감시 (Notion ↔ Local)
 nwatch -b -i 60                  # 양방향, 60초 polling 간격
 nwatch --debounce 5              # 5초 대기 후 동기화
 nwatch --modules-only            # 모듈만 감시
 nwatch --timeline-only           # 타임라인만 감시
+nwatch --plans-only              # 플랜만 감시
+nwatch --no-plans                # 플랜 제외 (모듈 + 타임라인만)
 nwatch --dry-run                 # 테스트 모드
 nwatch --quiet                   # 간결한 출력
+```
+
+### 메모리 기반 Q&A (mask)
+
+LLM을 활용한 Agentic RAG 질의응답:
+
+```bash
+mask "최근 어떤 결정을 내렸나요?"
+mask "이번 주 작업 내용 요약"
+mask "OAuth 관련 기록은?"
+```
+
+**작동 방식:**
+1. LLM이 질문을 분석
+2. 적절한 도구 선택 (timeline, search, module, plan)
+3. 컨텍스트 수집 및 답변 생성
+
+### 설정 관리 (mconfig)
+
+config.yaml을 CLI에서 관리:
+
+```bash
+mconfig list                     # 전체 설정 보기
+mconfig get help.language        # 특정 값 조회
+mconfig set help.language ko     # 값 설정
+mconfig set notion.sync.plan.enabled true
 ```
 
 ### LLM 기반 요약 (msummary)
@@ -453,9 +524,38 @@ mplan daily create               # 생성
 mplan daily add "작업 내용"      # 추가
 mplan daily done "작업"          # 완료 (Timeline 자동 기록)
 
+# Smart Done (스마트 완료)
+mplan daily done 1               # 인덱스로 첫 번째 작업 완료
+mplan daily done 2               # 인덱스로 두 번째 작업 완료
+mplan daily done "Write"         # Prefix 매칭 (유니크하면 매칭)
+mplan weekly done 1              # 주간 목표 인덱스로 완료
+
 # Weekly/Monthly Plan
 mplan weekly
 mplan monthly
+
+# 미완료 작업 이관
+mplan daily carryover            # 어제 미완료 → 오늘
+mplan weekly carryover           # 지난주 미완료 → 이번 주
+```
+
+**스마트 매칭 우선순위:**
+1. 숫자 입력 → 인덱스로 처리 (1=첫 번째, 2=두 번째...)
+2. 정확한 일치 (대소문자 무시)
+3. 유니크 Prefix 매칭
+4. 유니크 Contains 매칭
+5. 다중 매칭 시 → 인덱스 목록 표시
+
+### Notion Plan (np)
+
+Notion에 직접 계획 추가:
+
+```bash
+np "작업 내용"                   # 오늘 daily plan에 추가
+np "목표" --weekly               # 이번 주 weekly plan에 추가
+np "프로젝트" --monthly          # 이번 달 monthly plan에 추가
+np "작업" --date 2026-01-25      # 특정 날짜에 추가
+np "완료된 작업" --done          # 완료 상태로 추가
 ```
 
 ---
