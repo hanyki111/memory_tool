@@ -287,8 +287,8 @@ Supports modules, timeline, and plans synchronization.
                 "nsync --module            # 모듈만 동기화",
                 "nsync --timeline          # 타임라인만 동기화",
                 "nsync --plan              # 계획만 동기화",
-                "nsync --push              # 로컬 → Notion 푸시",
-                "nsync --pull              # Notion → 로컬 풀",
+                "nsync --push              # 로컬 -> Notion 푸시",
+                "nsync --pull              # Notion -> 로컬 풀",
                 "nsync --status            # 동기화 상태 확인",
             ],
             "options": [
@@ -1372,6 +1372,7 @@ def show_help(
     lang: Optional[str] = typer.Option(None, "--lang", "-l", help="Language for this invocation: en, ko"),
     set_lang: Optional[str] = typer.Option(None, "--set-lang", help="Permanently set default language: en, ko"),
     list_all: bool = typer.Option(False, "--list", help="List all commands"),
+    guide: bool = typer.Option(False, "--guide", help="Show advanced features guide"),
 ):
     """Show detailed help for commands (mhelp).
 
@@ -1383,7 +1384,15 @@ def show_help(
         mhelp search --lang ko      # Help in Korean (this time only)
         mhelp --set-lang ko         # Permanently set language to Korean
         mhelp --list                # List all commands
+        mhelp --guide               # Show advanced features guide
     """
+    # Use config language as default if not specified
+    if lang is None:
+        lang = _get_config_language()
+    lang = lang.lower()
+    if lang not in ("en", "ko"):
+        lang = "en"
+
     # Handle permanent language change
     if set_lang:
         set_lang = set_lang.lower()
@@ -1401,12 +1410,10 @@ def show_help(
             console.print("[dim]Make sure .memory/ exists (run minit)[/dim]")
         return
 
-    # Use config language as default if not specified
-    if lang is None:
-        lang = _get_config_language()
-    lang = lang.lower()
-    if lang not in ("en", "ko"):
-        lang = "en"
+    # Handle guide option
+    if guide:
+        _show_advanced_guide(lang)
+        return
 
     if list_all or command is None:
         _show_command_list(lang)
@@ -1436,6 +1443,318 @@ def _show_command_list(lang: str):
                 console.print(f"  {cmd:20} (no detailed help)")
 
         console.print("")
+
+
+def _show_advanced_guide(lang: str):
+    """Show advanced features guide."""
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich import box
+
+    if lang == "ko":
+        _show_advanced_guide_ko()
+    else:
+        _show_advanced_guide_en()
+
+
+def _show_advanced_guide_en():
+    """Show advanced guide in English."""
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich import box
+
+    console.print()
+    console.print("[bold cyan]Memory Tool - Advanced Features Guide[/bold cyan]\n")
+
+    # 1. Tags
+    console.print(Panel(
+        """[bold]Tags[/bold] allow categorization and filtering of timeline entries.
+
+[bold]Usage:[/bold]
+  m "Fixed login bug" --tags bug,auth,urgent
+  m "Meeting notes" --tags meeting,team
+  ms "bug" --tags auth        # Search with tag filter
+
+[bold]Tag Best Practices:[/bold]
+  - Use lowercase, hyphen-separated: [green]feature-request[/green], [green]bug-fix[/green]
+  - Keep tags consistent across entries
+  - Limit to 3-5 tags per entry for clarity""",
+        title="[bold yellow]1. Tags & Categorization[/bold yellow]",
+        border_style="cyan",
+        box=box.ROUNDED
+    ))
+
+    # 2. Wiki Links
+    console.print(Panel(
+        """[bold]Wiki Links[/bold] connect knowledge across modules using \\[\\[double brackets]].
+
+[bold]Usage in module files:[/bold]
+  See \\[\\[auth-system]] for authentication details.
+  Related to \\[\\[projects/website]] and \\[\\[core/database]].
+
+[bold]Link Resolution:[/bold]
+  - \\[\\[module-name]] -> Searches all modules for match
+  - \\[\\[path/to/module]] -> Direct path lookup
+  - mcheck -> Validates all wiki links
+
+[bold]Create bidirectional connections:[/bold]
+  In auth-system/current.md: "Used by \\[\\[user-service]]"
+  In user-service/current.md: "Depends on \\[\\[auth-system]]" """,
+        title="[bold yellow]2. Wiki Links & Cross-References[/bold yellow]",
+        border_style="cyan",
+        box=box.ROUNDED
+    ))
+
+    # 3. Semantic Search
+    console.print(Panel(
+        """[bold]Semantic Search[/bold] finds content by meaning, not just keywords.
+
+[bold]Modes:[/bold]
+  ms "authentication" --hybrid     # Best: keyword + semantic
+  ms "how users log in" --semantic # Pure semantic search
+  ms "login bug" --boost-recent    # Prioritize recent content
+
+[bold]When to use:[/bold]
+  -[cyan]Keyword[/cyan]: Exact terms, file names, identifiers
+  -[cyan]Semantic[/cyan]: Concepts, questions, descriptions
+  -[cyan]Hybrid[/cyan]: General search (recommended default)
+
+[bold]Requires:[/bold]
+  LLM provider with embedding support (Ollama, OpenAI, etc.)
+  Configure in .memory/config.yaml under llm section""",
+        title="[bold yellow]3. Semantic Search[/bold yellow]",
+        border_style="cyan",
+        box=box.ROUNDED
+    ))
+
+    # 4. Module Structure
+    console.print(Panel(
+        """[bold]Module Structure[/bold] organizes knowledge spatially.
+
+[bold]Standard Module Files:[/bold]
+  module-name/
+  ├── module.md       # Metadata: name, description, tags
+  ├── current.md      # Current state, ongoing work
+  ├── decisions.md    # Important decisions & rationale
+  └── archive/        # Historical records
+
+[bold]Best Practices:[/bold]
+  -Keep current.md focused on active work
+  -Move completed items to decisions.md or archive/
+  -Use marchive --suggest to find archivable content
+
+[bold]Commands:[/bold]
+  mmodule create my-project --tags dev,web
+  mmodule show my-project
+  marchive --module my-project --interactive""",
+        title="[bold yellow]4. Module Organization[/bold yellow]",
+        border_style="cyan",
+        box=box.ROUNDED
+    ))
+
+    # 5. Config.yaml
+    console.print(Panel(
+        """[bold]config.yaml[/bold] controls Memory Tool behavior.
+
+[bold]Key Settings:[/bold]
+  help.language: ko              # Help language (en/ko)
+  llm.provider: ollama           # LLM provider
+  llm.ollama_model: qwen3-vl:8b  # Model for mask command
+  search.default_scope: local    # Search scope
+  timeline.granularity: medium   # Recording detail level
+
+[bold]Notion Sync:[/bold]
+  notion.api_key: secret_xxx
+  notion.sync.enabled: true
+  notion.sync.timeline.bidirectional: true
+
+[bold]Commands:[/bold]
+  mconfig list                   # Show all settings
+  mconfig get llm.provider       # Get specific value
+  mconfig set help.language ko   # Change setting""",
+        title="[bold yellow]5. Configuration (config.yaml)[/bold yellow]",
+        border_style="cyan",
+        box=box.ROUNDED
+    ))
+
+    # 6. AI/LLM Integration
+    console.print(Panel(
+        """[bold]AI Integration[/bold] provides intelligent features.
+
+[bold]mask (Ask Command):[/bold]
+  mask "What did I work on yesterday?"
+  mask "Summarize decisions about the database"
+  mask --verbose "List all auth-related modules"
+
+[bold]msummary (Summarization):[/bold]
+  msummary                    # Summarize today
+  msummary --week             # Weekly summary
+  msummary --module auth      # Module summary
+
+[bold]LLM Providers:[/bold]
+  -claude-cli: Uses Claude CLI
+  -ollama: Local LLM (default)
+  -gemini-cli: Google Gemini
+
+Configure with: mconfig set llm.provider ollama""",
+        title="[bold yellow]6. AI & LLM Features[/bold yellow]",
+        border_style="cyan",
+        box=box.ROUNDED
+    ))
+
+    console.print()
+    console.print("[dim]Run 'mhelp <command>' for specific command help[/dim]")
+    console.print("[dim]Run 'mhelp --list' for all commands[/dim]\n")
+
+
+def _show_advanced_guide_ko():
+    """Show advanced guide in Korean."""
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich import box
+
+    console.print()
+    console.print("[bold cyan]Memory Tool - 고급 기능 가이드[/bold cyan]\n")
+
+    # 1. Tags
+    console.print(Panel(
+        """[bold]태그[/bold]를 사용하여 타임라인 항목을 분류하고 필터링할 수 있습니다.
+
+[bold]사용법:[/bold]
+  m "로그인 버그 수정" --tags bug,auth,urgent
+  m "회의 노트" --tags meeting,team
+  ms "버그" --tags auth        # 태그로 필터링하여 검색
+
+[bold]태그 작성 팁:[/bold]
+  -소문자, 하이픈 구분 사용: [green]feature-request[/green], [green]bug-fix[/green]
+  -항목 전체에서 일관된 태그 사용
+  -명확성을 위해 항목당 3-5개 태그로 제한""",
+        title="[bold yellow]1. 태그 & 분류[/bold yellow]",
+        border_style="cyan",
+        box=box.ROUNDED
+    ))
+
+    # 2. Wiki Links
+    console.print(Panel(
+        """[bold]위키 링크[/bold]로 \\[\\[이중 괄호]]를 사용해 모듈 간 지식을 연결합니다.
+
+[bold]모듈 파일에서 사용:[/bold]
+  인증 상세 내용은 \\[\\[auth-system]] 참조.
+  \\[\\[projects/website]] 및 \\[\\[core/database]]와 관련됨.
+
+[bold]링크 해석:[/bold]
+  - \\[\\[module-name]] -> 모든 모듈에서 매칭 검색
+  - \\[\\[path/to/module]] -> 직접 경로 조회
+  - mcheck -> 모든 위키 링크 검증
+
+[bold]양방향 연결 생성:[/bold]
+  auth-system/current.md: "\\[\\[user-service]]에서 사용됨"
+  user-service/current.md: "\\[\\[auth-system]]에 의존" """,
+        title="[bold yellow]2. 위키 링크 & 상호 참조[/bold yellow]",
+        border_style="cyan",
+        box=box.ROUNDED
+    ))
+
+    # 3. Semantic Search
+    console.print(Panel(
+        """[bold]시맨틱 검색[/bold]은 키워드가 아닌 의미로 콘텐츠를 찾습니다.
+
+[bold]모드:[/bold]
+  ms "인증" --hybrid           # 최적: 키워드 + 시맨틱
+  ms "사용자가 로그인하는 방법" --semantic  # 순수 시맨틱
+  ms "로그인 버그" --boost-recent  # 최근 콘텐츠 우선
+
+[bold]사용 시점:[/bold]
+  -[cyan]키워드[/cyan]: 정확한 용어, 파일명, 식별자
+  -[cyan]시맨틱[/cyan]: 개념, 질문, 설명
+  -[cyan]하이브리드[/cyan]: 일반 검색 (권장 기본값)
+
+[bold]요구사항:[/bold]
+  임베딩 지원 LLM 제공자 (Ollama, OpenAI 등)
+  .memory/config.yaml의 llm 섹션에서 설정""",
+        title="[bold yellow]3. 시맨틱 검색[/bold yellow]",
+        border_style="cyan",
+        box=box.ROUNDED
+    ))
+
+    # 4. Module Structure
+    console.print(Panel(
+        """[bold]모듈 구조[/bold]로 지식을 공간적으로 조직합니다.
+
+[bold]표준 모듈 파일:[/bold]
+  module-name/
+  ├── module.md       # 메타데이터: 이름, 설명, 태그
+  ├── current.md      # 현재 상태, 진행 중인 작업
+  ├── decisions.md    # 중요 결정사항 & 근거
+  └── archive/        # 과거 기록
+
+[bold]모범 사례:[/bold]
+  -current.md는 활성 작업에 집중
+  -완료된 항목은 decisions.md 또는 archive/로 이동
+  -marchive --suggest로 아카이브 가능한 콘텐츠 찾기
+
+[bold]명령어:[/bold]
+  mmodule create my-project --tags dev,web
+  mmodule show my-project
+  marchive --module my-project --interactive""",
+        title="[bold yellow]4. 모듈 조직[/bold yellow]",
+        border_style="cyan",
+        box=box.ROUNDED
+    ))
+
+    # 5. Config.yaml
+    console.print(Panel(
+        """[bold]config.yaml[/bold]로 Memory Tool 동작을 제어합니다.
+
+[bold]주요 설정:[/bold]
+  help.language: ko              # 도움말 언어 (en/ko)
+  llm.provider: ollama           # LLM 제공자
+  llm.ollama_model: qwen3-vl:8b  # mask 명령용 모델
+  search.default_scope: local    # 검색 범위
+  timeline.granularity: medium   # 기록 상세 수준
+
+[bold]Notion 동기화:[/bold]
+  notion.api_key: secret_xxx
+  notion.sync.enabled: true
+  notion.sync.timeline.bidirectional: true
+
+[bold]명령어:[/bold]
+  mconfig list                   # 모든 설정 표시
+  mconfig get llm.provider       # 특정 값 조회
+  mconfig set help.language ko   # 설정 변경""",
+        title="[bold yellow]5. 설정 (config.yaml)[/bold yellow]",
+        border_style="cyan",
+        box=box.ROUNDED
+    ))
+
+    # 6. AI/LLM Integration
+    console.print(Panel(
+        """[bold]AI 통합[/bold]으로 지능형 기능을 제공합니다.
+
+[bold]mask (질문 명령):[/bold]
+  mask "어제 무엇을 했나요?"
+  mask "데이터베이스 관련 결정 요약해줘"
+  mask --verbose "인증 관련 모듈 모두 나열해줘"
+
+[bold]msummary (요약):[/bold]
+  msummary                    # 오늘 요약
+  msummary --week             # 주간 요약
+  msummary --module auth      # 모듈 요약
+
+[bold]LLM 제공자:[/bold]
+  -claude-cli: Claude CLI 사용
+  -ollama: 로컬 LLM (기본값)
+  -gemini-cli: Google Gemini
+
+설정: mconfig set llm.provider ollama""",
+        title="[bold yellow]6. AI & LLM 기능[/bold yellow]",
+        border_style="cyan",
+        box=box.ROUNDED
+    ))
+
+    console.print()
+    console.print("[dim]특정 명령어 도움말: mhelp <명령어>[/dim]")
+    console.print("[dim]모든 명령어 목록: mhelp --list[/dim]\n")
 
 
 def _show_command_help(command: str, lang: str):
