@@ -433,9 +433,14 @@ class NotionWatcher:
 
             # Sync each new entry to Notion
             from memory_tool.notion.client import NotionClient, NotionError
+            from memory_tool.utils.config import Config
 
             try:
                 client = NotionClient()
+
+                # Get timeline root_page_id from config
+                config = Config()
+                timeline_root_page_id = config.get("notion.sync.timeline.root_page_id")
 
                 # Get the date from file path (e.g., .../2026-01/16.md)
                 date_str = self._extract_date_from_path(file_path)
@@ -444,8 +449,8 @@ class NotionWatcher:
                 else:
                     date_obj = datetime.now()
 
-                # Get or create daily page
-                page_id = client.get_or_create_daily_page(date_obj)
+                # Get or create daily page (pass timeline-specific root_page_id)
+                page_id = client.get_or_create_daily_page(date_obj, timeline_root_page_id)
 
                 for entry in new_entries:
                     try:
