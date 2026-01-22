@@ -42,6 +42,9 @@ class Config:
             "include_archived": False,
             "max_file_size": 1048576,  # 1MB
             "exclude_patterns": [],
+            "hybrid": False,  # Enable hybrid search by default
+            "text_weight": 0.7,  # Keyword search weight (0-1)
+            "semantic_weight": 0.3,  # Semantic search weight (0-1)
         },
         "llm": {
             "provider": "anthropic",

@@ -12,6 +12,7 @@ from memory_tool.commands.common import (
 )
 from memory_tool.core.search import MemorySearcher, SearchError
 from memory_tool.utils.path_checker import PathChecker, format_check_result
+from memory_tool.utils.config import Config
 
 
 @app.command(
@@ -38,9 +39,9 @@ def search(
     tag: List[str] = typer.Option(None, "--tag", help="Filter by tags (can use multiple times)"),
     show_score: bool = typer.Option(False, "--show-score", help="Show relevance scores"),
     summary: bool = typer.Option(False, "--summary", help="Show summary statistics"),
-    hybrid: bool = typer.Option(False, "--hybrid", help="Hybrid search (keyword + semantic combined)"),
-    text_weight: float = typer.Option(0.7, "--text-weight", help="Keyword weight for hybrid (default: 0.7)"),
-    semantic_weight: float = typer.Option(0.3, "--semantic-weight", help="Semantic weight for hybrid (default: 0.3)"),
+    hybrid: Optional[bool] = typer.Option(None, "--hybrid/--no-hybrid", help="Hybrid search (keyword + semantic combined). Default from config."),
+    text_weight: Optional[float] = typer.Option(None, "--text-weight", help="Keyword weight for hybrid (default from config: 0.7)"),
+    semantic_weight: Optional[float] = typer.Option(None, "--semantic-weight", help="Semantic weight for hybrid (default from config: 0.3)"),
     no_cache: bool = typer.Option(False, "--no-cache", help="Disable result caching"),
     cache_ttl: int = typer.Option(3600, "--cache-ttl", help="Cache TTL in seconds (default: 3600)"),
 ):
@@ -63,6 +64,15 @@ def search(
     date = opt_str(date)
     file_type = opt_str(file_type)
     module_filter = opt_str(module_filter)
+
+    # Load hybrid search defaults from config
+    config = Config()
+    if hybrid is None:
+        hybrid = config.get("search.hybrid", False)
+    if text_weight is None:
+        text_weight = config.get("search.text_weight", 0.7)
+    if semantic_weight is None:
+        semantic_weight = config.get("search.semantic_weight", 0.3)
 
     search_cache = None
     cache_key_params = {
@@ -160,13 +170,19 @@ def search(
 
                 semantic_results = []
                 for r in semantic_results_list:
+                    result_date = None
+                    if r.get('date'):
+                        try:
+                            result_date = datetime.fromisoformat(r['date'])
+                        except ValueError:
+                            pass  # Skip invalid date formats
                     semantic_results.append(SearchResult(
                         file_path=Path(r['file']),
                         line_number=r['line'],
                         line_content=r['content'],
                         match_context=r['content'],
                         score=r['similarity'],
-                        date=datetime.fromisoformat(r['date']) if r.get('date') else None,
+                        date=result_date,
                     ))
 
                 hybrid_searcher = HybridSearcher()

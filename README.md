@@ -89,9 +89,11 @@ Memory Tool은 Notion과 완전히 통합됩니다:
 - **nsync**: 로컬 모듈 ↔ 노션 양방향 싱크
 - **nwatch**: 파일 변경 감지 시 자동 동기화
 
-### Linux에서 Notion Sync 설정 가이드
+### Notion Sync 설정 가이드
 
 #### 1단계: 기본 설치
+
+**Linux/macOS:**
 
 ```bash
 # 저장소 클론 및 설치
@@ -102,6 +104,23 @@ pip install -e .
 # Bash 별칭 설치
 python -m memory_tool alias install --bash
 source ~/.bashrc
+
+# 또는 Zsh 사용 시
+python -m memory_tool alias install --zsh
+source ~/.zshrc
+```
+
+**Windows (PowerShell 권장):**
+
+```powershell
+# 저장소 클론 및 설치
+git clone https://github.com/hanyki111/memory_tool.git
+cd memory_tool
+pip install -e .
+
+# PowerShell 별칭 설치
+python -m memory_tool alias install --powershell
+. $PROFILE
 ```
 
 #### 2단계: Notion API 키 발급
@@ -134,12 +153,27 @@ source ~/.bashrc
 
 #### 5단계: config.yaml 설정
 
+**Linux/macOS:**
+
 ```bash
 # 프로젝트 초기화 (아직 안 했다면)
 minit
 
 # config.yaml 편집
 nano .memory/config.yaml
+# 또는 vim, code 등 선호하는 에디터 사용
+```
+
+**Windows:**
+
+```powershell
+# 프로젝트 초기화 (아직 안 했다면)
+minit
+
+# config.yaml 편집
+notepad .memory\config.yaml
+# 또는 VSCode 사용 시
+code .memory\config.yaml
 ```
 
 다음 내용 추가:
@@ -216,15 +250,32 @@ nwatch --dry-run                 # 테스트 모드
 ```
 
 **nwatch 설치:**
+
 ```bash
 pip install memory-tool[watch]
 ```
 
-**참고:** WSL에서 Windows 마운트 드라이브(/mnt/...)를 감시할 경우, Windows에서 직접 실행하세요:
+**플랫폼별 nwatch 실행:**
+
+**Linux/macOS:**
+```bash
+# 파일 변경 감시 시작
+nwatch                           # Local → Notion
+nwatch --bidirectional           # 양방향 동기화
+```
+
+**Windows (PowerShell):**
 ```powershell
-# Windows PowerShell에서
+# 파일 변경 감시 시작
+nwatch                           # Local → Notion
+nwatch --bidirectional           # 양방향 동기화
+
+# 또는 Python 모듈로 직접 실행
 python -m memory_tool nwatch --bidirectional
 ```
+
+**WSL 사용 시 주의:**
+WSL에서 Windows 마운트 드라이브(/mnt/...)를 감시할 경우, 파일 시스템 이벤트가 제대로 전달되지 않을 수 있습니다. 이 경우 Windows PowerShell에서 직접 실행하세요.
 
 ### Notion Sync 구조
 
@@ -270,6 +321,13 @@ python -m memory_tool nwatch --bidirectional
 # 기본 기록
 m "OAuth 구현 완료"
 
+# 인라인 태그 (메시지 끝에 #태그)
+m "로그인 버그 수정 #bug #auth #urgent"
+m "회의 노트 #meeting #team"
+
+# --tags 옵션으로 태그 지정
+m "기능 개발 시작" --tags feature,sprint-1,frontend
+
 # 시간 지정
 m --time "23:45" "늦게 끝난 작업"
 
@@ -277,11 +335,29 @@ m --time "23:45" "늦게 끝난 작업"
 m --date "2025-11-12" --time "14:30" "회고 기록"
 ```
 
+**태그 작성 팁:**
+- 소문자, 하이픈 구분 권장: `feature-request`, `bug-fix`
+- 항목당 3-5개 태그로 제한
+- 검색 시 `ms "query" --tag 태그명`으로 필터링
+
 ### 검색 명령어
 
 ```bash
-# 기본 검색
+# 기본 검색 (config.yaml 설정에 따라 하이브리드 또는 키워드)
 ms "OAuth"
+
+# 하이브리드 검색 (키워드 + 시맨틱, 권장)
+ms "authentication" --hybrid
+
+# 하이브리드 비활성화 (키워드만)
+ms "OAuth" --no-hybrid
+
+# 시맨틱 검색 (의미 기반)
+ms "사용자 인증 방법" --semantic
+
+# 태그로 필터링
+ms "bug" --tag auth
+ms "feature" --tag sprint-1 --tag frontend
 
 # 개인 KB 포함
 ms --with-kb "authentication"
@@ -292,8 +368,20 @@ ms --all "pattern"
 # 날짜 범위
 ms "query" --from 2025-11-01 --to 2025-11-14
 
+# 최근 결과 우선
+ms "refactor" --boost-recent
+
 # Regex 지원
 ms "func.*Auth"
+```
+
+**하이브리드 검색 기본 설정 (config.yaml):**
+
+```yaml
+search:
+  hybrid: true           # 하이브리드 검색 기본 활성화
+  text_weight: 0.7       # 키워드 검색 가중치 (70%)
+  semantic_weight: 0.3   # 시맨틱 검색 가중치 (30%)
 ```
 
 ### 별칭 관리 (malias)
@@ -465,18 +553,51 @@ msummary today --lang ko         # 한국어
 msummary today --force           # 캐시 무시
 ```
 
-**설정 (config.yaml):**
+### LLM 설정 (config.yaml)
+
+Memory Tool은 다양한 LLM 제공자를 지원합니다:
+
+| 제공자 | 설명 | API 키 필요 |
+|--------|------|-------------|
+| `ollama` | 로컬 LLM (기본값, 무료) | ❌ |
+| `anthropic` | Claude API | ✅ |
+| `claude-cli` | Claude CLI 도구 사용 | ❌ (CLI 설치 필요) |
+| `gemini-cli` | Google Gemini CLI 사용 | ❌ (CLI 설치 필요) |
+
+**설정 예시:**
 
 ```yaml
 llm:
-  provider: "anthropic"              # 또는 "ollama"
-  api_key: "your-anthropic-api-key"
-  model: "claude-3-5-sonnet-20241022"
+  # === Ollama (로컬, 무료, 기본값) ===
+  provider: "ollama"
+  ollama_host: "http://localhost:11434"
+  ollama_model: "qwen3-vl:8b"    # 또는 llama3, mistral 등
 
-  # Ollama (로컬, 무료)
-  # provider: "ollama"
-  # model: "llama3"
-  # base_url: "http://localhost:11434"
+  # === Anthropic API ===
+  # provider: "anthropic"
+  # anthropic_api_key: "sk-ant-..."
+  # anthropic_model: "claude-3-5-sonnet-20241022"
+
+  # === Claude CLI (claude 명령어 사용) ===
+  # provider: "claude-cli"
+  # (별도 API 키 불필요, Claude CLI가 설치되어 있어야 함)
+
+  # === Gemini CLI (gemini 명령어 사용) ===
+  # provider: "gemini-cli"
+  # (별도 API 키 불필요, Gemini CLI가 설치되어 있어야 함)
+
+  # 공통 설정
+  max_tokens: 4096
+  temperature: 0.7
+  output_language: "ko"          # 출력 언어 (ko, en)
+```
+
+**mask 명령어에서 제공자 직접 지정:**
+
+```bash
+mask "어제 무엇을 했나요?"                    # config 기본 제공자 사용
+mask "summarize last week" --provider claude-cli  # Claude CLI 사용
+mask "what decisions were made?" --provider gemini-cli  # Gemini CLI 사용
 ```
 
 ### 문서 아카이브 (marchive)
