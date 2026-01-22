@@ -2,7 +2,7 @@
 
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 import re
 
 # Import db for indexing (optional dependency)
@@ -142,18 +142,29 @@ class Timeline:
 
         return target_dt
 
-    def format_entry(self, dt: datetime, message: str) -> str:
+    def format_entry(
+        self, dt: datetime, message: str, tags: Optional[List[str]] = None
+    ) -> str:
         """Format a timeline entry.
 
         Args:
             dt: Datetime for the entry
             message: Message to record
+            tags: Optional list of tags to add
 
         Returns:
-            Formatted entry string (e.g., "- 14:30 | Message here")
+            Formatted entry string (e.g., "- 14:30 | Message here #tag1 #tag2")
         """
         time_str = dt.strftime("%H:%M")
-        return f"- {time_str} | {message}"
+        entry = f"- {time_str} | {message}"
+
+        if tags:
+            # Format tags as #tag1 #tag2
+            tag_str = " ".join(f"#{t.strip().replace(' ', '-')}" for t in tags if t.strip())
+            if tag_str:
+                entry = f"{entry} {tag_str}"
+
+        return entry
 
     def read_timeline(self, file_path: Path) -> Tuple[str, list[str]]:
         """Read existing timeline file.
@@ -222,6 +233,7 @@ class Timeline:
         date_str: Optional[str] = None,
         time_str: Optional[str] = None,
         force: bool = False,
+        tags: Optional[List[str]] = None,
     ) -> Tuple[datetime, Path]:
         """Record a message to timeline.
 
@@ -230,6 +242,7 @@ class Timeline:
             date_str: Optional date (YYYY-MM-DD)
             time_str: Optional time (HH:MM)
             force: If True, skip distant past warning
+            tags: Optional list of tags for categorization
 
         Returns:
             Tuple of (datetime, file_path)
@@ -274,7 +287,7 @@ class Timeline:
         header, entries = self.read_timeline(file_path)
 
         # Format new entry
-        new_entry = self.format_entry(dt, message)
+        new_entry = self.format_entry(dt, message, tags)
 
         # Add to entries
         entries.append(new_entry)

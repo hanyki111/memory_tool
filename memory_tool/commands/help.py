@@ -20,16 +20,19 @@ The entry is automatically saved to .memory/timeline/daily/YYYY-MM/DD.md
 
 This is the most frequently used command - capture thoughts, progress,
 decisions, or any information instantly.
+
+Tags can be added for categorization and later filtering with search.
             """,
             "examples": [
                 'm "Fixed login bug in auth.py"',
                 'm "Decision: Using PostgreSQL for the database"',
                 'm "Started working on feature X"',
-                'm "Meeting notes: discussed API design with team"',
+                'm "Fixed auth issue" --tags bug,auth,urgent',
             ],
             "options": [
                 ("--date, -d", "Record to a specific date (YYYY-MM-DD)"),
                 ("--time, -t", "Override timestamp (HH:MM)"),
+                ("--tags, -t", "Comma-separated tags (e.g., bug,auth,urgent)"),
             ],
         },
         "ko": {
@@ -41,16 +44,19 @@ decisions, or any information instantly.
 
 가장 자주 사용하는 명령어입니다 - 생각, 진행 상황, 결정 사항,
 또는 어떤 정보든 즉시 기록하세요.
+
+태그를 추가하면 분류 및 검색 시 필터링이 가능합니다.
             """,
             "examples": [
                 'm "auth.py 로그인 버그 수정"',
                 'm "결정: 데이터베이스로 PostgreSQL 사용"',
                 'm "기능 X 작업 시작"',
-                'm "회의 노트: 팀과 API 설계 논의"',
+                'm "인증 문제 수정" --tags bug,auth,urgent',
             ],
             "options": [
                 ("--date, -d", "특정 날짜에 기록 (YYYY-MM-DD)"),
                 ("--time, -t", "타임스탬프 직접 지정 (HH:MM)"),
+                ("--tags, -t", "쉼표로 구분된 태그 (예: bug,auth,urgent)"),
             ],
         },
     },
@@ -1473,7 +1479,7 @@ def _show_advanced_guide_en():
 [bold]Usage:[/bold]
   m "Fixed login bug" --tags bug,auth,urgent
   m "Meeting notes" --tags meeting,team
-  ms "bug" --tags auth        # Search with tag filter
+  ms "bug" --tag auth         # Search with tag filter
 
 [bold]Tag Best Practices:[/bold]
   - Use lowercase, hyphen-separated: [green]feature-request[/green], [green]bug-fix[/green]
@@ -1623,7 +1629,7 @@ def _show_advanced_guide_ko():
 [bold]사용법:[/bold]
   m "로그인 버그 수정" --tags bug,auth,urgent
   m "회의 노트" --tags meeting,team
-  ms "버그" --tags auth        # 태그로 필터링하여 검색
+  ms "버그" --tag auth         # 태그로 필터링하여 검색
 
 [bold]태그 작성 팁:[/bold]
   -소문자, 하이픈 구분 사용: [green]feature-request[/green], [green]bug-fix[/green]

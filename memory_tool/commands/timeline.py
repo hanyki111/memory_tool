@@ -3,7 +3,7 @@
 import sys
 from datetime import datetime, date, timedelta
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 
 import typer
 
@@ -28,6 +28,7 @@ def record(
     date: Optional[str] = typer.Option(None, "--date", help="Date (YYYY-MM-DD), defaults to today"),
     time: Optional[str] = typer.Option(None, "--time", help="Time (HH:MM), defaults to current time"),
     force: bool = typer.Option(False, "--force", "-f", help="Force recording (skip warnings for old dates)"),
+    tags: Optional[str] = typer.Option(None, "--tags", "-t", help="Comma-separated tags (e.g., bug,auth,urgent)"),
 ):
     """Record a message to timeline (m command).
 
@@ -37,15 +38,22 @@ def record(
     Examples:
         m "Started working on feature X"
         m "Fixed bug" --date 2026-01-20 --time 14:30
+        m "Fixed login issue" --tags bug,auth
     """
     message = arg_str(message)
     date = opt_str(date)
     time = opt_str(time)
+    tags_str = opt_str(tags)
+
+    # Parse tags
+    tag_list: Optional[List[str]] = None
+    if tags_str:
+        tag_list = [t.strip() for t in tags_str.split(",") if t.strip()]
 
     timeline = Timeline()
 
     try:
-        dt, file_path = timeline.record(message, date, time, force=force)
+        dt, file_path = timeline.record(message, date, time, force=force, tags=tag_list)
 
         time_str = dt.strftime("%H:%M")
         date_str = dt.strftime("%Y-%m-%d")

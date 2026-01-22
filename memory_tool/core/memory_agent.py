@@ -116,6 +116,13 @@ class MemoryAgent:
             },
             "examples": ["get_config_guide(section='notion')", "get_config_guide(section='all')", "get_config_guide(section='notion.sync.timeline')"]
         },
+        "get_usage_guide": {
+            "description": "Get comprehensive usage guide for Memory Tool features (tags, wiki links, search modes, etc.)",
+            "args": {
+                "topic": "Topic to get guide for: 'all', 'tags', 'search', 'timeline', 'modules', 'plans', 'ai', 'notion', 'config'"
+            },
+            "examples": ["get_usage_guide(topic='tags')", "get_usage_guide(topic='all')", "get_usage_guide(topic='search')"]
+        },
     }
 
     def __init__(self, base_path: Optional[Path] = None):
@@ -981,6 +988,104 @@ modules:
 
 예: get_config_guide(section='notion.sync.timeline')"""
 
+    def _tool_get_usage_guide(self, topic: str = "all") -> str:
+        """Get comprehensive usage guide for Memory Tool features.
+
+        Args:
+            topic: Topic to get guide for ('all', 'tags', 'search', etc.)
+        """
+        content = None
+
+        # Try to read from package data first
+        try:
+            import importlib.resources
+            if hasattr(importlib.resources, 'files'):
+                # Python 3.9+
+                data_path = importlib.resources.files('memory_tool') / 'data' / 'USAGE.md'
+                if data_path.is_file():
+                    content = data_path.read_text(encoding='utf-8')
+        except Exception:
+            pass
+
+        # Fallback to .memory/docs/USAGE.md
+        if content is None:
+            usage_file = self.memory_path / "docs" / "USAGE.md"
+            if usage_file.exists():
+                try:
+                    content = usage_file.read_text(encoding="utf-8")
+                except Exception:
+                    pass
+
+        # If no content found, return fallback
+        if content is None:
+            return """USAGE.md not found. Run 'mhelp --guide' for advanced features guide.
+
+Key features:
+1. Tags: m "message" --tags bug,auth (then search with ms "query" --tag auth)
+2. Wiki Links: [[module-name]] to connect modules
+3. Search Modes: --hybrid, --semantic, --boost-recent
+4. Plans: mplan daily/weekly for task management
+5. AI: mask "question" to ask about your memory
+
+For detailed help, run 'mhelp --guide' or 'mhelp <command>'."""
+
+        # If topic is 'all', return full content
+        if topic.lower() == "all":
+            return content
+
+        # Extract relevant section based on topic
+        topic_map = {
+            "tags": "## 12. Tags System",
+            "tag": "## 12. Tags System",
+            "search": "## 2. Search",
+            "timeline": "## 1. Timeline Recording",
+            "record": "## 1. Timeline Recording",
+            "modules": "## 4. Modules",
+            "module": "## 4. Modules",
+            "plans": "## 5. Plans",
+            "plan": "## 5. Plans",
+            "ai": "## 6. AI Features",
+            "ask": "## 6. AI Features",
+            "mask": "## 6. AI Features",
+            "notion": "## 10. Notion Integration",
+            "config": "## 9. Configuration",
+            "wiki": "## 4. Modules",  # Wiki links are in modules section
+            "archive": "## 13. Archive System",
+            "context": "## 8. Context Generation",
+            "summary": "## 7. Summarization",
+        }
+
+        section_header = topic_map.get(topic.lower())
+        if section_header:
+            # Find section and extract until next ## header
+            start_idx = content.find(section_header)
+            if start_idx != -1:
+                # Find next section or end of file
+                next_section = content.find("\n## ", start_idx + len(section_header))
+                if next_section != -1:
+                    section_content = content[start_idx:next_section].strip()
+                else:
+                    section_content = content[start_idx:].strip()
+                return section_content
+
+        # If topic not found, return available topics
+        return f"""Topic '{topic}' not found in usage guide.
+
+Available topics:
+- all: Complete guide
+- tags: Tag system for categorization
+- search: Search features and modes
+- timeline: Timeline recording
+- modules: Module organization
+- plans: Daily/weekly plans
+- ai/mask: AI question answering
+- notion: Notion integration
+- config: Configuration settings
+- archive: Archive system
+- wiki: Wiki links
+
+Example: get_usage_guide(topic='tags')"""
+
     def _execute_tool(self, tool_call: ToolCall) -> ToolResult:
         """Execute a single tool call."""
         tool_name = tool_call.tool
@@ -1008,6 +1113,8 @@ modules:
                 result = self._tool_get_help(args.get("command", "all"))
             elif tool_name == "get_config_guide":
                 result = self._tool_get_config_guide(args.get("section", "all"))
+            elif tool_name == "get_usage_guide":
+                result = self._tool_get_usage_guide(args.get("topic", "all"))
             else:
                 return ToolResult(
                     tool=tool_name,
