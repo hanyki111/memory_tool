@@ -29,12 +29,27 @@ m "Started working on feature X"
 ```
 
 ### With Tags
+
+Two ways to add tags:
+
+**1. Inline tags (recommended)** - add #tags at end of message:
 ```bash
-m "Fixed auth issue" --tags bug,auth,urgent
-m "Meeting notes" --tags meeting,team
+m "Fixed auth issue #bug #auth #urgent"
+m "Meeting notes #meeting #team"
 ```
 
-Tags are appended as `#tag1 #tag2` at the end of the entry.
+**2. --tags option** - comma-separated:
+```bash
+m "Fixed auth issue" --tags bug,auth,urgent
+```
+
+**Combined** - both methods can be used together:
+```bash
+m "Fixed bug #critical" --tags sprint-1,backend
+# Result: #critical #sprint-1 #backend
+```
+
+Tags are stored as `#tag1 #tag2` at the end of the entry.
 Search with tags: `ms "bug" --tag auth`
 
 ### Other Options

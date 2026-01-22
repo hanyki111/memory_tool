@@ -4,6 +4,7 @@ import sys
 from datetime import datetime, date, timedelta
 from pathlib import Path
 from typing import Optional, List
+import re
 
 import typer
 
@@ -35,25 +36,47 @@ def record(
     Records a timestamped entry to your timeline. Entries are automatically
     organized by date and can be searched later with ms command.
 
+    Tags can be added with --tags option or inline at the end of message:
+        m "Fixed bug #bug #auth"  (auto-parsed from message)
+        m "Fixed bug" --tags bug,auth  (explicit option)
+
     Examples:
         m "Started working on feature X"
         m "Fixed bug" --date 2026-01-20 --time 14:30
         m "Fixed login issue" --tags bug,auth
+        m "Fixed auth bug #bug #auth #urgent"
     """
     message = arg_str(message)
     date = opt_str(date)
     time = opt_str(time)
     tags_str = opt_str(tags)
 
-    # Parse tags
-    tag_list: Optional[List[str]] = None
+    # Parse inline tags from end of message (e.g., "message #tag1 #tag2")
+    inline_tags: List[str] = []
+    # Pattern: match #word at the end of message (one or more)
+    inline_tag_pattern = re.compile(r'(\s+#[\w-]+)+$')
+    match = inline_tag_pattern.search(message)
+    if match:
+        # Extract tags from matched portion
+        tag_portion = match.group(0)
+        inline_tags = re.findall(r'#([\w-]+)', tag_portion)
+        # Remove tags from message
+        message = message[:match.start()].strip()
+
+    # Parse --tags option
+    tag_list: List[str] = []
     if tags_str:
         tag_list = [t.strip() for t in tags_str.split(",") if t.strip()]
+
+    # Combine inline tags and --tags option (deduplicate)
+    all_tags = list(dict.fromkeys(inline_tags + tag_list))  # Preserve order, remove duplicates
+    if not all_tags:
+        all_tags = None
 
     timeline = Timeline()
 
     try:
-        dt, file_path = timeline.record(message, date, time, force=force, tags=tag_list)
+        dt, file_path = timeline.record(message, date, time, force=force, tags=all_tags)
 
         time_str = dt.strftime("%H:%M")
         date_str = dt.strftime("%Y-%m-%d")

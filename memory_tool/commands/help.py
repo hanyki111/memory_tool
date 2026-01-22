@@ -21,13 +21,14 @@ The entry is automatically saved to .memory/timeline/daily/YYYY-MM/DD.md
 This is the most frequently used command - capture thoughts, progress,
 decisions, or any information instantly.
 
-Tags can be added for categorization and later filtering with search.
+Tags can be added inline at the end of message (#tag) or with --tags option.
+Tags are searchable with: ms "query" --tag tagname
             """,
             "examples": [
                 'm "Fixed login bug in auth.py"',
-                'm "Decision: Using PostgreSQL for the database"',
-                'm "Started working on feature X"',
-                'm "Fixed auth issue" --tags bug,auth,urgent',
+                'm "Fixed auth issue #bug #auth #urgent"',
+                'm "Started feature X" --tags feature,sprint-1',
+                'm "Meeting notes #meeting #team"',
             ],
             "options": [
                 ("--date, -d", "Record to a specific date (YYYY-MM-DD)"),
@@ -45,13 +46,14 @@ Tags can be added for categorization and later filtering with search.
 가장 자주 사용하는 명령어입니다 - 생각, 진행 상황, 결정 사항,
 또는 어떤 정보든 즉시 기록하세요.
 
-태그를 추가하면 분류 및 검색 시 필터링이 가능합니다.
+태그는 메시지 끝에 #태그 형식으로 추가하거나 --tags 옵션으로 지정합니다.
+태그 검색: ms "검색어" --tag 태그명
             """,
             "examples": [
                 'm "auth.py 로그인 버그 수정"',
-                'm "결정: 데이터베이스로 PostgreSQL 사용"',
-                'm "기능 X 작업 시작"',
-                'm "인증 문제 수정" --tags bug,auth,urgent',
+                'm "인증 문제 수정 #bug #auth #urgent"',
+                'm "기능 X 시작" --tags feature,sprint-1',
+                'm "회의 노트 #meeting #team"',
             ],
             "options": [
                 ("--date, -d", "특정 날짜에 기록 (YYYY-MM-DD)"),
