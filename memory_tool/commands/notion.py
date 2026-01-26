@@ -362,9 +362,9 @@ def notion_sync(
             elif monthly and not daily and not weekly:
                 plan_type = "monthly"
 
-        if not syncer.sync_config.enabled and sync_modules:
+        if sync_modules and not (syncer.sync_config.module and syncer.sync_config.module.enabled):
             console.print("[yellow]Notion module sync is not enabled.[/yellow]")
-            console.print("[dim]Enable it in config.yaml: notion.sync.enabled: true[/dim]")
+            console.print("[dim]Enable it in config.yaml: notion.sync.module.enabled: true[/dim]")
             if not sync_timeline and not sync_plans:
                 return
 
@@ -522,7 +522,7 @@ def notion_sync(
                 console.print()
 
         # Sync modules if requested
-        if sync_modules and syncer.sync_config.enabled:
+        if sync_modules and syncer.sync_config.module and syncer.sync_config.module.enabled:
             if dry_run:
                 console.print("[cyan]Module sync (dry-run):[/cyan]\n")
             else:

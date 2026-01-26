@@ -99,23 +99,43 @@ class NotionClient:
         except Exception as e:
             raise NotionError(f"Failed to initialize Notion client: {e}")
 
-    def find_child_page(self, parent_id: str, title: str) -> Optional[str]:
-        """Find a child page with specific title under parent_id."""
-        try:
-            # Note: blocks.children.list is paginated. For simplicity/speed, checking first 100.
-            # A more robust solution would paginate, but for a month list it's usually fine.
-            response = self.client.blocks.children.list(block_id=parent_id)
+    def find_child_page(self, parent_id: str, title: str, verbose: bool = False) -> Optional[str]:
+        """Find a child page with specific title under parent_id.
 
-            for block in response.get("results", []):
-                # Skip archived blocks
-                if block.get("archived", False):
-                    continue
-                if block.get("type") == "child_page":
-                    child_title = block.get("child_page", {}).get("title", "")
-                    if child_title == title:
-                        return block["id"]
+        Supports pagination to handle parents with more than 100 children.
+        """
+        try:
+            start_cursor = None
+            found_titles = []
+            while True:
+                if start_cursor:
+                    response = self.client.blocks.children.list(
+                        block_id=parent_id, start_cursor=start_cursor
+                    )
+                else:
+                    response = self.client.blocks.children.list(block_id=parent_id)
+
+                for block in response.get("results", []):
+                    # Skip archived blocks
+                    if block.get("archived", False):
+                        continue
+                    if block.get("type") == "child_page":
+                        child_title = block.get("child_page", {}).get("title", "")
+                        found_titles.append(child_title)
+                        if child_title == title:
+                            return block["id"]
+
+                # Check for more pages
+                if not response.get("has_more"):
+                    break
+                start_cursor = response.get("next_cursor")
+
+            if verbose and found_titles:
+                print(f"    [debug] Looking for '{title}', found: {found_titles}")
             return None
-        except Exception:
+        except Exception as e:
+            if verbose:
+                print(f"    [debug] find_child_page error: {e}")
             return None
 
     def get_or_create_subpage(self, parent_id: str, title: str, cache_key: Optional[str] = None, icon: Optional[str] = None) -> str:

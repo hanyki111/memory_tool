@@ -67,7 +67,13 @@ class ModuleSyncer:
         targets = []
         seen_paths = set()
 
-        for pattern in self.sync_config.targets:
+        # Use module-specific targets with fallback to legacy config
+        targets_config = (
+            self.sync_config.module.targets
+            if self.sync_config.module and self.sync_config.module.targets
+            else self.sync_config.targets
+        )
+        for pattern in targets_config:
             # Handle glob patterns
             if "**" in pattern:
                 # Recursive match
@@ -130,7 +136,13 @@ class ModuleSyncer:
 
     def _is_excluded(self, module_path: str) -> bool:
         """Check if a module path matches exclusion patterns."""
-        for pattern in self.sync_config.exclude_patterns:
+        # Use module-specific exclude_patterns with fallback to legacy config
+        exclude_patterns = (
+            self.sync_config.module.exclude_patterns
+            if self.sync_config.module and self.sync_config.module.exclude_patterns
+            else self.sync_config.exclude_patterns
+        )
+        for pattern in exclude_patterns:
             if fnmatch.fnmatch(module_path, pattern):
                 return True
         return False
@@ -249,6 +261,12 @@ class ModuleSyncer:
         notion_files = self._get_notion_file_pages(notion_page_id) if notion_page_id else {}
         if verbose:
             print(f"  [notion] Found {len(notion_files)} existing page(s)")
+            # Show all child page titles (including non-.md) for debugging
+            all_titles = getattr(self, '_last_all_child_titles', [])
+            if all_titles:
+                print(f"  [notion] All child titles: {all_titles}")
+            if notion_files:
+                print(f"  [notion] Matched .md titles: {list(notion_files.keys())}")
 
         # Determine actions for each file
         actions = self._determine_actions(
@@ -387,6 +405,8 @@ class ModuleSyncer:
     ) -> Dict[str, Dict[str, Any]]:
         """Get child pages under a module page.
 
+        Supports pagination to handle modules with more than 100 files.
+
         Args:
             parent_page_id: Parent page ID
 
@@ -397,20 +417,40 @@ class ModuleSyncer:
             return {}
 
         try:
-            response = self.client.client.blocks.children.list(block_id=parent_page_id)
             files = {}
+            all_child_titles = []  # For debugging
+            start_cursor = None
 
-            for block in response.get("results", []):
-                if block.get("type") == "child_page":
-                    title = block.get("child_page", {}).get("title", "")
-                    if title.endswith(".md"):
-                        files[title] = {
-                            "id": block["id"],
-                            "last_edited_time": block.get("last_edited_time"),
-                        }
+            while True:
+                if start_cursor:
+                    response = self.client.client.blocks.children.list(
+                        block_id=parent_page_id, start_cursor=start_cursor
+                    )
+                else:
+                    response = self.client.client.blocks.children.list(block_id=parent_page_id)
 
+                for block in response.get("results", []):
+                    if block.get("type") == "child_page":
+                        title = block.get("child_page", {}).get("title", "")
+                        all_child_titles.append(title)  # Collect all titles for debugging
+                        if title.endswith(".md"):
+                            files[title] = {
+                                "id": block["id"],
+                                "last_edited_time": block.get("last_edited_time"),
+                            }
+
+                # Check for more pages
+                if not response.get("has_more"):
+                    break
+                start_cursor = response.get("next_cursor")
+
+            # Store for debugging access
+            self._last_all_child_titles = all_child_titles
             return files
-        except Exception:
+        except Exception as e:
+            # Log error for debugging - silent failures cause duplicate pages
+            import sys
+            print(f"    [warning] Failed to get Notion file pages: {e}", file=sys.stderr)
             return {}
 
     def _determine_actions(
@@ -457,12 +497,22 @@ class ModuleSyncer:
                 # Force push if local exists, otherwise skip
                 direction = SyncDirection.PUSH if local_mtime else SyncDirection.SKIP
             else:
+                # Use module-specific conflict_resolution with fallback
+                conflict_resolution = (
+                    self.sync_config.module.conflict_resolution
+                    if self.sync_config.module
+                    else self.sync_config.conflict_resolution
+                )
                 direction = self.state_manager.determine_sync_direction(
                     local_mtime,
                     notion_edited,
                     file_state.last_sync,
-                    self.sync_config.conflict_resolution,
+                    conflict_resolution,
                 )
+
+            # Use Notion API result first, fallback to saved state
+            # This prevents duplicate page creation when API fails to find existing page
+            notion_page_id = notion_info.get("id") if notion_info else file_state.notion_page_id
 
             actions.append(SyncAction(
                 file_path=filename,
@@ -470,7 +520,7 @@ class ModuleSyncer:
                 direction=direction,
                 local_mtime=local_mtime,
                 notion_edited=notion_edited,
-                notion_page_id=notion_info.get("id") if notion_info else None,
+                notion_page_id=notion_page_id,
             ))
 
         return actions
@@ -547,9 +597,17 @@ class ModuleSyncer:
             self._replace_page_content(action.notion_page_id, blocks)
             page_id = action.notion_page_id
         else:
-            # Create new page (📄 icon for file pages)
-            new_page = self.client.create_page(action.file_path, parent_page_id, icon="📄")
-            page_id = new_page["id"]
+            # Double-check: search for existing page before creating new one
+            # This prevents duplicates when state was lost or API previously failed
+            existing_id = self.client.find_child_page(parent_page_id, action.file_path)
+            if existing_id:
+                # Found existing page, update it instead of creating duplicate
+                self._replace_page_content(existing_id, blocks)
+                page_id = existing_id
+            else:
+                # Create new page (📄 icon for file pages)
+                new_page = self.client.create_page(action.file_path, parent_page_id, icon="📄")
+                page_id = new_page["id"]
 
             # Add content blocks (batch by 100 due to Notion API limit)
             if blocks:
