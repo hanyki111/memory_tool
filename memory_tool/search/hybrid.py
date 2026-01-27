@@ -53,6 +53,8 @@ class HybridSearcher:
                     match_context=result.match_context,
                     score=result.score * text_weight,
                     date=result.date,
+                    source=result.source,
+                    origin_project=result.origin_project,
                 )
                 result_map[key] = combined
             else:
@@ -71,6 +73,8 @@ class HybridSearcher:
                     match_context=result.match_context,
                     score=result.score * semantic_weight,
                     date=result.date,
+                    source=result.source,
+                    origin_project=result.origin_project,
                 )
                 result_map[key] = combined
             else:

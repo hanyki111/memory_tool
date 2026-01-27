@@ -1,6 +1,6 @@
 # Claude Code Guidelines
 
-**memory_tool 공통 가이드라인**
+**memory_tool 사용 가이드라인**
 
 ---
 
@@ -10,6 +10,7 @@
 |---------|---------|
 | `m "message"` | Record to timeline |
 | `ms "query"` | Search timeline and modules |
+| `ms "query" --with-kb` | Search including knowledge base |
 | `mcontext` | Build context for AI |
 | `mcheck` | Validate module paths |
 | `mtoday` | Show today's timeline |
@@ -17,9 +18,84 @@
 | `mmodule create <path>` | Create new module |
 | `mmodule tree` | View module hierarchy |
 
+### Federation Commands
+
+| Command | Purpose |
+|---------|---------|
+| `mpublish <module>` | Publish module to KB |
+| `mimport --list` | List KB modules |
+| `mimport <path>` | Import module from KB |
+
 ---
 
-## 2. Dogfooding Principle
+## 2. Behavioral Guidelines
+
+### 2.1 When to Record
+
+**PRINCIPLE: Do NOT interrupt workflow. Record at natural breakpoints.**
+
+**Immediate Recording (user request):**
+- "기록해줘", "record this", "save this"
+- Action: Record immediately
+
+**Suggest Recording AFTER:**
+- ✅ Completing a feature (tested, working)
+- ✅ Fixing a bug (verified)
+- ✅ Making important decisions
+- ✅ Major refactoring
+
+**Pattern:**
+```
+[Complete work] → Show results → THEN suggest: "Shall I record this?"
+```
+
+**What to record:**
+- Decisions: `m "Decision: PostgreSQL chosen for relational data"`
+- Milestones: `m "Feature complete: User authentication"`
+- Bugs fixed: `m "Fixed memory leak in worker threads"`
+
+**Do NOT record:**
+- ❌ During conversation (wait for breakpoint)
+- ❌ Trivial changes or questions
+- ❌ Work in progress
+
+### 2.2 When to Search
+
+**Search when user:**
+- Explicitly asks: "검색해줘", "find", "what did we do about..."
+- Asks about past work: "How did we implement X?", "previously..."
+
+**Search workflow:**
+```bash
+ms "query"              # Local only
+ms "query" --with-kb    # Include KB (cross-project knowledge)
+```
+
+1. Search first (don't guess)
+2. Show findings
+3. If no results, suggest `--with-kb`
+
+### 2.3 Batch Recording
+
+After completing work with multiple items:
+
+```
+"I've completed [task]. Should I record these?
+- Decision: TypeScript for type safety
+- Decision: PostgreSQL for database
+- Feature: Authentication system"
+```
+
+If user agrees:
+```bash
+m "Decision: TypeScript for type safety"
+m "Decision: PostgreSQL for database"
+m "Feature complete: Authentication system"
+```
+
+---
+
+## 3. Dogfooding Principle
 
 When working with memory_tool projects:
 
@@ -41,7 +117,7 @@ m "Completed: Feature X"
 
 ---
 
-## 3. Module Organization Summary
+## 4. Module Organization Summary
 
 ### When to Split
 - `current.md` > 300 lines
@@ -65,7 +141,7 @@ New project                     → New project (projects/new-project)
 
 ---
 
-## 4. Related Files Section
+## 5. Related Files Section
 
 Link modules to source code in `current.md`:
 
@@ -82,7 +158,7 @@ Link modules to source code in `current.md`:
 
 ---
 
-## 5. Context Building
+## 6. Context Building
 
 Before starting AI session:
 
@@ -96,11 +172,11 @@ Context file: `.claude/memory-context.md`
 
 ---
 
-## 6. Workflow Tips
+## 7. Workflow Tips
 
 ### Daily Workflow
 1. Run `mcontext` at session start
-2. Record progress with `m "message"` frequently
+2. Record progress with `m "message"` at natural breakpoints
 3. Check `mtoday` to review work
 
 ### When Creating Features
@@ -116,6 +192,13 @@ Context file: `.claude/memory-context.md`
 mweek                    # Review week's timeline
 mcheck                   # Validate module paths
 marchive --suggest       # Check for archiving needs
+```
+
+### Knowledge Federation
+```bash
+mpublish <module>        # Publish to KB
+mimport --list           # Browse KB
+ms "query" --with-kb     # Search across projects
 ```
 
 ---

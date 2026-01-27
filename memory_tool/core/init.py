@@ -63,7 +63,8 @@ class MemoryInitializer:
             ".memory/docs/.gitkeep": "file",
             ".claude": "dir",
             ".claude/skills": "dir",
-            ".claude/skills/memory-tool": "dir",
+            ".claude/skills/mt-publish": "dir",
+            ".claude/skills/mt-master-module": "dir",
         }
 
     def create_config_yaml(self) -> Path:
@@ -240,21 +241,38 @@ codemap:
 
         return config_path
 
-    def create_kb_lock(self, kb_path: Optional[str] = None) -> Optional[Path]:
-        """Create kb.lock file pointing to knowledge base.
+    def set_kb_path(self, kb_path: Optional[str] = None) -> bool:
+        """Set knowledge base path in config.yaml.
 
         Args:
             kb_path: Path to knowledge base (optional)
 
         Returns:
-            Path to kb.lock if created, None otherwise
+            True if set, False if kb_path is None
         """
         if kb_path is None:
-            return None
+            return False
 
-        kb_lock_path = self.memory_path / "kb.lock"
-        kb_lock_path.write_text(kb_path, encoding="utf-8")
-        return kb_lock_path
+        from memory_tool.utils.config import Config
+        config = Config(self.memory_path)
+        config.set_kb_path(kb_path)
+        return True
+
+    # Legacy method for backward compatibility
+    def create_kb_lock(self, kb_path: Optional[str] = None) -> Optional[Path]:
+        """[DEPRECATED] Use set_kb_path instead.
+
+        This method now sets kb.path in config.yaml.
+
+        Args:
+            kb_path: Path to knowledge base (optional)
+
+        Returns:
+            None (no longer creates kb.lock file)
+        """
+        if kb_path:
+            self.set_kb_path(kb_path)
+        return None
 
     def create_readme(self) -> Path:
         """Create README.md explaining the structure.
@@ -930,32 +948,35 @@ Action: Split by clear criteria
         return doc_path
 
     def create_claude_skills(self) -> list[Path]:
-        """Copy memory_tool skills to project's .claude/skills/memory-tool/.
+        """Copy memory_tool skills to project's .claude/skills/.
+
+        Copies mt-publish and mt-master-module skills for KB federation workflow.
 
         Returns:
             List of paths to created skill files
         """
         created_files = []
 
-        # Source: memory_tool's .claude/skills/memory-tool/
-        source_skills_dir = self.memory_tool_root / ".claude" / "skills" / "memory-tool"
-        # Destination: project's .claude/skills/memory-tool/
-        dest_skills_dir = self.claude_path / "skills" / "memory-tool"
+        # Skills to copy
+        skill_names = ["mt-publish", "mt-master-module"]
 
-        if not source_skills_dir.exists():
-            # If memory_tool's skills don't exist, skip silently
-            # This can happen if memory_tool is installed via pip
-            return created_files
+        for skill_name in skill_names:
+            # Source: memory_tool's .claude/skills/<skill>/
+            source_skills_dir = self.memory_tool_root / ".claude" / "skills" / skill_name
+            # Destination: project's .claude/skills/<skill>/
+            dest_skills_dir = self.claude_path / "skills" / skill_name
 
-        # Ensure destination directory exists
-        dest_skills_dir.mkdir(parents=True, exist_ok=True)
+            if not source_skills_dir.exists():
+                # If skill doesn't exist, skip
+                continue
 
-        # Copy only essential skill files (SKILL.md is the only required file for Claude Skills)
-        skill_files = ["SKILL.md"]
-        for filename in skill_files:
-            source_file = source_skills_dir / filename
+            # Ensure destination directory exists
+            dest_skills_dir.mkdir(parents=True, exist_ok=True)
+
+            # Copy SKILL.md (the only required file for Claude Skills)
+            source_file = source_skills_dir / "SKILL.md"
             if source_file.exists():
-                dest_file = dest_skills_dir / filename
+                dest_file = dest_skills_dir / "SKILL.md"
                 shutil.copy2(source_file, dest_file)
                 created_files.append(dest_file)
 
@@ -1064,11 +1085,10 @@ Action: Split by clear criteria
         if guidelines_path:
             created["files"].append(guidelines_path)
 
-        # Create kb.lock if requested
+        # Set KB path in config.yaml if requested
         if kb_path:
-            kb_lock_path = self.create_kb_lock(kb_path)
-            if kb_lock_path:
-                created["files"].append(kb_lock_path)
+            self.set_kb_path(kb_path)
+            created["kb_path"] = kb_path
 
         return created
 

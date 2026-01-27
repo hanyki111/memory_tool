@@ -25,6 +25,9 @@ class Config:
 
     DEFAULT_CONFIG = {
         "version": "1.0",
+        "kb": {
+            "path": None,  # Knowledge base path (e.g., "~/memory/personal")
+        },
         "timeline": {
             "auto_record": False,
             "granularity": "medium",
@@ -45,6 +48,7 @@ class Config:
             "hybrid": False,  # Enable hybrid search by default
             "text_weight": 0.7,  # Keyword search weight (0-1)
             "semantic_weight": 0.3,  # Semantic search weight (0-1)
+            "semantic_threshold": 0.5,  # Minimum similarity for semantic search (0-1)
         },
         "llm": {
             "provider": "anthropic",
@@ -293,6 +297,89 @@ class Config:
             Number of days
         """
         return self.get("timeline.warn_old_days", 365)
+
+    def get_kb_path(self) -> Optional[Path]:
+        """Get knowledge base path from config.
+
+        Checks in order:
+        1. config.yaml kb.path
+        2. config.yaml search.kb_path (legacy)
+        3. kb.lock file (backward compatibility)
+
+        Returns:
+            KB path or None if not configured
+        """
+        # 1. Check kb.path (primary)
+        kb_path = self.get("kb.path")
+        if kb_path:
+            return Path(kb_path).expanduser()
+
+        # 2. Check search.kb_path (legacy)
+        kb_path = self.get("search.kb_path")
+        if kb_path:
+            return Path(kb_path).expanduser()
+
+        # 3. Check kb.lock file (backward compatibility)
+        if self.memory_path:
+            kb_lock = self.memory_path / "kb.lock"
+            if kb_lock.exists():
+                return self._read_kb_lock(kb_lock)
+
+        return None
+
+    def _read_kb_lock(self, kb_lock_path: Path) -> Optional[Path]:
+        """Read KB path from legacy kb.lock file.
+
+        Args:
+            kb_lock_path: Path to kb.lock file
+
+        Returns:
+            KB path or None
+        """
+        try:
+            content = kb_lock_path.read_text(encoding="utf-8").strip()
+
+            # Plain text format
+            if not content.startswith("kb_root:") and "\n" not in content:
+                return Path(content).expanduser()
+
+            # YAML format
+            data = yaml.safe_load(content)
+            if isinstance(data, dict) and "kb_root" in data:
+                return Path(data["kb_root"]).expanduser()
+
+            # Fallback: first line
+            first_line = content.split("\n")[0].strip()
+            if first_line.startswith("kb_root:"):
+                return Path(first_line.replace("kb_root:", "").strip()).expanduser()
+        except Exception:
+            pass
+
+        return None
+
+    def set_kb_path(self, kb_path: str) -> None:
+        """Set knowledge base path in config.yaml.
+
+        Args:
+            kb_path: Path to knowledge base
+        """
+        if not self.config_path:
+            raise ConfigError("config.yaml path not found")
+
+        config = self.load()
+        if "kb" not in config:
+            config["kb"] = {}
+        config["kb"]["path"] = kb_path
+
+        # Remove legacy search.kb_path if exists
+        if "search" in config and "kb_path" in config["search"]:
+            del config["search"]["kb_path"]
+
+        with open(self.config_path, "w", encoding="utf-8") as f:
+            yaml.dump(config, f, default_flow_style=False, allow_unicode=True)
+
+        # Clear cache
+        self._config = None
 
 
 def load_config(memory_path: Optional[Path] = None, strict: bool = False) -> dict:

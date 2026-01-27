@@ -84,7 +84,7 @@ class DailyPlan:
 
 ## Today's Goals
 
-- [ ]
+<!-- Add tasks with: mplan daily add "task" -->
 
 ## Progress
 
@@ -136,6 +136,21 @@ class DailyPlan:
             except ValueError:
                 return None
 
+    def _format_for_display(self, content: str) -> str:
+        """Format content for display with visual check marks.
+
+        Converts '- [x]' to checkmark symbol for better visual feedback.
+        File content remains unchanged (uses [x]).
+
+        Args:
+            content: Plan content
+
+        Returns:
+            Formatted content for display
+        """
+        # Replace completed tasks with check mark (U+2713)
+        return re.sub(r'^- \[x\]', '- \u2713', content, flags=re.MULTILINE)
+
     def show_plan(self, target_date: Optional[date] = None, auto_update: bool = True) -> str:
         """Show daily plan content.
 
@@ -163,12 +178,12 @@ class DailyPlan:
                 # Save if changed
                 if updated_content != content:
                     plan_path.write_text(updated_content, encoding='utf-8')
-                return updated_content
+                return self._format_for_display(updated_content)
             except Exception:
                 # If update fails, just return original content
-                return plan_path.read_text(encoding='utf-8')
+                return self._format_for_display(plan_path.read_text(encoding='utf-8'))
 
-        return plan_path.read_text(encoding='utf-8')
+        return self._format_for_display(plan_path.read_text(encoding='utf-8'))
 
     def add_task(self, task: str, target_date: Optional[date] = None) -> bool:
         """Add task to daily plan.
@@ -400,9 +415,9 @@ class DailyPlan:
 
         content = plan_path.read_text(encoding='utf-8')
 
-        # Count tasks
-        total = len(re.findall(r'- \[[ x]\]', content))
-        completed = len(re.findall(r'- \[x\]', content))
+        # Count tasks (only those with actual text, exclude empty checkboxes)
+        total = len(re.findall(r'- \[[ x]\] \S', content))
+        completed = len(re.findall(r'- \[x\] \S', content))
 
         return (completed, total)
 
@@ -415,9 +430,9 @@ class DailyPlan:
         Returns:
             Updated content
         """
-        # Count tasks
-        total = len(re.findall(r'- \[[ x]\]', content))
-        completed = len(re.findall(r'- \[x\]', content))
+        # Count tasks (only those with actual text, exclude empty checkboxes)
+        total = len(re.findall(r'- \[[ x]\] \S', content))
+        completed = len(re.findall(r'- \[x\] \S', content))
 
         # Calculate percentage
         if total > 0:

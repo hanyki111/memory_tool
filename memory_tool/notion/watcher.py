@@ -31,6 +31,8 @@ class ChangeHandler(FileSystemEventHandler):
         on_module_change: Callable[[str, Set[str]], None],
         on_timeline_change: Callable[[str, str], None],
         on_plan_change: Optional[Callable[[str, str, str], None]] = None,
+        on_module_move: Optional[Callable[[str, str], None]] = None,
+        on_module_delete: Optional[Callable[[str], None]] = None,
         debounce_seconds: float = 2.0,
         verbose: bool = False,
         modules_dir: Optional[Path] = None,
@@ -42,6 +44,8 @@ class ChangeHandler(FileSystemEventHandler):
             on_module_change: Callback for module changes (event_type, module_paths)
             on_timeline_change: Callback for timeline changes
             on_plan_change: Callback for plan changes (event_type, plan_type, file_path)
+            on_module_move: Callback for module file moves (src_path, dest_path)
+            on_module_delete: Callback for module file deletes (file_path)
             debounce_seconds: Wait time before triggering sync
             verbose: Print verbose output
             modules_dir: Path to modules directory for extracting module paths
@@ -51,6 +55,8 @@ class ChangeHandler(FileSystemEventHandler):
         self.on_module_change = on_module_change
         self.on_timeline_change = on_timeline_change
         self.on_plan_change = on_plan_change
+        self.on_module_move = on_module_move
+        self.on_module_delete = on_module_delete
         self.debounce_seconds = debounce_seconds
         self.verbose = verbose
         self.modules_dir = modules_dir
@@ -64,6 +70,10 @@ class ChangeHandler(FileSystemEventHandler):
         self._module_pending_paths: Set[str] = set()  # Track changed module paths
         self._timeline_pending_files: Set[str] = set()
         self._plan_pending_files: Set[tuple] = set()  # (plan_type, file_path)
+
+        # Track pending moves and deletes for debouncing
+        self._module_pending_moves: list = []  # [(src_path, dest_path), ...]
+        self._module_pending_deletes: Set[str] = set()  # {file_path, ...}
 
     def _get_change_type(self, path: str) -> Optional[str]:
         """Determine if path is module, timeline, or plan change."""
@@ -104,7 +114,10 @@ class ChangeHandler(FileSystemEventHandler):
             return None
 
     def _schedule_module_sync(self, event_type: str, path: str):
-        """Schedule module sync with debouncing."""
+        """Schedule module sync with debouncing.
+
+        Uses unified _trigger_module_changes to handle all module events together.
+        """
         with self._lock:
             if self._module_timer:
                 self._module_timer.cancel()
@@ -116,19 +129,9 @@ class ChangeHandler(FileSystemEventHandler):
 
             self._module_timer = threading.Timer(
                 self.debounce_seconds,
-                self._trigger_module_sync,
-                args=[event_type]
+                self._trigger_module_changes,
             )
             self._module_timer.start()
-
-    def _trigger_module_sync(self, event_type: str):
-        """Trigger module sync callback."""
-        with self._lock:
-            self._module_timer = None
-            module_paths = self._module_pending_paths.copy()
-            self._module_pending_paths.clear()
-
-        self.on_module_change(event_type, module_paths)
 
     def _schedule_timeline_sync(self, event_type: str, path: str):
         """Schedule timeline sync with debouncing."""
@@ -230,6 +233,106 @@ class ChangeHandler(FileSystemEventHandler):
             plan_type = change_type.replace("plan_", "")
             print(f"[watch] Plan ({plan_type}) created: {Path(event.src_path).name}")
             self._schedule_plan_sync("created", plan_type, event.src_path)
+
+    def on_deleted(self, event):
+        """Handle file deletion."""
+        if event.is_directory:
+            return
+
+        change_type = self._get_change_type(event.src_path)
+        if self.verbose:
+            print(f"[watch:debug] Deleted change_type={change_type} path={event.src_path}")
+
+        if change_type == "module":
+            print(f"[watch] Module deleted: {Path(event.src_path).name}")
+            self._schedule_module_delete(event.src_path)
+
+    def on_moved(self, event):
+        """Handle file move/rename.
+
+        This is crucial for preventing duplicate Notion pages when files are moved.
+        Instead of treating moves as delete+create, we track the src->dest mapping
+        and transfer the Notion page ID to the new location.
+        """
+        if event.is_directory:
+            return
+
+        src_change_type = self._get_change_type(event.src_path)
+        dest_change_type = self._get_change_type(event.dest_path)
+
+        if self.verbose:
+            print(f"[watch:debug] Moved src_type={src_change_type} dest_type={dest_change_type}")
+            print(f"[watch:debug]   src={event.src_path}")
+            print(f"[watch:debug]   dest={event.dest_path}")
+
+        # Handle module file moves
+        if src_change_type == "module" or dest_change_type == "module":
+            src_name = Path(event.src_path).name
+            dest_name = Path(event.dest_path).name
+            print(f"[watch] Module moved: {src_name} -> {dest_name}")
+            self._schedule_module_move(event.src_path, event.dest_path)
+
+    def _schedule_module_delete(self, path: str):
+        """Schedule module delete handling with debouncing."""
+        if not self.on_module_delete:
+            return
+
+        with self._lock:
+            if self._module_timer:
+                self._module_timer.cancel()
+
+            self._module_pending_deletes.add(path)
+
+            self._module_timer = threading.Timer(
+                self.debounce_seconds,
+                self._trigger_module_changes,
+            )
+            self._module_timer.start()
+
+    def _schedule_module_move(self, src_path: str, dest_path: str):
+        """Schedule module move handling with debouncing."""
+        if not self.on_module_move:
+            # Fallback: treat as delete + create
+            self._schedule_module_delete(src_path)
+            self._schedule_module_sync("created", dest_path)
+            return
+
+        with self._lock:
+            if self._module_timer:
+                self._module_timer.cancel()
+
+            self._module_pending_moves.append((src_path, dest_path))
+
+            self._module_timer = threading.Timer(
+                self.debounce_seconds,
+                self._trigger_module_changes,
+            )
+            self._module_timer.start()
+
+    def _trigger_module_changes(self):
+        """Trigger all pending module changes (moves, deletes, syncs)."""
+        with self._lock:
+            self._module_timer = None
+            pending_moves = self._module_pending_moves.copy()
+            pending_deletes = self._module_pending_deletes.copy()
+            pending_paths = self._module_pending_paths.copy()
+            self._module_pending_moves.clear()
+            self._module_pending_deletes.clear()
+            self._module_pending_paths.clear()
+
+        # Process moves first (transfer state before creating new pages)
+        for src_path, dest_path in pending_moves:
+            if self.on_module_move:
+                self.on_module_move(src_path, dest_path)
+
+        # Process deletes (archive old Notion pages)
+        for path in pending_deletes:
+            if self.on_module_delete:
+                self.on_module_delete(path)
+
+        # Process regular syncs
+        if pending_paths:
+            self.on_module_change("modified", pending_paths)
 
 
 class NotionWatcher:
@@ -386,6 +489,150 @@ class NotionWatcher:
 
         except Exception as e:
             print(f"[{timestamp}] Module sync failed: {e}")
+
+    def _on_module_move(self, src_path: str, dest_path: str):
+        """Handle module file move by transferring sync state.
+
+        When a file is moved, we:
+        1. Transfer the Notion page ID from old location to new location
+        2. Update the Notion page's parent if the module changed
+        3. Archive the old state to prevent orphaned pages
+
+        Args:
+            src_path: Original file path
+            dest_path: New file path
+        """
+        timestamp = datetime.now().strftime("%H:%M:%S")
+
+        if self.dry_run:
+            print(f"[{timestamp}] Would handle move: {Path(src_path).name} -> {Path(dest_path).name}")
+            return
+
+        try:
+            from memory_tool.notion.state import SyncStateManager
+            from memory_tool.notion.sync import ModuleSyncer
+
+            state_manager = SyncStateManager(self.memory_root)
+
+            # Extract module paths and file names
+            src_module_path = self._extract_module_path_from_file(src_path)
+            dest_module_path = self._extract_module_path_from_file(dest_path)
+            src_file_name = Path(src_path).name
+            dest_file_name = Path(dest_path).name
+
+            if not src_module_path or not dest_module_path:
+                print(f"[{timestamp}] Could not extract module paths for move")
+                return
+
+            # Get the old file's sync state (contains Notion page ID)
+            old_state = state_manager.get_file_state(src_module_path, src_file_name)
+
+            if old_state.notion_page_id:
+                print(f"[{timestamp}] Transferring Notion page ID: {old_state.notion_page_id[:8]}...")
+
+                # Transfer state to new location
+                state_manager.set_file_state(dest_module_path, dest_file_name, old_state)
+
+                # Clear old state to prevent duplicate references
+                state_manager.clear_file_state(src_module_path, src_file_name)
+
+                # If module changed, we need to move the Notion page too
+                if src_module_path != dest_module_path:
+                    print(f"[{timestamp}] Module changed: {src_module_path} -> {dest_module_path}")
+                    # The actual Notion page move will happen during next sync
+                    # For now, just sync the destination module
+                    syncer = ModuleSyncer()
+                    syncer.sync(module_path=dest_module_path, verbose=self.verbose)
+                else:
+                    # Same module, just file renamed - sync to update
+                    syncer = ModuleSyncer()
+                    syncer.sync(module_path=dest_module_path, verbose=self.verbose)
+
+                print(f"[{timestamp}] Move handled successfully")
+            else:
+                # No existing Notion page, just sync the new location
+                print(f"[{timestamp}] No existing Notion page for moved file")
+                syncer = ModuleSyncer()
+                syncer.sync(module_path=dest_module_path, verbose=self.verbose)
+
+        except Exception as e:
+            print(f"[{timestamp}] Move handling failed: {e}")
+            # Fallback: just sync destination
+            try:
+                from memory_tool.notion.sync import ModuleSyncer
+                dest_module_path = self._extract_module_path_from_file(dest_path)
+                if dest_module_path:
+                    syncer = ModuleSyncer()
+                    syncer.sync(module_path=dest_module_path, verbose=self.verbose)
+            except Exception:
+                pass
+
+    def _on_module_delete(self, file_path: str):
+        """Handle module file deletion by archiving Notion page.
+
+        Args:
+            file_path: Deleted file path
+        """
+        timestamp = datetime.now().strftime("%H:%M:%S")
+
+        if self.dry_run:
+            print(f"[{timestamp}] Would handle delete: {Path(file_path).name}")
+            return
+
+        try:
+            from memory_tool.notion.state import SyncStateManager
+            from memory_tool.notion.client import NotionClient
+
+            state_manager = SyncStateManager(self.memory_root)
+
+            module_path = self._extract_module_path_from_file(file_path)
+            file_name = Path(file_path).name
+
+            if not module_path:
+                return
+
+            # Get the file's sync state
+            file_state = state_manager.get_file_state(module_path, file_name)
+
+            if file_state.notion_page_id:
+                print(f"[{timestamp}] Archiving Notion page for deleted file: {file_name}")
+
+                try:
+                    client = NotionClient()
+                    # Archive (soft delete) the Notion page
+                    client.archive_page(file_state.notion_page_id)
+                    print(f"[{timestamp}] Archived Notion page: {file_state.notion_page_id[:8]}...")
+                except Exception as e:
+                    print(f"[{timestamp}] Failed to archive Notion page: {e}")
+
+                # Clear the sync state
+                state_manager.clear_file_state(module_path, file_name)
+            else:
+                if self.verbose:
+                    print(f"[{timestamp}] No Notion page to archive for: {file_name}")
+
+        except Exception as e:
+            print(f"[{timestamp}] Delete handling failed: {e}")
+
+    def _extract_module_path_from_file(self, file_path: str) -> Optional[str]:
+        """Extract module path from a full file path.
+
+        Args:
+            file_path: Full path to file
+
+        Returns:
+            Module path relative to modules directory
+        """
+        if not self.modules_dir:
+            return None
+
+        try:
+            file_path_obj = Path(file_path)
+            module_dir = file_path_obj.parent
+            rel_path = module_dir.relative_to(self.modules_dir)
+            return str(rel_path).replace("\\", "/")
+        except (ValueError, Exception):
+            return None
 
     def _process_pending_modules(self):
         """Process any modules that were queued during an active sync."""
@@ -588,6 +835,8 @@ class NotionWatcher:
             on_module_change=self._on_module_change,
             on_timeline_change=self._on_timeline_change,
             on_plan_change=self._on_plan_change if self.watch_plans else None,
+            on_module_move=self._on_module_move if self.watch_modules else None,
+            on_module_delete=self._on_module_delete if self.watch_modules else None,
             debounce_seconds=self.debounce_seconds,
             verbose=self.verbose,
             modules_dir=self.modules_dir,

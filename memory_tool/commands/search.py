@@ -28,7 +28,7 @@ def search(
     from_date: Optional[str] = typer.Option(None, "--from", help="Start date (YYYY-MM-DD)"),
     to_date: Optional[str] = typer.Option(None, "--to", help="End date (YYYY-MM-DD)"),
     semantic: bool = typer.Option(False, "--semantic", "-s", help="Semantic search using embeddings"),
-    threshold: float = typer.Option(0.3, "--threshold", "-t", help="Similarity threshold (0-1, semantic only)"),
+    threshold: Optional[float] = typer.Option(None, "--threshold", "-t", help="Similarity threshold (0-1, default from config: 0.5)"),
     no_index: bool = typer.Option(False, "--no-index", help="Force file-based search (skip SQLite index)"),
     rank: Optional[str] = typer.Option(None, "--rank", help="Ranking algorithm: bm25 (default: none)"),
     boost_recent: bool = typer.Option(False, "--boost-recent", help="Boost recent results"),
@@ -65,7 +65,7 @@ def search(
     file_type = opt_str(file_type)
     module_filter = opt_str(module_filter)
 
-    # Load hybrid search defaults from config
+    # Load search defaults from config
     config = Config()
     if hybrid is None:
         hybrid = config.get("search.hybrid", False)
@@ -73,6 +73,8 @@ def search(
         text_weight = config.get("search.text_weight", 0.7)
     if semantic_weight is None:
         semantic_weight = config.get("search.semantic_weight", 0.3)
+    if threshold is None:
+        threshold = config.get("search.semantic_threshold", 0.5)
 
     search_cache = None
     cache_key_params = {

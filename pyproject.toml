@@ -102,6 +102,9 @@ mhelp = "memory_tool.cli:help_cli"
 "월간" = "memory_tool.cli:month_cli"
 "일수" = "memory_tool.cli:days_cli"
 "질문" = "memory_tool.cli:ask_cli"
+# Federation commands
+mpublish = "memory_tool.cli:publish_cli"
+mimport = "memory_tool.cli:import_cli"
 
 [tool.setuptools.packages.find]
 where = ["."]

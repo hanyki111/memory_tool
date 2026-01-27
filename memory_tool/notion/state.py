@@ -281,3 +281,15 @@ class SyncStateManager:
         if "modules" in state and module_path in state["modules"]:
             del state["modules"][module_path]
             self.save_state()
+
+    def clear_file_state(self, module_path: str, file_name: str):
+        """Clear sync state for a specific file within a module.
+
+        Args:
+            module_path: Module path
+            file_name: File name to clear (e.g., "current.md")
+        """
+        module_state = self.get_module_state(module_path)
+        if file_name in module_state.files:
+            del module_state.files[file_name]
+            self.set_module_state(module_path, module_state)

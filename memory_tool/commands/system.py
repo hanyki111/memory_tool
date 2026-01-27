@@ -248,7 +248,7 @@ def _display_aliases_grouped(manager, status_map, lang=None):
         groups[category].append((alias_name, command, desc_en, desc_ko))
 
     # Display order
-    group_order = ["core", "timeline", "search", "module", "plan", "llm", "notion", "system"]
+    group_order = ["core", "timeline", "search", "module", "federation", "plan", "llm", "notion", "system"]
 
     for group_key in group_order:
         if group_key not in groups:

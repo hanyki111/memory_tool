@@ -298,6 +298,64 @@ WSL에서 Windows 마운트 드라이브(/mnt/...)를 감시할 경우, 파일 �
 
 ---
 
+## Knowledge Federation (KB 연동)
+
+> **"Execution should be isolated, but Knowledge must be federated."**
+
+여러 프로젝트 간 지식을 공유하는 Federation 시스템입니다.
+
+### 기본 개념
+
+```
+Project A                    Central KB                    Project B
+┌─────────┐                 ┌─────────┐                   ┌─────────┐
+│ modules/│   mpublish      │ modules/│     mimport       │ modules/│
+│ search/ │ ──────────────▶ │ search/ │ ◀──────────────── │ ref/    │
+└─────────┘                 └─────────┘                   └─────────┘
+```
+
+- **mpublish**: 로컬 모듈을 KB에 발행
+- **mimport**: KB 모듈을 로컬로 가져오기
+- **ms --with-kb**: KB 포함 검색
+
+### KB 설정
+
+```yaml
+# .memory/config.yaml
+kb:
+  path: /path/to/your/kb  # 중앙 KB 경로
+```
+
+### 사용 예시
+
+```bash
+# 모듈 발행
+mpublish search-system --tags search,fts5,hybrid
+mpublish master --tags project-overview
+
+# KB 목록 확인
+mimport --list
+
+# KB 모듈 가져오기
+mimport Projects/memory_tool/search-system --target ref/search
+
+# KB 포함 검색
+ms "hybrid search" --with-kb
+```
+
+### Federation 명령어
+
+| 명령어 | 설명 |
+|--------|------|
+| `mpublish <module>` | 로컬 모듈을 KB에 발행 |
+| `mpublish <module> --dry-run` | 발행 미리보기 |
+| `mpublish <module> --tags a,b` | 태그와 함께 발행 |
+| `mimport --list` | KB 모듈 목록 |
+| `mimport <path>` | KB 모듈 가져오기 |
+| `mimport <path> --target <local>` | 지정 경로로 가져오기 |
+
+---
+
 ## 명령어 레퍼런스
 
 ### 핵심 명령어

@@ -306,3 +306,17 @@ def config_cli():
     import sys
     sys.argv = ['memory_tool', 'config'] + sys.argv[1:]
     app()
+
+
+def publish_cli():
+    """Entry point for 'mpublish' command."""
+    import sys
+    sys.argv = ['memory_tool', 'publish'] + sys.argv[1:]
+    app()
+
+
+def import_cli():
+    """Entry point for 'mimport' command."""
+    import sys
+    sys.argv = ['memory_tool', 'import-kb'] + sys.argv[1:]
+    app()

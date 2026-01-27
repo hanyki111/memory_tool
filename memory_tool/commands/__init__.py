@@ -24,5 +24,6 @@ from memory_tool.commands import notion
 from memory_tool.commands import system
 from memory_tool.commands import qa
 from memory_tool.commands import help
+from memory_tool.commands import federation
 
 __all__ = ["app", "console"]

@@ -24,6 +24,8 @@ class SearchResult:
     match_context: str  # Surrounding context
     score: float = 1.0  # Relevance score (default: 1.0)
     date: Optional[datetime] = None  # Document date (for timeline files)
+    source: Optional[str] = None  # Source: "local" or "kb"
+    origin_project: Optional[str] = None  # Origin project name (for KB results)
 
 
 class SearchError(Exception):
@@ -165,6 +167,16 @@ class MemorySearcher:
         except (ValueError, Exception):
             return False
 
+    def _get_kb_path(self) -> Optional[Path]:
+        """Get KB path from config.
+
+        Returns:
+            KB path or None if not configured
+        """
+        from memory_tool.utils.config import Config
+        config = Config(self.memory_path)
+        return config.get_kb_path()
+
     def get_search_paths(
         self,
         scope: str = "local",
@@ -188,14 +200,32 @@ class MemorySearcher:
 
         # Knowledge base
         if scope == "kb" or with_kb or scope == "all":
-            kb_lock = self.memory_path / "kb.lock"
-            if kb_lock.exists():
-                kb_path = kb_lock.read_text(encoding="utf-8").strip()
-                kb_path_obj = Path(kb_path).expanduser()
-                if kb_path_obj.exists():
-                    paths.append(kb_path_obj)
+            kb_path_obj = self._get_kb_path()
+            if kb_path_obj and kb_path_obj.exists():
+                paths.append(kb_path_obj)
 
         return paths
+
+    def _extract_origin_from_file(self, file_path: Path) -> Optional[str]:
+        """Extract origin_project from file frontmatter.
+
+        Args:
+            file_path: Path to file
+
+        Returns:
+            Origin project name or None
+        """
+        try:
+            content = file_path.read_text(encoding="utf-8")
+            # Quick check for frontmatter
+            if not content.startswith("---"):
+                return None
+
+            from memory_tool.utils.frontmatter import Frontmatter
+            frontmatter, _ = Frontmatter.parse(content)
+            return frontmatter.get("origin_project")
+        except Exception:
+            return None
 
     def search_file(
         self,
@@ -203,6 +233,8 @@ class MemorySearcher:
         pattern: str,
         case_sensitive: bool = False,
         context_lines: int = 0,
+        source: Optional[str] = None,
+        origin_project: Optional[str] = None,
     ) -> List[SearchResult]:
         """Search a single file for pattern.
 
@@ -211,6 +243,8 @@ class MemorySearcher:
             pattern: Search pattern (regex)
             case_sensitive: Whether to match case
             context_lines: Number of context lines to include
+            source: Source type ("local" or "kb")
+            origin_project: Origin project name (for KB results)
 
         Returns:
             List of search results
@@ -254,6 +288,8 @@ class MemorySearcher:
                         line_number=i + 1,
                         line_content=line,
                         match_context=context,
+                        source=source,
+                        origin_project=origin_project,
                     )
                 )
 
@@ -267,6 +303,7 @@ class MemorySearcher:
         context_lines: int = 0,
         from_date: Optional[date] = None,
         to_date: Optional[date] = None,
+        source: Optional[str] = None,
     ) -> List[SearchResult]:
         """Search all markdown files in directory recursively.
 
@@ -277,6 +314,7 @@ class MemorySearcher:
             context_lines: Number of context lines
             from_date: Start date filter (for timeline files)
             to_date: End date filter (for timeline files)
+            source: Source type ("local" or "kb")
 
         Returns:
             List of all search results
@@ -297,11 +335,18 @@ class MemorySearcher:
             if not self._is_in_date_range(md_file, from_date, to_date):
                 continue
 
+            # Extract origin_project for KB files
+            origin_project = None
+            if source == "kb":
+                origin_project = self._extract_origin_from_file(md_file)
+
             file_results = self.search_file(
                 md_file,
                 pattern,
                 case_sensitive,
                 context_lines,
+                source=source,
+                origin_project=origin_project,
             )
             results.extend(file_results)
 
@@ -401,6 +446,7 @@ class MemorySearcher:
                                         line_number=line_number,
                                         line_content=content,
                                         match_context=context,
+                                        source="local",
                                     )
                                 )
                             except Exception:
@@ -421,11 +467,19 @@ class MemorySearcher:
         if not search_paths:
             raise SearchError("No search paths available. Check .memory/ and kb.lock.")
 
+        # Determine KB path for source detection
+        kb_path = self._get_kb_path()
+
         # Search each path
         all_results = {}
         total_count = 0
 
         for path in search_paths:
+            # Determine source type
+            source = "local"
+            if kb_path and path == kb_path:
+                source = "kb"
+
             results = self.search_directory(
                 path,
                 query,
@@ -433,6 +487,7 @@ class MemorySearcher:
                 context_lines,
                 from_date,
                 to_date,
+                source=source,
             )
 
             if results:

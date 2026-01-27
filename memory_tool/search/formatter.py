@@ -59,11 +59,18 @@ class ResultFormatter:
 
         location = f"{rel_path}:{result.line_number}"
 
+        # Add source prefix for KB results
+        source_prefix = ""
+        if result.source == "kb" and result.origin_project:
+            source_prefix = f"[magenta][KB: {result.origin_project}][/magenta] "
+        elif result.source == "kb":
+            source_prefix = "[magenta][KB][/magenta] "
+
         # Add score if requested
         if show_score:
-            lines.append(f"[cyan]Score: {result.score:.2f}[/cyan] | {location}")
+            lines.append(f"{source_prefix}[cyan]Score: {result.score:.2f}[/cyan] | {location}")
         else:
-            lines.append(f"[bold]{location}[/bold]")
+            lines.append(f"{source_prefix}[bold]{location}[/bold]")
 
         # Add date if available
         if result.date:

@@ -1001,3 +1001,243 @@ class ModuleSyncer:
             return self.converter.blocks_to_markdown(blocks)
         except Exception as e:
             raise NotionSyncError(f"Failed to get page content: {e}")
+
+    def cleanup(
+        self,
+        dry_run: bool = True,
+        verbose: bool = False,
+        archive_orphans: bool = False,
+    ) -> Dict[str, Any]:
+        """Clean up orphaned Notion pages and invalid sync state.
+
+        This method:
+        1. Validates all stored page IDs still exist in Notion
+        2. Removes invalid state entries (pointing to deleted pages)
+        3. Identifies duplicate pages (same title under same parent)
+        4. Optionally archives orphaned pages
+
+        Args:
+            dry_run: If True, only report what would be cleaned (default: True for safety)
+            verbose: If True, show detailed progress
+            archive_orphans: If True, archive duplicate/orphaned Notion pages
+
+        Returns:
+            Dict with cleanup results
+        """
+        self._ensure_client()
+
+        result = {
+            "invalid_states": [],      # State entries pointing to non-existent pages
+            "orphaned_pages": [],      # Notion pages without local files
+            "duplicate_pages": [],     # Multiple pages with same title
+            "cleaned_states": [],      # States that were cleaned
+            "archived_pages": [],      # Pages that were archived
+            "errors": [],
+            "dry_run": dry_run,
+        }
+
+        if verbose:
+            print("[cleanup] Starting cleanup scan...")
+
+        # Load all state
+        state = self.state_manager._load_state()
+        modules_state = state.get("modules", {})
+
+        # Phase 1: Validate stored page IDs
+        if verbose:
+            print(f"\n[cleanup] Phase 1: Validating {len(modules_state)} module states...")
+
+        for module_path, module_data in list(modules_state.items()):
+            module_notion_id = module_data.get("notion_page_id")
+            files_state = module_data.get("files", {})
+
+            # Check module page
+            if module_notion_id:
+                is_valid = self._validate_page_exists(module_notion_id)
+                if not is_valid:
+                    result["invalid_states"].append({
+                        "type": "module",
+                        "path": module_path,
+                        "page_id": module_notion_id,
+                    })
+                    if verbose:
+                        print(f"  [invalid] Module '{module_path}' -> page not found")
+
+            # Check file pages
+            for filename, file_data in list(files_state.items()):
+                file_notion_id = file_data.get("notion_page_id")
+                if file_notion_id:
+                    is_valid = self._validate_page_exists(file_notion_id)
+                    if not is_valid:
+                        result["invalid_states"].append({
+                            "type": "file",
+                            "path": f"{module_path}/{filename}",
+                            "page_id": file_notion_id,
+                        })
+                        if verbose:
+                            print(f"  [invalid] File '{module_path}/{filename}' -> page not found")
+
+        # Phase 2: Find duplicate pages (same title under same parent)
+        if verbose:
+            print(f"\n[cleanup] Phase 2: Scanning for duplicate pages...")
+
+        targets = self.get_sync_targets()
+        for target in targets:
+            module_state = self.state_manager.get_module_state(target.module_path)
+            if not module_state.notion_page_id:
+                continue
+
+            try:
+                duplicates = self._find_duplicate_pages(module_state.notion_page_id)
+                for dup in duplicates:
+                    result["duplicate_pages"].append({
+                        "module": target.module_path,
+                        "title": dup["title"],
+                        "pages": dup["pages"],  # List of {id, last_edited}
+                    })
+                    if verbose:
+                        print(f"  [duplicate] '{target.module_path}/{dup['title']}' has {len(dup['pages'])} copies")
+            except Exception as e:
+                result["errors"].append(f"Error scanning {target.module_path}: {e}")
+
+        # Phase 3: Find orphaned pages (in Notion but not local)
+        if verbose:
+            print(f"\n[cleanup] Phase 3: Finding orphaned pages...")
+
+        for target in targets:
+            local_path = Path(target.local_path)
+            module_state = self.state_manager.get_module_state(target.module_path)
+
+            if not module_state.notion_page_id or not local_path.exists():
+                continue
+
+            try:
+                local_files = set(self._get_local_files(local_path).keys())
+                notion_files = self._get_notion_file_pages(module_state.notion_page_id)
+
+                for notion_filename, notion_info in notion_files.items():
+                    if notion_filename not in local_files:
+                        result["orphaned_pages"].append({
+                            "module": target.module_path,
+                            "filename": notion_filename,
+                            "page_id": notion_info.get("page_id"),
+                        })
+                        if verbose:
+                            print(f"  [orphan] '{target.module_path}/{notion_filename}' exists in Notion but not local")
+            except Exception as e:
+                result["errors"].append(f"Error checking orphans in {target.module_path}: {e}")
+
+        # Phase 4: Execute cleanup (if not dry_run)
+        if not dry_run:
+            if verbose:
+                print(f"\n[cleanup] Phase 4: Executing cleanup...")
+
+            # Clean invalid states
+            for invalid in result["invalid_states"]:
+                try:
+                    if invalid["type"] == "module":
+                        self.state_manager.clear_module_state(invalid["path"])
+                    else:
+                        # file type: path is "module_path/filename"
+                        parts = invalid["path"].rsplit("/", 1)
+                        if len(parts) == 2:
+                            self.state_manager.clear_file_state(parts[0], parts[1])
+                    result["cleaned_states"].append(invalid["path"])
+                    if verbose:
+                        print(f"  [cleaned] Removed invalid state: {invalid['path']}")
+                except Exception as e:
+                    result["errors"].append(f"Failed to clean state {invalid['path']}: {e}")
+
+            # Archive orphans and duplicates (if requested)
+            if archive_orphans:
+                # Archive orphaned pages
+                for orphan in result["orphaned_pages"]:
+                    try:
+                        self.client.archive_page(orphan["page_id"])
+                        result["archived_pages"].append(orphan["page_id"])
+                        if verbose:
+                            print(f"  [archived] {orphan['module']}/{orphan['filename']}")
+                    except Exception as e:
+                        result["errors"].append(f"Failed to archive {orphan['page_id']}: {e}")
+
+                # Archive duplicate pages (keep the most recently edited)
+                for dup in result["duplicate_pages"]:
+                    pages = sorted(dup["pages"], key=lambda p: p.get("last_edited", ""), reverse=True)
+                    # Keep the first (most recent), archive the rest
+                    for old_page in pages[1:]:
+                        try:
+                            self.client.archive_page(old_page["id"])
+                            result["archived_pages"].append(old_page["id"])
+                            if verbose:
+                                print(f"  [archived duplicate] {dup['title']} (kept most recent)")
+                        except Exception as e:
+                            result["errors"].append(f"Failed to archive duplicate {old_page['id']}: {e}")
+
+        # Summary
+        if verbose:
+            print(f"\n[cleanup] Summary:")
+            print(f"  Invalid states: {len(result['invalid_states'])}")
+            print(f"  Orphaned pages: {len(result['orphaned_pages'])}")
+            print(f"  Duplicate pages: {len(result['duplicate_pages'])}")
+            if not dry_run:
+                print(f"  Cleaned states: {len(result['cleaned_states'])}")
+                print(f"  Archived pages: {len(result['archived_pages'])}")
+            print(f"  Errors: {len(result['errors'])}")
+
+        return result
+
+    def _validate_page_exists(self, page_id: str) -> bool:
+        """Check if a Notion page exists and is not archived.
+
+        Args:
+            page_id: Notion page ID
+
+        Returns:
+            True if page exists and is accessible
+        """
+        try:
+            page = self.client.client.pages.retrieve(page_id=page_id)
+            return not page.get("archived", False)
+        except Exception:
+            return False
+
+    def _find_duplicate_pages(self, parent_page_id: str) -> List[Dict[str, Any]]:
+        """Find duplicate child pages (same title) under a parent.
+
+        Args:
+            parent_page_id: Parent page ID to scan
+
+        Returns:
+            List of duplicate groups, each with title and list of pages
+        """
+        try:
+            response = self.client.client.blocks.children.list(block_id=parent_page_id)
+            blocks = response.get("results", [])
+
+            # Group by title
+            title_to_pages = {}
+            for block in blocks:
+                if block.get("type") == "child_page":
+                    title = block.get("child_page", {}).get("title", "")
+                    page_id = block["id"]
+                    last_edited = block.get("last_edited_time", "")
+
+                    if title not in title_to_pages:
+                        title_to_pages[title] = []
+                    title_to_pages[title].append({
+                        "id": page_id,
+                        "last_edited": last_edited,
+                    })
+
+            # Find duplicates (titles with more than one page)
+            duplicates = []
+            for title, pages in title_to_pages.items():
+                if len(pages) > 1:
+                    duplicates.append({
+                        "title": title,
+                        "pages": pages,
+                    })
+
+            return duplicates
+        except Exception:
+            return []

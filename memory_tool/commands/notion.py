@@ -301,6 +301,9 @@ def notion_sync(
     dry_run: bool = typer.Option(False, "--dry-run", "-n", help="Show what would happen without syncing"),
     status: bool = typer.Option(False, "--status", "-s", help="Show sync status"),
     discover: bool = typer.Option(False, "--discover", "-d", help="Discover and download modules from Notion"),
+    cleanup: bool = typer.Option(False, "--cleanup", "-c", help="Clean up orphaned pages and invalid state"),
+    archive_orphans: bool = typer.Option(False, "--archive-orphans", help="Archive orphaned/duplicate pages (use with --cleanup)"),
+    execute: bool = typer.Option(False, "--execute", "-x", help="Actually execute cleanup (default is dry-run for safety)"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
     # Type selection flags
     module_flag: bool = typer.Option(False, "--module", "-m", help="Sync modules only"),
@@ -334,6 +337,10 @@ def notion_sync(
         nsync --dry-run          # Preview changes
         nsync --status           # Show sync status
         nsync --days 7           # Sync last 7 days of timeline/daily plans
+
+        nsync --cleanup              # Scan for orphaned pages (dry-run)
+        nsync --cleanup --execute    # Actually clean up invalid states
+        nsync --cleanup --archive-orphans --execute  # Also archive orphaned pages
     """
     try:
         from memory_tool.notion.sync import ModuleSyncer, NotionSyncError
@@ -397,6 +404,72 @@ def notion_sync(
             else:
                 console.print("[yellow]No modules found in Notion under root page[/yellow]")
                 console.print("[dim]Make sure root_page_id points to a page with child pages[/dim]")
+            return
+
+        if cleanup:
+            # Default to dry_run=True for safety unless --execute is specified
+            actual_dry_run = not execute
+
+            if actual_dry_run:
+                console.print("[cyan]Cleanup scan (dry-run)...[/cyan]\n")
+                console.print("[dim]Use --cleanup --execute to actually clean up[/dim]\n")
+            else:
+                console.print("[cyan]Running cleanup...[/cyan]\n")
+
+            result = syncer.cleanup(
+                dry_run=actual_dry_run,
+                verbose=verbose,
+                archive_orphans=archive_orphans,
+            )
+
+            # Display results
+            invalid_states = result.get("invalid_states", [])
+            orphaned_pages = result.get("orphaned_pages", [])
+            duplicate_pages = result.get("duplicate_pages", [])
+            cleaned_states = result.get("cleaned_states", [])
+            archived_pages = result.get("archived_pages", [])
+            errors = result.get("errors", [])
+
+            if invalid_states:
+                console.print(f"[yellow]Invalid states (pointing to deleted Notion pages):[/yellow]")
+                for item in invalid_states:
+                    console.print(f"  - {item['path']} -> {item['page_id'][:12]}...")
+                console.print()
+
+            if orphaned_pages:
+                console.print(f"[yellow]Orphaned pages (in Notion but not local):[/yellow]")
+                for item in orphaned_pages:
+                    console.print(f"  - {item['module']}/{item['filename']}")
+                console.print()
+
+            if duplicate_pages:
+                console.print(f"[yellow]Duplicate pages (same title):[/yellow]")
+                for dup in duplicate_pages:
+                    console.print(f"  - {dup['module']}/{dup['title']} ({len(dup['pages'])} copies)")
+                console.print()
+
+            if not invalid_states and not orphaned_pages and not duplicate_pages:
+                console.print("[green]No issues found![/green]")
+            else:
+                total_issues = len(invalid_states) + len(orphaned_pages) + len(duplicate_pages)
+                console.print(f"[bold]Total issues: {total_issues}[/bold]")
+
+            if not actual_dry_run:
+                if cleaned_states:
+                    console.print(f"\n[green]Cleaned {len(cleaned_states)} invalid state(s)[/green]")
+                if archived_pages:
+                    console.print(f"[green]Archived {len(archived_pages)} page(s)[/green]")
+
+            if errors:
+                console.print(f"\n[red]Errors: {len(errors)}[/red]")
+                for err in errors:
+                    console.print(f"  - {err}")
+
+            if actual_dry_run and (invalid_states or orphaned_pages or duplicate_pages):
+                console.print("\n[dim]To fix issues:[/dim]")
+                console.print("[dim]  nsync --cleanup --execute              # Clean invalid states[/dim]")
+                console.print("[dim]  nsync --cleanup --archive-orphans --execute  # Also archive orphans[/dim]")
+
             return
 
         if status:

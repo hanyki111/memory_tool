@@ -450,6 +450,47 @@ class NotionClient:
         except Exception as e:
             raise NotionError(f"Failed to create page: {e}")
 
+    def archive_page(self, page_id: str) -> Dict[str, Any]:
+        """Archive (soft delete) a Notion page.
+
+        This moves the page to Notion's trash. It can be restored from trash
+        within 30 days.
+
+        Args:
+            page_id: ID of the page to archive
+
+        Returns:
+            Updated page data from Notion API
+        """
+        try:
+            # Notion API: set archived=true to move to trash
+            response = self.client.pages.update(
+                page_id=page_id,
+                archived=True
+            )
+            return response
+        except Exception as e:
+            raise NotionError(f"Failed to archive page: {e}")
+
+    def move_page(self, page_id: str, new_parent_id: str) -> Dict[str, Any]:
+        """Move a page to a new parent.
+
+        Args:
+            page_id: ID of the page to move
+            new_parent_id: ID of the new parent page
+
+        Returns:
+            Updated page data from Notion API
+        """
+        try:
+            response = self.client.pages.update(
+                page_id=page_id,
+                parent={"page_id": new_parent_id}
+            )
+            return response
+        except Exception as e:
+            raise NotionError(f"Failed to move page: {e}")
+
     def append_text(self, page_id: str, text: str) -> Dict[str, Any]:
         """Append text block to a page."""
         try:

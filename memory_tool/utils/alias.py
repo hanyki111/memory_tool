@@ -22,6 +22,7 @@ class AliasManager:
         "timeline": "Timeline / 타임라인",
         "search": "Search & Browse / 검색",
         "module": "Modules / 모듈 관리",
+        "federation": "Federation / 지식 연동",
         "plan": "Planning / 계획",
         "llm": "AI & LLM / AI 기능",
         "notion": "Notion Integration / 노션 연동",
@@ -71,6 +72,15 @@ class AliasManager:
         "marchive": ("archive", "Archive documentation", "문서 아카이브", "module"),
         "mcontext": ("context", "Build Claude Code context", "Claude Code 컨텍스트 생성", "module"),
         "mmap": ("map", "Generate code structure map", "코드 구조 맵 생성", "module"),
+
+        # ============================================================
+        # Federation / 지식 연동
+        # ============================================================
+        "mpublish": ("publish", "Publish module to KB", "모듈을 KB로 발행", "federation"),
+        "mimport": ("import-kb", "Import module from KB", "KB에서 모듈 가져오기", "federation"),
+        # Korean
+        "발행": ("publish", "Publish module to KB", "모듈을 KB로 발행", "federation"),
+        "가져오기": ("import-kb", "Import module from KB", "KB에서 모듈 가져오기", "federation"),
 
         # ============================================================
         # Planning / 계획

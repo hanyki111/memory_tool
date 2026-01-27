@@ -153,10 +153,11 @@ Modules organize knowledge spatially. Each module is a folder with standardized 
 ### Commands
 ```bash
 mmodule list                     # List all modules
-mmodule show myproject           # Show module details
+mmodule tree                     # Tree view of modules
 mmodule create newproject        # Create new module
 mmodule create proj --tags dev,web  # Create with tags
-mmodule edit myproject           # Edit module files
+mmodule graph                    # Visualize module connections
+mmodule connections myproject    # Show connections for module
 ```
 
 ### Wiki Links
@@ -430,6 +431,45 @@ Creates:
 
 ---
 
+## 15. Knowledge Federation
+
+Share knowledge across projects via central Knowledge Base (KB).
+
+### Setup
+```yaml
+# .memory/config.yaml
+kb:
+  path: /path/to/your/kb  # Central KB directory
+```
+
+### Publish to KB
+```bash
+mpublish search-system           # Publish module to KB
+mpublish master --dry-run        # Preview publish
+mpublish master --tags overview  # Publish with tags
+```
+
+### Import from KB
+```bash
+mimport --list                   # List available KB modules
+mimport Projects/proj/module     # Import to default location
+mimport Projects/proj/module --target ref/module  # Import to specific path
+```
+
+### Search with KB
+```bash
+ms "query" --with-kb             # Search local + KB
+```
+
+### Cleanup
+```bash
+nsync --cleanup                  # Scan for orphaned pages
+nsync --cleanup --execute        # Fix invalid states
+nsync --cleanup --archive-orphans --execute  # Also archive orphans
+```
+
+---
+
 ## Command Reference
 
 | Command | Alias | Description |
@@ -452,6 +492,8 @@ Creates:
 | `minit` | `init` | Initialize |
 | `mstatus` | `status` | Show stats |
 | `mcheck` | `check` | Validate links |
+| `mpublish` | `publish` | Publish to KB |
+| `mimport` | `import-kb` | Import from KB |
 
 ---
 
