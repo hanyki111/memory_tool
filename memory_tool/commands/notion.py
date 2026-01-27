@@ -10,6 +10,7 @@ import typer
 from memory_tool.commands.common import app, console
 from memory_tool.notion.client import NotionClient, NotionError
 from memory_tool.notion.models import SyncDirection
+from memory_tool.utils.config import Config
 
 
 @app.command(name="nm")
@@ -20,6 +21,9 @@ def notion_message(
     """Append text to a Notion page (nm command)."""
     try:
         client = NotionClient()
+        config = Config()
+        timeline_root_page_id = config.get("notion.sync.timeline.root_page_id")
+
         now = datetime.now()
 
         if page_id:
@@ -28,12 +32,12 @@ def notion_message(
             console.print(f"[green]OK[/green] Appended to Notion page")
             console.print(f"[dim]-> Page: {target_id}[/dim]")
         else:
-            if not client.default_page_id:
-                console.print("[red]ERROR[/red] Default page ID not configured in config.yaml")
+            if not timeline_root_page_id:
+                console.print("[red]ERROR[/red] Timeline root page ID not configured. Set notion.sync.timeline.root_page_id in config.yaml")
                 sys.exit(1)
 
             console.print("[dim]Locating daily page...[/dim]")
-            target_id = client.get_or_create_daily_page(now)
+            target_id = client.get_or_create_daily_page(now, timeline_root_page_id)
 
             time_str = now.strftime("%H:%M")
             client.append_timeline_entry(target_id, time_str, message, date_obj=now)
@@ -96,12 +100,15 @@ def notion_today():
     """Show today's Notion timeline (nt command)."""
     try:
         client = NotionClient()
+        config = Config()
+        timeline_root_page_id = config.get("notion.sync.timeline.root_page_id")
+
         now = datetime.now()
         date_str = now.strftime("%Y-%m-%d")
 
         console.print(f"[cyan]{date_str} Notion Timeline:[/cyan]\n")
 
-        target_id = client.get_or_create_daily_page(now)
+        target_id = client.get_or_create_daily_page(now, timeline_root_page_id)
         content = client.get_page_content(target_id)
 
         if content.strip():
@@ -121,6 +128,9 @@ def notion_week():
     """Show this week's Notion timeline (nw command)."""
     try:
         client = NotionClient()
+        config = Config()
+        timeline_root_page_id = config.get("notion.sync.timeline.root_page_id")
+
         today = datetime.now()
 
         start_of_week = today - timedelta(days=today.weekday())
@@ -133,7 +143,7 @@ def notion_week():
             current_date = start_of_week + timedelta(days=i)
             date_str = current_date.strftime("%Y-%m-%d")
 
-            page_id = client.get_or_create_daily_page(current_date)
+            page_id = client.get_or_create_daily_page(current_date, timeline_root_page_id)
             content = client.get_page_content(page_id)
 
             if content.strip():
