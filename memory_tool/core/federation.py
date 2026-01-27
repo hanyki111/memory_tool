@@ -244,14 +244,19 @@ class Publisher:
     def _get_module_key(self, module_path: Path) -> str:
         """Get module key from path.
 
+        Registry key includes project name prefix to avoid collisions
+        when multiple projects publish modules with the same local name.
+
         Args:
             module_path: Path to module directory
 
         Returns:
-            Module key (e.g., "projects/memory-tool/search-system")
+            Module key with project prefix (e.g., "memory-tool/master")
         """
         rel_path = module_path.relative_to(self.modules_path)
-        return str(rel_path).replace("\\", "/")
+        local_key = str(rel_path).replace("\\", "/")
+        # Add project name prefix for global uniqueness in KB registry
+        return f"{self.project_name}/{local_key}"
 
     def _compute_module_hash(self, module_path: Path) -> str:
         """Compute hash of module contents.

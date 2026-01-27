@@ -47,6 +47,11 @@ mtoday
 mmodule create master
 ```
 
+This creates `.memory/modules/master/` locally.
+
+When published, the registry key automatically includes project name prefix
+(e.g., `memory-tool/master`) to avoid collisions across projects.
+
 **Required files:**
 - `current.md` - Project overview (main document)
 - `decisions.md` - Architectural decisions summary
