@@ -970,6 +970,7 @@ Action: Split by clear criteria
         """Copy memory_tool skills to project's .claude/skills/.
 
         Copies mt-publish and mt-master-module skills for KB federation workflow.
+        Skills are stored inside the package at memory_tool/templates/skills/.
 
         Returns:
             List of paths to created skill files
@@ -979,14 +980,17 @@ Action: Split by clear criteria
         # Skills to copy
         skill_names = ["mt-publish", "mt-master-module"]
 
+        # Source: memory_tool package's templates/skills/
+        package_dir = Path(__file__).parent.parent  # memory_tool/
+        source_base = package_dir / "templates" / "skills"
+
         for skill_name in skill_names:
-            # Source: memory_tool's .claude/skills/<skill>/
-            source_skills_dir = self.memory_tool_root / ".claude" / "skills" / skill_name
+            source_skills_dir = source_base / skill_name
             # Destination: project's .claude/skills/<skill>/
             dest_skills_dir = self.claude_path / "skills" / skill_name
 
             if not source_skills_dir.exists():
-                # If skill doesn't exist, skip
+                # If skill doesn't exist in package, skip
                 continue
 
             # Ensure destination directory exists
