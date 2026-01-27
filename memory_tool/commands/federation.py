@@ -121,6 +121,11 @@ def import_kb(
         "--list", "-l",
         help="List available KB modules"
     ),
+    preview: bool = typer.Option(
+        False,
+        "--preview", "-v",
+        help="Preview module contents without importing"
+    ),
     category: Optional[str] = typer.Option(
         None,
         "--category", "-c",
@@ -142,6 +147,7 @@ def import_kb(
     Examples:
         mimport --list                                   # List KB modules
         mimport --list --category Topics                 # Filter by category
+        mimport Projects/memory-tool/search-system --preview  # Preview contents
         mimport Projects/memory-tool/search-system       # Import module
         mimport Projects/memory-tool/search-system --target ref/search  # Custom path
     """
@@ -193,6 +199,54 @@ def import_kb(
             )
 
         console.print(table)
+        return
+
+    # Preview mode
+    if preview:
+        if not kb_module_path:
+            console.print("[red]Error:[/red] Specify a module path to preview")
+            raise typer.Exit(1)
+
+        result = importer.preview_module(kb_module_path)
+
+        if not result["success"]:
+            console.print(f"[red]Error:[/red] {result['message']}")
+            raise typer.Exit(1)
+
+        # Display module info
+        mod_info = result.get("module_info")
+        if mod_info:
+            console.print(f"\n[bold cyan]Module Info[/bold cyan]")
+            console.print(f"  Origin: [green]{mod_info.origin_project}[/green]")
+            console.print(f"  Version: {mod_info.version}")
+            console.print(f"  Published: {mod_info.published_at[:10] if mod_info.published_at else 'N/A'}")
+            if mod_info.tags:
+                console.print(f"  Tags: {', '.join(mod_info.tags)}")
+            console.print()
+
+        # Display files
+        files = result.get("files", [])
+        console.print(f"[bold cyan]Files ({len(files)})[/bold cyan]")
+
+        for file_info in files:
+            console.print(f"\n[bold yellow]--- {file_info['name']} ---[/bold yellow]")
+
+            # Show frontmatter if exists
+            if file_info.get("frontmatter"):
+                console.print("[dim]Frontmatter:[/dim]")
+                for key, value in file_info["frontmatter"].items():
+                    console.print(f"  [dim]{key}:[/dim] {value}")
+                console.print()
+
+            # Show content (truncate if too long)
+            content = file_info.get("content", "")
+            lines = content.split("\n")
+            if len(lines) > 50:
+                console.print("\n".join(lines[:50]))
+                console.print(f"\n[dim]... ({len(lines) - 50} more lines)[/dim]")
+            else:
+                console.print(content)
+
         return
 
     # Import mode

@@ -336,6 +336,9 @@ mpublish master --tags project-overview
 # KB 목록 확인
 mimport --list
 
+# KB 모듈 내용 미리보기
+mimport Projects/memory_tool/search-system --preview
+
 # KB 모듈 가져오기
 mimport Projects/memory_tool/search-system --target ref/search
 
@@ -351,6 +354,7 @@ ms "hybrid search" --with-kb
 | `mpublish <module> --dry-run` | 발행 미리보기 |
 | `mpublish <module> --tags a,b` | 태그와 함께 발행 |
 | `mimport --list` | KB 모듈 목록 |
+| `mimport <path> --preview` | KB 모듈 내용 미리보기 |
 | `mimport <path>` | KB 모듈 가져오기 |
 | `mimport <path> --target <local>` | 지정 경로로 가져오기 |
 

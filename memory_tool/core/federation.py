@@ -497,3 +497,68 @@ class Importer:
         result["target_path"] = str(dest_path.relative_to(self.memory_path))
 
         return result
+
+    def preview_module(
+        self,
+        kb_module_path: str,
+    ) -> Dict[str, Any]:
+        """Preview contents of a KB module without importing.
+
+        Args:
+            kb_module_path: Path within KB (e.g., "Projects/memory-tool/search-system")
+
+        Returns:
+            Dictionary with module info and file contents
+        """
+        result = {
+            "success": False,
+            "kb_module_path": kb_module_path,
+            "module_info": None,
+            "files": [],
+            "message": "",
+        }
+
+        # Normalize path
+        normalized_path = kb_module_path
+        if not kb_module_path.startswith("modules/"):
+            normalized_path = f"modules/{kb_module_path}"
+
+        # Find source in KB
+        source_path = self.kb_path / normalized_path
+        if not source_path.exists():
+            result["message"] = f"Module not found in KB: {kb_module_path}"
+            return result
+
+        # Try to get module info from registry
+        # Find matching module by kb_path
+        all_modules = self.registry.list_modules()
+        module_info = None
+        for mod in all_modules:
+            # Compare normalized paths
+            mod_kb_path = mod.kb_path.rstrip("/")
+            if mod_kb_path == normalized_path or mod_kb_path == normalized_path.rstrip("/"):
+                module_info = mod
+                break
+
+        # Collect file contents
+        files = []
+        for file_path in sorted(source_path.rglob("*.md")):
+            rel_file = file_path.relative_to(source_path)
+            content = file_path.read_text(encoding="utf-8")
+
+            # Parse frontmatter
+            frontmatter, body = Frontmatter.parse(content)
+
+            files.append({
+                "name": str(rel_file),
+                "frontmatter": frontmatter,
+                "content": body,
+                "full_content": content,
+            })
+
+        result["success"] = True
+        result["module_info"] = module_info
+        result["files"] = files
+        result["message"] = f"Found {len(files)} file(s) in module"
+
+        return result

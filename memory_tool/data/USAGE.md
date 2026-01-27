@@ -452,6 +452,7 @@ mpublish master --tags overview  # Publish with tags
 ### Import from KB
 ```bash
 mimport --list                   # List available KB modules
+mimport Projects/proj/module --preview  # Preview contents before importing
 mimport Projects/proj/module     # Import to default location
 mimport Projects/proj/module --target ref/module  # Import to specific path
 ```
