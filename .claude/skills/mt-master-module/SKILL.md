@@ -148,6 +148,44 @@ After creating the master module, optionally publish to KB:
 mpublish master --tags project-overview
 ```
 
+#### KB Path Structure
+
+`mpublish` creates files at:
+```
+{KB_PATH}/modules/{category}/{project_name}/{module_name}/
+```
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `category` | `Projects` | Use `--category Topics` for topic-based modules |
+| `project_name` | Auto-detected from directory | Can be set in config.yaml |
+| `module_name` | From local module path | e.g., `master` |
+
+**Example paths:**
+```
+mpublish master
+→ KB: modules/Projects/memory-tool/master/
+→ Registry key: memory-tool/master
+
+mpublish master --category Topics
+→ KB: modules/Topics/memory-tool/master/
+```
+
+#### Manual Publish (Fallback)
+
+If `mpublish` is unavailable, manually:
+
+1. Copy files to KB:
+   ```bash
+   mkdir -p {KB_PATH}/modules/Projects/{project_name}/master/
+   cp .memory/modules/master/*.md {KB_PATH}/modules/Projects/{project_name}/master/
+   ```
+
+2. Update registry (optional):
+   ```
+   {KB_PATH}/modules/_Registry/registry.json
+   ```
+
 ## Output Format
 
 ```

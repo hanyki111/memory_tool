@@ -89,6 +89,52 @@ mpublish <module-name> --tags auth,security,jwt
 mimport --list
 ```
 
+#### KB Path Structure
+
+`mpublish` creates files at:
+```
+{KB_PATH}/modules/{category}/{project_name}/{module_name}/
+```
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `category` | `Projects` | Use `--category Topics` for topic-based modules |
+| `project_name` | Auto-detected | From directory name or config.yaml |
+| `module_name` | Local module name | e.g., `search-system` |
+
+**Example:**
+```bash
+mpublish search-system --tags search,fts5
+# Local:  .memory/modules/search-system/
+# KB:     modules/Projects/memory-tool/search-system/
+# Registry key: memory-tool/search-system
+```
+
+#### Manual Publish (Fallback)
+
+If `mpublish` is unavailable:
+
+1. Copy files:
+   ```bash
+   mkdir -p {KB_PATH}/modules/Projects/{project_name}/{module_name}/
+   cp .memory/modules/{module_name}/*.md {KB_PATH}/modules/Projects/{project_name}/{module_name}/
+   ```
+
+2. Update `{KB_PATH}/modules/_Registry/registry.json`:
+   ```json
+   {
+     "modules": {
+       "{project_name}/{module_name}": {
+         "origin_project": "{project_name}",
+         "kb_path": "modules/Projects/{project_name}/{module_name}/",
+         "published_at": "2026-01-27T...",
+         "version": 1,
+         "tags": ["tag1", "tag2"]
+       }
+     }
+   }
+   ```
+
 ## Output Format
 
 ```
