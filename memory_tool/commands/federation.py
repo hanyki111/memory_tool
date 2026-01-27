@@ -60,12 +60,13 @@ def publish(
     kb_path = config.get_kb_path()
     if not kb_path:
         console.print("[red]Error:[/red] KB path not configured.")
-        console.print("Set with: [cyan]mconfig set kb.path ~/your/kb/path[/cyan]")
+        console.print("Set with: [cyan]mconfig set kb.path /path/to/kb/.memory[/cyan]")
+        console.print("[dim]Note: Path must include .memory folder[/dim]")
         raise typer.Exit(1)
 
     if not kb_path.exists():
         console.print(f"[red]Error:[/red] KB path does not exist: {kb_path}")
-        console.print(f"Create with: [cyan]mkdir -p {kb_path}[/cyan]")
+        console.print(f"Create with: [cyan]mkdir -p {kb_path}/modules[/cyan]")
         raise typer.Exit(1)
 
     # Parse tags
@@ -162,7 +163,8 @@ def import_kb(
     kb_path = config.get_kb_path()
     if not kb_path:
         console.print("[red]Error:[/red] KB path not configured.")
-        console.print("Set with: [cyan]mconfig set kb.path ~/your/kb/path[/cyan]")
+        console.print("Set with: [cyan]mconfig set kb.path /path/to/kb/.memory[/cyan]")
+        console.print("[dim]Note: Path must include .memory folder[/dim]")
         raise typer.Exit(1)
 
     if not kb_path.exists():

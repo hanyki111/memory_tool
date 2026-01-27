@@ -1304,6 +1304,117 @@ Memory Tool 설정을 확인하고 수정합니다.
             ],
         },
     },
+
+    # ================================================================
+    # Knowledge Federation
+    # ================================================================
+    "publish": {
+        "en": {
+            "name": "mpublish / publish",
+            "summary": "Publish module to Knowledge Base",
+            "description": """
+Publishes a local module to the central Knowledge Base for cross-project sharing.
+
+IMPORTANT: KB path must include .memory folder.
+Set with: mconfig set kb.path /path/to/kb/.memory
+
+Modules are stored at: {kb.path}/modules/Projects/{project}/{module}/
+Registry key format: {project}/{module} (e.g., memory-tool/master)
+            """,
+            "examples": [
+                "mpublish master                    # Publish master module",
+                "mpublish search-system --dry-run  # Preview without publishing",
+                "mpublish master --tags overview   # Publish with tags",
+                "mpublish master --category Topics # Publish to Topics category",
+            ],
+            "options": [
+                ("--dry-run, -n", "Preview without making changes"),
+                ("--tags, -t", "Comma-separated tags"),
+                ("--category, -c", "KB category (Projects or Topics)"),
+                ("--force, -f", "Force republish even if unchanged"),
+            ],
+        },
+        "ko": {
+            "name": "mpublish / publish (발행)",
+            "summary": "모듈을 Knowledge Base에 발행",
+            "description": """
+로컬 모듈을 중앙 Knowledge Base에 발행하여 프로젝트 간 공유합니다.
+
+중요: KB 경로는 .memory 폴더를 포함해야 합니다.
+설정: mconfig set kb.path /path/to/kb/.memory
+
+모듈 저장 위치: {kb.path}/modules/Projects/{project}/{module}/
+Registry key 형식: {project}/{module} (예: memory-tool/master)
+            """,
+            "examples": [
+                "mpublish master                    # master 모듈 발행",
+                "mpublish search-system --dry-run  # 발행 미리보기",
+                "mpublish master --tags overview   # 태그와 함께 발행",
+                "mpublish master --category Topics # Topics 카테고리로 발행",
+            ],
+            "options": [
+                ("--dry-run, -n", "변경 없이 미리보기"),
+                ("--tags, -t", "쉼표로 구분된 태그"),
+                ("--category, -c", "KB 카테고리 (Projects 또는 Topics)"),
+                ("--force, -f", "변경 없어도 강제 재발행"),
+            ],
+        },
+    },
+
+    "import-kb": {
+        "en": {
+            "name": "mimport / import-kb",
+            "summary": "Import module from Knowledge Base",
+            "description": """
+Imports a module from the central Knowledge Base to local project.
+
+Use --list to browse available modules.
+Use --preview to view contents before importing.
+
+KB path must include .memory folder in config.
+            """,
+            "examples": [
+                "mimport --list                              # List KB modules",
+                "mimport --list --project memory-tool       # Filter by project",
+                "mimport Projects/memory-tool/master --preview  # Preview contents",
+                "mimport Projects/memory-tool/master        # Import module",
+                "mimport Projects/memory-tool/master --target ref/master  # Custom path",
+            ],
+            "options": [
+                ("--list, -l", "List available KB modules"),
+                ("--preview, -v", "Preview module contents"),
+                ("--target, -t", "Local target path"),
+                ("--category, -c", "Filter by category when listing"),
+                ("--project, -p", "Filter by project when listing"),
+            ],
+        },
+        "ko": {
+            "name": "mimport / import-kb (가져오기)",
+            "summary": "Knowledge Base에서 모듈 가져오기",
+            "description": """
+중앙 Knowledge Base에서 로컬 프로젝트로 모듈을 가져옵니다.
+
+--list로 사용 가능한 모듈 목록 확인.
+--preview로 가져오기 전 내용 미리보기.
+
+config에서 KB 경로에 .memory 폴더가 포함되어야 합니다.
+            """,
+            "examples": [
+                "mimport --list                              # KB 모듈 목록",
+                "mimport --list --project memory-tool       # 프로젝트별 필터",
+                "mimport Projects/memory-tool/master --preview  # 내용 미리보기",
+                "mimport Projects/memory-tool/master        # 모듈 가져오기",
+                "mimport Projects/memory-tool/master --target ref/master  # 지정 경로",
+            ],
+            "options": [
+                ("--list, -l", "KB 모듈 목록 보기"),
+                ("--preview, -v", "모듈 내용 미리보기"),
+                ("--target, -t", "로컬 대상 경로"),
+                ("--category, -c", "목록 필터: 카테고리별"),
+                ("--project, -p", "목록 필터: 프로젝트별"),
+            ],
+        },
+    },
 }
 
 # Command categories for listing
@@ -1315,6 +1426,7 @@ COMMAND_CATEGORIES = {
         "module": ("Modules", ["module", "archive", "context", "map"]),
         "plan": ("Planning", ["plan", "summary"]),
         "llm": ("AI & LLM", ["ask", "providers"]),
+        "federation": ("KB Federation", ["publish", "import-kb"]),
         "notion": ("Notion", ["nm", "nadd", "np", "ns", "nt", "nw", "nsi", "nsync", "nwatch"]),
         "system": ("System", ["alias", "config", "hooks", "completion"]),
     },
@@ -1325,6 +1437,7 @@ COMMAND_CATEGORIES = {
         "module": ("모듈 관리", ["module", "archive", "context", "map"]),
         "plan": ("계획", ["plan", "summary"]),
         "llm": ("AI 기능", ["ask", "providers"]),
+        "federation": ("KB 연동", ["publish", "import-kb"]),
         "notion": ("노션 연동", ["nm", "nadd", "np", "ns", "nt", "nw", "nsi", "nsync", "nwatch"]),
         "system": ("시스템", ["alias", "config", "hooks", "completion"]),
     },

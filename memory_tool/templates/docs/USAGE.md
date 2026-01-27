@@ -439,8 +439,11 @@ Share knowledge across projects via central Knowledge Base (KB).
 ```yaml
 # .memory/config.yaml
 kb:
-  path: /path/to/your/kb  # Central KB directory
+  path: /path/to/your/kb/.memory  # Must include .memory folder
 ```
+
+> **Important:** KB path must include `.memory` folder.
+> Modules are stored at `{kb.path}/modules/Projects/{project}/{module}/`.
 
 ### Publish to KB
 ```bash

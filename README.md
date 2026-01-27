@@ -323,8 +323,11 @@ Project A                    Central KB                    Project B
 ```yaml
 # .memory/config.yaml
 kb:
-  path: /path/to/your/kb  # 중앙 KB 경로
+  path: /path/to/your/kb/.memory  # 중앙 KB 경로 (.memory 포함)
 ```
+
+> **중요:** KB 경로는 `.memory` 폴더까지 포함해야 합니다.
+> 모듈은 `{kb.path}/modules/Projects/{project}/{module}/` 구조로 저장됩니다.
 
 ### 사용 예시
 
