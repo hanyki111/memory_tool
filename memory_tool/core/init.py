@@ -317,6 +317,25 @@ mcontext --with-map --update-interfaces
 mcheck
 ```
 
+## Knowledge Federation (KB)
+
+Share knowledge across projects via central Knowledge Base.
+
+```bash
+# Setup: mconfig set kb.path /path/to/kb
+
+# Publish module to KB
+mpublish <module>
+
+# Browse and import from KB
+mimport --list
+mimport <path> --preview
+mimport <path>
+
+# Search including KB
+ms "query" --with-kb
+```
+
 ## Philosophy
 
 **Time First** - Capture first, organize later
@@ -1099,7 +1118,7 @@ Action: Split by clear criteria
         affecting other project data (timeline, modules, etc.).
 
         Args:
-            include_guidelines: Also update .claude/guidelines.md
+            include_guidelines: Also update .claude/guidelines.md and skills
 
         Returns:
             Dictionary with updated paths
@@ -1129,7 +1148,7 @@ Action: Split by clear criteria
                 "Template files not found. Memory tool may be incorrectly installed."
             )
 
-        # Optionally update guidelines.md
+        # Optionally update guidelines.md and skills
         if include_guidelines:
             dest_file = self.claude_path / "guidelines.md"
             source_file = Path(__file__).parent.parent / "templates" / "claude" / "guidelines.md"
@@ -1146,5 +1165,9 @@ Action: Split by clear criteria
 
                 shutil.copy2(source_file, dest_file)
                 updated["files"].append(dest_file)
+
+            # Also update skills
+            skill_files = self.create_claude_skills()
+            updated["files"].extend(skill_files)
 
         return updated

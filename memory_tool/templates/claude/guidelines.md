@@ -24,6 +24,7 @@
 |---------|---------|
 | `mpublish <module>` | Publish module to KB |
 | `mimport --list` | List KB modules |
+| `mimport <path> --preview` | Preview KB module contents |
 | `mimport <path>` | Import module from KB |
 
 ---
@@ -198,6 +199,8 @@ marchive --suggest       # Check for archiving needs
 ```bash
 mpublish <module>        # Publish to KB
 mimport --list           # Browse KB
+mimport <path> --preview # Preview before importing
+mimport <path>           # Import from KB
 ms "query" --with-kb     # Search across projects
 ```
 
