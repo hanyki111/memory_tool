@@ -722,20 +722,42 @@ def completion(
 def tutorial(
     lesson: str = typer.Argument(None, help="Lesson ID to show (optional)"),
     list_lessons: bool = typer.Option(False, "--list", "-l", help="List available lessons"),
+    lang: str = typer.Option("en", "--lang", help="Language: en (English), ko (Korean)"),
 ):
     """Interactive tutorial for memory_tool (mtutorial command).
 
     Learn how to use memory_tool commands with step-by-step tutorials.
+    Available in English and Korean.
+
+    Lessons:
+        installation   - Install and set up memory_tool
+        setup          - Configure CLAUDE.md for AI integration
+        daily          - Daily workflow guide
+        ai-integration - Claude Code, Gemini CLI integration
+        recording      - Recording best practices
+        search         - Search and retrieval
+        modules        - Module organization
+        korean         - Korean commands (한글 명령어)
+        quickref       - Quick reference card
 
     Examples:
-        mtutorial                  # Show interactive menu
-        mtutorial basics           # Show basics lesson
-        mtutorial --list           # List all lessons
+        mtutorial                      # Interactive menu (English)
+        mtutorial --lang ko            # Interactive menu (Korean)
+        mtutorial setup                # CLAUDE.md setup guide
+        mtutorial ai-integration       # AI integration guide
+        mtutorial daily --lang ko      # Daily workflow (Korean)
+        mtutorial --list               # List all lessons
+        mtutorial --list --lang ko     # List lessons (Korean)
     """
     try:
         from memory_tool.utils.tutorial import Tutorial
 
-        tut = Tutorial()
+        # Validate language
+        if lang not in ["en", "ko"]:
+            console.print(f"[yellow]Warning:[/yellow] Unknown language '{lang}', using 'en'")
+            lang = "en"
+
+        tut = Tutorial(lang=lang)
 
         if list_lessons:
             tut.list_lessons()
@@ -743,7 +765,8 @@ def tutorial(
             tut.run(lesson_id=lesson)
 
     except KeyboardInterrupt:
-        console.print("\n[yellow]Tutorial closed[/yellow]")
+        msg = "\n[yellow]튜토리얼 종료[/yellow]" if lang == "ko" else "\n[yellow]Tutorial closed[/yellow]"
+        console.print(msg)
     except Exception as e:
         console.print(f"[red]ERROR[/red] Tutorial failed: {e}")
         import traceback

@@ -79,6 +79,46 @@ mcontext
 
 ---
 
+## 튜토리얼
+
+Memory Tool의 상세한 사용법을 단계별로 학습할 수 있습니다.
+
+### 튜토리얼 실행
+
+```bash
+# 인터랙티브 메뉴 (영어)
+mtutorial
+
+# 인터랙티브 메뉴 (한국어)
+mtutorial --lang ko
+
+# 특정 레슨 보기
+mtutorial setup                    # CLAUDE.md 설정 가이드
+mtutorial ai-integration           # AI 도구 연동 (Claude Code, Gemini CLI)
+mtutorial daily                    # 일상 워크플로우
+mtutorial recording                # 기록 모범 사례
+
+# 레슨 목록 보기
+mtutorial --list
+mtutorial --list --lang ko         # 한국어 목록
+```
+
+### 제공 레슨
+
+| ID | English | 한국어 |
+|----|---------|--------|
+| `installation` | Installation & Setup | 설치 및 초기 설정 |
+| `setup` | CLAUDE.md Setup for AI Integration | CLAUDE.md 설정 (AI 연동) |
+| `daily` | Daily Workflow | 일상 워크플로우 |
+| `ai-integration` | AI Tool Integration (Detailed) | AI 도구 연동 (상세) |
+| `recording` | Recording Best Practices | 기록 모범 사례 |
+| `search` | Search and Retrieval | 검색 및 조회 |
+| `modules` | Module Organization | 모듈 조직 |
+| `korean` | - | 한글 명령어 |
+| `quickref` | Quick Reference Card | 빠른 참조 카드 |
+
+---
+
 ## Notion 연동
 
 Memory Tool은 Notion과 완전히 통합됩니다:
