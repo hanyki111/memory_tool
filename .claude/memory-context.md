@@ -1,6 +1,6 @@
 # Memory Context
 
-**Generated:** 2026-01-21 17:40
+**Generated:** 2026-01-30 12:34
 
 ---
 
@@ -19,14 +19,15 @@
 ## Module Status
 
 - **archive/memory-system**: `./.memory\modules\archive\memory-system\current.md`
-- **projects/memory-tool**: `./.memory\modules\projects\memory-tool\current.md`
-- **projects/memory-tool/core-system**: `./.memory\modules\projects\memory-tool\core-system\current.md`
-- **projects/memory-tool/knowledge-graph-system**: `./.memory\modules\projects\memory-tool\knowledge-graph-system\current.md`
-- **projects/memory-tool/llm-integration**: `./.memory\modules\projects\memory-tool\llm-integration\current.md`
-- **projects/memory-tool/module-system**: `./.memory\modules\projects\memory-tool\module-system\current.md`
-- **projects/memory-tool/project-management**: `./.memory\modules\projects\memory-tool\project-management\current.md`
-- **projects/memory-tool/search-system**: `./.memory\modules\projects\memory-tool\search-system\current.md`
-- **projects/memory-tool/ui-system**: `./.memory\modules\projects\memory-tool\ui-system\current.md`
+- **master**: `./.memory\modules\master\current.md`
+- **memory-tool**: `./.memory\modules\memory-tool\current.md`
+- **memory-tool/core-system**: `./.memory\modules\memory-tool\core-system\current.md`
+- **memory-tool/knowledge-graph-system**: `./.memory\modules\memory-tool\knowledge-graph-system\current.md`
+- **memory-tool/llm-integration**: `./.memory\modules\memory-tool\llm-integration\current.md`
+- **memory-tool/module-system**: `./.memory\modules\memory-tool\module-system\current.md`
+- **memory-tool/project-management**: `./.memory\modules\memory-tool\project-management\current.md`
+- **memory-tool/search-system**: `./.memory\modules\memory-tool\search-system\current.md`
+- **memory-tool/ui-system**: `./.memory\modules\memory-tool\ui-system\current.md`
 
 ---
 
@@ -36,23 +37,24 @@
 
 - **archive/memory-system/decisions.md**: 692 lines - ⚠️ Very large, should archive soon
   - Quick action: `marchive decisions --module archive/memory-system --interactive`
-- **projects/memory-tool/module-system/current.md**: 641 lines - ⚠️ Very large, should archive soon
-  - Quick action: `marchive current --module projects/memory-tool/module-system --interactive`
-- **projects/memory-tool/project-management/decisions.md**: 1031 lines - ⚠️ Very large, should archive soon
-  - Quick action: `marchive decisions --module projects/memory-tool/project-management --interactive`
-- **projects/memory-tool/ui-system/current.md**: 403 lines - ⚠️ Very large, should archive soon
-  - Quick action: `marchive current --module projects/memory-tool/ui-system --interactive`
+- **memory-tool/module-system/current.md**: 641 lines - ⚠️ Very large, should archive soon
+  - Quick action: `marchive current --module memory-tool/module-system --interactive`
+- **memory-tool/project-management/decisions.md**: 1031 lines - ⚠️ Very large, should archive soon
+  - Quick action: `marchive decisions --module memory-tool/project-management --interactive`
+- **memory-tool/ui-system/current.md**: 403 lines - ⚠️ Very large, should archive soon
+  - Quick action: `marchive current --module memory-tool/ui-system --interactive`
 
 ### 🟡 WARNING (300-600/200-400 lines)
 
+- **master/current.md**: 241 lines - Consider reviewing
+- **memory-tool/current.md**: 337 lines - Consider reviewing
 - **archive/memory-system/current.md**: 234 lines - Consider reviewing
-- **projects/memory-tool/current.md**: 337 lines - Consider reviewing
-- **projects/memory-tool/core-system/current.md**: 277 lines - Consider reviewing
-- **projects/memory-tool/knowledge-graph-system/decisions.md**: 347 lines - Consider archiving
-- **projects/memory-tool/llm-integration/decisions.md**: 347 lines - Consider archiving
-- **projects/memory-tool/llm-integration/current.md**: 372 lines - Consider reviewing
-- **projects/memory-tool/project-management/current.md**: 363 lines - Consider reviewing
-- **projects/memory-tool/search-system/current.md**: 262 lines - Consider reviewing
+- **memory-tool/core-system/current.md**: 277 lines - Consider reviewing
+- **memory-tool/knowledge-graph-system/decisions.md**: 347 lines - Consider archiving
+- **memory-tool/llm-integration/decisions.md**: 347 lines - Consider archiving
+- **memory-tool/llm-integration/current.md**: 372 lines - Consider reviewing
+- **memory-tool/project-management/current.md**: 363 lines - Consider reviewing
+- **memory-tool/search-system/current.md**: 262 lines - Consider reviewing
 
 ### ✅ Quick Actions
 

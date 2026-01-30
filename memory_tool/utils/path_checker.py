@@ -196,8 +196,11 @@ class PathChecker:
         Returns:
             PathCheckResult with existence info
         """
-        # Normalize path (remove ./ prefix if present)
-        normalized_path = path_str.lstrip("./")
+        # Normalize path (remove ./ prefix if present, but preserve .memory etc)
+        if path_str.startswith("./"):
+            normalized_path = path_str[2:]
+        else:
+            normalized_path = path_str
 
         # 1. Try module directory first (for relative paths like spec.md)
         if module_path and module_path.exists():
