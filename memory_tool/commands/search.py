@@ -855,3 +855,211 @@ def cache(
     else:
         console.print(f"Cache: {cache_stats['entries']} entries, {cache_stats['total_size_mb']:.2f} MB")
         console.print("[dim]Use --stats for details, --clear to remove[/dim]")
+
+
+@app.command("tag-replace")
+def tag_replace(
+    old_tag: str = typer.Argument(..., help="Tag to replace"),
+    new_tag: str = typer.Argument(..., help="New tag value"),
+    file_type: List[str] = typer.Option(
+        None, "--type", "-t",
+        help="File types: timeline, modules, plans (can use multiple)"
+    ),
+    all_types: bool = typer.Option(
+        False, "--all", "-a",
+        help="Search all file types"
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", "-n",
+        help="Preview changes without modifying files"
+    ),
+):
+    """Replace a tag with another (mtag-replace command).
+
+    Replaces all occurrences of a tag in .memory files.
+    Matching is case-insensitive.
+
+    Examples:
+        mtag-replace endfield 엔드필드              # Replace tag
+        mtag-replace "old tag" "new tag" --all     # All file types
+        mtag-replace bug BUG --type timeline       # Timeline only
+        mtag-replace test TEST --dry-run           # Preview only
+    """
+    from memory_tool.search.filters import TagManager
+
+    memory_path = Path.cwd() / ".memory"
+    if not memory_path.exists():
+        console.print("[red]ERROR[/red] .memory/ not found. Run 'minit' first.")
+        raise typer.Exit(1)
+
+    # Determine file types
+    if all_types:
+        selected_types = ["timeline", "modules", "plans"]
+    elif file_type:
+        selected_types = list(file_type)
+    else:
+        selected_types = ["timeline", "modules", "plans"]  # Default: all
+
+    manager = TagManager(memory_path)
+
+    # Show what we're doing
+    if dry_run:
+        console.print("[yellow]DRY RUN[/yellow] - No files will be modified\n")
+
+    console.print(f"Replacing [cyan]{old_tag}[/cyan] → [green]{new_tag}[/green]")
+    console.print(f"Searching in: {', '.join(selected_types)}\n")
+
+    # Perform replacement
+    result = manager.replace_tag(old_tag, new_tag, selected_types, dry_run=dry_run)
+
+    if result["files_modified"] == 0:
+        console.print(f"[yellow]No occurrences of '{old_tag}' found[/yellow]")
+        return
+
+    # Show results
+    console.print(f"[bold]Files modified:[/bold] {result['files_modified']}")
+    console.print(f"[bold]Total replacements:[/bold] {result['total_replacements']}\n")
+
+    for detail in result["details"]:
+        if "error" in detail:
+            console.print(f"  [red]ERROR[/red] {detail['file']}: {detail['error']}")
+        else:
+            console.print(f"  [green]OK[/green] {detail['file']} ({detail['count']} replacements)")
+
+    if dry_run:
+        console.print("\n[yellow]Run without --dry-run to apply changes[/yellow]")
+
+
+@app.command("tag-delete")
+def tag_delete(
+    tag: str = typer.Argument(..., help="Tag to delete"),
+    file_type: List[str] = typer.Option(
+        None, "--type", "-t",
+        help="File types: timeline, modules, plans (can use multiple)"
+    ),
+    all_types: bool = typer.Option(
+        False, "--all", "-a",
+        help="Search all file types"
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", "-n",
+        help="Preview changes without modifying files"
+    ),
+    force: bool = typer.Option(
+        False, "--force", "-f",
+        help="Skip confirmation prompt"
+    ),
+):
+    """Delete a tag from all files (mtag-delete command).
+
+    Removes all occurrences of a tag from .memory files.
+    Matching is case-insensitive.
+
+    Examples:
+        mtag-delete TAG                    # Delete tag (with confirmation)
+        mtag-delete "test tag" --all       # All file types
+        mtag-delete tmp --dry-run          # Preview only
+        mtag-delete old --force            # Skip confirmation
+    """
+    from memory_tool.search.filters import TagManager
+
+    memory_path = Path.cwd() / ".memory"
+    if not memory_path.exists():
+        console.print("[red]ERROR[/red] .memory/ not found. Run 'minit' first.")
+        raise typer.Exit(1)
+
+    # Determine file types
+    if all_types:
+        selected_types = ["timeline", "modules", "plans"]
+    elif file_type:
+        selected_types = list(file_type)
+    else:
+        selected_types = ["timeline", "modules", "plans"]  # Default: all
+
+    manager = TagManager(memory_path)
+
+    # First, find occurrences
+    occurrences = manager.find_tag(tag, selected_types)
+
+    if not occurrences:
+        console.print(f"[yellow]No occurrences of '{tag}' found[/yellow]")
+        return
+
+    # Show what will be deleted
+    total_count = sum(o["count"] for o in occurrences)
+    console.print(f"Found [cyan]{tag}[/cyan] in {len(occurrences)} file(s) ({total_count} occurrences)\n")
+
+    for occ in occurrences:
+        console.print(f"  {occ['file']} ({occ['count']})")
+
+    console.print()
+
+    # Confirm unless --force or --dry-run
+    if not force and not dry_run:
+        confirm = typer.confirm("Delete all occurrences?")
+        if not confirm:
+            console.print("[yellow]Cancelled[/yellow]")
+            return
+
+    if dry_run:
+        console.print("[yellow]DRY RUN[/yellow] - No files will be modified")
+        return
+
+    # Perform deletion
+    result = manager.delete_tag(tag, selected_types, dry_run=False)
+
+    console.print(f"\n[green]Deleted {result['total_deletions']} occurrences from {result['files_modified']} file(s)[/green]")
+
+
+@app.command("tag-find")
+def tag_find(
+    tag: str = typer.Argument(..., help="Tag to find"),
+    file_type: List[str] = typer.Option(
+        None, "--type", "-t",
+        help="File types: timeline, modules, plans (can use multiple)"
+    ),
+    all_types: bool = typer.Option(
+        False, "--all", "-a",
+        help="Search all file types"
+    ),
+):
+    """Find all occurrences of a tag (mtag-find command).
+
+    Shows which files contain a specific tag.
+    Matching is case-insensitive.
+
+    Examples:
+        mtag-find bug                      # Find in all file types
+        mtag-find "memory tool" --type timeline
+    """
+    from memory_tool.search.filters import TagManager
+
+    memory_path = Path.cwd() / ".memory"
+    if not memory_path.exists():
+        console.print("[red]ERROR[/red] .memory/ not found. Run 'minit' first.")
+        raise typer.Exit(1)
+
+    # Determine file types
+    if all_types:
+        selected_types = ["timeline", "modules", "plans"]
+    elif file_type:
+        selected_types = list(file_type)
+    else:
+        selected_types = ["timeline", "modules", "plans"]  # Default: all
+
+    manager = TagManager(memory_path)
+    occurrences = manager.find_tag(tag, selected_types)
+
+    if not occurrences:
+        console.print(f"[yellow]No occurrences of '{tag}' found[/yellow]")
+        return
+
+    total_count = sum(o["count"] for o in occurrences)
+    console.print(f"\n[bold cyan]Tag: {tag}[/bold cyan]")
+    console.print(f"Found in {len(occurrences)} file(s), {total_count} total occurrences\n")
+
+    # Sort by count descending
+    occurrences.sort(key=lambda x: -x["count"])
+
+    for occ in occurrences:
+        console.print(f"  {occ['file']:<50} {occ['count']}")

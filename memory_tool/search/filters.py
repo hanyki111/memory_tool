@@ -471,3 +471,232 @@ class TagCollector:
                 result[file_type] = tag_counts
 
         return result
+
+
+class TagManager:
+    """Manage tags in .memory files (replace, delete)."""
+
+    # Reuse patterns from TagCollector
+    FILE_TYPE_PATTERNS = TagCollector.FILE_TYPE_PATTERNS
+
+    def __init__(self, memory_path: Path):
+        """
+        Initialize tag manager.
+
+        Args:
+            memory_path: Path to .memory directory
+        """
+        self.memory_path = memory_path
+
+    def _get_files_for_types(self, file_types: List[str]) -> List[Path]:
+        """Get list of files matching the specified file types."""
+        files = []
+        seen = set()
+
+        for file_type in file_types:
+            patterns = self.FILE_TYPE_PATTERNS.get(file_type.lower(), [])
+            for pattern in patterns:
+                for path in self.memory_path.glob(pattern):
+                    if path.is_file() and path not in seen:
+                        seen.add(path)
+                        files.append(path)
+
+        return files
+
+    def _replace_tag_in_content(
+        self,
+        content: str,
+        old_tag: str,
+        new_tag: Optional[str] = None,
+    ) -> Tuple[str, int]:
+        """
+        Replace or delete a tag in content.
+
+        Args:
+            content: File content
+            old_tag: Tag to find (case-insensitive matching)
+            new_tag: New tag (None = delete)
+
+        Returns:
+            Tuple of (modified content, number of replacements)
+        """
+        count = 0
+        old_tag_lower = old_tag.lower()
+
+        # Replace [bracket tags]
+        def replace_bracket(match):
+            nonlocal count
+            tag = match.group(1)
+            if tag.lower() == old_tag_lower:
+                count += 1
+                if new_tag is None:
+                    return ""  # Delete
+                return f"[{new_tag}]"
+            return match.group(0)
+
+        content = re.sub(r'\[([\w가-힣\s-]+)\]', replace_bracket, content)
+
+        # Replace #hashtags
+        def replace_hashtag(match):
+            nonlocal count
+            tag = match.group(1)
+            if tag.lower() == old_tag_lower:
+                count += 1
+                if new_tag is None:
+                    return ""  # Delete
+                return f"#{new_tag}"
+            return match.group(0)
+
+        content = re.sub(r'#([\w가-힣-]+)', replace_hashtag, content)
+
+        # Clean up double spaces from deletions
+        if new_tag is None:
+            content = re.sub(r'  +', ' ', content)
+            # Clean up space at start of line
+            content = re.sub(r'^\s+$', '', content, flags=re.MULTILINE)
+
+        return content, count
+
+    def replace_tag(
+        self,
+        old_tag: str,
+        new_tag: str,
+        file_types: List[str],
+        dry_run: bool = False,
+    ) -> Dict[str, any]:
+        """
+        Replace a tag with another in all matching files.
+
+        Args:
+            old_tag: Tag to replace
+            new_tag: New tag value
+            file_types: File types to search
+            dry_run: If True, don't modify files
+
+        Returns:
+            Dictionary with results (files_modified, total_replacements, details)
+        """
+        files = self._get_files_for_types(file_types)
+        results = {
+            "files_modified": 0,
+            "total_replacements": 0,
+            "details": [],
+            "dry_run": dry_run,
+        }
+
+        for file_path in files:
+            try:
+                content = file_path.read_text(encoding="utf-8")
+                new_content, count = self._replace_tag_in_content(content, old_tag, new_tag)
+
+                if count > 0:
+                    results["files_modified"] += 1
+                    results["total_replacements"] += count
+                    rel_path = file_path.relative_to(self.memory_path)
+                    results["details"].append({
+                        "file": str(rel_path),
+                        "count": count,
+                    })
+
+                    if not dry_run:
+                        file_path.write_text(new_content, encoding="utf-8")
+
+            except Exception as e:
+                results["details"].append({
+                    "file": str(file_path),
+                    "error": str(e),
+                })
+
+        return results
+
+    def delete_tag(
+        self,
+        tag: str,
+        file_types: List[str],
+        dry_run: bool = False,
+    ) -> Dict[str, any]:
+        """
+        Delete a tag from all matching files.
+
+        Args:
+            tag: Tag to delete
+            file_types: File types to search
+            dry_run: If True, don't modify files
+
+        Returns:
+            Dictionary with results
+        """
+        files = self._get_files_for_types(file_types)
+        results = {
+            "files_modified": 0,
+            "total_deletions": 0,
+            "details": [],
+            "dry_run": dry_run,
+        }
+
+        for file_path in files:
+            try:
+                content = file_path.read_text(encoding="utf-8")
+                new_content, count = self._replace_tag_in_content(content, tag, None)
+
+                if count > 0:
+                    results["files_modified"] += 1
+                    results["total_deletions"] += count
+                    rel_path = file_path.relative_to(self.memory_path)
+                    results["details"].append({
+                        "file": str(rel_path),
+                        "count": count,
+                    })
+
+                    if not dry_run:
+                        file_path.write_text(new_content, encoding="utf-8")
+
+            except Exception as e:
+                results["details"].append({
+                    "file": str(file_path),
+                    "error": str(e),
+                })
+
+        return results
+
+    def find_tag(
+        self,
+        tag: str,
+        file_types: List[str],
+    ) -> List[Dict[str, any]]:
+        """
+        Find all occurrences of a tag.
+
+        Args:
+            tag: Tag to find
+            file_types: File types to search
+
+        Returns:
+            List of file info with tag occurrences
+        """
+        files = self._get_files_for_types(file_types)
+        tag_lower = tag.lower()
+        results = []
+
+        for file_path in files:
+            try:
+                content = file_path.read_text(encoding="utf-8")
+
+                # Count occurrences
+                bracket_matches = re.findall(r'\[([\w가-힣\s-]+)\]', content)
+                hashtag_matches = re.findall(r'#([\w가-힣-]+)', content)
+
+                count = sum(1 for t in bracket_matches if t.lower() == tag_lower)
+                count += sum(1 for t in hashtag_matches if t.lower() == tag_lower)
+
+                if count > 0:
+                    rel_path = file_path.relative_to(self.memory_path)
+                    results.append({
+                        "file": str(rel_path),
+                        "count": count,
+                    })
+
+            except Exception:
+                pass
+
+        return results

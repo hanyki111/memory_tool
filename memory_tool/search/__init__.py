@@ -2,7 +2,7 @@
 
 from .bm25 import BM25Ranker
 from .ranking import SearchRanker, DateWeightRanker
-from .filters import DateFilter, FileTypeFilter, TagFilter, FilterChain, TagCollector
+from .filters import DateFilter, FileTypeFilter, TagFilter, FilterChain, TagCollector, TagManager
 from .formatter import ResultFormatter, deduplicate_results
 from .hybrid import HybridSearcher
 from .cache import SearchCache
@@ -17,6 +17,7 @@ __all__ = [
     "FileTypeFilter",
     "TagFilter",
     "TagCollector",
+    "TagManager",
     "FilterChain",
     "ResultFormatter",
     "deduplicate_results",
