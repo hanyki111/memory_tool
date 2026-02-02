@@ -663,20 +663,26 @@ class NotionWatcher:
             content = timeline_path.read_text(encoding="utf-8")
 
             # Parse timeline entries (format: "- HH:MM | message")
-            new_entries = self._find_new_entries(file_path, content, event_type)
+            new_entries, modified_entries = self._find_new_entries(file_path, content, event_type)
 
-            if not new_entries:
+            if not new_entries and not modified_entries:
                 if self.verbose:
                     print(f"[{timestamp}] No new timeline entries to sync")
                 return
 
             if self.dry_run:
-                print(f"\n[{timestamp}] Timeline change detected: {len(new_entries)} new entries")
-                for entry in new_entries:
-                    print(f"[{timestamp}] Would sync: {entry['time']} | {entry['message'][:50]}...")
+                if new_entries:
+                    print(f"\n[{timestamp}] Timeline change detected: {len(new_entries)} new entries")
+                    for entry in new_entries:
+                        print(f"[{timestamp}] Would sync (new): {entry['time']} | {entry['message'][:50]}...")
+                if modified_entries:
+                    print(f"[{timestamp}] {len(modified_entries)} modified entries (tag changes)")
+                    for entry in modified_entries:
+                        print(f"[{timestamp}] Would update: {entry['time']} | {entry['message'][:50]}...")
                 return
 
-            print(f"\n[{timestamp}] Timeline change detected: {len(new_entries)} new entries")
+            total_changes = len(new_entries) + len(modified_entries)
+            print(f"\n[{timestamp}] Timeline change detected: {len(new_entries)} new, {len(modified_entries)} modified")
 
             # Sync each new entry to Notion
             from memory_tool.notion.client import NotionClient, NotionError
@@ -699,6 +705,7 @@ class NotionWatcher:
                 # Get or create daily page (pass timeline-specific root_page_id)
                 page_id = client.get_or_create_daily_page(date_obj, timeline_root_page_id)
 
+                # Sync new entries
                 for entry in new_entries:
                     try:
                         # Create full datetime by combining date and time
@@ -720,6 +727,55 @@ class NotionWatcher:
                         print(f"[{timestamp}] Synced: {entry['time']} | {entry['message'][:40]}...")
                     except NotionError as e:
                         print(f"[{timestamp}] Failed to sync entry: {e}")
+
+                # Update modified entries (tag changes)
+                for entry in modified_entries:
+                    try:
+                        # Get message key for finding the block
+                        message_key = self._strip_tags_for_key(entry['message'])
+
+                        # Find the existing block
+                        block_id = client.find_entry_block(page_id, entry['time'], message_key)
+
+                        if block_id:
+                            # Create entry datetime
+                            try:
+                                time_parts = entry['time'].split(':')
+                                entry_datetime = date_obj.replace(
+                                    hour=int(time_parts[0]),
+                                    minute=int(time_parts[1]),
+                                    second=0,
+                                    microsecond=0
+                                )
+                            except (ValueError, IndexError):
+                                entry_datetime = date_obj
+
+                            # Update the block
+                            client.update_entry_block(
+                                block_id, entry['time'], entry['message'],
+                                date_obj=entry_datetime
+                            )
+                            print(f"[{timestamp}] Updated: {entry['time']} | {entry['message'][:40]}...")
+                        else:
+                            # Block not found - append as new
+                            print(f"[{timestamp}] Block not found, appending: {entry['time']}")
+                            try:
+                                time_parts = entry['time'].split(':')
+                                entry_datetime = date_obj.replace(
+                                    hour=int(time_parts[0]),
+                                    minute=int(time_parts[1]),
+                                    second=0,
+                                    microsecond=0
+                                )
+                            except (ValueError, IndexError):
+                                entry_datetime = date_obj
+                            client.append_timeline_entry(
+                                page_id, entry['time'], entry['message'],
+                                date_obj=entry_datetime
+                            )
+
+                    except NotionError as e:
+                        print(f"[{timestamp}] Failed to update entry: {e}")
 
             except NotionError as e:
                 print(f"[{timestamp}] Timeline sync failed: {e}")
@@ -752,13 +808,16 @@ class NotionWatcher:
         clean_message = self._strip_tags_for_key(message)
         return f"{normalized_time}|{clean_message[:50].lower()}"
 
-    def _find_new_entries(self, file_path: str, content: str, event_type: str = "modified") -> list:
-        """Find new timeline entries that haven't been synced yet.
+    def _find_new_entries(self, file_path: str, content: str, event_type: str = "modified") -> tuple:
+        """Find new and modified timeline entries.
 
         Args:
             file_path: Path to the timeline file
             content: Current file content
             event_type: "created" or "modified" - created files sync all entries
+
+        Returns:
+            Tuple of (new_entries, modified_entries)
         """
         # Parse all entries from content
         entry_pattern = re.compile(r"^- (\d{1,2}:\d{2})\s*\|\s*(.+)$", re.MULTILINE)
@@ -784,21 +843,39 @@ class NotionWatcher:
         if not prev_content:
             if event_type == "created":
                 # New file created during watch - sync all entries
-                return current_entries
+                return current_entries, []
             else:
                 # File existed before watch started (preloaded) - skip to avoid re-sync
-                return []
+                return [], []
 
-        # Find entries that are new (not in previous content by key, not raw)
-        prev_entries_keys = set()
+        # Build maps of previous entries
+        prev_entries_by_key = {}
         for match in entry_pattern.finditer(prev_content):
-            key = self._entry_key(match.group(1), match.group(2).strip())
-            prev_entries_keys.add(key)
+            time_str = match.group(1)
+            msg = match.group(2).strip()
+            key = self._entry_key(time_str, msg)
+            prev_entries_by_key[key] = {
+                'time': time_str,
+                'message': msg,
+                'raw': match.group(0)
+            }
 
-        # Only sync entries with new keys (tag changes won't trigger re-sync)
-        new_entries = [e for e in current_entries if e['key'] not in prev_entries_keys]
+        # Find new entries and modified entries
+        new_entries = []
+        modified_entries = []
 
-        return new_entries
+        for entry in current_entries:
+            if entry['key'] not in prev_entries_by_key:
+                # New entry (key doesn't exist in previous)
+                new_entries.append(entry)
+            else:
+                # Key exists - check if content changed (tag changes)
+                prev_entry = prev_entries_by_key[entry['key']]
+                if entry['raw'] != prev_entry['raw']:
+                    # Content changed (likely tag change)
+                    modified_entries.append(entry)
+
+        return new_entries, modified_entries
 
     def _extract_date_from_path(self, file_path: str) -> Optional[str]:
         """Extract date from timeline file path."""

@@ -380,6 +380,129 @@ class NotionClient:
         except Exception:
             return None  # Insert at end if error
 
+    def find_entry_block(self, page_id: str, time_str: str, message_key: str) -> Optional[str]:
+        """Find a timeline entry block by time and message key.
+
+        Args:
+            page_id: Notion page ID
+            time_str: Time string (HH:MM)
+            message_key: Message without tags (for matching)
+
+        Returns:
+            Block ID if found, None otherwise
+        """
+        import re
+
+        try:
+            # Parse the target time
+            parts = time_str.split(":")
+            target_hour = int(parts[0])
+            target_min = int(parts[1])
+        except (ValueError, IndexError):
+            return None
+
+        try:
+            response = self.client.blocks.children.list(block_id=page_id)
+            blocks = response.get("results", [])
+
+            for block in blocks:
+                if block.get("type") != "paragraph":
+                    continue
+
+                rich_text = block.get("paragraph", {}).get("rich_text", [])
+                if not rich_text:
+                    continue
+
+                # Extract time and message from block
+                block_hour, block_min = self._parse_time_from_block(block)
+
+                # Check if time matches
+                if block_hour != target_hour or block_min != target_min:
+                    continue
+
+                # Extract full text content
+                full_text = ""
+                for rt in rich_text:
+                    if rt.get("type") == "text":
+                        full_text += rt.get("text", {}).get("content", "")
+                    elif rt.get("type") == "mention":
+                        # Skip date mentions
+                        pass
+
+                # Strip tags from block content for comparison
+                stripped = re.sub(r'#[\w가-힣-]+', '', full_text)
+                stripped = re.sub(r'\[[\w가-힣\s-]+\]', '', stripped)
+                stripped = re.sub(r'\s+', ' ', stripped).strip()
+
+                # Compare keys (normalized)
+                if stripped.lower()[:50] == message_key.lower()[:50]:
+                    return block.get("id")
+
+            return None
+
+        except Exception:
+            return None
+
+    def update_entry_block(self, block_id: str, time_str: str, message: str, date_obj=None):
+        """Update an existing timeline entry block.
+
+        Args:
+            block_id: Block ID to update
+            time_str: Time string (HH:MM)
+            message: New message content
+            date_obj: Optional datetime object for Notion date mention
+        """
+        try:
+            from datetime import datetime
+            import time
+
+            clean_message = message.strip().replace("\r", "").replace("\n", " ")
+
+            rich_text = []
+
+            if date_obj:
+                if time.daylight and time.localtime().tm_isdst > 0:
+                    utc_offset_sec = -time.altzone
+                else:
+                    utc_offset_sec = -time.timezone
+                utc_offset_hours = utc_offset_sec // 3600
+                utc_offset_mins = abs(utc_offset_sec % 3600) // 60
+                tz_str = f"{utc_offset_hours:+03d}:{utc_offset_mins:02d}"
+                iso_datetime = date_obj.strftime(f"%Y-%m-%dT%H:%M:00{tz_str}")
+                rich_text.append({
+                    "type": "mention",
+                    "mention": {
+                        "type": "date",
+                        "date": {
+                            "start": iso_datetime,
+                            "end": None
+                        }
+                    }
+                })
+                rich_text.append({
+                    "type": "text",
+                    "text": {"content": " "}
+                })
+            else:
+                rich_text.append({
+                    "type": "text",
+                    "text": {"content": f"{time_str} | "},
+                    "annotations": {"bold": True}
+                })
+
+            rich_text.append({
+                "type": "text",
+                "text": {"content": clean_message}
+            })
+
+            self.client.blocks.update(
+                block_id=block_id,
+                paragraph={"rich_text": rich_text}
+            )
+
+        except Exception as e:
+            raise NotionError(f"Failed to update entry block: {e}")
+
     def reorder_timeline_page(self, page_id: str, verbose: bool = False) -> dict:
         """Reorder timeline entries in a Notion page by time.
 
