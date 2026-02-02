@@ -797,3 +797,61 @@ def tags(
         console.print(
             f"  {tag:<{max_tag_len}}  [{bar_color}]{bar:<{bar_width}}[/{bar_color}]  {count}"
         )
+
+
+@app.command()
+def cache(
+    clear: bool = typer.Option(False, "--clear", "-c", help="Clear all search cache"),
+    stats: bool = typer.Option(False, "--stats", "-s", help="Show cache statistics"),
+    clear_expired: bool = typer.Option(False, "--clear-expired", "-e", help="Clear only expired cache entries"),
+):
+    """Manage search cache (mcache command).
+
+    Search results are cached to improve performance for repeated queries.
+    Cache location: ~/.memory/.cache/search/
+
+    Examples:
+        mcache --stats           # Show cache statistics
+        mcache --clear           # Clear all cache
+        mcache --clear-expired   # Clear only expired entries
+    """
+    from memory_tool.search import SearchCache
+
+    cache_dir = Path.home() / ".memory" / ".cache" / "search"
+
+    if not cache_dir.exists():
+        console.print("[yellow]No cache directory found[/yellow]")
+        console.print(f"[dim]Location: {cache_dir}[/dim]")
+        return
+
+    search_cache = SearchCache(cache_dir)
+
+    if stats:
+        cache_stats = search_cache.get_stats()
+        console.print("\n[bold cyan]Search Cache Statistics[/bold cyan]\n")
+        console.print(f"  Entries: {cache_stats['entries']}")
+        console.print(f"  Size: {cache_stats['total_size_mb']:.2f} MB")
+        if cache_stats['oldest']:
+            console.print(f"  Oldest: {cache_stats['oldest']}")
+        if cache_stats['newest']:
+            console.print(f"  Newest: {cache_stats['newest']}")
+        console.print(f"\n[dim]Location: {cache_dir}[/dim]")
+        return
+
+    if clear:
+        search_cache.clear()
+        console.print("[green]Cache cleared successfully[/green]")
+        return
+
+    if clear_expired:
+        search_cache.clear_expired()
+        console.print("[green]Expired cache entries cleared[/green]")
+        return
+
+    # Default: show stats
+    cache_stats = search_cache.get_stats()
+    if cache_stats['entries'] == 0:
+        console.print("[yellow]Cache is empty[/yellow]")
+    else:
+        console.print(f"Cache: {cache_stats['entries']} entries, {cache_stats['total_size_mb']:.2f} MB")
+        console.print("[dim]Use --stats for details, --clear to remove[/dim]")
