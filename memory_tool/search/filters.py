@@ -225,7 +225,7 @@ class TagFilter:
     """Filter by tags or categories."""
 
     @staticmethod
-    def extract_tags(content: str) -> Set[str]:
+    def extract_tags(content: str, preserve_case: bool = True) -> Set[str]:
         """
         Extract tags from content.
 
@@ -237,23 +237,33 @@ class TagFilter:
 
         Args:
             content: Document content
+            preserve_case: If True, preserve original case; if False, convert to lowercase
 
         Returns:
-            Set of tags (lowercase)
+            Set of tags
         """
         tags = set()
 
-        # Extract [bracket tags] (supports Korean, alphanumeric, hyphens, underscores)
-        bracket_tags = re.findall(r'\[([\w가-힣-]+)\]', content)
-        tags.update(tag.lower() for tag in bracket_tags)
+        # Extract [bracket tags] (supports Korean, alphanumeric, hyphens, underscores, spaces)
+        bracket_tags = re.findall(r'\[([\w가-힣\s-]+)\]', content)
+        if preserve_case:
+            tags.update(tag.strip() for tag in bracket_tags)
+        else:
+            tags.update(tag.strip().lower() for tag in bracket_tags)
 
         # Extract #hashtags (supports Korean, alphanumeric, hyphens, underscores)
         hashtags = re.findall(r'#([\w가-힣-]+)', content)
-        tags.update(tag.lower() for tag in hashtags)
+        if preserve_case:
+            tags.update(hashtags)
+        else:
+            tags.update(tag.lower() for tag in hashtags)
 
         # Extract **Category:** patterns
         categories = re.findall(r'\*\*([^:]+):\*\*', content)
-        tags.update(cat.strip().lower() for cat in categories)
+        if preserve_case:
+            tags.update(cat.strip() for cat in categories)
+        else:
+            tags.update(cat.strip().lower() for cat in categories)
 
         # TODO: YAML frontmatter parsing (future enhancement)
 
@@ -265,7 +275,7 @@ class TagFilter:
         required_tags: Optional[List[str]],
     ) -> List[SearchResult]:
         """
-        Filter results by tags.
+        Filter results by tags (case-insensitive matching).
 
         Args:
             results: Search results
@@ -277,14 +287,17 @@ class TagFilter:
         if not required_tags:
             return results
 
+        # Lowercase required tags for case-insensitive comparison
         required_tags_lower = set(tag.lower() for tag in required_tags)
 
         filtered = []
         for result in results:
+            # Extract tags preserving case, then lowercase for comparison
             content_tags = TagFilter.extract_tags(result.match_context)
+            content_tags_lower = set(tag.lower() for tag in content_tags)
 
-            # Check if all required tags are present
-            if required_tags_lower.issubset(content_tags):
+            # Check if all required tags are present (case-insensitive)
+            if required_tags_lower.issubset(content_tags_lower):
                 filtered.append(result)
 
         return filtered
