@@ -50,6 +50,15 @@ class Config:
             "semantic_weight": 0.3,  # Semantic search weight (0-1)
             "semantic_threshold": 0.5,  # Minimum similarity for semantic search (0-1)
         },
+        "tag": {
+            "storage_format": "bracket",  # "bracket" ([태그]) or "hashtag" (#태그)
+            "display_format": "bracket",  # "bracket" ([태그]) or "hashtag" (#태그)
+        },
+        "tags": {
+            "default_types": ["timeline"],  # Default file types to search
+            "sort": "count",  # "count" (by frequency) or "alpha" (alphabetical)
+            "min_count": 1,  # Minimum usage count to display
+        },
         "llm": {
             "provider": "anthropic",
             "ollama_host": "http://localhost:11434",
@@ -70,6 +79,7 @@ class Config:
     VALID_GRANULARITIES = {"low", "medium", "high"}
     VALID_SCOPES = {"local", "kb", "all"}
     VALID_LANGUAGES = {"ko", "en", "auto"}
+    VALID_TAG_FORMATS = {"bracket", "hashtag"}
 
     def __init__(self, memory_path: Optional[Path] = None):
         """Initialize config manager.
@@ -230,6 +240,22 @@ class Config:
             raise ConfigValidationError(
                 f"Invalid summary.default_language: '{lang}'. "
                 f"Must be one of: {', '.join(self.VALID_LANGUAGES)}"
+            )
+
+        # Validate tag.storage_format
+        tag_storage = config.get("tag", {}).get("storage_format")
+        if tag_storage and tag_storage not in self.VALID_TAG_FORMATS:
+            raise ConfigValidationError(
+                f"Invalid tag.storage_format: '{tag_storage}'. "
+                f"Must be one of: {', '.join(self.VALID_TAG_FORMATS)}"
+            )
+
+        # Validate tag.display_format
+        tag_display = config.get("tag", {}).get("display_format")
+        if tag_display and tag_display not in self.VALID_TAG_FORMATS:
+            raise ConfigValidationError(
+                f"Invalid tag.display_format: '{tag_display}'. "
+                f"Must be one of: {', '.join(self.VALID_TAG_FORMATS)}"
             )
 
     def get(self, key_path: str, default: Any = None) -> Any:

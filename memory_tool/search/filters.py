@@ -2,8 +2,9 @@
 
 import re
 from datetime import datetime, date, timedelta
+from fnmatch import fnmatch
 from pathlib import Path
-from typing import Optional, Tuple, List, Set
+from typing import Optional, Tuple, List, Set, Dict
 from ..core.search import SearchResult
 
 
@@ -229,7 +230,8 @@ class TagFilter:
         Extract tags from content.
 
         Extracts:
-        - #hashtags
+        - [bracket tags] (including Korean)
+        - #hashtags (including Korean)
         - **Category:** patterns
         - YAML frontmatter tags (if present)
 
@@ -241,8 +243,12 @@ class TagFilter:
         """
         tags = set()
 
-        # Extract #hashtags
-        hashtags = re.findall(r'#(\w+)', content)
+        # Extract [bracket tags] (supports Korean, alphanumeric, hyphens, underscores)
+        bracket_tags = re.findall(r'\[([\w가-힣-]+)\]', content)
+        tags.update(tag.lower() for tag in bracket_tags)
+
+        # Extract #hashtags (supports Korean, alphanumeric, hyphens, underscores)
+        hashtags = re.findall(r'#([\w가-힣-]+)', content)
         tags.update(tag.lower() for tag in hashtags)
 
         # Extract **Category:** patterns
@@ -326,3 +332,129 @@ class FilterChain:
             results = TagFilter.filter_by_tags(results, tags)
 
         return results
+
+
+class TagCollector:
+    """Collect and analyze tags from .memory files."""
+
+    # File type patterns for tag collection
+    FILE_TYPE_PATTERNS = {
+        "timeline": ["timeline/**/*.md"],
+        "modules": ["modules/**/*.md"],
+        "plans": ["**/PLAN-*.md", "**/plans/**/*.md"],
+    }
+
+    def __init__(self, memory_path: Path):
+        """
+        Initialize tag collector.
+
+        Args:
+            memory_path: Path to .memory directory
+        """
+        self.memory_path = memory_path
+
+    def _get_files_for_types(self, file_types: List[str]) -> List[Path]:
+        """
+        Get list of files matching the specified file types.
+
+        Args:
+            file_types: List of file type names (timeline, modules, plans)
+
+        Returns:
+            List of matching file paths
+        """
+        files = []
+        seen = set()
+
+        for file_type in file_types:
+            patterns = self.FILE_TYPE_PATTERNS.get(file_type.lower(), [])
+            for pattern in patterns:
+                for path in self.memory_path.glob(pattern):
+                    if path.is_file() and path not in seen:
+                        seen.add(path)
+                        files.append(path)
+
+        return files
+
+    def _extract_tags_from_file(self, file_path: Path) -> Set[str]:
+        """
+        Extract tags from a single file.
+
+        Args:
+            file_path: Path to the file
+
+        Returns:
+            Set of tags found in the file
+        """
+        try:
+            content = file_path.read_text(encoding="utf-8")
+            raw_tags = TagFilter.extract_tags(content)
+
+            # Filter out invalid tags:
+            # - Pure numbers (likely from markdown references like [1], [23])
+            # - Tags longer than 50 characters (likely malformed)
+            # - Tags containing newlines
+            filtered_tags = set()
+            for tag in raw_tags:
+                # Skip pure numbers
+                if tag.isdigit():
+                    continue
+                # Skip tags that are too long
+                if len(tag) > 50:
+                    continue
+                # Skip tags with newlines
+                if "\n" in tag:
+                    continue
+                filtered_tags.add(tag)
+
+            return filtered_tags
+        except Exception:
+            return set()
+
+    def collect(self, file_types: List[str]) -> Dict[str, int]:
+        """
+        Collect tags with counts from specified file types.
+
+        Args:
+            file_types: List of file type names to search
+
+        Returns:
+            Dictionary mapping tag names to usage counts
+        """
+        tag_counts: Dict[str, int] = {}
+        files = self._get_files_for_types(file_types)
+
+        for file_path in files:
+            tags = self._extract_tags_from_file(file_path)
+            for tag in tags:
+                tag_counts[tag] = tag_counts.get(tag, 0) + 1
+
+        return tag_counts
+
+    def collect_by_type(self, file_types: List[str]) -> Dict[str, Dict[str, int]]:
+        """
+        Collect tags grouped by file type.
+
+        Args:
+            file_types: List of file type names to search
+
+        Returns:
+            Dictionary mapping file types to their tag counts
+        """
+        result: Dict[str, Dict[str, int]] = {}
+
+        for file_type in file_types:
+            tag_counts: Dict[str, int] = {}
+            patterns = self.FILE_TYPE_PATTERNS.get(file_type.lower(), [])
+
+            for pattern in patterns:
+                for file_path in self.memory_path.glob(pattern):
+                    if file_path.is_file():
+                        tags = self._extract_tags_from_file(file_path)
+                        for tag in tags:
+                            tag_counts[tag] = tag_counts.get(tag, 0) + 1
+
+            if tag_counts:
+                result[file_type] = tag_counts
+
+        return result

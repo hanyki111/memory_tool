@@ -1,5 +1,6 @@
 """Search-related CLI commands."""
 
+import re
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -13,6 +14,7 @@ from memory_tool.commands.common import (
 from memory_tool.core.search import MemorySearcher, SearchError
 from memory_tool.utils.path_checker import PathChecker, format_check_result
 from memory_tool.utils.config import Config
+from memory_tool.search.filters import TagCollector
 
 
 @app.command(
@@ -37,6 +39,7 @@ def search(
     file_type: Optional[str] = typer.Option(None, "--type", help="File type: timeline, modules, decisions, plans, archive"),
     module_filter: Optional[str] = typer.Option(None, "--module", help="Filter by module path (e.g., 'projects' or 'projects/website')"),
     tag: List[str] = typer.Option(None, "--tag", help="Filter by tags (can use multiple times)"),
+    tag_only: Optional[str] = typer.Option(None, "--tag-only", help="Search by tag only (no keyword matching)"),
     show_score: bool = typer.Option(False, "--show-score", help="Show relevance scores"),
     summary: bool = typer.Option(False, "--summary", help="Show summary statistics"),
     hybrid: Optional[bool] = typer.Option(None, "--hybrid/--no-hybrid", help="Hybrid search (keyword + semantic combined). Default from config."),
@@ -49,6 +52,12 @@ def search(
 
     Supports keyword search (default), semantic search (--semantic),
     and hybrid search (--hybrid) combining both approaches.
+
+    Tag search methods:
+        ms "#버그"                   # Search by hashtag
+        ms "#버그 #긴급"             # Multiple tags
+        ms --tag-only 버그           # Tag-only search
+        ms "login" --tag 버그        # Keyword + tag filter
 
     Examples:
         ms "bug fix"                        # Keyword search
@@ -64,6 +73,39 @@ def search(
     date = opt_str(date)
     file_type = opt_str(file_type)
     module_filter = opt_str(module_filter)
+    tag_only = opt_str(tag_only)
+
+    # Initialize tag list if None
+    if tag is None:
+        tag = []
+    else:
+        tag = list(tag)
+
+    # Parse #hashtags from query (supports Korean)
+    # e.g., "#버그 #긴급" -> tags: ["버그", "긴급"], query: ""
+    # e.g., "login #버그" -> tags: ["버그"], query: "login"
+    if query.startswith('#'):
+        # Query starts with hashtag - likely tag-only search
+        query_tags = re.findall(r'#([\w가-힣-]+)', query)
+        if query_tags:
+            tag.extend(query_tags)
+            # Remove hashtags from query
+            remaining = re.sub(r'#[\w가-힣-]+\s*', '', query).strip()
+            query = remaining if remaining else ""
+    else:
+        # Check for hashtags at the end of query
+        hashtag_pattern = re.compile(r'(\s+#[\w가-힣-]+)+$')
+        match = hashtag_pattern.search(query)
+        if match:
+            query_tags = re.findall(r'#([\w가-힣-]+)', match.group(0))
+            tag.extend(query_tags)
+            query = query[:match.start()].strip()
+
+    # Handle --tag-only option
+    if tag_only:
+        tag.append(tag_only)
+        if not query:
+            query = ""  # Will search all content, filtered by tag
 
     # Load search defaults from config
     config = Config()
@@ -308,17 +350,21 @@ def search(
         console.print("[dim]Use YYYY-MM-DD format (e.g., 2025-11-14)[/dim]")
         sys.exit(1)
 
+    # If query is empty but tags are specified, use wildcard pattern
+    search_query = query if query else "."
+    tag_only_mode = not query and tag
+
     try:
         results_dict = searcher.search(
-            query,
+            search_query,
             scope=scope,
             with_kb=with_kb,
             case_sensitive=case_sensitive,
             context_lines=1 if not no_context else 0,
-            max_results=max_results,
+            max_results=None if tag_only_mode else max_results,  # Get all results for tag filtering
             from_date=parsed_from,
             to_date=parsed_to,
-            use_index=not no_index,
+            use_index=not no_index if not tag_only_mode else False,  # Skip index for tag-only mode
         )
 
         from memory_tool.core.search import SearchResult
@@ -377,17 +423,22 @@ def search(
         if search_cache:
             search_cache.set(query, all_results, **cache_key_params)
 
+        # Show tag search header if tag-only mode
+        if tag_only_mode:
+            tag_str = ", ".join(f"#{t}" for t in tag)
+            console.print(f"[cyan]Tag Search Results[/cyan] ({tag_str})\n")
+
         if show_score or summary or not no_context:
             from memory_tool.search import ResultFormatter
             formatter = ResultFormatter(searcher.base_path)
 
             formatter.print_results(
                 all_results,
-                query=query,
+                query=query if query else None,
                 show_score=show_score,
                 show_context=not no_context,
                 context_lines=1,
-                highlight=True,
+                highlight=bool(query),
                 show_summary=summary,
             )
         else:
@@ -626,3 +677,116 @@ def index(
         import traceback
         console.print(f"[dim]{traceback.format_exc()}[/dim]")
         sys.exit(1)
+
+
+@app.command()
+def tags(
+    file_type: List[str] = typer.Option(
+        None, "--type", "-t",
+        help="File types: timeline, modules, plans (can use multiple)"
+    ),
+    all_types: bool = typer.Option(
+        False, "--all", "-a",
+        help="Search all file types"
+    ),
+    sort: Optional[str] = typer.Option(
+        None, "--sort", "-s",
+        help="Sort by: count (default), alpha"
+    ),
+    min_count: Optional[int] = typer.Option(
+        None, "--min-count", "-m",
+        help="Minimum usage count to display"
+    ),
+):
+    """List tags used in .memory (mtags command).
+
+    By default, shows tags from timeline only.
+
+    Examples:
+        mtags                              # Timeline tags (default)
+        mtags --all                        # All file types
+        mtags --type timeline --type modules  # Multiple types
+        mtags --sort alpha                 # Sort alphabetically
+        mtags --min-count 3                # Tags used 3+ times
+    """
+    # Load defaults from config
+    config = Config()
+
+    # Determine file types to search
+    if file_type:
+        selected_types = list(file_type)
+    elif all_types:
+        selected_types = ["timeline", "modules", "plans"]
+    else:
+        selected_types = config.get("tags.default_types", ["timeline"])
+
+    # Load sort and min_count from config if not provided
+    if sort is None:
+        sort = config.get("tags.sort", "count")
+    if min_count is None:
+        min_count = config.get("tags.min_count", 1)
+
+    # Validate sort option
+    if sort not in ("count", "alpha"):
+        console.print(f"[red]ERROR[/red] Invalid sort option: {sort}")
+        console.print("[dim]Valid options: count, alpha[/dim]")
+        sys.exit(1)
+
+    # Find .memory directory
+    memory_path = Path.cwd() / ".memory"
+    if not memory_path.exists():
+        console.print("[red]ERROR[/red] .memory/ not found. Run 'minit' first.")
+        sys.exit(1)
+
+    # Collect tags
+    collector = TagCollector(memory_path)
+    tag_counts = collector.collect(selected_types)
+
+    # Filter by min_count
+    if min_count > 1:
+        tag_counts = {k: v for k, v in tag_counts.items() if v >= min_count}
+
+    if not tag_counts:
+        type_str = ", ".join(selected_types)
+        console.print(f"[yellow]No tags found in {type_str}[/yellow]")
+        if min_count > 1:
+            console.print(f"[dim](minimum count filter: {min_count})[/dim]")
+        return
+
+    # Sort tags
+    if sort == "alpha":
+        sorted_tags = sorted(tag_counts.items(), key=lambda x: x[0].lower())
+    else:  # count (default)
+        sorted_tags = sorted(tag_counts.items(), key=lambda x: (-x[1], x[0].lower()))
+
+    # Calculate max values for bar chart
+    max_count = max(tag_counts.values())
+    max_tag_len = max(len(tag) for tag in tag_counts.keys())
+    bar_width = 20  # Maximum bar width
+
+    # Print header
+    type_str = ", ".join(selected_types)
+    unique_count = len(tag_counts)
+    console.print(f"\n[bold cyan]Tags in {type_str}[/bold cyan] ({unique_count} unique tags)\n")
+
+    # Print tags with bar chart
+    # Use ASCII-safe character for Windows compatibility
+    bar_char = "#"
+
+    for tag, count in sorted_tags:
+        # Calculate bar length
+        bar_len = int((count / max_count) * bar_width) if max_count > 0 else 0
+        bar = bar_char * bar_len
+
+        # Color based on count
+        if count >= max_count * 0.7:
+            bar_color = "green"
+        elif count >= max_count * 0.3:
+            bar_color = "yellow"
+        else:
+            bar_color = "dim"
+
+        # Print formatted line
+        console.print(
+            f"  {tag:<{max_tag_len}}  [{bar_color}]{bar:<{bar_width}}[/{bar_color}]  {count}"
+        )

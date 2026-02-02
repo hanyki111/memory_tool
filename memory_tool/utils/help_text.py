@@ -196,6 +196,61 @@ Examples:
     # -------------------------------------------------------------------------
     # Search Commands
     # -------------------------------------------------------------------------
+    "tags": {
+        "short": {
+            "en": "List tags used in .memory",
+            "ko": ".memory에서 사용된 태그 목록",
+        },
+        "long": {
+            "en": """List all tags used in your .memory files.
+
+Shows tags with usage counts from timeline, modules, and plans.
+By default, only searches timeline files.
+
+Output includes a visual bar chart showing relative usage frequency.
+
+Examples:
+    mtags                              # Timeline tags (default)
+    mtags --all                        # All file types
+    mtags --type timeline --type modules  # Multiple types
+    mtags --sort alpha                 # Sort alphabetically
+    mtags --min-count 3                # Tags used 3+ times
+""",
+            "ko": """.memory 파일에서 사용된 모든 태그를 나열합니다.
+
+타임라인, 모듈, 플랜에서 사용 횟수와 함께 태그를 표시합니다.
+기본값으로 타임라인 파일만 검색합니다.
+
+출력에는 상대적 사용 빈도를 보여주는 시각적 막대 차트가 포함됩니다.
+
+예시:
+    mtags                              # 타임라인 태그 (기본값)
+    mtags --all                        # 모든 파일 타입
+    mtags --type timeline --type modules  # 여러 타입
+    mtags --sort alpha                 # 알파벳순 정렬
+    mtags --min-count 3                # 3회 이상 사용된 태그만
+""",
+        },
+        "options": {
+            "type": {
+                "en": "File types to search: timeline, modules, plans (can use multiple)",
+                "ko": "검색할 파일 타입: timeline, modules, plans (다중 사용 가능)",
+            },
+            "all": {
+                "en": "Search all file types",
+                "ko": "모든 파일 타입 검색",
+            },
+            "sort": {
+                "en": "Sort by: count (default), alpha",
+                "ko": "정렬 방식: count (기본값), alpha",
+            },
+            "min_count": {
+                "en": "Minimum usage count to display",
+                "ko": "표시할 최소 사용 횟수",
+            },
+        },
+    },
+
     "search": {
         "short": {
             "en": "Search timeline and modules",

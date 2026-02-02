@@ -445,6 +445,44 @@ m --date "2025-11-12" --time "14:30" "회고 기록"
 - 항목당 3-5개 태그로 제한
 - 검색 시 `ms "query" --tag 태그명`으로 필터링
 
+### 태그 목록 (mtags)
+
+```bash
+# 타임라인 태그만 (기본값)
+mtags
+
+# 모든 파일 타입 태그
+mtags --all
+
+# 특정 타입 선택 (다중 가능)
+mtags --type timeline --type modules
+
+# 알파벳순 정렬
+mtags --sort alpha
+
+# 최소 사용 횟수 필터링
+mtags --min-count 3
+```
+
+**출력 예시:**
+```
+Tags in timeline (15 unique tags)
+
+  bug         ████████████████████  12
+  feature     █████████████         8
+  urgent      ██████████            6
+  meeting     ██████                4
+  refactor    ███                   2
+```
+
+**기본값 설정 (config.yaml):**
+```yaml
+tags:
+  default_types: ["timeline"]  # 기본 검색 타입
+  sort: "count"                # count 또는 alpha
+  min_count: 1                 # 최소 사용 횟수
+```
+
 ### 검색 명령어
 
 ```bash
