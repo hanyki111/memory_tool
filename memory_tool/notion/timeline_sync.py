@@ -172,16 +172,37 @@ class TimelineSyncer:
 
         return entries
 
+    def _strip_tags(self, message: str) -> str:
+        """Remove hashtags and bracket tags from message for key comparison.
+
+        Args:
+            message: Original message
+
+        Returns:
+            Message without tags
+        """
+        # Remove #hashtags (including Korean)
+        stripped = re.sub(r'#[\w가-힣-]+', '', message)
+        # Remove [bracket tags] (including Korean and spaces)
+        stripped = re.sub(r'\[[\w가-힣\s-]+\]', '', stripped)
+        # Clean up extra spaces
+        stripped = re.sub(r'\s+', ' ', stripped).strip()
+        return stripped
+
     def _entry_key(self, time_str: str, message: str) -> str:
-        """Create unique key for an entry."""
+        """Create unique key for an entry.
+
+        Tags are stripped so that tag changes don't create duplicate entries.
+        """
         # Normalize time to HH:MM format
         if ":" in time_str:
             parts = time_str.split(":")
             normalized_time = f"{int(parts[0]):02d}:{parts[1]}"
         else:
             normalized_time = time_str
-        # Use first 50 chars of message for comparison (handles minor differences)
-        return f"{normalized_time}|{message[:50].strip().lower()}"
+        # Strip tags and use first 50 chars for comparison
+        clean_message = self._strip_tags(message)
+        return f"{normalized_time}|{clean_message[:50].strip().lower()}"
 
     def sync(
         self,

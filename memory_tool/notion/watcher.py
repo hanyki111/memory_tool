@@ -727,6 +727,31 @@ class NotionWatcher:
         except Exception as e:
             print(f"[{timestamp}] Timeline sync error: {e}")
 
+    def _strip_tags_for_key(self, message: str) -> str:
+        """Remove hashtags and bracket tags from message for comparison.
+
+        This ensures tag changes don't create duplicate entries.
+        """
+        # Remove #hashtags (including Korean)
+        stripped = re.sub(r'#[\w가-힣-]+', '', message)
+        # Remove [bracket tags] (including Korean and spaces)
+        stripped = re.sub(r'\[[\w가-힣\s-]+\]', '', stripped)
+        # Clean up extra spaces
+        stripped = re.sub(r'\s+', ' ', stripped).strip()
+        return stripped
+
+    def _entry_key(self, time_str: str, message: str) -> str:
+        """Create a stable key for an entry (tags stripped)."""
+        # Normalize time
+        if ":" in time_str:
+            parts = time_str.split(":")
+            normalized_time = f"{int(parts[0]):02d}:{parts[1]}"
+        else:
+            normalized_time = time_str
+        # Strip tags for stable comparison
+        clean_message = self._strip_tags_for_key(message)
+        return f"{normalized_time}|{clean_message[:50].lower()}"
+
     def _find_new_entries(self, file_path: str, content: str, event_type: str = "modified") -> list:
         """Find new timeline entries that haven't been synced yet.
 
@@ -740,11 +765,13 @@ class NotionWatcher:
         current_entries = []
 
         for match in entry_pattern.finditer(content):
-            current_entries.append({
+            entry = {
                 'time': match.group(1),
                 'message': match.group(2).strip(),
                 'raw': match.group(0)
-            })
+            }
+            entry['key'] = self._entry_key(entry['time'], entry['message'])
+            current_entries.append(entry)
 
         # Get previously seen content
         prev_content = self._last_timeline_content.get(file_path, "")
@@ -762,12 +789,14 @@ class NotionWatcher:
                 # File existed before watch started (preloaded) - skip to avoid re-sync
                 return []
 
-        # Find entries that are new (not in previous content)
-        prev_entries_raw = set()
+        # Find entries that are new (not in previous content by key, not raw)
+        prev_entries_keys = set()
         for match in entry_pattern.finditer(prev_content):
-            prev_entries_raw.add(match.group(0))
+            key = self._entry_key(match.group(1), match.group(2).strip())
+            prev_entries_keys.add(key)
 
-        new_entries = [e for e in current_entries if e['raw'] not in prev_entries_raw]
+        # Only sync entries with new keys (tag changes won't trigger re-sync)
+        new_entries = [e for e in current_entries if e['key'] not in prev_entries_keys]
 
         return new_entries
 
