@@ -385,9 +385,8 @@ New timeline entries are automatically inserted in time-sorted order.
 
 Options for fixing existing out-of-order entries:
   --sort     Sort local timeline files by time
-  --reorder  Reorder Notion pages by time:
-             - Timeline entries within daily pages
-             - Daily pages within month pages (2026-01-01, 2026-01-02, ...)
+  --reorder  Reorder timeline entries within Notion daily pages
+             (Note: Daily page order in months cannot be changed via API)
             """,
             "examples": [
                 "nsync                     # Sync all (modules + timeline + plans)",
@@ -408,7 +407,7 @@ Options for fixing existing out-of-order entries:
                 ("--pull", "Pull changes from Notion"),
                 ("--status", "Show synchronization status"),
                 ("--sort", "Sort existing local timeline entries by time"),
-                ("--reorder", "Reorder Notion pages (entries + daily pages in months)"),
+                ("--reorder", "Reorder timeline entries in Notion daily pages"),
             ],
         },
         "ko": {
@@ -422,9 +421,8 @@ Options for fixing existing out-of-order entries:
 
 기존 항목 순서 정리 옵션:
   --sort     로컬 타임라인 파일의 기존 항목 시간순 정렬
-  --reorder  Notion 페이지 시간순 재정렬:
-             - 일별 페이지 내 타임라인 항목
-             - 월별 페이지 내 일별 페이지 (2026-01-01, 2026-01-02, ...)
+  --reorder  Notion 일별 페이지 내 타임라인 항목 재정렬
+             (참고: 월별 페이지 내 일별 페이지 순서는 API로 변경 불가)
             """,
             "examples": [
                 "nsync                     # 전체 동기화 (모듈 + 타임라인 + 계획)",
@@ -445,7 +443,7 @@ Options for fixing existing out-of-order entries:
                 ("--pull", "Notion에서 변경사항 풀"),
                 ("--status", "동기화 상태 표시"),
                 ("--sort", "로컬 타임라인 기존 항목 시간순 정렬"),
-                ("--reorder", "Notion 페이지 재정렬 (항목 + 월별 내 일별 페이지)"),
+                ("--reorder", "Notion 일별 페이지 내 항목 재정렬"),
             ],
         },
     },

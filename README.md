@@ -279,7 +279,7 @@ nsync --verbose          # 상세 진행 로그
 nsync --timeline                 # 오늘 타임라인 동기화
 nsync --timeline --days 7        # 최근 7일 동기화
 nsync --timeline --sort          # 로컬 파일 기존 항목 시간순 정렬
-nsync --timeline --reorder       # Notion 페이지 시간순 재정렬 (항목 + 일별 페이지)
+nsync --timeline --reorder       # Notion 일별 페이지 내 항목 시간순 재정렬
 
 # 자동 동기화 (파일 변경 감지, 신규 항목 자동 시간순 삽입)
 nwatch                           # Local → Notion 단방향
@@ -670,7 +670,7 @@ nsync --timeline --days 7        # 최근 7일 동기화
 nsync --timeline --push          # 로컬 → 노션만
 nsync --timeline --pull          # 노션 → 로컬만
 nsync --timeline --sort          # 로컬 파일 기존 항목 시간순 정렬
-nsync --timeline --reorder       # Notion 페이지 시간순 재정렬 (항목 + 일별 페이지)
+nsync --timeline --reorder       # Notion 일별 페이지 내 항목 시간순 재정렬
 
 # 자동 동기화 (파일 변경 감시)
 nwatch                           # 감시 시작 (modules + timeline + plans)

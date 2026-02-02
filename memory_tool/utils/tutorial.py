@@ -696,7 +696,7 @@ class Tutorial:
                     "  nw                       Notion week",
                     "  nsync                    Sync with Notion",
                     "  nsync --timeline --sort  Sort local files by time",
-                    "  nsync --timeline --reorder  Reorder Notion pages",
+                    "  nsync --timeline --reorder  Reorder Notion entries",
                 ],
             },
         ]
@@ -1417,7 +1417,7 @@ class Tutorial:
                     "  nw / 노주                       노션 주간",
                     "  nsync                           노션 동기화",
                     "  nsync --timeline --sort         로컬 파일 시간순 정렬",
-                    "  nsync --timeline --reorder      노션 페이지 재정렬",
+                    "  nsync --timeline --reorder      노션 항목 재정렬",
                 ],
             },
         ]

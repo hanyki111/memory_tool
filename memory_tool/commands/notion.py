@@ -642,11 +642,12 @@ def notion_sync(
                     except Exception as e:
                         reorder_errors.append(f"{target_date.strftime('%Y-%m-%d')}: {e}")
 
-                # Reorder child pages (daily pages) within each month page
+                # Check child pages (daily pages) order within each month page
+                # NOTE: Notion API does not support safe reordering of child pages
                 if processed_months:
-                    console.print("[cyan]Reordering daily pages within month pages...[/cyan]")
+                    console.print("[cyan]Checking daily page order within month pages...[/cyan]")
 
-                    month_reorder_count = 0
+                    unsorted_months = []
                     root_page_id = timeline_syncer.timeline_config.root_page_id
 
                     for month_str in sorted(processed_months):
@@ -655,12 +656,12 @@ def notion_sync(
                             month_page_id = client.find_child_page(root_page_id, month_str)
 
                             if month_page_id:
-                                result = client.reorder_child_pages(month_page_id, verbose=verbose)
+                                result = client.check_child_pages_order(month_page_id, verbose=False)
 
-                                if result["reordered"] > 0:
-                                    month_reorder_count += 1
+                                if not result["is_sorted"]:
+                                    unsorted_months.append(month_str)
                                     if verbose:
-                                        console.print(f"  [green]OK[/green] {month_str}: {result['reordered']} daily pages reordered")
+                                        console.print(f"  [yellow]!![/yellow] {month_str}: daily pages not sorted ({len(result['out_of_order'])} out of order)")
 
                                 if result["errors"]:
                                     reorder_errors.extend(result["errors"])
@@ -668,10 +669,12 @@ def notion_sync(
                         except Exception as e:
                             reorder_errors.append(f"Month {month_str}: {e}")
 
-                    if month_reorder_count > 0:
-                        console.print(f"[green]Reordered daily pages in {month_reorder_count} month(s)[/green]")
+                    if unsorted_months:
+                        console.print(f"[yellow]Note: {len(unsorted_months)} month(s) have unsorted daily pages[/yellow]")
+                        console.print("[dim]Notion API does not support safe reordering of child pages.[/dim]")
+                        console.print("[dim]Please reorder manually in Notion by dragging pages.[/dim]")
                     else:
-                        console.print("[dim]All month pages already sorted[/dim]")
+                        console.print("[dim]All month pages have sorted daily pages[/dim]")
 
                 if reorder_count > 0:
                     console.print(f"[green]Reordered entries in {reorder_count} daily page(s)[/green]")

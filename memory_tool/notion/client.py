@@ -466,20 +466,21 @@ class NotionClient:
 
         return result
 
-    def reorder_child_pages(self, parent_page_id: str, verbose: bool = False) -> dict:
-        """Reorder child pages under a parent page by their title (date string).
+    def check_child_pages_order(self, parent_page_id: str, verbose: bool = False) -> dict:
+        """Check if child pages under a parent page are sorted by title.
 
-        This is useful for sorting daily pages (2026-01-01, 2026-01-02, etc.)
-        under a monthly page (2026-01).
+        NOTE: Notion API does not support reordering child_page blocks safely.
+        Deleting and recreating child_page blocks would lose all page content.
+        This method only CHECKS the order and reports if sorting is needed.
 
         Args:
             parent_page_id: Parent page ID containing child pages
             verbose: Print progress
 
         Returns:
-            Dict with reordered count and any errors
+            Dict with sorted status and page list
         """
-        result = {"reordered": 0, "total": 0, "errors": []}
+        result = {"is_sorted": True, "total": 0, "out_of_order": [], "errors": []}
 
         try:
             # Get all child blocks (with pagination)
@@ -511,59 +512,39 @@ class NotionClient:
                     child_pages.append({
                         "id": block.get("id"),
                         "title": title,
-                        "data": block
                     })
 
             result["total"] = len(child_pages)
 
             if len(child_pages) <= 1:
-                return result  # Nothing to reorder
+                return result  # Nothing to check
 
             # Check if already sorted by title (date string)
             titles = [p["title"] for p in child_pages]
-            if titles == sorted(titles):
+            sorted_titles = sorted(titles)
+
+            if titles == sorted_titles:
                 if verbose:
                     print(f"  Child pages already sorted ({len(child_pages)} pages)")
                 return result
 
-            # Sort by title (date strings sort correctly alphabetically)
-            sorted_pages = sorted(child_pages, key=lambda x: x["title"])
+            # Find out-of-order pages
+            result["is_sorted"] = False
+            for i, (current, expected) in enumerate(zip(titles, sorted_titles)):
+                if current != expected:
+                    result["out_of_order"].append({
+                        "position": i + 1,
+                        "current": current,
+                        "expected": expected
+                    })
 
             if verbose:
-                print(f"  Reordering {len(child_pages)} child pages...")
-
-            # Delete all child_page blocks
-            for page in child_pages:
-                try:
-                    self.client.blocks.delete(block_id=page["id"])
-                except Exception as e:
-                    result["errors"].append(f"Delete failed ({page['title']}): {e}")
-
-            # Recreate pages in sorted order
-            # Note: We recreate as child pages with the same title
-            for page in sorted_pages:
-                try:
-                    self.client.blocks.children.append(
-                        block_id=parent_page_id,
-                        children=[
-                            {
-                                "object": "block",
-                                "type": "child_page",
-                                "child_page": {
-                                    "title": page["title"]
-                                }
-                            }
-                        ]
-                    )
-                    result["reordered"] += 1
-                except Exception as e:
-                    result["errors"].append(f"Recreate failed ({page['title']}): {e}")
-
-            if verbose:
-                print(f"  Reordered {result['reordered']}/{result['total']} child pages")
+                print(f"  [yellow]Child pages NOT sorted ({len(result['out_of_order'])} out of order)[/yellow]")
+                print(f"  [dim]Note: Notion API does not support safe reordering of child pages.[/dim]")
+                print(f"  [dim]Please reorder manually in Notion by dragging pages.[/dim]")
 
         except Exception as e:
-            result["errors"].append(f"Reorder child pages failed: {e}")
+            result["errors"].append(f"Check child pages order failed: {e}")
 
         return result
 
