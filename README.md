@@ -275,11 +275,13 @@ nsync --status           # 싱크 상태 확인
 nsync --discover         # 노션에서 모듈 다운로드 (첫 설정)
 nsync --verbose          # 상세 진행 로그
 
-# 타임라인 일괄 싱크
+# 타임라인 일괄 싱크 (신규 항목은 자동 시간순 삽입)
 nsync --timeline                 # 오늘 타임라인 동기화
 nsync --timeline --days 7        # 최근 7일 동기화
+nsync --timeline --sort          # 로컬 파일 기존 항목 시간순 정렬
+nsync --timeline --reorder       # Notion 페이지 시간순 재정렬 (항목 + 일별 페이지)
 
-# 자동 동기화 (파일 변경 감지)
+# 자동 동기화 (파일 변경 감지, 신규 항목 자동 시간순 삽입)
 nwatch                           # Local → Notion 단방향
 nwatch --bidirectional           # 양방향 (Notion → Local polling 포함)
 nwatch -b -i 60                  # 양방향, 60초 polling 간격
@@ -445,26 +447,35 @@ m --date "2025-11-12" --time "14:30" "회고 기록"
 - 항목당 3-5개 태그로 제한
 - 검색 시 `ms "query" --tag 태그명`으로 필터링
 
-### 태그 목록 (mtags)
+### 태그 관리 (mtag)
 
 ```bash
-# 타임라인 태그만 (기본값)
-mtags
+# 태그 목록 보기
+mtag list                          # 타임라인 태그 (기본값)
+mtag list --all                    # 모든 파일 타입
+mtag list --type modules           # 특정 타입
+mtag list --sort alpha             # 알파벳순 정렬
+mtag list --min-count 3            # 3회 이상 사용된 태그만
 
-# 모든 파일 타입 태그
-mtags --all
+# 단축 명령어
+mtags                              # mtag list와 동일
+mtags --all                        # mtag list --all과 동일
 
-# 특정 타입 선택 (다중 가능)
-mtags --type timeline --type modules
+# 태그 치환
+mtag replace oldtag newtag         # 태그 이름 변경
+mtag replace "OLD TAG" "NEW TAG"   # 대괄호 태그 (공백 포함)
+mtag replace old new --dry-run     # 변경 미리보기
 
-# 알파벳순 정렬
-mtags --sort alpha
+# 태그 삭제
+mtag delete testtag                # 태그 제거
+mtag delete TAG --force            # 확인 없이 삭제
 
-# 최소 사용 횟수 필터링
-mtags --min-count 3
+# 태그 찾기
+mtag find bug                      # 태그 사용 위치 찾기
+mtag find "MEMORY TOOL"            # 대괄호 태그 찾기
 ```
 
-**출력 예시:**
+**출력 예시 (mtag list):**
 ```
 Tags in timeline (15 unique tags)
 
@@ -475,6 +486,10 @@ Tags in timeline (15 unique tags)
   refactor    ███                   2
 ```
 
+**태그 형식:**
+- `#hashtag` - 해시태그 형식
+- `[BRACKET TAG]` - 대괄호 형식 (공백, 대문자 지원)
+
 **기본값 설정 (config.yaml):**
 ```yaml
 tags:
@@ -482,6 +497,20 @@ tags:
   sort: "count"                # count 또는 alpha
   min_count: 1                 # 최소 사용 횟수
 ```
+
+### 캐시 관리 (mcache)
+
+```bash
+mcache                    # 캐시 요약 표시
+mcache --stats            # 상세 통계 (크기, 항목 수, 날짜)
+mcache --clear            # 모든 캐시 삭제
+mcache --clear-expired    # 만료된 캐시만 삭제
+```
+
+**캐시 정보:**
+- 위치: `~/.memory/.cache/search/`
+- 기본 TTL: 3600초 (1시간)
+- 검색 성능 향상을 위해 결과를 캐시
 
 ### 검색 명령어
 
@@ -635,11 +664,13 @@ nsync --discover                 # 노션에서 모듈 다운로드
 nsync --verbose                  # 상세 진행 로그
 nsync "projects/my-app"          # 특정 모듈만
 
-# 타임라인 일괄 싱크 (NEW)
+# 타임라인 일괄 싱크 (신규 항목은 자동 시간순 삽입)
 nsync --timeline                 # 오늘 타임라인 동기화
 nsync --timeline --days 7        # 최근 7일 동기화
 nsync --timeline --push          # 로컬 → 노션만
 nsync --timeline --pull          # 노션 → 로컬만
+nsync --timeline --sort          # 로컬 파일 기존 항목 시간순 정렬
+nsync --timeline --reorder       # Notion 페이지 시간순 재정렬 (항목 + 일별 페이지)
 
 # 자동 동기화 (파일 변경 감시)
 nwatch                           # 감시 시작 (modules + timeline + plans)

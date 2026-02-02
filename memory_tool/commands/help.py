@@ -380,6 +380,14 @@ Smart task completion (done command):
             "description": """
 Synchronize local memory content with Notion.
 Supports modules, timeline, and plans synchronization.
+
+New timeline entries are automatically inserted in time-sorted order.
+
+Options for fixing existing out-of-order entries:
+  --sort     Sort local timeline files by time
+  --reorder  Reorder Notion pages by time:
+             - Timeline entries within daily pages
+             - Daily pages within month pages (2026-01-01, 2026-01-02, ...)
             """,
             "examples": [
                 "nsync                     # Sync all (modules + timeline + plans)",
@@ -389,6 +397,8 @@ Supports modules, timeline, and plans synchronization.
                 "nsync --push              # Push local to Notion",
                 "nsync --pull              # Pull from Notion to local",
                 "nsync --status            # Show sync status",
+                "nsync --timeline --sort   # Sync and sort local files",
+                "nsync --timeline --reorder # Reorder Notion pages by time",
             ],
             "options": [
                 ("--module", "Sync modules only"),
@@ -397,6 +407,8 @@ Supports modules, timeline, and plans synchronization.
                 ("--push", "Push local changes to Notion"),
                 ("--pull", "Pull changes from Notion"),
                 ("--status", "Show synchronization status"),
+                ("--sort", "Sort existing local timeline entries by time"),
+                ("--reorder", "Reorder Notion pages (entries + daily pages in months)"),
             ],
         },
         "ko": {
@@ -405,6 +417,14 @@ Supports modules, timeline, and plans synchronization.
             "description": """
 로컬 메모리 내용을 Notion과 동기화합니다.
 모듈, 타임라인, 계획 동기화를 지원합니다.
+
+신규 타임라인 항목은 자동으로 시간순으로 삽입됩니다.
+
+기존 항목 순서 정리 옵션:
+  --sort     로컬 타임라인 파일의 기존 항목 시간순 정렬
+  --reorder  Notion 페이지 시간순 재정렬:
+             - 일별 페이지 내 타임라인 항목
+             - 월별 페이지 내 일별 페이지 (2026-01-01, 2026-01-02, ...)
             """,
             "examples": [
                 "nsync                     # 전체 동기화 (모듈 + 타임라인 + 계획)",
@@ -414,6 +434,8 @@ Supports modules, timeline, and plans synchronization.
                 "nsync --push              # 로컬 -> Notion 푸시",
                 "nsync --pull              # Notion -> 로컬 풀",
                 "nsync --status            # 동기화 상태 확인",
+                "nsync --timeline --sort   # 동기화 후 로컬 파일 정렬",
+                "nsync --timeline --reorder # Notion 페이지 시간순 재정렬",
             ],
             "options": [
                 ("--module", "모듈만 동기화"),
@@ -422,6 +444,8 @@ Supports modules, timeline, and plans synchronization.
                 ("--push", "로컬 변경사항을 Notion에 푸시"),
                 ("--pull", "Notion에서 변경사항 풀"),
                 ("--status", "동기화 상태 표시"),
+                ("--sort", "로컬 타임라인 기존 항목 시간순 정렬"),
+                ("--reorder", "Notion 페이지 재정렬 (항목 + 월별 내 일별 페이지)"),
             ],
         },
     },
@@ -1135,8 +1159,10 @@ Runs continuously until stopped (Ctrl+C).
 Default mode: Local -> Notion (push only)
 Bidirectional mode (-b): Local <-> Notion (push and pull)
   - modules: bidirectional sync
-  - timeline: bidirectional sync
+  - timeline: bidirectional sync (entries sorted by time)
   - plans: bidirectional sync
+
+Timeline entries are automatically inserted in time-sorted order.
             """,
             "examples": [
                 "nwatch                     # Watch all, Local -> Notion",
@@ -1166,8 +1192,10 @@ Bidirectional mode (-b): Local <-> Notion (push and pull)
 기본 모드: Local -> Notion (push만)
 양방향 모드 (-b): Local <-> Notion (push + pull)
   - modules: 양방향 동기화
-  - timeline: 양방향 동기화
+  - timeline: 양방향 동기화 (시간순 정렬)
   - plans: 양방향 동기화
+
+타임라인 항목은 자동으로 시간순으로 삽입됩니다.
             """,
             "examples": [
                 "nwatch                     # 전체 감시, Local -> Notion",
@@ -1538,7 +1566,7 @@ COMMAND_CATEGORIES = {
     "en": {
         "core": ("Core Commands", ["record", "init", "status", "tutorial"]),
         "timeline": ("Timeline", ["today", "week", "month", "days", "sort"]),
-        "search": ("Search", ["search", "browse", "check"]),
+        "search": ("Search", ["search", "tag", "browse", "check", "cache"]),
         "module": ("Modules", ["module", "archive", "context", "map"]),
         "plan": ("Planning", ["plan", "summary"]),
         "llm": ("AI & LLM", ["ask", "providers"]),
@@ -1549,7 +1577,7 @@ COMMAND_CATEGORIES = {
     "ko": {
         "core": ("핵심 명령어", ["record", "init", "status", "tutorial"]),
         "timeline": ("타임라인", ["today", "week", "month", "days", "sort"]),
-        "search": ("검색", ["search", "browse", "check"]),
+        "search": ("검색", ["search", "tag", "browse", "check", "cache"]),
         "module": ("모듈 관리", ["module", "archive", "context", "map"]),
         "plan": ("계획", ["plan", "summary"]),
         "llm": ("AI 기능", ["ask", "providers"]),
@@ -2003,6 +2031,8 @@ def _show_command_help(command: str, lang: str):
         "mask": "ask", "질문": "ask",
         "mtoday": "today", "오늘": "today",
         "mplan": "plan",
+        "mtag": "tag", "mtags": "tag",
+        "mcache": "cache",
     }
     cmd = cmd_map.get(command, command)
 

@@ -466,6 +466,107 @@ class NotionClient:
 
         return result
 
+    def reorder_child_pages(self, parent_page_id: str, verbose: bool = False) -> dict:
+        """Reorder child pages under a parent page by their title (date string).
+
+        This is useful for sorting daily pages (2026-01-01, 2026-01-02, etc.)
+        under a monthly page (2026-01).
+
+        Args:
+            parent_page_id: Parent page ID containing child pages
+            verbose: Print progress
+
+        Returns:
+            Dict with reordered count and any errors
+        """
+        result = {"reordered": 0, "total": 0, "errors": []}
+
+        try:
+            # Get all child blocks (with pagination)
+            all_blocks = []
+            start_cursor = None
+
+            while True:
+                if start_cursor:
+                    response = self.client.blocks.children.list(
+                        block_id=parent_page_id, start_cursor=start_cursor
+                    )
+                else:
+                    response = self.client.blocks.children.list(block_id=parent_page_id)
+
+                all_blocks.extend(response.get("results", []))
+
+                if not response.get("has_more"):
+                    break
+                start_cursor = response.get("next_cursor")
+
+            if not all_blocks:
+                return result
+
+            # Filter only child_page blocks
+            child_pages = []
+            for block in all_blocks:
+                if block.get("type") == "child_page" and not block.get("archived", False):
+                    title = block.get("child_page", {}).get("title", "")
+                    child_pages.append({
+                        "id": block.get("id"),
+                        "title": title,
+                        "data": block
+                    })
+
+            result["total"] = len(child_pages)
+
+            if len(child_pages) <= 1:
+                return result  # Nothing to reorder
+
+            # Check if already sorted by title (date string)
+            titles = [p["title"] for p in child_pages]
+            if titles == sorted(titles):
+                if verbose:
+                    print(f"  Child pages already sorted ({len(child_pages)} pages)")
+                return result
+
+            # Sort by title (date strings sort correctly alphabetically)
+            sorted_pages = sorted(child_pages, key=lambda x: x["title"])
+
+            if verbose:
+                print(f"  Reordering {len(child_pages)} child pages...")
+
+            # Delete all child_page blocks
+            for page in child_pages:
+                try:
+                    self.client.blocks.delete(block_id=page["id"])
+                except Exception as e:
+                    result["errors"].append(f"Delete failed ({page['title']}): {e}")
+
+            # Recreate pages in sorted order
+            # Note: We recreate as child pages with the same title
+            for page in sorted_pages:
+                try:
+                    self.client.blocks.children.append(
+                        block_id=parent_page_id,
+                        children=[
+                            {
+                                "object": "block",
+                                "type": "child_page",
+                                "child_page": {
+                                    "title": page["title"]
+                                }
+                            }
+                        ]
+                    )
+                    result["reordered"] += 1
+                except Exception as e:
+                    result["errors"].append(f"Recreate failed ({page['title']}): {e}")
+
+            if verbose:
+                print(f"  Reordered {result['reordered']}/{result['total']} child pages")
+
+        except Exception as e:
+            result["errors"].append(f"Reorder child pages failed: {e}")
+
+        return result
+
     def get_page_content(self, page_id: str) -> str:
         """Get text content of a page."""
         try:

@@ -611,6 +611,7 @@ def notion_sync(
 
                 reorder_count = 0
                 reorder_errors = []
+                processed_months = set()  # Track processed month pages
 
                 for day_offset in range(days):
                     target_date = today - timedelta(days=day_offset)
@@ -622,7 +623,7 @@ def notion_sync(
                             timeline_syncer.timeline_config.root_page_id
                         )
 
-                        # Reorder the page
+                        # Reorder entries within the daily page
                         result = client.reorder_timeline_page(page_id, verbose=verbose)
 
                         if result["reordered"] > 0:
@@ -633,13 +634,49 @@ def notion_sync(
                         if result["errors"]:
                             reorder_errors.extend(result["errors"])
 
+                        # Track month page for later child page reordering
+                        month_str = target_date.strftime("%Y-%m")
+                        if month_str not in processed_months:
+                            processed_months.add(month_str)
+
                     except Exception as e:
                         reorder_errors.append(f"{target_date.strftime('%Y-%m-%d')}: {e}")
 
+                # Reorder child pages (daily pages) within each month page
+                if processed_months:
+                    console.print("[cyan]Reordering daily pages within month pages...[/cyan]")
+
+                    month_reorder_count = 0
+                    root_page_id = timeline_syncer.timeline_config.root_page_id
+
+                    for month_str in sorted(processed_months):
+                        try:
+                            # Get month page ID
+                            month_page_id = client.find_child_page(root_page_id, month_str)
+
+                            if month_page_id:
+                                result = client.reorder_child_pages(month_page_id, verbose=verbose)
+
+                                if result["reordered"] > 0:
+                                    month_reorder_count += 1
+                                    if verbose:
+                                        console.print(f"  [green]OK[/green] {month_str}: {result['reordered']} daily pages reordered")
+
+                                if result["errors"]:
+                                    reorder_errors.extend(result["errors"])
+
+                        except Exception as e:
+                            reorder_errors.append(f"Month {month_str}: {e}")
+
+                    if month_reorder_count > 0:
+                        console.print(f"[green]Reordered daily pages in {month_reorder_count} month(s)[/green]")
+                    else:
+                        console.print("[dim]All month pages already sorted[/dim]")
+
                 if reorder_count > 0:
-                    console.print(f"[green]Reordered {reorder_count} Notion page(s)[/green]")
+                    console.print(f"[green]Reordered entries in {reorder_count} daily page(s)[/green]")
                 else:
-                    console.print("[dim]All Notion pages already sorted[/dim]")
+                    console.print("[dim]All daily page entries already sorted[/dim]")
 
                 if reorder_errors and verbose:
                     for err in reorder_errors:
