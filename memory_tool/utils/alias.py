@@ -62,11 +62,9 @@ class AliasManager:
         "ms": ("search", "Search timeline and modules", "타임라인/모듈 검색", "search"),
         "mbrowse": ("browse", "Interactive search browser", "대화형 검색 브라우저", "search"),
         "mcheck": ("check", "Check Related Files paths", "관련 파일 경로 확인", "search"),
-        "mtags": ("tags", "List tags with usage counts", "태그 목록 및 사용 횟수", "search"),
+        "mtag": ("tag", "Tag management (list, replace, delete, find)", "태그 관리", "search"),
+        "mtags": ("tag list", "List tags with usage counts", "태그 목록 및 사용 횟수", "search"),
         "mcache": ("cache", "Manage search cache", "검색 캐시 관리", "search"),
-        "mtag-replace": ("tag-replace", "Replace tag in files", "태그 치환", "search"),
-        "mtag-delete": ("tag-delete", "Delete tag from files", "태그 삭제", "search"),
-        "mtag-find": ("tag-find", "Find tag occurrences", "태그 찾기", "search"),
         # Korean
         "검": ("search", "Search timeline and modules", "타임라인/모듈 검색", "search"),
 

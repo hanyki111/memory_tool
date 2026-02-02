@@ -118,51 +118,67 @@ Supports regex patterns, date filtering, and result ranking.
         },
     },
 
-    "tags": {
+    "tag": {
         "en": {
-            "name": "mtags / tags",
-            "summary": "List tags with usage counts",
+            "name": "mtag / tag",
+            "summary": "Tag management commands",
             "description": """
-Lists all tags used in your .memory files with usage counts.
-Shows a visual bar chart of tag frequency.
+Manage tags in your .memory files. Supports listing, replacing,
+deleting, and finding tags.
 
-By default, searches timeline only. Use --all for all file types.
+Subcommands:
+  list     - List tags with usage counts (alias: mtags)
+  replace  - Replace a tag with another
+  delete   - Delete a tag from files
+  find     - Find all occurrences of a tag
+
+Tag matching is case-insensitive but preserves original case.
+Supports both [bracket tags] and #hashtags.
             """,
             "examples": [
-                'mtags                              # Timeline tags (default)',
-                'mtags --all                        # All file types',
-                'mtags --type timeline --type modules  # Multiple types',
-                'mtags --sort alpha                 # Alphabetical order',
-                'mtags --min-count 3                # Tags used 3+ times',
+                'mtag list                          # List timeline tags',
+                'mtag list --all                    # All file types',
+                'mtag replace endfield 엔드필드      # Replace tag',
+                'mtag replace "old" "new" --dry-run # Preview changes',
+                'mtag delete TAG --force            # Delete tag',
+                'mtag find bug                      # Find tag usage',
             ],
             "options": [
-                ("--type, -t", "File types: timeline, modules, plans (can use multiple)"),
-                ("--all, -a", "Search all file types"),
-                ("--sort, -s", "Sort by: count (default), alpha"),
-                ("--min-count, -m", "Minimum usage count to display"),
+                ("list", "List tags with usage counts"),
+                ("replace <old> <new>", "Replace tag with another"),
+                ("delete <tag>", "Delete tag from files"),
+                ("find <tag>", "Find all occurrences"),
             ],
         },
         "ko": {
-            "name": "mtags / tags",
-            "summary": "태그 목록 및 사용 횟수 표시",
+            "name": "mtag / tag",
+            "summary": "태그 관리 명령어",
             "description": """
-.memory 파일에서 사용된 모든 태그와 사용 횟수를 보여줍니다.
-태그 빈도를 시각적 막대 차트로 표시합니다.
+.memory 파일의 태그를 관리합니다. 목록 보기, 치환,
+삭제, 찾기를 지원합니다.
 
-기본값으로 타임라인만 검색합니다. 모든 파일 유형은 --all 사용.
+하위 명령어:
+  list     - 태그 목록 및 사용 횟수 (별칭: mtags)
+  replace  - 태그 치환
+  delete   - 태그 삭제
+  find     - 태그 사용 위치 찾기
+
+태그 매칭은 대소문자 구분 없이 하되 원본 대소문자는 유지합니다.
+[대괄호 태그]와 #해시태그를 모두 지원합니다.
             """,
             "examples": [
-                'mtags                              # 타임라인 태그 (기본)',
-                'mtags --all                        # 모든 파일 유형',
-                'mtags --type timeline --type modules  # 여러 유형',
-                'mtags --sort alpha                 # 알파벳순 정렬',
-                'mtags --min-count 3                # 3회 이상 사용된 태그만',
+                'mtag list                          # 타임라인 태그 목록',
+                'mtag list --all                    # 모든 파일 유형',
+                'mtag replace endfield 엔드필드      # 태그 치환',
+                'mtag replace "기존" "신규" --dry-run # 미리보기',
+                'mtag delete TAG --force            # 태그 삭제',
+                'mtag find bug                      # 태그 찾기',
             ],
             "options": [
-                ("--type, -t", "파일 유형: timeline, modules, plans (여러 개 지정 가능)"),
-                ("--all, -a", "모든 파일 유형 검색"),
-                ("--sort, -s", "정렬 방식: count (기본), alpha"),
-                ("--min-count, -m", "표시할 최소 사용 횟수"),
+                ("list", "태그 목록 및 사용 횟수"),
+                ("replace <이전> <신규>", "태그 치환"),
+                ("delete <태그>", "태그 삭제"),
+                ("find <태그>", "태그 사용 위치 찾기"),
             ],
         },
     },
@@ -210,139 +226,6 @@ Default TTL: 3600 seconds (1 hour)
                 ("--stats, -s", "캐시 통계 표시 (항목 수, 크기, 날짜)"),
                 ("--clear, -c", "모든 검색 캐시 삭제"),
                 ("--clear-expired, -e", "만료된 캐시 항목만 삭제"),
-            ],
-        },
-    },
-
-    "tag-replace": {
-        "en": {
-            "name": "mtag-replace / tag-replace",
-            "summary": "Replace a tag with another",
-            "description": """
-Replaces all occurrences of a tag in .memory files.
-Matching is case-insensitive, but the new tag preserves its case.
-
-Supports both [bracket tags] and #hashtags.
-            """,
-            "examples": [
-                'mtag-replace endfield 엔드필드       # Replace tag',
-                'mtag-replace "old tag" "new tag"    # Tags with spaces',
-                'mtag-replace bug BUG --type timeline  # Timeline only',
-                'mtag-replace test TEST --dry-run    # Preview changes',
-            ],
-            "options": [
-                ("--type, -t", "File types: timeline, modules, plans (can use multiple)"),
-                ("--all, -a", "Search all file types"),
-                ("--dry-run, -n", "Preview changes without modifying files"),
-            ],
-        },
-        "ko": {
-            "name": "mtag-replace / tag-replace",
-            "summary": "태그를 다른 태그로 치환",
-            "description": """
-.memory 파일에서 태그의 모든 항목을 치환합니다.
-대소문자 구분 없이 매칭하며, 새 태그는 입력한 대로 적용됩니다.
-
-[대괄호 태그]와 #해시태그 모두 지원합니다.
-            """,
-            "examples": [
-                'mtag-replace endfield 엔드필드       # 태그 치환',
-                'mtag-replace "기존 태그" "새 태그"   # 공백 포함 태그',
-                'mtag-replace bug BUG --type timeline  # 타임라인만',
-                'mtag-replace test TEST --dry-run    # 미리보기',
-            ],
-            "options": [
-                ("--type, -t", "파일 유형: timeline, modules, plans (여러 개 지정 가능)"),
-                ("--all, -a", "모든 파일 유형 검색"),
-                ("--dry-run, -n", "파일 수정 없이 미리보기"),
-            ],
-        },
-    },
-
-    "tag-delete": {
-        "en": {
-            "name": "mtag-delete / tag-delete",
-            "summary": "Delete a tag from files",
-            "description": """
-Removes all occurrences of a tag from .memory files.
-Matching is case-insensitive.
-
-Asks for confirmation before deleting (use --force to skip).
-            """,
-            "examples": [
-                'mtag-delete TAG                     # Delete with confirmation',
-                'mtag-delete "test tag" --all        # All file types',
-                'mtag-delete tmp --dry-run           # Preview only',
-                'mtag-delete old --force             # Skip confirmation',
-            ],
-            "options": [
-                ("--type, -t", "File types: timeline, modules, plans (can use multiple)"),
-                ("--all, -a", "Search all file types"),
-                ("--dry-run, -n", "Preview changes without modifying files"),
-                ("--force, -f", "Skip confirmation prompt"),
-            ],
-        },
-        "ko": {
-            "name": "mtag-delete / tag-delete",
-            "summary": "태그 삭제",
-            "description": """
-.memory 파일에서 태그의 모든 항목을 삭제합니다.
-대소문자 구분 없이 매칭합니다.
-
-삭제 전 확인을 요청합니다 (--force로 건너뛸 수 있음).
-            """,
-            "examples": [
-                'mtag-delete TAG                     # 확인 후 삭제',
-                'mtag-delete "테스트 태그" --all      # 모든 파일 유형',
-                'mtag-delete tmp --dry-run           # 미리보기만',
-                'mtag-delete old --force             # 확인 없이 삭제',
-            ],
-            "options": [
-                ("--type, -t", "파일 유형: timeline, modules, plans (여러 개 지정 가능)"),
-                ("--all, -a", "모든 파일 유형 검색"),
-                ("--dry-run, -n", "파일 수정 없이 미리보기"),
-                ("--force, -f", "확인 프롬프트 건너뛰기"),
-            ],
-        },
-    },
-
-    "tag-find": {
-        "en": {
-            "name": "mtag-find / tag-find",
-            "summary": "Find all occurrences of a tag",
-            "description": """
-Shows which files contain a specific tag and how many times.
-Matching is case-insensitive.
-
-Useful for reviewing tag usage before replacing or deleting.
-            """,
-            "examples": [
-                'mtag-find bug                       # Find in all file types',
-                'mtag-find "memory tool" --type timeline',
-                'mtag-find urgent --all',
-            ],
-            "options": [
-                ("--type, -t", "File types: timeline, modules, plans (can use multiple)"),
-                ("--all, -a", "Search all file types"),
-            ],
-        },
-        "ko": {
-            "name": "mtag-find / tag-find",
-            "summary": "태그 사용 위치 찾기",
-            "description": """
-특정 태그가 포함된 파일과 사용 횟수를 보여줍니다.
-대소문자 구분 없이 매칭합니다.
-
-태그 치환이나 삭제 전에 사용 현황을 확인할 때 유용합니다.
-            """,
-            "examples": [
-                'mtag-find bug                       # 모든 파일 유형에서 찾기',
-                'mtag-find "메모리 툴" --type timeline',
-                'mtag-find urgent --all',
-            ],
-            "options": [
-                ("--type, -t", "파일 유형: timeline, modules, plans (여러 개 지정 가능)"),
-                ("--all, -a", "모든 파일 유형 검색"),
             ],
         },
     },
