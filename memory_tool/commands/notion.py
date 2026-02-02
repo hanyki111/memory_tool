@@ -582,15 +582,17 @@ def notion_sync(
                 for day_offset in range(days):
                     target_date = today - timedelta(days=day_offset)
                     year_month = target_date.strftime("%Y-%m")
-                    day_num = target_date.strftime("%d")
+                    # Use int() to remove leading zero (e.g., "01" -> "1")
+                    day_num = str(target_date.day)
                     file_path = sorter.timeline_path / "daily" / year_month / f"{day_num}.md"
 
                     if file_path.exists():
                         try:
                             sorter.sort_file(file_path, create_backup=False)
                             sorted_count += 1
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            if verbose:
+                                console.print(f"[dim]Sort error for {file_path.name}: {e}[/dim]")
 
                 if sorted_count > 0:
                     console.print(f"[dim]Sorted {sorted_count} timeline file(s)[/dim]")

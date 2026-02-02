@@ -268,9 +268,12 @@ class NotionClient:
                 }
             })
 
-            self.client.blocks.children.append(
-                block_id=page_id,
-                children=[
+            # Find correct insertion position (sorted by time)
+            after_block_id = self._find_insertion_position(page_id, time_str)
+
+            append_kwargs = {
+                "block_id": page_id,
+                "children": [
                     {
                         "object": "block",
                         "type": "paragraph",
@@ -279,9 +282,103 @@ class NotionClient:
                         }
                     }
                 ]
-            )
+            }
+
+            # Insert after specific block if position found
+            if after_block_id:
+                append_kwargs["after"] = after_block_id
+
+            self.client.blocks.children.append(**append_kwargs)
         except Exception as e:
             raise NotionError(f"Failed to append timeline entry: {e}")
+
+    def _parse_time_from_block(self, block: dict) -> tuple:
+        """Extract time from a Notion block for sorting.
+
+        Args:
+            block: Notion block dict
+
+        Returns:
+            Tuple of (hour, minute) or (99, 99) if no time found
+        """
+        if block.get("type") != "paragraph":
+            return (99, 99)
+
+        rich_text = block.get("paragraph", {}).get("rich_text", [])
+        if not rich_text:
+            return (99, 99)
+
+        for rt in rich_text:
+            rt_type = rt.get("type")
+
+            # Check for date mention
+            if rt_type == "mention":
+                mention = rt.get("mention", {})
+                if mention.get("type") == "date":
+                    date_info = mention.get("date", {})
+                    start = date_info.get("start", "")
+                    # Extract time from ISO format (2026-01-16T19:34:00+09:00)
+                    if "T" in start:
+                        time_part = start.split("T")[1][:5]  # HH:MM
+                        try:
+                            parts = time_part.split(":")
+                            return (int(parts[0]), int(parts[1]))
+                        except (ValueError, IndexError):
+                            pass
+
+            # Check for bold time format (legacy): "HH:MM | "
+            elif rt_type == "text":
+                content = rt.get("text", {}).get("content", "")
+                annotations = rt.get("annotations", {})
+
+                if annotations.get("bold") and "|" in content:
+                    time_str = content.split("|")[0].strip()
+                    try:
+                        parts = time_str.split(":")
+                        return (int(parts[0]), int(parts[1]))
+                    except (ValueError, IndexError):
+                        pass
+
+        return (99, 99)
+
+    def _find_insertion_position(self, page_id: str, time_str: str) -> str:
+        """Find the block ID after which to insert a new entry.
+
+        Args:
+            page_id: Notion page ID
+            time_str: Time string (HH:MM) of the entry to insert
+
+        Returns:
+            Block ID to insert after, or None to insert at beginning
+        """
+        try:
+            # Parse the target time
+            parts = time_str.split(":")
+            target_time = (int(parts[0]), int(parts[1]))
+        except (ValueError, IndexError):
+            return None  # Insert at beginning if time is invalid
+
+        try:
+            response = self.client.blocks.children.list(block_id=page_id)
+            blocks = response.get("results", [])
+
+            # Find the last block with time <= target_time
+            insert_after = None
+
+            for block in blocks:
+                block_time = self._parse_time_from_block(block)
+
+                # If this block's time is <= target time, it's a candidate
+                if block_time <= target_time:
+                    insert_after = block.get("id")
+                else:
+                    # We've passed the insertion point
+                    break
+
+            return insert_after
+
+        except Exception:
+            return None  # Insert at end if error
 
     def get_page_content(self, page_id: str) -> str:
         """Get text content of a page."""
