@@ -15,6 +15,7 @@ from memory_tool.core.search import MemorySearcher, SearchError
 from memory_tool.utils.path_checker import PathChecker, format_check_result
 from memory_tool.utils.config import Config
 from memory_tool.search.filters import TagCollector
+from memory_tool.search.formatter import deduplicate_results
 
 
 @app.command(
@@ -259,6 +260,9 @@ def search(
                     )
                     all_results = ranker.rank(query, all_results)
 
+                # Deduplicate overlapping results
+                all_results = deduplicate_results(all_results, context_lines=1)
+
                 if search_cache:
                     search_cache.set(query, all_results, **cache_key_params)
 
@@ -416,6 +420,9 @@ def search(
             )
 
             all_results = ranker.rank(query, all_results)
+
+        # Deduplicate overlapping results (from context lines)
+        all_results = deduplicate_results(all_results, context_lines=1)
 
         if max_results and len(all_results) > max_results:
             all_results = all_results[:max_results]

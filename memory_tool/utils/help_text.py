@@ -262,6 +262,13 @@ Examples:
 Supports keyword search (default), semantic search (--semantic),
 and hybrid search (--hybrid) that combines both approaches.
 
+Tag search:
+  - Use #hashtag directly in query: ms "#bug"
+  - Multiple tags: ms "#bug #urgent"
+  - Tag + keyword: ms "login #auth"
+  - Tag-only filter: ms --tag-only bug
+  - Keyword + tag filter: ms "error" --tag auth
+
 Search scopes:
   - local: Search only in .memory/ directory (default)
   - kb: Search in knowledge base
@@ -269,15 +276,25 @@ Search scopes:
 
 Examples:
     ms "bug fix"                    # Keyword search
-    ms "authentication issues" --semantic   # Semantic search
+    ms "#bug"                       # Search by tag
+    ms "#bug #urgent"               # Multiple tags
+    ms "login" --tag auth           # Keyword + tag filter
+    ms "authentication" --semantic  # Semantic search
     ms "login" --hybrid             # Hybrid search
-    ms "api" --scope all            # Search everywhere
-    ms "refactor" --days 7          # Last 7 days only
+    ms "api" --with-kb              # Include KB
+    ms "refactor" --date this-week  # This week only
 """,
             "ko": """타임라인 항목과 모듈 문서를 검색합니다.
 
 키워드 검색(기본), 시맨틱 검색(--semantic),
 그리고 두 가지를 결합한 하이브리드 검색(--hybrid)을 지원합니다.
+
+태그 검색:
+  - 쿼리에 #해시태그 직접 사용: ms "#버그"
+  - 여러 태그: ms "#버그 #긴급"
+  - 태그 + 키워드: ms "로그인 #인증"
+  - 태그만 필터: ms --tag-only 버그
+  - 키워드 + 태그 필터: ms "에러" --tag 인증
 
 검색 범위:
   - local: .memory/ 디렉토리만 검색 (기본값)
@@ -286,10 +303,13 @@ Examples:
 
 예시:
     ms "버그 수정"                   # 키워드 검색
+    ms "#버그"                       # 태그로 검색
+    ms "#버그 #긴급"                 # 여러 태그
+    ms "로그인" --tag 인증           # 키워드 + 태그 필터
     ms "인증 문제" --semantic        # 시맨틱 검색
     ms "로그인" --hybrid             # 하이브리드 검색
-    ms "api" --scope all             # 모든 곳에서 검색
-    ms "리팩토링" --days 7           # 최근 7일만
+    ms "api" --with-kb               # KB 포함
+    ms "리팩토링" --date this-week   # 이번 주만
 """,
         },
     },

@@ -3,11 +3,71 @@
 import re
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Dict
 from rich.console import Console
 from rich.text import Text
 from rich.panel import Panel
 from ..core.search import SearchResult
+
+
+def deduplicate_results(
+    results: List[SearchResult],
+    context_lines: int = 1
+) -> List[SearchResult]:
+    """
+    Deduplicate search results that have overlapping line numbers.
+
+    When searching with context lines, adjacent matches can produce
+    overlapping results. This function merges such results.
+
+    Args:
+        results: List of search results
+        context_lines: Number of context lines used in search
+
+    Returns:
+        Deduplicated list of results
+    """
+    if not results:
+        return results
+
+    # Group by file path
+    by_file: Dict[Path, List[SearchResult]] = {}
+    for r in results:
+        if r.file_path not in by_file:
+            by_file[r.file_path] = []
+        by_file[r.file_path].append(r)
+
+    deduplicated = []
+
+    for file_path, file_results in by_file.items():
+        # Sort by line number
+        file_results.sort(key=lambda r: r.line_number)
+
+        # Merge overlapping results
+        merged = []
+        for result in file_results:
+            if not merged:
+                merged.append(result)
+                continue
+
+            last = merged[-1]
+            # Check if this result overlaps with the last one
+            # Two results overlap if their line numbers are within 2*context_lines+1
+            threshold = 2 * context_lines + 1
+            if result.line_number - last.line_number <= threshold:
+                # Merge: keep the one with better score, or first one if equal
+                if result.score > last.score:
+                    merged[-1] = result
+                # Otherwise keep the existing one
+            else:
+                merged.append(result)
+
+        deduplicated.extend(merged)
+
+    # Sort by score (descending), then by file path and line number
+    deduplicated.sort(key=lambda r: (-r.score, str(r.file_path), r.line_number))
+
+    return deduplicated
 
 
 class ResultFormatter:

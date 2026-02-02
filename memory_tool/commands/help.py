@@ -79,6 +79,8 @@ Supports regex patterns, date filtering, and result ranking.
                 'ms "API" --date this-week      # Search this week only',
                 'ms "decision" --type modules   # Search modules only',
                 'ms "refactor" --boost-recent   # Boost recent results',
+                'ms "#bug"                       # Search by hashtag',
+                'ms "[urgent]"                   # Search by bracket tag',
             ],
             "options": [
                 ("--hybrid", "Combine keyword and semantic search"),
@@ -103,6 +105,8 @@ Supports regex patterns, date filtering, and result ranking.
                 'ms "API" --date this-week       # 이번 주만 검색',
                 'ms "결정" --type modules        # 모듈만 검색',
                 'ms "리팩토링" --boost-recent    # 최근 결과 우선',
+                'ms "#버그"                       # 해시태그로 검색',
+                'ms "[긴급]"                      # 대괄호 태그로 검색',
             ],
             "options": [
                 ("--hybrid", "키워드와 시맨틱 검색 결합"),
