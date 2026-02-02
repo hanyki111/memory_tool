@@ -474,3 +474,65 @@ class Timeline:
 
         content = file_path.read_text(encoding="utf-8")
         return file_path, content, target_date
+
+    def parse_entries(self, date_str: str) -> Tuple[Optional[Path], List[dict], Optional[datetime]]:
+        """Parse timeline entries for a specific date.
+
+        Args:
+            date_str: Date string (YYYY-MM-DD, MM-DD, or DD)
+
+        Returns:
+            Tuple of (file_path, entries_list, parsed_date)
+            entries_list contains dicts with 'time', 'message', 'line_number'
+        """
+        file_path, content, parsed_date = self.get_date(date_str)
+
+        if content is None:
+            return file_path, [], parsed_date
+
+        entries = []
+        entry_pattern = re.compile(r"^- (\d{1,2}:\d{2})\s*\|\s*(.+)$", re.MULTILINE)
+
+        for i, match in enumerate(entry_pattern.finditer(content)):
+            entries.append({
+                'index': i,
+                'time': match.group(1),
+                'message': match.group(2).strip(),
+                'start': match.start(),
+                'end': match.end(),
+                'raw': match.group(0)
+            })
+
+        return file_path, entries, parsed_date
+
+    def save_entries(self, file_path: Path, entries: List[dict], date: datetime) -> None:
+        """Save entries back to file.
+
+        Args:
+            file_path: Path to timeline file
+            entries: List of entry dicts with 'time' and 'message'
+            date: Date for the timeline
+        """
+        # Sort by time
+        sorted_entries = sorted(entries, key=lambda e: e['time'])
+
+        # Build content
+        lines = []
+        date_str = date.strftime("%Y-%m-%d")
+        lines.append(f"# {date_str}\n")
+
+        for entry in sorted_entries:
+            time_str = entry['time']
+            # Normalize time format
+            if ":" in time_str:
+                parts = time_str.split(":")
+                time_str = f"{int(parts[0]):02d}:{parts[1]}"
+            lines.append(f"- {time_str} | {entry['message']}")
+
+        content = "\n".join(lines)
+        if not content.endswith("\n"):
+            content += "\n"
+
+        # Ensure parent directory exists
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.write_text(content, encoding="utf-8")

@@ -330,6 +330,166 @@ def day(
 
 
 @app.command()
+def edit(
+    date_str: str = typer.Argument(None, help="Date: YYYY-MM-DD, MM-DD, DD, or 'today'"),
+):
+    """Interactive editor for timeline entries (medit command).
+
+    Edit or delete specific entries from a date's timeline.
+
+    Commands in editor:
+      <n>        - Edit entry number n
+      d <n>      - Delete entry number n
+      s          - Save and exit
+      q          - Quit without saving
+      ?          - Show help
+
+    Examples:
+        medit               # Edit today's timeline
+        medit 2026-01-15    # Edit specific date
+        medit 15            # Edit 15th of current month
+    """
+    from rich.prompt import Prompt
+    from rich.table import Table
+    from rich.panel import Panel
+
+    timeline = Timeline()
+
+    # Default to today if no date provided
+    if not date_str:
+        date_str = datetime.now().strftime("%Y-%m-%d")
+
+    # Parse entries
+    file_path, entries, parsed_date = timeline.parse_entries(date_str)
+
+    if parsed_date is None:
+        console.print(f"[red]ERROR[/red] Invalid date format: {date_str}")
+        console.print("[dim]Use: YYYY-MM-DD, MM-DD, or DD[/dim]")
+        sys.exit(1)
+
+    date_display = parsed_date.strftime("%Y-%m-%d")
+
+    if not entries:
+        console.print(f"[yellow]![/yellow] No timeline entries for {date_display}")
+        if file_path:
+            console.print(f"[dim]File would be at: {file_path}[/dim]")
+        return
+
+    # Track changes
+    modified = False
+    current_entries = entries.copy()
+
+    def show_entries():
+        """Display entries in a table."""
+        table = Table(title=f"Timeline: {date_display}", show_header=True, header_style="bold cyan")
+        table.add_column("#", style="dim", width=4)
+        table.add_column("Time", style="bold", width=6)
+        table.add_column("Message", overflow="fold")
+
+        for i, entry in enumerate(current_entries):
+            table.add_row(str(i + 1), entry['time'], entry['message'])
+
+        console.print(table)
+        console.print()
+
+    def show_help():
+        """Display help."""
+        help_text = """[bold]Commands:[/bold]
+  [cyan]<n>[/cyan]        Edit entry n (e.g., '1' to edit first entry)
+  [cyan]d <n>[/cyan]      Delete entry n (e.g., 'd 2' to delete second entry)
+  [cyan]s[/cyan]          Save changes and exit
+  [cyan]q[/cyan]          Quit without saving
+  [cyan]?[/cyan]          Show this help"""
+        console.print(Panel(help_text, title="Help", border_style="blue"))
+
+    # Main loop
+    console.print()
+    show_entries()
+    show_help()
+    console.print()
+
+    while True:
+        try:
+            prompt_text = "[green]>[/green] " if not modified else "[yellow]>[/yellow] (modified) "
+            cmd = Prompt.ask(prompt_text).strip()
+
+            if not cmd:
+                continue
+
+            # Quit without saving
+            if cmd.lower() == 'q':
+                if modified:
+                    confirm = Prompt.ask("Discard changes?", choices=["y", "n"], default="n")
+                    if confirm.lower() != 'y':
+                        continue
+                console.print("[dim]Exited without saving[/dim]")
+                break
+
+            # Save and exit
+            if cmd.lower() == 's':
+                if modified:
+                    timeline.save_entries(file_path, current_entries, parsed_date)
+                    console.print(f"[green]Saved {len(current_entries)} entries to {file_path.name}[/green]")
+                else:
+                    console.print("[dim]No changes to save[/dim]")
+                break
+
+            # Help
+            if cmd == '?':
+                show_help()
+                continue
+
+            # Delete entry: d <n>
+            if cmd.lower().startswith('d '):
+                try:
+                    idx = int(cmd[2:].strip()) - 1
+                    if 0 <= idx < len(current_entries):
+                        entry = current_entries[idx]
+                        console.print(f"Delete: [cyan]{entry['time']}[/cyan] | {entry['message'][:50]}...")
+                        confirm = Prompt.ask("Confirm delete?", choices=["y", "n"], default="n")
+                        if confirm.lower() == 'y':
+                            current_entries.pop(idx)
+                            modified = True
+                            console.print("[green]Deleted[/green]")
+                            show_entries()
+                        else:
+                            console.print("[dim]Cancelled[/dim]")
+                    else:
+                        console.print(f"[red]Invalid entry number. Use 1-{len(current_entries)}[/red]")
+                except ValueError:
+                    console.print("[red]Usage: d <number>[/red]")
+                continue
+
+            # Edit entry: <n>
+            if cmd.isdigit():
+                idx = int(cmd) - 1
+                if 0 <= idx < len(current_entries):
+                    entry = current_entries[idx]
+                    console.print(f"\nEditing: [cyan]{entry['time']}[/cyan] | {entry['message']}")
+                    console.print("[dim]Enter new message (or empty to cancel):[/dim]")
+
+                    new_message = Prompt.ask("Message")
+                    if new_message.strip():
+                        current_entries[idx]['message'] = new_message.strip()
+                        modified = True
+                        console.print("[green]Updated[/green]")
+                        show_entries()
+                    else:
+                        console.print("[dim]Cancelled[/dim]")
+                else:
+                    console.print(f"[red]Invalid entry number. Use 1-{len(current_entries)}[/red]")
+                continue
+
+            # Unknown command
+            console.print(f"[red]Unknown command: {cmd}[/red] (type ? for help)")
+
+        except KeyboardInterrupt:
+            console.print("\n[dim]Use 'q' to quit, 's' to save[/dim]")
+        except EOFError:
+            break
+
+
+@app.command()
 def sort(
     date_or_all: str = typer.Argument("today", help="Date (YYYY-MM-DD), 'today', or 'all'"),
     no_backup: bool = typer.Option(False, "--no-backup", help="Skip backup creation"),

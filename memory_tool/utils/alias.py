@@ -50,6 +50,7 @@ class AliasManager:
         "mmonth": ("month", "Show this month's timeline", "이번 달 타임라인 보기", "timeline"),
         "mdays": ("days", "Show last N days timeline", "최근 N일 타임라인 보기", "timeline"),
         "mday": ("day", "Show specific date timeline", "특정 날짜 타임라인 보기", "timeline"),
+        "medit": ("edit", "Interactive timeline editor", "대화형 타임라인 편집기", "timeline"),
         "msort": ("sort", "Sort timeline by time", "타임라인 시간순 정렬", "timeline"),
         # Korean
         "오늘": ("today", "Show today's timeline", "오늘 타임라인 보기", "timeline"),
