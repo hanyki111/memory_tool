@@ -196,39 +196,45 @@ Examples:
     # -------------------------------------------------------------------------
     # Search Commands
     # -------------------------------------------------------------------------
-    "tags": {
+    "tag": {
         "short": {
-            "en": "List tags used in .memory",
-            "ko": ".memory에서 사용된 태그 목록",
+            "en": "Tag management (default: list)",
+            "ko": "태그 관리 (기본: 목록)",
         },
         "long": {
-            "en": """List all tags used in your .memory files.
+            "en": """Tag management commands.
 
-Shows tags with usage counts from timeline, modules, and plans.
+Without subcommand, lists all tags with usage counts.
 By default, only searches timeline files.
 
 Output includes a visual bar chart showing relative usage frequency.
 
 Examples:
-    mtags                              # Timeline tags (default)
-    mtags --all                        # All file types
-    mtags --type timeline --type modules  # Multiple types
-    mtags --sort alpha                 # Sort alphabetically
-    mtags --min-count 3                # Tags used 3+ times
+    mtag                               # Timeline tags (default)
+    mtag --all                         # All file types
+    mtag --type timeline --type modules  # Multiple types
+    mtag --sort alpha                  # Sort alphabetically
+    mtag --min-count 3                 # Tags used 3+ times
+    mtag replace old new               # Replace tag
+    mtag delete TAG                    # Delete tag
+    mtag find TAG                      # Find tag usage
 """,
-            "ko": """.memory 파일에서 사용된 모든 태그를 나열합니다.
+            "ko": """태그 관리 명령어.
 
-타임라인, 모듈, 플랜에서 사용 횟수와 함께 태그를 표시합니다.
+하위 명령 없이 실행하면 사용 횟수와 함께 모든 태그를 나열합니다.
 기본값으로 타임라인 파일만 검색합니다.
 
 출력에는 상대적 사용 빈도를 보여주는 시각적 막대 차트가 포함됩니다.
 
 예시:
-    mtags                              # 타임라인 태그 (기본값)
-    mtags --all                        # 모든 파일 타입
-    mtags --type timeline --type modules  # 여러 타입
-    mtags --sort alpha                 # 알파벳순 정렬
-    mtags --min-count 3                # 3회 이상 사용된 태그만
+    mtag                               # 타임라인 태그 (기본값)
+    mtag --all                         # 모든 파일 타입
+    mtag --type timeline --type modules  # 여러 타입
+    mtag --sort alpha                  # 알파벳순 정렬
+    mtag --min-count 3                 # 3회 이상 사용된 태그만
+    mtag replace 기존 신규             # 태그 치환
+    mtag delete TAG                    # 태그 삭제
+    mtag find TAG                      # 태그 찾기
 """,
         },
         "options": {

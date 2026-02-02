@@ -14,11 +14,13 @@ tag_app = typer.Typer(
     name="tag",
     help="Tag management commands (mtag)",
     rich_markup_mode="rich",
+    invoke_without_command=True,
 )
 
 
-@tag_app.command("list")
-def tag_list(
+@tag_app.callback()
+def tag_callback(
+    ctx: typer.Context,
     file_type: List[str] = typer.Option(
         None, "--type", "-t",
         help="File types: timeline, modules, plans (can use multiple)"
@@ -36,17 +38,33 @@ def tag_list(
         help="Minimum usage count to display"
     ),
 ):
-    """List tags with usage counts.
+    """Tag management commands (mtag).
 
-    By default, shows tags from timeline only.
+    Without subcommand, lists tags with usage counts (default behavior).
 
     Examples:
-        mtag list                              # Timeline tags (default)
-        mtag list --all                        # All file types
-        mtag list --type timeline --type modules  # Multiple types
-        mtag list --sort alpha                 # Sort alphabetically
-        mtag list --min-count 3                # Tags used 3+ times
+        mtag                    # List timeline tags (default)
+        mtag --all              # All file types
+        mtag --sort alpha       # Alphabetical order
+        mtag replace OLD NEW    # Replace tag
+        mtag delete TAG         # Delete tag
+        mtag find TAG           # Find tag occurrences
     """
+    # If a subcommand is invoked, don't run list
+    if ctx.invoked_subcommand is not None:
+        return
+
+    # Default behavior: run tag list
+    _run_tag_list(file_type, all_types, sort, min_count)
+
+
+def _run_tag_list(
+    file_type: List[str],
+    all_types: bool,
+    sort: Optional[str],
+    min_count: Optional[int],
+):
+    """Internal function to run tag list logic."""
     from memory_tool.search.filters import TagCollector
 
     memory_path = Path.cwd() / ".memory"
@@ -119,6 +137,39 @@ def tag_list(
         console.print(
             f"  {tag:<{max_tag_len}}  [{bar_color}]{bar:<{bar_width}}[/{bar_color}]  {count}"
         )
+
+
+@tag_app.command("list")
+def tag_list(
+    file_type: List[str] = typer.Option(
+        None, "--type", "-t",
+        help="File types: timeline, modules, plans (can use multiple)"
+    ),
+    all_types: bool = typer.Option(
+        False, "--all", "-a",
+        help="Search all file types"
+    ),
+    sort: Optional[str] = typer.Option(
+        None, "--sort", "-s",
+        help="Sort by: count (default), alpha"
+    ),
+    min_count: Optional[int] = typer.Option(
+        None, "--min-count", "-m",
+        help="Minimum usage count to display"
+    ),
+):
+    """List tags with usage counts.
+
+    By default, shows tags from timeline only.
+
+    Examples:
+        mtag list                              # Timeline tags (default)
+        mtag list --all                        # All file types
+        mtag list --type timeline --type modules  # Multiple types
+        mtag list --sort alpha                 # Sort alphabetically
+        mtag list --min-count 3                # Tags used 3+ times
+    """
+    _run_tag_list(file_type, all_types, sort, min_count)
 
 
 @tag_app.command("replace")

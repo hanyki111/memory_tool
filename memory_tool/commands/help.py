@@ -126,8 +126,11 @@ Supports regex patterns, date filtering, and result ranking.
 Manage tags in your .memory files. Supports listing, replacing,
 deleting, and finding tags.
 
+Without subcommand, mtag defaults to listing tags.
+
 Subcommands:
-  list     - List tags with usage counts (alias: mtags)
+  (none)   - List tags (same as 'list')
+  list     - List tags with usage counts
   replace  - Replace a tag with another
   delete   - Delete a tag from files
   find     - Find all occurrences of a tag
@@ -136,15 +139,16 @@ Tag matching is case-insensitive but preserves original case.
 Supports both [bracket tags] and #hashtags.
             """,
             "examples": [
-                'mtag list                          # List timeline tags',
-                'mtag list --all                    # All file types',
+                'mtag                               # List timeline tags (default)',
+                'mtag --all                         # All file types',
                 'mtag replace endfield 엔드필드      # Replace tag',
                 'mtag replace "old" "new" --dry-run # Preview changes',
                 'mtag delete TAG --force            # Delete tag',
                 'mtag find bug                      # Find tag usage',
             ],
             "options": [
-                ("list", "List tags with usage counts"),
+                ("(default)", "List tags with usage counts"),
+                ("list", "List tags with usage counts (explicit)"),
                 ("replace <old> <new>", "Replace tag with another"),
                 ("delete <tag>", "Delete tag from files"),
                 ("find <tag>", "Find all occurrences"),
@@ -157,8 +161,11 @@ Supports both [bracket tags] and #hashtags.
 .memory 파일의 태그를 관리합니다. 목록 보기, 치환,
 삭제, 찾기를 지원합니다.
 
+하위 명령어 없이 mtag만 실행하면 태그 목록을 표시합니다.
+
 하위 명령어:
-  list     - 태그 목록 및 사용 횟수 (별칭: mtags)
+  (없음)   - 태그 목록 (list와 동일)
+  list     - 태그 목록 및 사용 횟수
   replace  - 태그 치환
   delete   - 태그 삭제
   find     - 태그 사용 위치 찾기
@@ -167,8 +174,8 @@ Supports both [bracket tags] and #hashtags.
 [대괄호 태그]와 #해시태그를 모두 지원합니다.
             """,
             "examples": [
-                'mtag list                          # 타임라인 태그 목록',
-                'mtag list --all                    # 모든 파일 유형',
+                'mtag                               # 타임라인 태그 (기본)',
+                'mtag --all                         # 모든 파일 유형',
                 'mtag replace endfield 엔드필드      # 태그 치환',
                 'mtag replace "기존" "신규" --dry-run # 미리보기',
                 'mtag delete TAG --force            # 태그 삭제',
@@ -2041,7 +2048,7 @@ def _show_command_help(command: str, lang: str):
         "mask": "ask", "질문": "ask",
         "mtoday": "today", "오늘": "today",
         "mplan": "plan",
-        "mtag": "tag", "mtags": "tag",
+        "mtag": "tag",
         "mcache": "cache",
     }
     cmd = cmd_map.get(command, command)

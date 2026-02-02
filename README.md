@@ -450,16 +450,12 @@ m --date "2025-11-12" --time "14:30" "회고 기록"
 ### 태그 관리 (mtag)
 
 ```bash
-# 태그 목록 보기
-mtag list                          # 타임라인 태그 (기본값)
-mtag list --all                    # 모든 파일 타입
-mtag list --type modules           # 특정 타입
-mtag list --sort alpha             # 알파벳순 정렬
-mtag list --min-count 3            # 3회 이상 사용된 태그만
-
-# 단축 명령어
-mtags                              # mtag list와 동일
-mtags --all                        # mtag list --all과 동일
+# 태그 목록 보기 (mtag만 실행하면 list가 기본)
+mtag                               # 타임라인 태그 (기본값)
+mtag --all                         # 모든 파일 타입
+mtag --type modules                # 특정 타입
+mtag --sort alpha                  # 알파벳순 정렬
+mtag --min-count 3                 # 3회 이상 사용된 태그만
 
 # 태그 치환
 mtag replace oldtag newtag         # 태그 이름 변경
