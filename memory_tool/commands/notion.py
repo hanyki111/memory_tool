@@ -326,7 +326,9 @@ def notion_sync(
     # Days option
     days: int = typer.Option(7, "--days", help="Number of days to sync for timeline/daily plans (default: 7)"),
     # Sort option
-    sort_timeline: bool = typer.Option(False, "--sort", help="Sort timeline entries by time after sync"),
+    sort_timeline: bool = typer.Option(False, "--sort", help="Sort local timeline entries by time after sync"),
+    # Reorder option
+    reorder: bool = typer.Option(False, "--reorder", help="Reorder Notion timeline pages by time"),
 ):
     """Bidirectional sync with Notion (nsync command).
 
@@ -596,6 +598,52 @@ def notion_sync(
 
                 if sorted_count > 0:
                     console.print(f"[dim]Sorted {sorted_count} timeline file(s)[/dim]")
+
+            # Reorder Notion pages if requested
+            if reorder and not dry_run:
+                from memory_tool.notion.client import NotionClient
+                from datetime import timedelta
+
+                console.print("[cyan]Reordering Notion timeline pages...[/cyan]")
+
+                client = NotionClient()
+                today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+
+                reorder_count = 0
+                reorder_errors = []
+
+                for day_offset in range(days):
+                    target_date = today - timedelta(days=day_offset)
+
+                    try:
+                        # Get or create the daily page
+                        page_id = client.get_or_create_daily_page(
+                            target_date,
+                            timeline_syncer.timeline_config.root_page_id
+                        )
+
+                        # Reorder the page
+                        result = client.reorder_timeline_page(page_id, verbose=verbose)
+
+                        if result["reordered"] > 0:
+                            reorder_count += 1
+                            if verbose:
+                                console.print(f"  [green]OK[/green] {target_date.strftime('%Y-%m-%d')}: {result['reordered']} entries reordered")
+
+                        if result["errors"]:
+                            reorder_errors.extend(result["errors"])
+
+                    except Exception as e:
+                        reorder_errors.append(f"{target_date.strftime('%Y-%m-%d')}: {e}")
+
+                if reorder_count > 0:
+                    console.print(f"[green]Reordered {reorder_count} Notion page(s)[/green]")
+                else:
+                    console.print("[dim]All Notion pages already sorted[/dim]")
+
+                if reorder_errors and verbose:
+                    for err in reorder_errors:
+                        console.print(f"[red]Error:[/red] {err}")
 
             console.print()
 

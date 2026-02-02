@@ -380,6 +380,92 @@ class NotionClient:
         except Exception:
             return None  # Insert at end if error
 
+    def reorder_timeline_page(self, page_id: str, verbose: bool = False) -> dict:
+        """Reorder timeline entries in a Notion page by time.
+
+        Args:
+            page_id: Notion page ID
+            verbose: Print progress
+
+        Returns:
+            Dict with reordered count and any errors
+        """
+        result = {"reordered": 0, "total": 0, "errors": []}
+
+        try:
+            # Get all blocks
+            response = self.client.blocks.children.list(block_id=page_id)
+            blocks = response.get("results", [])
+
+            if not blocks:
+                return result
+
+            # Parse blocks with their times
+            parsed_blocks = []
+            for block in blocks:
+                block_id = block.get("id")
+                block_time = self._parse_time_from_block(block)
+
+                # Only process paragraph blocks with valid times
+                if block.get("type") == "paragraph" and block_time != (99, 99):
+                    parsed_blocks.append({
+                        "id": block_id,
+                        "time": block_time,
+                        "data": block
+                    })
+
+            result["total"] = len(parsed_blocks)
+
+            if len(parsed_blocks) <= 1:
+                return result  # Nothing to reorder
+
+            # Check if already sorted
+            times = [b["time"] for b in parsed_blocks]
+            if times == sorted(times):
+                if verbose:
+                    print(f"  Page already sorted ({len(parsed_blocks)} entries)")
+                return result
+
+            # Sort by time
+            sorted_blocks = sorted(parsed_blocks, key=lambda x: x["time"])
+
+            # Delete all timeline blocks
+            for block in parsed_blocks:
+                try:
+                    self.client.blocks.delete(block_id=block["id"])
+                except Exception as e:
+                    result["errors"].append(f"Delete failed: {e}")
+
+            # Recreate blocks in sorted order
+            for block in sorted_blocks:
+                try:
+                    # Extract rich_text from original block
+                    rich_text = block["data"].get("paragraph", {}).get("rich_text", [])
+
+                    self.client.blocks.children.append(
+                        block_id=page_id,
+                        children=[
+                            {
+                                "object": "block",
+                                "type": "paragraph",
+                                "paragraph": {
+                                    "rich_text": rich_text
+                                }
+                            }
+                        ]
+                    )
+                    result["reordered"] += 1
+                except Exception as e:
+                    result["errors"].append(f"Recreate failed: {e}")
+
+            if verbose:
+                print(f"  Reordered {result['reordered']}/{result['total']} entries")
+
+        except Exception as e:
+            result["errors"].append(f"Reorder failed: {e}")
+
+        return result
+
     def get_page_content(self, page_id: str) -> str:
         """Get text content of a page."""
         try:
