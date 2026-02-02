@@ -153,16 +153,37 @@ class Timeline:
             tags: Optional list of tags to add
 
         Returns:
-            Formatted entry string (e.g., "- 14:30 | Message here #tag1 #tag2")
+            Formatted entry string based on config:
+            - bracket format: "- 14:30 | [tag1] [tag2] Message here"
+            - hashtag format: "- 14:30 | Message here #tag1 #tag2"
         """
         time_str = dt.strftime("%H:%M")
-        entry = f"- {time_str} | {message}"
 
         if tags:
-            # Format tags as #tag1 #tag2
-            tag_str = " ".join(f"#{t.strip().replace(' ', '-')}" for t in tags if t.strip())
-            if tag_str:
-                entry = f"{entry} {tag_str}"
+            # Get storage format from config
+            try:
+                from ..utils.config import Config
+                config = Config()
+                storage_format = config.get("tag.storage_format", "bracket")
+            except Exception:
+                storage_format = "bracket"
+
+            if storage_format == "bracket":
+                # [tag1] [tag2] format (prepended to message)
+                tag_str = " ".join(f"[{t.strip().replace(' ', '-')}]" for t in tags if t.strip())
+                if tag_str:
+                    entry = f"- {time_str} | {tag_str} {message}"
+                else:
+                    entry = f"- {time_str} | {message}"
+            else:
+                # #tag1 #tag2 format (appended to message)
+                tag_str = " ".join(f"#{t.strip().replace(' ', '-')}" for t in tags if t.strip())
+                if tag_str:
+                    entry = f"- {time_str} | {message} {tag_str}"
+                else:
+                    entry = f"- {time_str} | {message}"
+        else:
+            entry = f"- {time_str} | {message}"
 
         return entry
 

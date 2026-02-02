@@ -36,14 +36,17 @@ def record(
     Records a timestamped entry to your timeline. Entries are automatically
     organized by date and can be searched later with ms command.
 
-    Tags can be added with --tags option or inline at the end of message:
-        m "Fixed bug #bug #auth"  (auto-parsed from message)
-        m "Fixed bug" --tags bug,auth  (explicit option)
+    Tags can be added in three ways:
+        m "[버그] Fixed login issue"       (bracket at start)
+        m "[버그][긴급] Multiple tags"     (consecutive brackets)
+        m "Fixed bug #bug #auth"           (hashtag at end)
+        m "Fixed bug" --tags bug,auth      (explicit option)
 
     Examples:
         m "Started working on feature X"
         m "Fixed bug" --date 2026-01-20 --time 14:30
-        m "Fixed login issue" --tags bug,auth
+        m "[버그] Fixed login issue"
+        m "[버그][긴급] Critical auth fix #sprint-1"
         m "Fixed auth bug #bug #auth #urgent"
     """
     message = arg_str(message)
@@ -51,25 +54,32 @@ def record(
     time = opt_str(time)
     tags_str = opt_str(tags)
 
-    # Parse inline tags from end of message (e.g., "message #tag1 #tag2")
+    # 1. Parse bracket tags from start of message (e.g., "[버그][긴급] message")
+    # Supports Korean, alphanumeric, hyphens, underscores
+    bracket_tags: List[str] = []
+    bracket_tag_pattern = re.compile(r'^(\[[\w가-힣-]+\]\s*)+')
+    bracket_match = bracket_tag_pattern.match(message)
+    if bracket_match:
+        bracket_tags = re.findall(r'\[([\w가-힣-]+)\]', bracket_match.group(0))
+        message = message[bracket_match.end():].strip()
+
+    # 2. Parse hashtag tags from end of message (e.g., "message #tag1 #tag2")
+    # Supports Korean, alphanumeric, hyphens, underscores
     inline_tags: List[str] = []
-    # Pattern: match #word at the end of message (one or more)
-    inline_tag_pattern = re.compile(r'(\s+#[\w-]+)+$')
+    inline_tag_pattern = re.compile(r'(\s+#[\w가-힣-]+)+$')
     match = inline_tag_pattern.search(message)
     if match:
-        # Extract tags from matched portion
         tag_portion = match.group(0)
-        inline_tags = re.findall(r'#([\w-]+)', tag_portion)
-        # Remove tags from message
+        inline_tags = re.findall(r'#([\w가-힣-]+)', tag_portion)
         message = message[:match.start()].strip()
 
-    # Parse --tags option
+    # 3. Parse --tags option
     tag_list: List[str] = []
     if tags_str:
         tag_list = [t.strip() for t in tags_str.split(",") if t.strip()]
 
-    # Combine inline tags and --tags option (deduplicate)
-    all_tags = list(dict.fromkeys(inline_tags + tag_list))  # Preserve order, remove duplicates
+    # Combine all tags (bracket + inline hashtag + option), deduplicate while preserving order
+    all_tags = list(dict.fromkeys(bracket_tags + inline_tags + tag_list))
     if not all_tags:
         all_tags = None
 
