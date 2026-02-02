@@ -699,7 +699,7 @@ def cache(
     Search and Notion caches are stored to improve performance.
     Cache locations:
       - Search: ~/.memory/.cache/search/
-      - Notion: ~/.memory/.cache/notion/
+      - Notion: .memory/cache/notion_pages.json (project-local)
 
     Examples:
         mcache --stats           # Show all cache statistics
@@ -713,7 +713,10 @@ def cache(
 
     cache_base = Path.home() / ".memory" / ".cache"
     search_cache_dir = cache_base / "search"
-    notion_cache_dir = cache_base / "notion"
+
+    # Notion cache is project-local: .memory/cache/
+    project_cache_dir = Path.cwd() / ".memory" / "cache"
+    notion_cache_file = project_cache_dir / "notion_pages.json"
 
     # Determine which caches to operate on
     target_search = not notion or all_cache
@@ -739,15 +742,20 @@ def cache(
 
         console.print()
 
-        # Notion cache stats
-        if notion_cache_dir.exists():
-            notion_files = list(notion_cache_dir.rglob("*"))
-            notion_file_count = sum(1 for f in notion_files if f.is_file())
-            notion_size = sum(f.stat().st_size for f in notion_files if f.is_file())
+        # Notion cache stats (project-local file)
+        if notion_cache_file.exists():
+            notion_size = notion_cache_file.stat().st_size
+            import json
+            try:
+                with open(notion_cache_file, 'r', encoding='utf-8') as f:
+                    notion_data = json.load(f)
+                page_count = len(notion_data) if isinstance(notion_data, dict) else 0
+            except (json.JSONDecodeError, IOError):
+                page_count = 0
             console.print("[cyan]Notion Cache:[/cyan]")
-            console.print(f"  Files: {notion_file_count}")
-            console.print(f"  Size: {notion_size / 1024 / 1024:.2f} MB")
-            console.print(f"  [dim]Location: {notion_cache_dir}[/dim]")
+            console.print(f"  Pages: {page_count}")
+            console.print(f"  Size: {notion_size / 1024:.2f} KB")
+            console.print(f"  [dim]Location: {notion_cache_file}[/dim]")
         else:
             console.print("[cyan]Notion Cache:[/cyan] [dim]Not found[/dim]")
 
@@ -761,8 +769,8 @@ def cache(
             search_cache.clear()
             cleared.append("search")
 
-        if target_notion and notion_cache_dir.exists():
-            shutil.rmtree(notion_cache_dir, ignore_errors=True)
+        if target_notion and notion_cache_file.exists():
+            notion_cache_file.unlink()
             cleared.append("notion")
 
         if cleared:
@@ -790,13 +798,10 @@ def cache(
             has_cache = True
             console.print(f"Search cache: {cache_stats['entries']} entries, {cache_stats['total_size_mb']:.2f} MB")
 
-    if notion_cache_dir.exists():
-        notion_files = list(notion_cache_dir.rglob("*"))
-        notion_file_count = sum(1 for f in notion_files if f.is_file())
-        if notion_file_count > 0:
-            has_cache = True
-            notion_size = sum(f.stat().st_size for f in notion_files if f.is_file())
-            console.print(f"Notion cache: {notion_file_count} files, {notion_size / 1024 / 1024:.2f} MB")
+    if notion_cache_file.exists():
+        has_cache = True
+        notion_size = notion_cache_file.stat().st_size
+        console.print(f"Notion cache: {notion_size / 1024:.2f} KB at {notion_cache_file}")
 
     if not has_cache:
         console.print("[yellow]Cache is empty[/yellow]")
