@@ -325,6 +325,23 @@ class TimelineSyncer:
 
         return result
 
+    def _parse_time_for_sort(self, time_str: str) -> tuple:
+        """Parse time string to tuple for proper sorting.
+
+        Args:
+            time_str: Time string (H:MM or HH:MM)
+
+        Returns:
+            Tuple of (hour, minute) for sorting, or (99, 99) if invalid
+        """
+        try:
+            parts = time_str.split(":")
+            hour = int(parts[0])
+            minute = int(parts[1]) if len(parts) > 1 else 0
+            return (hour, minute)
+        except (ValueError, IndexError):
+            return (99, 99)  # Invalid times go to the end
+
     def _append_local_entry(self, date: datetime, time_str: str, message: str):
         """Append an entry to local timeline file.
 
@@ -361,9 +378,9 @@ class TimelineSyncer:
         # Add new entry
         new_entry = {"time": time_str, "message": message, "raw": f"- {time_str} | {message}"}
 
-        # Insert in sorted order
+        # Insert in sorted order using proper time comparison
         all_entries = existing_entries + [new_entry]
-        all_entries.sort(key=lambda e: e["time"])
+        all_entries.sort(key=lambda e: self._parse_time_for_sort(e["time"]))
 
         # Rebuild file content
         lines = [f"# {date.strftime('%Y-%m-%d')} Timeline"]

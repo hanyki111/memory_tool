@@ -325,6 +325,8 @@ def notion_sync(
     monthly: bool = typer.Option(False, "--monthly", help="Sync monthly plans only (requires --plan)"),
     # Days option
     days: int = typer.Option(7, "--days", help="Number of days to sync for timeline/daily plans (default: 7)"),
+    # Sort option
+    sort_timeline: bool = typer.Option(False, "--sort", help="Sort timeline entries by time after sync"),
 ):
     """Bidirectional sync with Notion (nsync command).
 
@@ -567,6 +569,32 @@ def notion_sync(
 
             if verbose:
                 console.print(f"[dim]Timeline: pushed={result.get('pushed', 0)}, pulled={result.get('pulled', 0)}[/dim]")
+
+            # Sort timeline if requested
+            if sort_timeline and not dry_run:
+                from memory_tool.core.sort import TimelineSorter
+                from datetime import timedelta
+
+                sorter = TimelineSorter()
+                today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+
+                sorted_count = 0
+                for day_offset in range(days):
+                    target_date = today - timedelta(days=day_offset)
+                    year_month = target_date.strftime("%Y-%m")
+                    day_num = target_date.strftime("%d")
+                    file_path = sorter.timeline_path / "daily" / year_month / f"{day_num}.md"
+
+                    if file_path.exists():
+                        try:
+                            sorter.sort_file(file_path, create_backup=False)
+                            sorted_count += 1
+                        except Exception:
+                            pass
+
+                if sorted_count > 0:
+                    console.print(f"[dim]Sorted {sorted_count} timeline file(s)[/dim]")
+
             console.print()
 
         # Sync plans if requested
