@@ -418,3 +418,59 @@ class Timeline:
             current_date += timedelta(days=1)
 
         return results
+
+    def get_date(self, date_str: str) -> Tuple[Optional[Path], Optional[str], Optional[datetime]]:
+        """Get timeline content for a specific date.
+
+        Args:
+            date_str: Date string in various formats:
+                - "2026-01-15" (full date)
+                - "01-15" or "1-15" (month-day, current year)
+                - "15" (day only, current month/year)
+
+        Returns:
+            Tuple of (file_path, content, parsed_date)
+            Returns (None, None, None) if parsing fails or file doesn't exist
+        """
+        today = datetime.now()
+        target_date = None
+
+        # Try parsing different formats
+        date_str = date_str.strip()
+
+        # Format: YYYY-MM-DD
+        if len(date_str) >= 8 and date_str.count("-") == 2:
+            try:
+                target_date = datetime.strptime(date_str, "%Y-%m-%d")
+            except ValueError:
+                pass
+
+        # Format: MM-DD or M-D
+        if target_date is None and "-" in date_str:
+            try:
+                parts = date_str.split("-")
+                if len(parts) == 2:
+                    month = int(parts[0])
+                    day = int(parts[1])
+                    target_date = today.replace(month=month, day=day)
+            except (ValueError, IndexError):
+                pass
+
+        # Format: DD (day only)
+        if target_date is None and date_str.isdigit():
+            try:
+                day = int(date_str)
+                target_date = today.replace(day=day)
+            except ValueError:
+                pass
+
+        if target_date is None:
+            return None, None, None
+
+        file_path = self.get_timeline_file(target_date, create=False)
+
+        if not file_path.exists():
+            return file_path, None, target_date
+
+        content = file_path.read_text(encoding="utf-8")
+        return file_path, content, target_date

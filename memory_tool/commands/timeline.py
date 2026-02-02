@@ -288,6 +288,48 @@ def days(
 
 
 @app.command()
+def day(
+    date_str: str = typer.Argument(..., help="Date: YYYY-MM-DD, MM-DD, or DD"),
+):
+    """Show timeline for a specific date (mday command).
+
+    Supports flexible date formats:
+      - Full date: 2026-01-15
+      - Month-day: 01-15 or 1-15 (current year)
+      - Day only: 15 (current month/year)
+
+    Examples:
+        mday 2026-01-15      # Specific date
+        mday 01-15           # January 15 (current year)
+        mday 15              # 15th of current month
+    """
+    timeline = Timeline()
+
+    try:
+        file_path, content, parsed_date = timeline.get_date(date_str)
+
+        if parsed_date is None:
+            console.print(f"[red]ERROR[/red] Invalid date format: {date_str}")
+            console.print("[dim]Use: YYYY-MM-DD, MM-DD, or DD[/dim]")
+            sys.exit(1)
+
+        date_display = parsed_date.strftime("%Y-%m-%d")
+
+        if content is None:
+            console.print(f"[yellow]![/yellow] No timeline entries for {date_display}")
+            console.print(f"[dim]File would be at: {file_path}[/dim]")
+            return
+
+        console.print(f"[cyan]{date_display} Timeline:[/cyan]\n")
+        console.print(sanitize_output(content))
+        console.print(f"\n[dim]File: {file_path}[/dim]")
+
+    except Exception as e:
+        console.print(f"[red]ERROR[/red] Failed to read timeline: {e}")
+        sys.exit(1)
+
+
+@app.command()
 def sort(
     date_or_all: str = typer.Argument("today", help="Date (YYYY-MM-DD), 'today', or 'all'"),
     no_backup: bool = typer.Option(False, "--no-backup", help="Skip backup creation"),
