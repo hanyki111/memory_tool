@@ -502,15 +502,18 @@ tags:
 
 ```bash
 mcache                    # 캐시 요약 표시
-mcache --stats            # 상세 통계 (크기, 항목 수, 날짜)
-mcache --clear            # 모든 캐시 삭제
-mcache --clear-expired    # 만료된 캐시만 삭제
+mcache --stats            # 상세 통계 (크기, 항목 수)
+mcache --clear            # 검색 캐시 삭제
+mcache --clear --notion   # Notion 캐시 삭제 (페이지 ID 등)
+mcache --clear --all      # 모든 캐시 삭제
+mcache --clear-expired    # 만료된 검색 캐시만 삭제
 ```
 
 **캐시 정보:**
-- 위치: `~/.memory/.cache/search/`
-- 기본 TTL: 3600초 (1시간)
-- 검색 성능 향상을 위해 결과를 캐시
+- 검색 캐시: `~/.memory/.cache/search/`
+- Notion 캐시: `~/.memory/.cache/notion/`
+- 검색 캐시 기본 TTL: 3600초 (1시간)
+- Notion 동기화 오류 시 `mcache --clear --notion` 실행
 
 ### 검색 명령어
 

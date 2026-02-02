@@ -186,46 +186,58 @@ Supports both [bracket tags] and #hashtags.
     "cache": {
         "en": {
             "name": "mcache / cache",
-            "summary": "Manage search cache",
+            "summary": "Manage search and Notion cache",
             "description": """
-Manage the search result cache. Search results are cached to improve
-performance for repeated queries.
+Manage search and Notion caches.
 
-Cache location: ~/.memory/.cache/search/
-Default TTL: 3600 seconds (1 hour)
+Cache locations:
+  - Search: ~/.memory/.cache/search/
+  - Notion: ~/.memory/.cache/notion/ (page IDs, etc.)
+
+Default search TTL: 3600 seconds (1 hour)
             """,
             "examples": [
                 'mcache                    # Show cache summary',
                 'mcache --stats            # Show detailed statistics',
-                'mcache --clear            # Clear all cache',
+                'mcache --clear            # Clear search cache',
+                'mcache --clear --notion   # Clear Notion cache',
+                'mcache --clear --all      # Clear all caches',
                 'mcache --clear-expired    # Clear only expired entries',
             ],
             "options": [
-                ("--stats, -s", "Show cache statistics (entries, size, dates)"),
-                ("--clear, -c", "Clear all search cache"),
-                ("--clear-expired, -e", "Clear only expired cache entries"),
+                ("--stats, -s", "Show cache statistics"),
+                ("--clear, -c", "Clear cache (search by default)"),
+                ("--notion, -n", "Target Notion cache"),
+                ("--all, -a", "Target all caches"),
+                ("--clear-expired, -e", "Clear only expired search entries"),
             ],
         },
         "ko": {
             "name": "mcache / cache",
-            "summary": "검색 캐시 관리",
+            "summary": "검색 및 Notion 캐시 관리",
             "description": """
-검색 결과 캐시를 관리합니다. 반복 검색의 성능 향상을 위해
-검색 결과가 캐시됩니다.
+검색 및 Notion 캐시를 관리합니다.
 
-캐시 위치: ~/.memory/.cache/search/
-기본 TTL: 3600초 (1시간)
+캐시 위치:
+  - 검색: ~/.memory/.cache/search/
+  - Notion: ~/.memory/.cache/notion/ (페이지 ID 등)
+
+검색 캐시 기본 TTL: 3600초 (1시간)
             """,
             "examples": [
                 'mcache                    # 캐시 요약 표시',
                 'mcache --stats            # 상세 통계 표시',
-                'mcache --clear            # 모든 캐시 삭제',
+                'mcache --clear            # 검색 캐시 삭제',
+                'mcache --clear --notion   # Notion 캐시 삭제',
+                'mcache --clear --all      # 모든 캐시 삭제',
                 'mcache --clear-expired    # 만료된 캐시만 삭제',
             ],
             "options": [
-                ("--stats, -s", "캐시 통계 표시 (항목 수, 크기, 날짜)"),
-                ("--clear, -c", "모든 검색 캐시 삭제"),
-                ("--clear-expired, -e", "만료된 캐시 항목만 삭제"),
+                ("--stats, -s", "캐시 통계 표시"),
+                ("--clear, -c", "캐시 삭제 (기본: 검색)"),
+                ("--notion, -n", "Notion 캐시 대상"),
+                ("--all, -a", "모든 캐시 대상"),
+                ("--clear-expired, -e", "만료된 검색 캐시만 삭제"),
             ],
         },
     },

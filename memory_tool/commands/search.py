@@ -688,57 +688,117 @@ def index(
 
 @app.command()
 def cache(
-    clear: bool = typer.Option(False, "--clear", "-c", help="Clear all search cache"),
+    clear: bool = typer.Option(False, "--clear", "-c", help="Clear cache (search by default, use --notion or --all)"),
     stats: bool = typer.Option(False, "--stats", "-s", help="Show cache statistics"),
     clear_expired: bool = typer.Option(False, "--clear-expired", "-e", help="Clear only expired cache entries"),
+    notion: bool = typer.Option(False, "--notion", "-n", help="Target Notion cache (page IDs, etc.)"),
+    all_cache: bool = typer.Option(False, "--all", "-a", help="Target all caches (search + notion)"),
 ):
-    """Manage search cache (mcache command).
+    """Manage cache (mcache command).
 
-    Search results are cached to improve performance for repeated queries.
-    Cache location: ~/.memory/.cache/search/
+    Search and Notion caches are stored to improve performance.
+    Cache locations:
+      - Search: ~/.memory/.cache/search/
+      - Notion: ~/.memory/.cache/notion/
 
     Examples:
-        mcache --stats           # Show cache statistics
-        mcache --clear           # Clear all cache
-        mcache --clear-expired   # Clear only expired entries
+        mcache --stats           # Show all cache statistics
+        mcache --clear           # Clear search cache
+        mcache --clear --notion  # Clear Notion cache
+        mcache --clear --all     # Clear all caches
+        mcache --clear-expired   # Clear only expired search entries
     """
+    import shutil
     from memory_tool.search import SearchCache
 
-    cache_dir = Path.home() / ".memory" / ".cache" / "search"
+    cache_base = Path.home() / ".memory" / ".cache"
+    search_cache_dir = cache_base / "search"
+    notion_cache_dir = cache_base / "notion"
 
-    if not cache_dir.exists():
-        console.print("[yellow]No cache directory found[/yellow]")
-        console.print(f"[dim]Location: {cache_dir}[/dim]")
-        return
-
-    search_cache = SearchCache(cache_dir)
+    # Determine which caches to operate on
+    target_search = not notion or all_cache
+    target_notion = notion or all_cache
 
     if stats:
-        cache_stats = search_cache.get_stats()
-        console.print("\n[bold cyan]Search Cache Statistics[/bold cyan]\n")
-        console.print(f"  Entries: {cache_stats['entries']}")
-        console.print(f"  Size: {cache_stats['total_size_mb']:.2f} MB")
-        if cache_stats['oldest']:
-            console.print(f"  Oldest: {cache_stats['oldest']}")
-        if cache_stats['newest']:
-            console.print(f"  Newest: {cache_stats['newest']}")
-        console.print(f"\n[dim]Location: {cache_dir}[/dim]")
+        console.print("\n[bold cyan]Cache Statistics[/bold cyan]\n")
+
+        # Search cache stats
+        if search_cache_dir.exists():
+            search_cache = SearchCache(search_cache_dir)
+            cache_stats = search_cache.get_stats()
+            console.print("[cyan]Search Cache:[/cyan]")
+            console.print(f"  Entries: {cache_stats['entries']}")
+            console.print(f"  Size: {cache_stats['total_size_mb']:.2f} MB")
+            if cache_stats['oldest']:
+                console.print(f"  Oldest: {cache_stats['oldest']}")
+            if cache_stats['newest']:
+                console.print(f"  Newest: {cache_stats['newest']}")
+            console.print(f"  [dim]Location: {search_cache_dir}[/dim]")
+        else:
+            console.print("[cyan]Search Cache:[/cyan] [dim]Not found[/dim]")
+
+        console.print()
+
+        # Notion cache stats
+        if notion_cache_dir.exists():
+            notion_files = list(notion_cache_dir.rglob("*"))
+            notion_file_count = sum(1 for f in notion_files if f.is_file())
+            notion_size = sum(f.stat().st_size for f in notion_files if f.is_file())
+            console.print("[cyan]Notion Cache:[/cyan]")
+            console.print(f"  Files: {notion_file_count}")
+            console.print(f"  Size: {notion_size / 1024 / 1024:.2f} MB")
+            console.print(f"  [dim]Location: {notion_cache_dir}[/dim]")
+        else:
+            console.print("[cyan]Notion Cache:[/cyan] [dim]Not found[/dim]")
+
         return
 
     if clear:
-        search_cache.clear()
-        console.print("[green]Cache cleared successfully[/green]")
+        cleared = []
+
+        if target_search and search_cache_dir.exists():
+            search_cache = SearchCache(search_cache_dir)
+            search_cache.clear()
+            cleared.append("search")
+
+        if target_notion and notion_cache_dir.exists():
+            shutil.rmtree(notion_cache_dir, ignore_errors=True)
+            cleared.append("notion")
+
+        if cleared:
+            console.print(f"[green]Cleared {', '.join(cleared)} cache[/green]")
+        else:
+            console.print("[yellow]No cache to clear[/yellow]")
         return
 
     if clear_expired:
-        search_cache.clear_expired()
-        console.print("[green]Expired cache entries cleared[/green]")
+        if search_cache_dir.exists():
+            search_cache = SearchCache(search_cache_dir)
+            search_cache.clear_expired()
+            console.print("[green]Expired search cache entries cleared[/green]")
+        else:
+            console.print("[yellow]No search cache found[/yellow]")
         return
 
-    # Default: show stats
-    cache_stats = search_cache.get_stats()
-    if cache_stats['entries'] == 0:
+    # Default: show summary
+    has_cache = False
+
+    if search_cache_dir.exists():
+        search_cache = SearchCache(search_cache_dir)
+        cache_stats = search_cache.get_stats()
+        if cache_stats['entries'] > 0:
+            has_cache = True
+            console.print(f"Search cache: {cache_stats['entries']} entries, {cache_stats['total_size_mb']:.2f} MB")
+
+    if notion_cache_dir.exists():
+        notion_files = list(notion_cache_dir.rglob("*"))
+        notion_file_count = sum(1 for f in notion_files if f.is_file())
+        if notion_file_count > 0:
+            has_cache = True
+            notion_size = sum(f.stat().st_size for f in notion_files if f.is_file())
+            console.print(f"Notion cache: {notion_file_count} files, {notion_size / 1024 / 1024:.2f} MB")
+
+    if not has_cache:
         console.print("[yellow]Cache is empty[/yellow]")
     else:
-        console.print(f"Cache: {cache_stats['entries']} entries, {cache_stats['total_size_mb']:.2f} MB")
-        console.print("[dim]Use --stats for details, --clear to remove[/dim]")
+        console.print("[dim]Use --stats for details, --clear to remove, --clear --notion for Notion cache[/dim]")
