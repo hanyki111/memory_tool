@@ -1,6 +1,7 @@
 """Tag management CLI commands."""
 
 import sys
+import unicodedata
 from pathlib import Path
 from typing import List, Optional
 
@@ -8,6 +9,31 @@ import typer
 
 from memory_tool.commands.common import app, console
 from memory_tool.utils.config import Config
+
+
+def get_display_width(text: str) -> int:
+    """
+    Calculate the display width of text in a terminal.
+
+    Wide characters (CJK, Korean, etc.) take 2 columns,
+    while ASCII and other narrow characters take 1 column.
+
+    Args:
+        text: Text to measure
+
+    Returns:
+        Display width in terminal columns
+    """
+    width = 0
+    for char in text:
+        # Get East Asian Width property
+        ea_width = unicodedata.east_asian_width(char)
+        # Wide (W) and Fullwidth (F) characters take 2 columns
+        if ea_width in ('W', 'F'):
+            width += 2
+        else:
+            width += 1
+    return width
 
 # Create tag subcommand app
 tag_app = typer.Typer(
@@ -108,7 +134,7 @@ def _run_tag_list(
 
     # Calculate max values for bar chart
     max_count = max(tag_counts.values())
-    max_tag_len = max(len(tag) for tag in tag_counts.keys())
+    max_tag_display_width = max(get_display_width(tag) for tag in tag_counts.keys())
     bar_width = 20  # Maximum bar width
 
     # Print header
@@ -133,9 +159,13 @@ def _run_tag_list(
         else:
             bar_color = "dim"
 
+        # Calculate padding for proper alignment with wide characters
+        tag_display_width = get_display_width(tag)
+        padding = max_tag_display_width - tag_display_width
+
         # Print formatted line
         console.print(
-            f"  {tag:<{max_tag_len}}  [{bar_color}]{bar:<{bar_width}}[/{bar_color}]  {count}"
+            f"  {tag}{' ' * padding}  [{bar_color}]{bar:<{bar_width}}[/{bar_color}]  {count}"
         )
 
 

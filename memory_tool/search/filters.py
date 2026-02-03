@@ -424,9 +424,58 @@ class TagCollector:
         except Exception:
             return set()
 
+    def _count_tags_from_file(self, file_path: Path) -> Dict[str, int]:
+        """
+        Count all tag occurrences from a single file.
+
+        Unlike _extract_tags_from_file which returns unique tags,
+        this method counts every occurrence of each tag.
+
+        Args:
+            file_path: Path to the file
+
+        Returns:
+            Dictionary mapping tags to their occurrence counts
+        """
+        try:
+            content = file_path.read_text(encoding="utf-8")
+            tag_counts: Dict[str, int] = {}
+
+            # Extract [bracket tags] (supports Korean, alphanumeric, hyphens, underscores, spaces)
+            bracket_tags = re.findall(r'\[([\w가-힣\s-]+)\]', content)
+            for tag in bracket_tags:
+                tag = tag.strip()
+                # Skip invalid tags
+                if tag.isdigit() or len(tag) > 50 or "\n" in tag:
+                    continue
+                tag_counts[tag] = tag_counts.get(tag, 0) + 1
+
+            # Extract #hashtags (supports Korean, alphanumeric, hyphens, underscores)
+            hashtags = re.findall(r'#([\w가-힣-]+)', content)
+            for tag in hashtags:
+                # Skip invalid tags
+                if tag.isdigit() or len(tag) > 50 or "\n" in tag:
+                    continue
+                tag_counts[tag] = tag_counts.get(tag, 0) + 1
+
+            # Extract **Category:** patterns
+            categories = re.findall(r'\*\*([^:]+):\*\*', content)
+            for tag in categories:
+                tag = tag.strip()
+                # Skip invalid tags
+                if tag.isdigit() or len(tag) > 50 or "\n" in tag:
+                    continue
+                tag_counts[tag] = tag_counts.get(tag, 0) + 1
+
+            return tag_counts
+        except Exception:
+            return {}
+
     def collect(self, file_types: List[str]) -> Dict[str, int]:
         """
         Collect tags with counts from specified file types.
+
+        Counts every occurrence of each tag, not just unique tags per file.
 
         Args:
             file_types: List of file type names to search
@@ -438,9 +487,9 @@ class TagCollector:
         files = self._get_files_for_types(file_types)
 
         for file_path in files:
-            tags = self._extract_tags_from_file(file_path)
-            for tag in tags:
-                tag_counts[tag] = tag_counts.get(tag, 0) + 1
+            file_tag_counts = self._count_tags_from_file(file_path)
+            for tag, count in file_tag_counts.items():
+                tag_counts[tag] = tag_counts.get(tag, 0) + count
 
         return tag_counts
 
