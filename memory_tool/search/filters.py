@@ -521,6 +521,73 @@ class TagCollector:
 
         return result
 
+    def _extract_date_from_path(self, file_path: Path) -> Optional[date]:
+        """
+        Extract date from timeline file path.
+
+        Expected path format: .memory/timeline/daily/YYYY-MM/DD.md
+
+        Args:
+            file_path: Path to the file
+
+        Returns:
+            Date object if extractable, None otherwise
+        """
+        try:
+            # Get filename without extension (should be day: "03", "15", etc.)
+            day_str = file_path.stem
+
+            # Get parent directory name (should be YYYY-MM)
+            year_month = file_path.parent.name
+
+            # Parse date
+            date_str = f"{year_month}-{day_str}"
+            return datetime.strptime(date_str, "%Y-%m-%d").date()
+        except (ValueError, AttributeError):
+            return None
+
+    def collect_with_dates(self, file_types: List[str], days: int = 31) -> Dict[str, Dict[str, any]]:
+        """
+        Collect tags with counts and date information.
+
+        Only timeline files have date information extracted from paths.
+
+        Args:
+            file_types: List of file type names to search
+            days: Number of days to track (default: 31)
+
+        Returns:
+            Dictionary mapping tag names to:
+                - 'count': total occurrences
+                - 'dates': set of dates when the tag was used
+        """
+        from datetime import timedelta
+
+        today = datetime.now().date()
+        start_date = today - timedelta(days=days - 1)
+
+        # Result structure: {tag: {'count': int, 'dates': set of date}}
+        tag_data: Dict[str, Dict[str, any]] = {}
+        files = self._get_files_for_types(file_types)
+
+        for file_path in files:
+            file_tag_counts = self._count_tags_from_file(file_path)
+
+            # Try to extract date from timeline files
+            file_date = self._extract_date_from_path(file_path)
+
+            for tag, count in file_tag_counts.items():
+                if tag not in tag_data:
+                    tag_data[tag] = {'count': 0, 'dates': set()}
+
+                tag_data[tag]['count'] += count
+
+                # Add date if within range and extractable
+                if file_date and start_date <= file_date <= today:
+                    tag_data[tag]['dates'].add(file_date)
+
+        return tag_data
+
 
 class TagManager:
     """Manage tags in .memory files (replace, delete)."""

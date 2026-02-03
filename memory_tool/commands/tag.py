@@ -2,8 +2,10 @@
 
 import sys
 import unicodedata
+from datetime import datetime, timedelta
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Set
+from datetime import date
 
 import typer
 
@@ -84,6 +86,58 @@ def tag_callback(
     _run_tag_list(file_type, all_types, sort, min_count)
 
 
+def _build_activity_string(dates: Set[date], days: int = 31) -> str:
+    """
+    Build activity string showing which days a tag was used.
+
+    Args:
+        dates: Set of dates when the tag was used
+        days: Number of days to show (default: 31)
+
+    Returns:
+        String of length `days` with '#' for active days, '·' for inactive
+    """
+    today = datetime.now().date()
+    result = []
+
+    for i in range(days - 1, -1, -1):  # From oldest to today
+        check_date = today - timedelta(days=i)
+        if check_date in dates:
+            result.append("#")
+        else:
+            result.append("·")
+
+    return "".join(result)
+
+
+def _build_date_header(days: int = 31) -> str:
+    """
+    Build date header showing day numbers.
+
+    Shows day numbers at regular intervals to help orientation.
+
+    Args:
+        days: Number of days to show
+
+    Returns:
+        Header string with day markers
+    """
+    today = datetime.now().date()
+    result = []
+
+    for i in range(days - 1, -1, -1):
+        check_date = today - timedelta(days=i)
+        day = check_date.day
+
+        # Show day number at start of each month or at regular intervals
+        if day == 1 or i == days - 1 or i == 0:
+            result.append(str(day).rjust(2)[-1])  # Last digit only
+        else:
+            result.append(" ")
+
+    return "".join(result)
+
+
 def _run_tag_list(
     file_type: List[str],
     all_types: bool,
@@ -111,15 +165,16 @@ def _run_tag_list(
 
     selected_types = list(file_type) if file_type else ["timeline"]
 
-    # Collect tags
+    # Collect tags with date information
     collector = TagCollector(memory_path)
-    tag_counts = collector.collect(selected_types)
+    days = 31
+    tag_data = collector.collect_with_dates(selected_types, days=days)
 
     # Filter by min_count
     if min_count > 1:
-        tag_counts = {k: v for k, v in tag_counts.items() if v >= min_count}
+        tag_data = {k: v for k, v in tag_data.items() if v['count'] >= min_count}
 
-    if not tag_counts:
+    if not tag_data:
         type_str = ", ".join(selected_types)
         console.print(f"[yellow]No tags found in {type_str}[/yellow]")
         if min_count > 1:
@@ -128,44 +183,68 @@ def _run_tag_list(
 
     # Sort tags
     if sort == "alpha":
-        sorted_tags = sorted(tag_counts.items(), key=lambda x: x[0].lower())
+        sorted_tags = sorted(tag_data.items(), key=lambda x: x[0].lower())
     else:  # count (default)
-        sorted_tags = sorted(tag_counts.items(), key=lambda x: (-x[1], x[0].lower()))
+        sorted_tags = sorted(tag_data.items(), key=lambda x: (-x[1]['count'], x[0].lower()))
 
-    # Calculate max values for bar chart
-    max_count = max(tag_counts.values())
-    max_tag_display_width = max(get_display_width(tag) for tag in tag_counts.keys())
-    bar_width = 20  # Maximum bar width
+    # Calculate display widths
+    max_tag_display_width = max(get_display_width(tag) for tag in tag_data.keys())
+    max_count = max(v['count'] for v in tag_data.values())
+    count_width = len(str(max_count))
+
+    # Print title
+    type_str = ", ".join(selected_types)
+    unique_count = len(tag_data)
+    today = datetime.now().date()
+    console.print(f"\n[bold cyan]Tags in {type_str}[/bold cyan] ({unique_count} unique tags)")
+    console.print()
+
+    # Build header
+    tag_header = "Tag"
+    tag_header_padding = max_tag_display_width - get_display_width(tag_header)
+    count_header = "Count"
+
+    # Calculate positions
+    # Format: "  Tag      Count  Activity (31 days)"
+    activity_label = f"Activity ({days} days)"
 
     # Print header
-    type_str = ", ".join(selected_types)
-    unique_count = len(tag_counts)
-    console.print(f"\n[bold cyan]Tags in {type_str}[/bold cyan] ({unique_count} unique tags)\n")
+    console.print(
+        f"  [bold]{tag_header}{' ' * tag_header_padding}  "
+        f"{count_header:>{count_width + 1}}  "
+        f"{activity_label}[/bold]"
+    )
 
-    # Print tags with bar chart
-    # Use ASCII-safe character for Windows compatibility
-    bar_char = "#"
+    # Print separator
+    separator_len = 2 + max_tag_display_width + 2 + max(count_width + 1, len(count_header)) + 2 + days
+    console.print(f"  [dim]{'─' * (separator_len - 2)}[/dim]")
 
-    for tag, count in sorted_tags:
-        # Calculate bar length
-        bar_len = int((count / max_count) * bar_width) if max_count > 0 else 0
-        bar = bar_char * bar_len
+    # Print each tag row
+    for tag, data in sorted_tags:
+        count = data['count']
+        dates = data['dates']
 
-        # Color based on count
-        if count >= max_count * 0.7:
-            bar_color = "green"
-        elif count >= max_count * 0.3:
-            bar_color = "yellow"
-        else:
-            bar_color = "dim"
+        # Build activity string
+        activity = _build_activity_string(dates, days)
 
-        # Calculate padding for proper alignment with wide characters
+        # Calculate padding for proper alignment
         tag_display_width = get_display_width(tag)
         padding = max_tag_display_width - tag_display_width
 
+        # Color activity based on recent usage
+        recent_days = sum(1 for d in dates if (today - d).days < 7)
+        if recent_days >= 3:
+            activity_color = "green"
+        elif recent_days >= 1:
+            activity_color = "yellow"
+        else:
+            activity_color = "dim"
+
         # Print formatted line
         console.print(
-            f"  {tag}{' ' * padding}  [{bar_color}]{bar:<{bar_width}}[/{bar_color}]  {count}"
+            f"  {tag}{' ' * padding}  "
+            f"{count:>{max(count_width + 1, len(count_header))}}  "
+            f"[{activity_color}]{activity}[/{activity_color}]"
         )
 
 
