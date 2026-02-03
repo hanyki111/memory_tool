@@ -352,6 +352,47 @@ def edit(
     from rich.prompt import Prompt
     from rich.table import Table
     from rich.panel import Panel
+    from memory_tool.commands.common import get_help_language
+
+    # Get language setting
+    lang = get_help_language()
+    is_ko = (lang == "ko")
+
+    # Bilingual messages
+    msg = {
+        "error": "오류" if is_ko else "ERROR",
+        "invalid_date": "잘못된 날짜 형식" if is_ko else "Invalid date format",
+        "date_hint": "사용: YYYY-MM-DD, MM-DD, 또는 DD" if is_ko else "Use: YYYY-MM-DD, MM-DD, or DD",
+        "no_entries": "타임라인 항목 없음" if is_ko else "No timeline entries for",
+        "file_at": "파일 위치" if is_ko else "File would be at",
+        "time_col": "시간" if is_ko else "Time",
+        "message_col": "메시지" if is_ko else "Message",
+        "help_title": "도움말" if is_ko else "Help",
+        "help_commands": "[bold]명령어:[/bold]" if is_ko else "[bold]Commands:[/bold]",
+        "help_edit": "항목 n 편집 (예: '1'로 첫 번째 항목 편집)" if is_ko else "Edit entry n (e.g., '1' to edit first entry)",
+        "help_delete": "항목 n 삭제 (예: 'd 2'로 두 번째 항목 삭제)" if is_ko else "Delete entry n (e.g., 'd 2' to delete second entry)",
+        "help_save": "변경사항 저장 후 종료" if is_ko else "Save changes and exit",
+        "help_quit": "저장 없이 종료" if is_ko else "Quit without saving",
+        "help_help": "도움말 표시" if is_ko else "Show this help",
+        "modified": "(수정됨)" if is_ko else "(modified)",
+        "discard": "변경사항을 버리시겠습니까?" if is_ko else "Discard changes?",
+        "exited": "저장 없이 종료됨" if is_ko else "Exited without saving",
+        "saved": "개 항목 저장됨" if is_ko else "entries saved to",
+        "no_changes": "저장할 변경사항 없음" if is_ko else "No changes to save",
+        "delete_prompt": "삭제" if is_ko else "Delete",
+        "confirm_delete": "삭제하시겠습니까?" if is_ko else "Confirm delete?",
+        "deleted": "삭제됨" if is_ko else "Deleted",
+        "cancelled": "취소됨" if is_ko else "Cancelled",
+        "invalid_num": "잘못된 항목 번호. 1-{n} 사용" if is_ko else "Invalid entry number. Use 1-{n}",
+        "usage_delete": "사용법: d <번호>" if is_ko else "Usage: d <number>",
+        "editing": "편집 중" if is_ko else "Editing",
+        "enter_message": "새 메시지 입력 (취소하려면 빈 값)" if is_ko else "Enter new message (or empty to cancel)",
+        "message_prompt": "메시지" if is_ko else "Message",
+        "updated": "수정됨" if is_ko else "Updated",
+        "unknown_cmd": "알 수 없는 명령" if is_ko else "Unknown command",
+        "hint_help": "도움말: ?" if is_ko else "type ? for help",
+        "hint_quit": "'q'로 종료, 's'로 저장" if is_ko else "Use 'q' to quit, 's' to save",
+    }
 
     timeline = Timeline()
 
@@ -363,16 +404,16 @@ def edit(
     file_path, entries, parsed_date = timeline.parse_entries(date_str)
 
     if parsed_date is None:
-        console.print(f"[red]ERROR[/red] Invalid date format: {date_str}")
-        console.print("[dim]Use: YYYY-MM-DD, MM-DD, or DD[/dim]")
+        console.print(f"[red]{msg['error']}[/red] {msg['invalid_date']}: {date_str}")
+        console.print(f"[dim]{msg['date_hint']}[/dim]")
         sys.exit(1)
 
     date_display = parsed_date.strftime("%Y-%m-%d")
 
     if not entries:
-        console.print(f"[yellow]![/yellow] No timeline entries for {date_display}")
+        console.print(f"[yellow]![/yellow] {msg['no_entries']} {date_display}")
         if file_path:
-            console.print(f"[dim]File would be at: {file_path}[/dim]")
+            console.print(f"[dim]{msg['file_at']}: {file_path}[/dim]")
         return
 
     # Track changes
@@ -383,8 +424,8 @@ def edit(
         """Display entries in a table."""
         table = Table(title=f"Timeline: {date_display}", show_header=True, header_style="bold cyan")
         table.add_column("#", style="dim", width=4)
-        table.add_column("Time", style="bold", width=6)
-        table.add_column("Message", overflow="fold")
+        table.add_column(msg['time_col'], style="bold", width=6)
+        table.add_column(msg['message_col'], overflow="fold")
 
         for i, entry in enumerate(current_entries):
             table.add_row(str(i + 1), entry['time'], entry['message'])
@@ -394,13 +435,13 @@ def edit(
 
     def show_help():
         """Display help."""
-        help_text = """[bold]Commands:[/bold]
-  [cyan]<n>[/cyan]        Edit entry n (e.g., '1' to edit first entry)
-  [cyan]d <n>[/cyan]      Delete entry n (e.g., 'd 2' to delete second entry)
-  [cyan]s[/cyan]          Save changes and exit
-  [cyan]q[/cyan]          Quit without saving
-  [cyan]?[/cyan]          Show this help"""
-        console.print(Panel(help_text, title="Help", border_style="blue"))
+        help_text = f"""{msg['help_commands']}
+  [cyan]<n>[/cyan]        {msg['help_edit']}
+  [cyan]d <n>[/cyan]      {msg['help_delete']}
+  [cyan]s[/cyan]          {msg['help_save']}
+  [cyan]q[/cyan]          {msg['help_quit']}
+  [cyan]?[/cyan]          {msg['help_help']}"""
+        console.print(Panel(help_text, title=msg['help_title'], border_style="blue"))
 
     # Main loop
     console.print()
@@ -410,7 +451,7 @@ def edit(
 
     while True:
         try:
-            prompt_text = "[green]>[/green] " if not modified else "[yellow]>[/yellow] (modified) "
+            prompt_text = "[green]>[/green] " if not modified else f"[yellow]>[/yellow] {msg['modified']} "
             cmd = Prompt.ask(prompt_text).strip()
 
             if not cmd:
@@ -419,19 +460,22 @@ def edit(
             # Quit without saving
             if cmd.lower() == 'q':
                 if modified:
-                    confirm = Prompt.ask("Discard changes?", choices=["y", "n"], default="n")
+                    confirm = Prompt.ask(msg['discard'], choices=["y", "n"], default="n")
                     if confirm.lower() != 'y':
                         continue
-                console.print("[dim]Exited without saving[/dim]")
+                console.print(f"[dim]{msg['exited']}[/dim]")
                 break
 
             # Save and exit
             if cmd.lower() == 's':
                 if modified:
                     timeline.save_entries(file_path, current_entries, parsed_date)
-                    console.print(f"[green]Saved {len(current_entries)} entries to {file_path.name}[/green]")
+                    if is_ko:
+                        console.print(f"[green]{len(current_entries)}{msg['saved']} {file_path.name}[/green]")
+                    else:
+                        console.print(f"[green]{len(current_entries)} {msg['saved']} {file_path.name}[/green]")
                 else:
-                    console.print("[dim]No changes to save[/dim]")
+                    console.print(f"[dim]{msg['no_changes']}[/dim]")
                 break
 
             # Help
@@ -445,19 +489,19 @@ def edit(
                     idx = int(cmd[2:].strip()) - 1
                     if 0 <= idx < len(current_entries):
                         entry = current_entries[idx]
-                        console.print(f"Delete: [cyan]{entry['time']}[/cyan] | {entry['message'][:50]}...")
-                        confirm = Prompt.ask("Confirm delete?", choices=["y", "n"], default="n")
+                        console.print(f"{msg['delete_prompt']}: [cyan]{entry['time']}[/cyan] | {entry['message'][:50]}...")
+                        confirm = Prompt.ask(msg['confirm_delete'], choices=["y", "n"], default="n")
                         if confirm.lower() == 'y':
                             current_entries.pop(idx)
                             modified = True
-                            console.print("[green]Deleted[/green]")
+                            console.print(f"[green]{msg['deleted']}[/green]")
                             show_entries()
                         else:
-                            console.print("[dim]Cancelled[/dim]")
+                            console.print(f"[dim]{msg['cancelled']}[/dim]")
                     else:
-                        console.print(f"[red]Invalid entry number. Use 1-{len(current_entries)}[/red]")
+                        console.print(f"[red]{msg['invalid_num'].format(n=len(current_entries))}[/red]")
                 except ValueError:
-                    console.print("[red]Usage: d <number>[/red]")
+                    console.print(f"[red]{msg['usage_delete']}[/red]")
                 continue
 
             # Edit entry: <n>
@@ -465,26 +509,26 @@ def edit(
                 idx = int(cmd) - 1
                 if 0 <= idx < len(current_entries):
                     entry = current_entries[idx]
-                    console.print(f"\nEditing: [cyan]{entry['time']}[/cyan] | {entry['message']}")
-                    console.print("[dim]Enter new message (or empty to cancel):[/dim]")
+                    console.print(f"\n{msg['editing']}: [cyan]{entry['time']}[/cyan] | {entry['message']}")
+                    console.print(f"[dim]{msg['enter_message']}:[/dim]")
 
-                    new_message = Prompt.ask("Message")
+                    new_message = Prompt.ask(msg['message_prompt'])
                     if new_message.strip():
                         current_entries[idx]['message'] = new_message.strip()
                         modified = True
-                        console.print("[green]Updated[/green]")
+                        console.print(f"[green]{msg['updated']}[/green]")
                         show_entries()
                     else:
-                        console.print("[dim]Cancelled[/dim]")
+                        console.print(f"[dim]{msg['cancelled']}[/dim]")
                 else:
-                    console.print(f"[red]Invalid entry number. Use 1-{len(current_entries)}[/red]")
+                    console.print(f"[red]{msg['invalid_num'].format(n=len(current_entries))}[/red]")
                 continue
 
             # Unknown command
-            console.print(f"[red]Unknown command: {cmd}[/red] (type ? for help)")
+            console.print(f"[red]{msg['unknown_cmd']}: {cmd}[/red] ({msg['hint_help']})")
 
         except KeyboardInterrupt:
-            console.print("\n[dim]Use 'q' to quit, 's' to save[/dim]")
+            console.print(f"\n[dim]{msg['hint_quit']}[/dim]")
         except EOFError:
             break
 
