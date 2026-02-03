@@ -1518,13 +1518,27 @@ Bash, Zsh, PowerShell을 지원합니다.
             "description": """
 View and modify Memory Tool configuration.
 Settings include timeline, search, LLM, Notion, and help language.
+
+Common settings:
+  help.language         - UI language (en/ko)
+  tag.storage_format    - Tag storage format (bracket/hashtag)
+  tag.display_format    - Tag display format (bracket/hashtag)
+  notion.api_key        - Notion API key
+  llm.provider          - LLM provider (anthropic/openai/ollama)
+
+Tag formats:
+  bracket  - [tag] at start: "- 14:30 | [bug] [urgent] message"
+  hashtag  - #tag at end: "- 14:30 | message #bug #urgent"
             """,
             "examples": [
+                "mconfig guide              # Interactive setup wizard",
                 "mconfig list               # Show all settings",
                 "mconfig get help.language  # Get specific setting",
-                "mconfig set help.language ko  # Set to Korean",
+                "mconfig set help.language ko         # Set UI to Korean",
+                "mconfig set tag.storage_format hashtag  # Use #tag format",
             ],
             "options": [
+                ("guide", "Interactive configuration wizard"),
                 ("list", "Show all settings"),
                 ("get", "Get specific setting"),
                 ("set", "Set a value"),
@@ -1536,13 +1550,27 @@ Settings include timeline, search, LLM, Notion, and help language.
             "description": """
 Memory Tool 설정을 확인하고 수정합니다.
 타임라인, 검색, LLM, Notion, 도움말 언어 설정이 포함됩니다.
+
+주요 설정:
+  help.language         - UI 언어 (en/ko)
+  tag.storage_format    - 태그 저장 형식 (bracket/hashtag)
+  tag.display_format    - 태그 표시 형식 (bracket/hashtag)
+  notion.api_key        - Notion API 키
+  llm.provider          - LLM 제공자 (anthropic/openai/ollama)
+
+태그 형식:
+  bracket  - [태그] 앞에: "- 14:30 | [버그] [긴급] 메시지"
+  hashtag  - #태그 뒤에: "- 14:30 | 메시지 #버그 #긴급"
             """,
             "examples": [
+                "mconfig guide              # 대화형 설정 가이드",
                 "mconfig list               # 모든 설정 보기",
                 "mconfig get help.language  # 특정 설정 가져오기",
-                "mconfig set help.language ko  # 한국어로 설정",
+                "mconfig set help.language ko         # 한국어로 설정",
+                "mconfig set tag.storage_format hashtag  # #태그 형식 사용",
             ],
             "options": [
+                ("guide", "대화형 설정 가이드"),
                 ("list", "모든 설정 보기"),
                 ("get", "특정 설정 가져오기"),
                 ("set", "값 설정"),

@@ -704,11 +704,33 @@ mask "OAuth 관련 기록은?"
 config.yaml을 CLI에서 관리:
 
 ```bash
+mconfig guide                    # 대화형 설정 가이드 (권장)
 mconfig list                     # 전체 설정 보기
 mconfig get help.language        # 특정 값 조회
 mconfig set help.language ko     # 값 설정
 mconfig set notion.sync.plan.enabled true
 ```
+
+#### 태그 형식 설정
+
+태그를 `[bracket]` 또는 `#hashtag` 형식으로 저장/표시할 수 있습니다:
+
+```bash
+# 태그 저장 형식 설정
+mconfig set tag.storage_format bracket   # [태그] 형식 (기본값)
+mconfig set tag.storage_format hashtag   # #태그 형식
+
+# 태그 표시 형식 설정
+mconfig set tag.display_format bracket   # [태그] 형식 (기본값)
+mconfig set tag.display_format hashtag   # #태그 형식
+```
+
+| 형식 | 저장 예시 |
+|------|----------|
+| `bracket` | `- 14:30 \| [버그] [긴급] 로그인 오류 수정` |
+| `hashtag` | `- 14:30 \| 로그인 오류 수정 #버그 #긴급` |
+
+> 💡 **Tip**: `mconfig guide`를 사용하면 대화형으로 모든 설정을 쉽게 구성할 수 있습니다.
 
 ### LLM 기반 요약 (msummary)
 

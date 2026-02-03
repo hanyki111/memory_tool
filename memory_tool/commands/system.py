@@ -969,7 +969,7 @@ def migrate_timeline(
     epilog="For detailed help: [bold]mhelp config[/bold]"
 )
 def config(
-    action: str = typer.Argument(..., help="Action: list, get, set"),
+    action: str = typer.Argument(..., help="Action: list, get, set, guide"),
     key: str = typer.Argument(None, help="Config key path (e.g., help.language)"),
     value: str = typer.Argument(None, help="Value to set (for 'set' action)"),
 ):
@@ -983,6 +983,7 @@ def config(
         mconfig get help.language         # Get help language
         mconfig set help.language ko      # Set to Korean
         mconfig set llm.provider ollama   # Set LLM provider
+        mconfig guide                     # Interactive setup guide
     """
     import yaml
     from memory_tool.utils.config import Config
@@ -1081,9 +1082,225 @@ def config(
             else:
                 console.print(f"[green]OK[/green] {key}: [green]{parsed_value}[/green]")
 
+        elif action == "guide":
+            # Interactive setup guide
+            from rich.prompt import Prompt
+            from rich.panel import Panel
+            from memory_tool.commands.common import get_help_language
+
+            lang = get_help_language()
+            is_ko = (lang == "ko")
+
+            # Bilingual messages
+            msg = {
+                "title": "설정 가이드" if is_ko else "Configuration Guide",
+                "welcome": "memory_tool 설정을 도와드립니다." if is_ko else "Let me help you configure memory_tool.",
+                "select_category": "설정할 카테고리를 선택하세요:" if is_ko else "Select a category to configure:",
+                "categories": {
+                    "1": ("언어 설정", "Language settings") if is_ko else ("Language settings", "언어 설정"),
+                    "2": ("태그 형식", "Tag format") if is_ko else ("Tag format", "태그 형식"),
+                    "3": ("Notion 연동", "Notion integration") if is_ko else ("Notion integration", "Notion 연동"),
+                    "4": ("LLM 설정", "LLM settings") if is_ko else ("LLM settings", "LLM 설정"),
+                    "q": ("종료", "Exit") if is_ko else ("Exit", "종료"),
+                },
+                "current": "현재 값" if is_ko else "Current",
+                "choose": "선택" if is_ko else "Choice",
+                "saved": "저장됨" if is_ko else "Saved",
+                "cancelled": "취소됨" if is_ko else "Cancelled",
+                "back": "뒤로 가려면 빈 값 입력" if is_ko else "Press Enter to go back",
+            }
+
+            def save_config(key_path: str, new_value):
+                """Save a config value."""
+                if config_path.exists():
+                    with open(config_path, "r", encoding="utf-8") as f:
+                        config_data = yaml.safe_load(f) or {}
+                else:
+                    config_data = {}
+
+                keys = key_path.split(".")
+                current = config_data
+                for k in keys[:-1]:
+                    if k not in current:
+                        current[k] = {}
+                    current = current[k]
+                current[keys[-1]] = new_value
+
+                with open(config_path, "w", encoding="utf-8") as f:
+                    yaml.dump(config_data, f, default_flow_style=False, allow_unicode=True)
+
+            def get_current(key_path: str):
+                """Get current config value."""
+                cfg = Config(memory_path)
+                return cfg.get(key_path)
+
+            console.print(Panel(f"[bold]{msg['title']}[/bold]\n\n{msg['welcome']}", border_style="cyan"))
+
+            while True:
+                console.print(f"\n[bold]{msg['select_category']}[/bold]")
+                for num, (primary, secondary) in msg["categories"].items():
+                    console.print(f"  [cyan]{num}[/cyan]. {primary} [dim]({secondary})[/dim]")
+
+                choice = Prompt.ask(f"\n{msg['choose']}", default="q")
+
+                if choice == "q":
+                    break
+
+                elif choice == "1":
+                    # Language settings
+                    console.print(Panel(
+                        "[bold]help.language[/bold]\n\n"
+                        + ("도움말 및 출력 언어를 설정합니다.\n\n" if is_ko else "Set the language for help and output.\n\n")
+                        + "  [cyan]en[/cyan] - English\n"
+                        + "  [cyan]ko[/cyan] - 한국어\n",
+                        title="언어 설정" if is_ko else "Language Settings",
+                        border_style="blue"
+                    ))
+                    current = get_current("help.language") or "en"
+                    console.print(f"{msg['current']}: [green]{current}[/green]")
+                    new_val = Prompt.ask(
+                        "help.language",
+                        choices=["en", "ko", ""],
+                        default=""
+                    )
+                    if new_val:
+                        save_config("help.language", new_val)
+                        console.print(f"[green]{msg['saved']}[/green]: help.language = {new_val}")
+
+                elif choice == "2":
+                    # Tag format settings
+                    console.print(Panel(
+                        "[bold]tag.storage_format[/bold]\n"
+                        + ("태그가 파일에 저장되는 형식입니다.\n\n" if is_ko else "How tags are stored in files.\n\n")
+                        + "  [cyan]bracket[/cyan]  - [태그] 형식 (메시지 앞)\n"
+                        + ("                 예: - 14:30 | [버그] [긴급] 메시지\n\n" if is_ko else "                 ex: - 14:30 | [bug] [urgent] message\n\n")
+                        + "  [cyan]hashtag[/cyan] - #태그 형식 (메시지 뒤)\n"
+                        + ("                 예: - 14:30 | 메시지 #버그 #긴급\n\n" if is_ko else "                 ex: - 14:30 | message #bug #urgent\n\n")
+                        + "[bold]tag.display_format[/bold]\n"
+                        + ("검색 결과 등에서 태그가 표시되는 형식입니다.\n" if is_ko else "How tags are displayed in search results.\n")
+                        + ("(storage_format과 동일하게 설정하는 것을 권장)\n" if is_ko else "(Recommend setting same as storage_format)\n"),
+                        title="태그 형식" if is_ko else "Tag Format",
+                        border_style="blue"
+                    ))
+
+                    # storage_format
+                    current_storage = get_current("tag.storage_format") or "bracket"
+                    console.print(f"\n{msg['current']} tag.storage_format: [green]{current_storage}[/green]")
+                    new_storage = Prompt.ask(
+                        "tag.storage_format",
+                        choices=["bracket", "hashtag", ""],
+                        default=""
+                    )
+                    if new_storage:
+                        save_config("tag.storage_format", new_storage)
+                        console.print(f"[green]{msg['saved']}[/green]: tag.storage_format = {new_storage}")
+
+                    # display_format
+                    current_display = get_current("tag.display_format") or "bracket"
+                    console.print(f"\n{msg['current']} tag.display_format: [green]{current_display}[/green]")
+                    new_display = Prompt.ask(
+                        "tag.display_format",
+                        choices=["bracket", "hashtag", ""],
+                        default=""
+                    )
+                    if new_display:
+                        save_config("tag.display_format", new_display)
+                        console.print(f"[green]{msg['saved']}[/green]: tag.display_format = {new_display}")
+
+                elif choice == "3":
+                    # Notion integration
+                    console.print(Panel(
+                        "[bold]notion.api_key[/bold]\n"
+                        + ("Notion API 통합 토큰입니다.\n" if is_ko else "Notion API integration token.\n")
+                        + ("https://www.notion.so/my-integrations 에서 생성\n\n" if is_ko else "Create at https://www.notion.so/my-integrations\n\n")
+                        + "[bold]notion.default_page_id[/bold]\n"
+                        + ("동기화할 기본 Notion 페이지 ID입니다.\n" if is_ko else "Default Notion page ID for sync.\n")
+                        + ("페이지 URL에서 마지막 32자리 (하이픈 제외)\n\n" if is_ko else "Last 32 characters from page URL (without hyphens)\n\n")
+                        + "[bold]notion.sync.timeline.root_page_id[/bold]\n"
+                        + ("타임라인 동기화용 페이지 ID (선택사항)\n" if is_ko else "Page ID for timeline sync (optional)\n"),
+                        title="Notion 연동" if is_ko else "Notion Integration",
+                        border_style="blue"
+                    ))
+
+                    # api_key
+                    current_key = get_current("notion.api_key")
+                    if current_key:
+                        masked = current_key[:10] + "..." + current_key[-4:] if len(current_key) > 14 else "***"
+                        console.print(f"\n{msg['current']} notion.api_key: [green]{masked}[/green]")
+                    else:
+                        console.print(f"\n{msg['current']} notion.api_key: [dim](not set)[/dim]")
+
+                    new_key = Prompt.ask("notion.api_key", default="", password=False)
+                    if new_key:
+                        save_config("notion.api_key", new_key)
+                        console.print(f"[green]{msg['saved']}[/green]: notion.api_key")
+
+                    # default_page_id
+                    current_page = get_current("notion.default_page_id")
+                    console.print(f"\n{msg['current']} notion.default_page_id: [green]{current_page or '(not set)'}[/green]")
+                    new_page = Prompt.ask("notion.default_page_id", default="")
+                    if new_page:
+                        save_config("notion.default_page_id", new_page)
+                        console.print(f"[green]{msg['saved']}[/green]: notion.default_page_id = {new_page}")
+
+                elif choice == "4":
+                    # LLM settings
+                    console.print(Panel(
+                        "[bold]llm.provider[/bold]\n"
+                        + ("LLM 제공자를 선택합니다.\n\n" if is_ko else "Select LLM provider.\n\n")
+                        + "  [cyan]anthropic[/cyan] - Claude API (Anthropic)\n"
+                        + "  [cyan]openai[/cyan]    - OpenAI API\n"
+                        + "  [cyan]ollama[/cyan]    - Local Ollama\n\n"
+                        + "[bold]llm.model[/bold]\n"
+                        + ("사용할 모델 이름입니다.\n" if is_ko else "Model name to use.\n")
+                        + ("예: claude-3-5-sonnet-20241022, gpt-4o, llama3.2\n\n" if is_ko else "ex: claude-3-5-sonnet-20241022, gpt-4o, llama3.2\n\n")
+                        + "[bold]llm.api_key[/bold]\n"
+                        + ("API 키 (Anthropic/OpenAI용)\n" if is_ko else "API key (for Anthropic/OpenAI)\n"),
+                        title="LLM 설정" if is_ko else "LLM Settings",
+                        border_style="blue"
+                    ))
+
+                    # provider
+                    current_provider = get_current("llm.provider") or "anthropic"
+                    console.print(f"\n{msg['current']} llm.provider: [green]{current_provider}[/green]")
+                    new_provider = Prompt.ask(
+                        "llm.provider",
+                        choices=["anthropic", "openai", "ollama", ""],
+                        default=""
+                    )
+                    if new_provider:
+                        save_config("llm.provider", new_provider)
+                        console.print(f"[green]{msg['saved']}[/green]: llm.provider = {new_provider}")
+
+                    # model
+                    current_model = get_current("llm.model")
+                    console.print(f"\n{msg['current']} llm.model: [green]{current_model or '(not set)'}[/green]")
+                    new_model = Prompt.ask("llm.model", default="")
+                    if new_model:
+                        save_config("llm.model", new_model)
+                        console.print(f"[green]{msg['saved']}[/green]: llm.model = {new_model}")
+
+                    # api_key
+                    current_llm_key = get_current("llm.api_key")
+                    if current_llm_key:
+                        masked = current_llm_key[:10] + "..." if len(current_llm_key) > 10 else "***"
+                        console.print(f"\n{msg['current']} llm.api_key: [green]{masked}[/green]")
+                    else:
+                        console.print(f"\n{msg['current']} llm.api_key: [dim](not set)[/dim]")
+
+                    new_llm_key = Prompt.ask("llm.api_key", default="")
+                    if new_llm_key:
+                        save_config("llm.api_key", new_llm_key)
+                        console.print(f"[green]{msg['saved']}[/green]: llm.api_key")
+
+                else:
+                    console.print(f"[yellow]Unknown choice: {choice}[/yellow]")
+
+            console.print(f"\n[dim]{'설정 가이드 종료' if is_ko else 'Configuration guide finished'}[/dim]")
+
         else:
             console.print(f"[red]ERROR[/red] Unknown action: {action}")
-            console.print("[dim]Valid actions: get, set, list[/dim]")
+            console.print("[dim]Valid actions: list, get, set, guide[/dim]")
             sys.exit(1)
 
     except Exception as e:
