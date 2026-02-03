@@ -673,6 +673,88 @@ Default is 7 days if not specified.
         },
     },
 
+    "day": {
+        "en": {
+            "name": "mday / day",
+            "summary": "Show specific date's timeline",
+            "description": """
+Displays timeline entries for a specific date.
+Supports flexible date formats:
+  - YYYY-MM-DD (full date)
+  - MM-DD (month-day, current year)
+  - DD (day only, current month/year)
+            """,
+            "examples": [
+                "mday 2026-01-15            # Specific date",
+                "mday 01-15                 # January 15 (current year)",
+                "mday 15                    # 15th of current month",
+            ],
+            "options": [],
+        },
+        "ko": {
+            "name": "mday / day (날짜)",
+            "summary": "특정 날짜 타임라인 보기",
+            "description": """
+특정 날짜의 타임라인 항목을 표시합니다.
+유연한 날짜 형식 지원:
+  - YYYY-MM-DD (전체 날짜)
+  - MM-DD (월-일, 현재 연도)
+  - DD (일만, 현재 월/연도)
+            """,
+            "examples": [
+                "mday 2026-01-15            # 특정 날짜",
+                "mday 01-15                 # 1월 15일 (현재 연도)",
+                "mday 15                    # 현재 월의 15일",
+            ],
+            "options": [],
+        },
+    },
+
+    "edit": {
+        "en": {
+            "name": "medit / edit",
+            "summary": "Interactive timeline editor",
+            "description": """
+Interactive editor for editing or deleting timeline entries.
+Select entries by number and modify or delete them.
+
+Commands in editor:
+  <n>      - Edit entry n
+  d <n>    - Delete entry n
+  s        - Save and exit
+  q        - Quit without saving
+  ?        - Show help
+            """,
+            "examples": [
+                "medit                      # Edit today's timeline",
+                "medit 2026-01-15           # Edit specific date",
+                "medit 15                   # Edit 15th of current month",
+            ],
+            "options": [],
+        },
+        "ko": {
+            "name": "medit / edit (편집)",
+            "summary": "대화형 타임라인 편집기",
+            "description": """
+타임라인 항목을 수정하거나 삭제하는 대화형 편집기입니다.
+번호로 항목을 선택하여 수정 또는 삭제할 수 있습니다.
+
+편집기 명령어:
+  <n>      - n번 항목 편집
+  d <n>    - n번 항목 삭제
+  s        - 저장 후 종료
+  q        - 저장 없이 종료
+  ?        - 도움말 표시
+            """,
+            "examples": [
+                "medit                      # 오늘 타임라인 편집",
+                "medit 2026-01-15           # 특정 날짜 편집",
+                "medit 15                   # 현재 월의 15일 편집",
+            ],
+            "options": [],
+        },
+    },
+
     "sort": {
         "en": {
             "name": "msort / sort",
@@ -2047,6 +2129,8 @@ def _show_command_help(command: str, lang: str):
         "ms": "search", "검": "search",
         "mask": "ask", "질문": "ask",
         "mtoday": "today", "오늘": "today",
+        "mday": "day", "날짜": "day",
+        "medit": "edit",
         "mplan": "plan",
         "mtag": "tag",
         "mcache": "cache",
