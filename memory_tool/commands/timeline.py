@@ -338,8 +338,9 @@ def edit(
     Edit or delete specific entries from a date's timeline.
 
     Commands in editor:
-      <n>        - Edit entry number n
-      d <n>      - Delete entry number n
+      <n>        - Edit entry message
+      t <n>      - Change entry time
+      d <n>      - Delete entry
       s          - Save and exit
       q          - Quit without saving
       ?          - Show help
@@ -369,8 +370,9 @@ def edit(
         "message_col": "메시지" if is_ko else "Message",
         "help_title": "도움말" if is_ko else "Help",
         "help_commands": "[bold]명령어:[/bold]" if is_ko else "[bold]Commands:[/bold]",
-        "help_edit": "항목 n 편집 (예: '1'로 첫 번째 항목 편집)" if is_ko else "Edit entry n (e.g., '1' to edit first entry)",
-        "help_delete": "항목 n 삭제 (예: 'd 2'로 두 번째 항목 삭제)" if is_ko else "Delete entry n (e.g., 'd 2' to delete second entry)",
+        "help_edit": "항목 n 메시지 편집 (예: '1')" if is_ko else "Edit entry n message (e.g., '1')",
+        "help_time": "항목 n 시간 변경 (예: 't 1')" if is_ko else "Change entry n time (e.g., 't 1')",
+        "help_delete": "항목 n 삭제 (예: 'd 2')" if is_ko else "Delete entry n (e.g., 'd 2')",
         "help_save": "변경사항 저장 후 종료" if is_ko else "Save changes and exit",
         "help_quit": "저장 없이 종료" if is_ko else "Quit without saving",
         "help_help": "도움말 표시" if is_ko else "Show this help",
@@ -392,6 +394,13 @@ def edit(
         "unknown_cmd": "알 수 없는 명령" if is_ko else "Unknown command",
         "hint_help": "도움말: ?" if is_ko else "type ? for help",
         "hint_quit": "'q'로 종료, 's'로 저장" if is_ko else "Use 'q' to quit, 's' to save",
+        "hint_commands": "[dim]명령어: <n>=편집  t<n>=시간  d<n>=삭제  s=저장  q=종료  ?=도움말[/dim]" if is_ko else "[dim]Commands: <n>=edit  t<n>=time  d<n>=delete  s=save  q=quit  ?=help[/dim]",
+        "time_change": "시간 변경" if is_ko else "Change time",
+        "enter_time": "새 시간 입력 (HH:MM, 취소하려면 빈 값)" if is_ko else "Enter new time (HH:MM, or empty to cancel)",
+        "time_prompt": "시간" if is_ko else "Time",
+        "invalid_time": "잘못된 시간 형식. HH:MM 사용 (예: 09:30)" if is_ko else "Invalid time format. Use HH:MM (e.g., 09:30)",
+        "usage_time": "사용법: t <번호>" if is_ko else "Usage: t <number>",
+        "time_updated": "시간 변경됨" if is_ko else "Time changed",
     }
 
     timeline = Timeline()
@@ -433,10 +442,15 @@ def edit(
         console.print(table)
         console.print()
 
+    def show_hint():
+        """Display condensed command hint."""
+        console.print(msg['hint_commands'])
+
     def show_help():
         """Display help."""
         help_text = f"""{msg['help_commands']}
   [cyan]<n>[/cyan]        {msg['help_edit']}
+  [cyan]t <n>[/cyan]      {msg['help_time']}
   [cyan]d <n>[/cyan]      {msg['help_delete']}
   [cyan]s[/cyan]          {msg['help_save']}
   [cyan]q[/cyan]          {msg['help_quit']}
@@ -483,6 +497,43 @@ def edit(
                 show_help()
                 continue
 
+            # Change time: t <n>
+            if cmd.lower().startswith('t '):
+                try:
+                    idx = int(cmd[2:].strip()) - 1
+                    if 0 <= idx < len(current_entries):
+                        entry = current_entries[idx]
+                        console.print(f"\n{msg['time_change']}: [cyan]{entry['time']}[/cyan] | {entry['message'][:50]}")
+                        console.print(f"[dim]{msg['enter_time']}:[/dim]")
+
+                        new_time = Prompt.ask(msg['time_prompt'])
+                        if new_time.strip():
+                            # Validate time format
+                            import re
+                            time_match = re.match(r'^(\d{1,2}):(\d{2})$', new_time.strip())
+                            if time_match:
+                                hour = int(time_match.group(1))
+                                minute = int(time_match.group(2))
+                                if 0 <= hour <= 23 and 0 <= minute <= 59:
+                                    # Format as HH:MM
+                                    formatted_time = f"{hour:02d}:{minute:02d}"
+                                    current_entries[idx]['time'] = formatted_time
+                                    modified = True
+                                    console.print(f"[green]{msg['time_updated']}: {formatted_time}[/green]")
+                                    show_entries()
+                                    show_hint()
+                                else:
+                                    console.print(f"[red]{msg['invalid_time']}[/red]")
+                            else:
+                                console.print(f"[red]{msg['invalid_time']}[/red]")
+                        else:
+                            console.print(f"[dim]{msg['cancelled']}[/dim]")
+                    else:
+                        console.print(f"[red]{msg['invalid_num'].format(n=len(current_entries))}[/red]")
+                except ValueError:
+                    console.print(f"[red]{msg['usage_time']}[/red]")
+                continue
+
             # Delete entry: d <n>
             if cmd.lower().startswith('d '):
                 try:
@@ -496,6 +547,7 @@ def edit(
                             modified = True
                             console.print(f"[green]{msg['deleted']}[/green]")
                             show_entries()
+                            show_hint()
                         else:
                             console.print(f"[dim]{msg['cancelled']}[/dim]")
                     else:
@@ -518,6 +570,7 @@ def edit(
                         modified = True
                         console.print(f"[green]{msg['updated']}[/green]")
                         show_entries()
+                        show_hint()
                     else:
                         console.print(f"[dim]{msg['cancelled']}[/dim]")
                 else:

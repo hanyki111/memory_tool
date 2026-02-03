@@ -503,6 +503,66 @@ class NotionClient:
         except Exception as e:
             raise NotionError(f"Failed to update entry block: {e}")
 
+    def delete_entry_block(self, block_id: str):
+        """Delete a timeline entry block.
+
+        Args:
+            block_id: Block ID to delete
+        """
+        try:
+            self.client.blocks.delete(block_id=block_id)
+        except Exception as e:
+            raise NotionError(f"Failed to delete entry block: {e}")
+
+    def find_entry_block_by_time(self, page_id: str, time_str: str) -> Optional[tuple]:
+        """Find a timeline entry block by time only.
+
+        Args:
+            page_id: Notion page ID
+            time_str: Time string (HH:MM)
+
+        Returns:
+            Tuple of (block_id, full_text) if found, None otherwise
+        """
+        import re
+
+        try:
+            # Parse the target time
+            parts = time_str.split(":")
+            target_hour = int(parts[0])
+            target_min = int(parts[1])
+        except (ValueError, IndexError):
+            return None
+
+        try:
+            response = self.client.blocks.children.list(block_id=page_id)
+            blocks = response.get("results", [])
+
+            for block in blocks:
+                if block.get("type") != "paragraph":
+                    continue
+
+                rich_text = block.get("paragraph", {}).get("rich_text", [])
+                if not rich_text:
+                    continue
+
+                # Extract time from block
+                block_hour, block_min = self._parse_time_from_block(block)
+
+                # Check if time matches
+                if block_hour == target_hour and block_min == target_min:
+                    # Extract full text content
+                    full_text = ""
+                    for rt in rich_text:
+                        if rt.get("type") == "text":
+                            full_text += rt.get("text", {}).get("content", "")
+                    return (block.get("id"), full_text)
+
+            return None
+
+        except Exception:
+            return None
+
     def reorder_timeline_page(self, page_id: str, verbose: bool = False) -> dict:
         """Reorder timeline entries in a Notion page by time.
 

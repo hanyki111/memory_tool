@@ -650,7 +650,7 @@ class NotionWatcher:
             self._do_module_sync(modules_to_sync, timestamp)
 
     def _on_timeline_change(self, event_type: str, file_path: str):
-        """Handle timeline change by syncing new entries to Notion."""
+        """Handle timeline change by syncing new/modified/deleted entries to Notion."""
         self._timeline_sync_count += 1
         timestamp = datetime.now().strftime("%H:%M:%S")
 
@@ -663,28 +663,31 @@ class NotionWatcher:
             content = timeline_path.read_text(encoding="utf-8")
 
             # Parse timeline entries (format: "- HH:MM | message")
-            new_entries, modified_entries = self._find_new_entries(file_path, content, event_type)
+            new_entries, modified_entries, deleted_entries = self._find_new_entries(file_path, content, event_type)
 
-            if not new_entries and not modified_entries:
+            if not new_entries and not modified_entries and not deleted_entries:
                 if self.verbose:
-                    print(f"[{timestamp}] No new timeline entries to sync")
+                    print(f"[{timestamp}] No timeline changes to sync")
                 return
 
             if self.dry_run:
                 if new_entries:
-                    print(f"\n[{timestamp}] Timeline change detected: {len(new_entries)} new entries")
+                    print(f"\n[{timestamp}] Timeline: {len(new_entries)} new entries")
                     for entry in new_entries:
-                        print(f"[{timestamp}] Would sync (new): {entry['time']} | {entry['message'][:50]}...")
+                        print(f"[{timestamp}] Would add: {entry['time']} | {entry['message'][:50]}...")
                 if modified_entries:
-                    print(f"[{timestamp}] {len(modified_entries)} modified entries (tag changes)")
+                    print(f"[{timestamp}] Timeline: {len(modified_entries)} modified entries")
                     for entry in modified_entries:
                         print(f"[{timestamp}] Would update: {entry['time']} | {entry['message'][:50]}...")
+                if deleted_entries:
+                    print(f"[{timestamp}] Timeline: {len(deleted_entries)} deleted entries")
+                    for entry in deleted_entries:
+                        print(f"[{timestamp}] Would delete: {entry['time']} | {entry['message'][:50]}...")
                 return
 
-            total_changes = len(new_entries) + len(modified_entries)
-            print(f"\n[{timestamp}] Timeline change detected: {len(new_entries)} new, {len(modified_entries)} modified")
+            print(f"\n[{timestamp}] Timeline change: {len(new_entries)} new, {len(modified_entries)} modified, {len(deleted_entries)} deleted")
 
-            # Sync each new entry to Notion
+            # Sync changes to Notion
             from memory_tool.notion.client import NotionClient, NotionError
             from memory_tool.utils.config import Config
 
@@ -705,36 +708,26 @@ class NotionWatcher:
                 # Get or create daily page (pass timeline-specific root_page_id)
                 page_id = client.get_or_create_daily_page(date_obj, timeline_root_page_id)
 
-                # Sync new entries
-                for entry in new_entries:
+                # 1. Delete removed entries first
+                for entry in deleted_entries:
                     try:
-                        # Create full datetime by combining date and time
-                        try:
-                            time_parts = entry['time'].split(':')
-                            entry_datetime = date_obj.replace(
-                                hour=int(time_parts[0]),
-                                minute=int(time_parts[1]),
-                                second=0,
-                                microsecond=0
-                            )
-                        except (ValueError, IndexError):
-                            entry_datetime = date_obj
-
-                        client.append_timeline_entry(
-                            page_id, entry['time'], entry['message'],
-                            date_obj=entry_datetime
-                        )
-                        print(f"[{timestamp}] Synced: {entry['time']} | {entry['message'][:40]}...")
+                        # Find block by time and message key
+                        message_key = self._strip_tags_for_key(entry['message'])
+                        block_id = client.find_entry_block(page_id, entry['time'], message_key)
+                        if block_id:
+                            client.delete_entry_block(block_id)
+                            print(f"[{timestamp}] Deleted: {entry['time']} | {entry['message'][:40]}...")
+                        else:
+                            if self.verbose:
+                                print(f"[{timestamp}] Block not found for deletion: {entry['time']}")
                     except NotionError as e:
-                        print(f"[{timestamp}] Failed to sync entry: {e}")
+                        print(f"[{timestamp}] Failed to delete entry: {e}")
 
-                # Update modified entries (tag changes)
+                # 2. Update modified entries (tag changes - same key, different raw)
                 for entry in modified_entries:
                     try:
-                        # Get message key for finding the block
+                        # Find block by time and message key
                         message_key = self._strip_tags_for_key(entry['message'])
-
-                        # Find the existing block
                         block_id = client.find_entry_block(page_id, entry['time'], message_key)
 
                         if block_id:
@@ -758,7 +751,8 @@ class NotionWatcher:
                             print(f"[{timestamp}] Updated: {entry['time']} | {entry['message'][:40]}...")
                         else:
                             # Block not found - append as new
-                            print(f"[{timestamp}] Block not found, appending: {entry['time']}")
+                            if self.verbose:
+                                print(f"[{timestamp}] Block not found, appending: {entry['time']}")
                             try:
                                 time_parts = entry['time'].split(':')
                                 entry_datetime = date_obj.replace(
@@ -773,9 +767,33 @@ class NotionWatcher:
                                 page_id, entry['time'], entry['message'],
                                 date_obj=entry_datetime
                             )
+                            print(f"[{timestamp}] Added: {entry['time']} | {entry['message'][:40]}...")
 
                     except NotionError as e:
                         print(f"[{timestamp}] Failed to update entry: {e}")
+
+                # 3. Add new entries
+                for entry in new_entries:
+                    try:
+                        # Create full datetime by combining date and time
+                        try:
+                            time_parts = entry['time'].split(':')
+                            entry_datetime = date_obj.replace(
+                                hour=int(time_parts[0]),
+                                minute=int(time_parts[1]),
+                                second=0,
+                                microsecond=0
+                            )
+                        except (ValueError, IndexError):
+                            entry_datetime = date_obj
+
+                        client.append_timeline_entry(
+                            page_id, entry['time'], entry['message'],
+                            date_obj=entry_datetime
+                        )
+                        print(f"[{timestamp}] Added: {entry['time']} | {entry['message'][:40]}...")
+                    except NotionError as e:
+                        print(f"[{timestamp}] Failed to add entry: {e}")
 
             except NotionError as e:
                 print(f"[{timestamp}] Timeline sync failed: {e}")
@@ -797,19 +815,35 @@ class NotionWatcher:
         return stripped
 
     def _entry_key(self, time_str: str, message: str) -> str:
-        """Create a stable key for an entry (tags stripped)."""
+        """Create a unique key for an entry (full message including tags).
+
+        Uses full message to ensure entries with different tags are treated
+        as different entries (e.g., "기기" and "기기 #기기" are separate).
+        """
         # Normalize time
         if ":" in time_str:
             parts = time_str.split(":")
             normalized_time = f"{int(parts[0]):02d}:{parts[1]}"
         else:
             normalized_time = time_str
-        # Strip tags for stable comparison
-        clean_message = self._strip_tags_for_key(message)
-        return f"{normalized_time}|{clean_message[:50].lower()}"
+        # Use full message (with tags) for unique identification
+        return f"{normalized_time}|{message[:80].lower()}"
+
+    def _normalize_time(self, time_str: str) -> str:
+        """Normalize time string to HH:MM format."""
+        if ":" in time_str:
+            parts = time_str.split(":")
+            return f"{int(parts[0]):02d}:{parts[1]}"
+        return time_str
 
     def _find_new_entries(self, file_path: str, content: str, event_type: str = "modified") -> tuple:
-        """Find new and modified timeline entries.
+        """Find new, modified, and deleted timeline entries.
+
+        Uses (time + stripped_message) as unique key to handle:
+        - Multiple entries at the same time (different messages)
+        - Tag-only changes (same key, different raw content)
+        - Full message edits (medit changes message content)
+        - Deletions (medit removes an entry)
 
         Args:
             file_path: Path to the timeline file
@@ -817,20 +851,27 @@ class NotionWatcher:
             event_type: "created" or "modified" - created files sync all entries
 
         Returns:
-            Tuple of (new_entries, modified_entries)
+            Tuple of (new_entries, modified_entries, deleted_entries)
+            - new_entries: completely new entries to add
+            - modified_entries: entries with same key but content changed (tag changes)
+            - deleted_entries: entries that no longer exist (for deletion)
         """
         # Parse all entries from content
         entry_pattern = re.compile(r"^- (\d{1,2}:\d{2})\s*\|\s*(.+)$", re.MULTILINE)
         current_entries = []
+        current_keys = set()
 
         for match in entry_pattern.finditer(content):
+            time_str = match.group(1)
             entry = {
-                'time': match.group(1),
+                'time': time_str,
+                'norm_time': self._normalize_time(time_str),
                 'message': match.group(2).strip(),
                 'raw': match.group(0)
             }
             entry['key'] = self._entry_key(entry['time'], entry['message'])
             current_entries.append(entry)
+            current_keys.add(entry['key'])
 
         # Get previously seen content
         prev_content = self._last_timeline_content.get(file_path, "")
@@ -839,43 +880,52 @@ class NotionWatcher:
         self._last_timeline_content[file_path] = content
 
         # For newly created files (not preloaded), sync all entries
-        # This ensures the first entry of a new day's timeline is synced
         if not prev_content:
             if event_type == "created":
-                # New file created during watch - sync all entries
-                return current_entries, []
+                return current_entries, [], []
             else:
-                # File existed before watch started (preloaded) - skip to avoid re-sync
-                return [], []
+                return [], [], []
 
-        # Build maps of previous entries
+        # Build map of previous entries by key
         prev_entries_by_key = {}
         for match in entry_pattern.finditer(prev_content):
             time_str = match.group(1)
             msg = match.group(2).strip()
             key = self._entry_key(time_str, msg)
-            prev_entries_by_key[key] = {
+            entry = {
                 'time': time_str,
+                'norm_time': self._normalize_time(time_str),
                 'message': msg,
-                'raw': match.group(0)
+                'raw': match.group(0),
+                'key': key
             }
+            prev_entries_by_key[key] = entry
 
-        # Find new entries and modified entries
+        # Find new entries, modified entries, and deleted entries
         new_entries = []
         modified_entries = []
+        deleted_entries = []
 
+        # Check current entries against previous
         for entry in current_entries:
-            if entry['key'] not in prev_entries_by_key:
-                # New entry (key doesn't exist in previous)
-                new_entries.append(entry)
-            else:
-                # Key exists - check if content changed (tag changes)
+            if entry['key'] in prev_entries_by_key:
+                # Same key exists - check if raw content changed (tag-only change)
                 prev_entry = prev_entries_by_key[entry['key']]
                 if entry['raw'] != prev_entry['raw']:
-                    # Content changed (likely tag change)
+                    # Content changed (tag change) - need to update
                     modified_entries.append(entry)
+                # else: exactly the same, no action needed
+            else:
+                # Key doesn't exist in previous - new entry
+                new_entries.append(entry)
 
-        return new_entries, modified_entries
+        # Check for deleted entries (key existed before but not now)
+        for key, prev_entry in prev_entries_by_key.items():
+            if key not in current_keys:
+                # Entry no longer exists - it was deleted
+                deleted_entries.append(prev_entry)
+
+        return new_entries, modified_entries, deleted_entries
 
     def _extract_date_from_path(self, file_path: str) -> Optional[str]:
         """Extract date from timeline file path."""

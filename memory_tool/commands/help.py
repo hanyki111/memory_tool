@@ -719,8 +719,9 @@ Interactive editor for editing or deleting timeline entries.
 Select entries by number and modify or delete them.
 
 Commands in editor:
-  <n>      - Edit entry n
-  d <n>    - Delete entry n
+  <n>      - Edit entry message
+  t <n>    - Change entry time
+  d <n>    - Delete entry
   s        - Save and exit
   q        - Quit without saving
   ?        - Show help
@@ -740,7 +741,8 @@ Commands in editor:
 번호로 항목을 선택하여 수정 또는 삭제할 수 있습니다.
 
 편집기 명령어:
-  <n>      - n번 항목 편집
+  <n>      - n번 항목 메시지 편집
+  t <n>    - n번 항목 시간 변경
   d <n>    - n번 항목 삭제
   s        - 저장 후 종료
   q        - 저장 없이 종료
