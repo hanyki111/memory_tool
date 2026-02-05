@@ -397,6 +397,12 @@ class NotionWatcher:
         self._sync_in_progress = False
         self._pending_modules: Set[str] = set()  # Modules waiting to sync
 
+        # Timeline sync lock to prevent duplicate syncs during sleep/wake cycles
+        self._timeline_sync_lock = threading.Lock()
+        self._timeline_sync_in_progress = False
+        self._pending_timeline_files: Set[str] = set()  # Timeline files waiting to sync
+        self._pending_timeline_event_type: str = "modified"  # Event type for pending files
+
     def _find_memory_root(self) -> Path:
         """Find .memory directory from current working directory."""
         current = Path.cwd()
@@ -650,10 +656,44 @@ class NotionWatcher:
             self._do_module_sync(modules_to_sync, timestamp)
 
     def _on_timeline_change(self, event_type: str, file_path: str):
-        """Handle timeline change by syncing new/modified/deleted entries to Notion."""
+        """Handle timeline change by syncing new/modified/deleted entries to Notion.
+
+        Uses a lock to prevent race conditions where multiple syncs run
+        concurrently and create duplicate Notion entries (e.g., during sleep/wake cycles).
+        """
         self._timeline_sync_count += 1
         timestamp = datetime.now().strftime("%H:%M:%S")
 
+        if self.dry_run:
+            # Dry run doesn't need locking
+            self._do_timeline_sync(event_type, file_path, timestamp)
+            return
+
+        # Check if sync is already in progress
+        with self._timeline_sync_lock:
+            if self._timeline_sync_in_progress:
+                # Add to pending and return - will be processed after current sync
+                self._pending_timeline_files.add(file_path)
+                self._pending_timeline_event_type = event_type
+                if self.verbose:
+                    print(f"[{timestamp}] Timeline sync in progress, queued: {Path(file_path).name}")
+                return
+            self._timeline_sync_in_progress = True
+
+        try:
+            self._do_timeline_sync(event_type, file_path, timestamp)
+        finally:
+            # Process any pending timeline files that accumulated during sync
+            self._process_pending_timeline_files()
+
+    def _do_timeline_sync(self, event_type: str, file_path: str, timestamp: str):
+        """Execute the actual timeline sync.
+
+        Args:
+            event_type: Type of change (created, modified)
+            file_path: Path to the changed timeline file
+            timestamp: Timestamp string for logging
+        """
         try:
             # Read the timeline file
             timeline_path = Path(file_path)
@@ -800,6 +840,25 @@ class NotionWatcher:
 
         except Exception as e:
             print(f"[{timestamp}] Timeline sync error: {e}")
+
+    def _process_pending_timeline_files(self):
+        """Process any timeline files that were queued during an active sync."""
+        while True:
+            with self._timeline_sync_lock:
+                if not self._pending_timeline_files:
+                    self._timeline_sync_in_progress = False
+                    return
+                # Take all pending files and clear the set
+                files_to_sync = self._pending_timeline_files.copy()
+                event_type = self._pending_timeline_event_type
+                self._pending_timeline_files.clear()
+
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            if self.verbose:
+                print(f"\n[{timestamp}] Processing {len(files_to_sync)} queued timeline file(s)")
+
+            for file_path in files_to_sync:
+                self._do_timeline_sync(event_type, file_path, timestamp)
 
     def _strip_tags_for_key(self, message: str) -> str:
         """Remove hashtags and bracket tags from message for comparison.
