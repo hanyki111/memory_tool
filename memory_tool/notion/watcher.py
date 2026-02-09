@@ -6,6 +6,9 @@ Watches local .memory/ directory for changes and triggers sync:
 - plans/ changes -> plan sync to Notion
 """
 
+import json
+import os
+import sys
 import time
 import threading
 import re
@@ -419,6 +422,76 @@ class NotionWatcher:
             "Run 'minit' to initialize or navigate to a project with .memory/"
         )
 
+    # --- Process singleton guard (lock file) ---
+
+    def _get_lock_path(self) -> Path:
+        """Get path for the nwatch lock file."""
+        return self.memory_root / "cache" / "nwatch.lock"
+
+    def _is_pid_running(self, pid: int) -> bool:
+        """Check if a process with the given PID is still running.
+
+        Cross-platform: uses kernel32.OpenProcess on Windows, os.kill(pid, 0) on Unix.
+        """
+        if sys.platform == "win32":
+            import ctypes
+            PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+            handle = ctypes.windll.kernel32.OpenProcess(
+                PROCESS_QUERY_LIMITED_INFORMATION, False, pid
+            )
+            if handle:
+                ctypes.windll.kernel32.CloseHandle(handle)
+                return True
+            return False
+        else:
+            try:
+                os.kill(pid, 0)
+                return True
+            except OSError:
+                return False
+
+    def _acquire_lock(self):
+        """Acquire the singleton lock file, or raise if another instance is running."""
+        lock_path = self._get_lock_path()
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+
+        if lock_path.exists():
+            try:
+                lock_data = json.loads(lock_path.read_text(encoding="utf-8"))
+                other_pid = lock_data.get("pid")
+                if other_pid and self._is_pid_running(other_pid):
+                    print(f"[nwatch] Error: nwatch is already running (PID: {other_pid})")
+                    print(f"[nwatch] Started at: {lock_data.get('started', 'unknown')}")
+                    print(f"[nwatch] To force restart, delete: {lock_path}")
+                    sys.exit(1)
+                else:
+                    # Stale lock from a dead process - remove it
+                    if self.verbose:
+                        print(f"[nwatch] Removing stale lock (PID: {other_pid} no longer running)")
+                    lock_path.unlink(missing_ok=True)
+            except (json.JSONDecodeError, KeyError):
+                # Corrupt lock file - remove it
+                lock_path.unlink(missing_ok=True)
+
+        # Write our lock
+        lock_data = {
+            "pid": os.getpid(),
+            "started": datetime.now().isoformat(),
+        }
+        lock_path.write_text(json.dumps(lock_data), encoding="utf-8")
+
+    def _release_lock(self):
+        """Release the singleton lock file (only if it belongs to us)."""
+        lock_path = self._get_lock_path()
+        if lock_path.exists():
+            try:
+                lock_data = json.loads(lock_path.read_text(encoding="utf-8"))
+                if lock_data.get("pid") == os.getpid():
+                    lock_path.unlink(missing_ok=True)
+            except (json.JSONDecodeError, KeyError, OSError):
+                # Best effort cleanup
+                lock_path.unlink(missing_ok=True)
+
     def _on_module_change(self, event_type: str, module_paths: Set[str]):
         """Handle module change by syncing specific modules only.
 
@@ -748,98 +821,126 @@ class NotionWatcher:
                 # Get or create daily page (pass timeline-specific root_page_id)
                 page_id = client.get_or_create_daily_page(date_obj, timeline_root_page_id)
 
-                # 1. Delete removed entries first
-                for entry in deleted_entries:
-                    try:
-                        # Find block by time and message key
-                        message_key = self._strip_tags_for_key(entry['message'])
-                        block_id = client.find_entry_block(page_id, entry['time'], message_key)
-                        if block_id:
-                            client.delete_entry_block(block_id)
-                            print(f"[{timestamp}] Deleted: {entry['time']} | {entry['message'][:40]}...")
-                        else:
-                            if self.verbose:
-                                print(f"[{timestamp}] Block not found for deletion: {entry['time']}")
-                    except NotionError as e:
-                        print(f"[{timestamp}] Failed to delete entry: {e}")
-
-                # 2. Update modified entries (tag changes - same key, different raw)
-                for entry in modified_entries:
-                    try:
-                        # Find block by time and message key
-                        message_key = self._strip_tags_for_key(entry['message'])
-                        block_id = client.find_entry_block(page_id, entry['time'], message_key)
-
-                        if block_id:
-                            # Create entry datetime
-                            try:
-                                time_parts = entry['time'].split(':')
-                                entry_datetime = date_obj.replace(
-                                    hour=int(time_parts[0]),
-                                    minute=int(time_parts[1]),
-                                    second=0,
-                                    microsecond=0
-                                )
-                            except (ValueError, IndexError):
-                                entry_datetime = date_obj
-
-                            # Update the block
-                            client.update_entry_block(
-                                block_id, entry['time'], entry['message'],
-                                date_obj=entry_datetime
-                            )
-                            print(f"[{timestamp}] Updated: {entry['time']} | {entry['message'][:40]}...")
-                        else:
-                            # Block not found - append as new
-                            if self.verbose:
-                                print(f"[{timestamp}] Block not found, appending: {entry['time']}")
-                            try:
-                                time_parts = entry['time'].split(':')
-                                entry_datetime = date_obj.replace(
-                                    hour=int(time_parts[0]),
-                                    minute=int(time_parts[1]),
-                                    second=0,
-                                    microsecond=0
-                                )
-                            except (ValueError, IndexError):
-                                entry_datetime = date_obj
-                            client.append_timeline_entry(
-                                page_id, entry['time'], entry['message'],
-                                date_obj=entry_datetime
-                            )
-                            print(f"[{timestamp}] Added: {entry['time']} | {entry['message'][:40]}...")
-
-                    except NotionError as e:
-                        print(f"[{timestamp}] Failed to update entry: {e}")
-
-                # 3. Add new entries
-                for entry in new_entries:
-                    try:
-                        # Create full datetime by combining date and time
-                        try:
-                            time_parts = entry['time'].split(':')
-                            entry_datetime = date_obj.replace(
-                                hour=int(time_parts[0]),
-                                minute=int(time_parts[1]),
-                                second=0,
-                                microsecond=0
-                            )
-                        except (ValueError, IndexError):
-                            entry_datetime = date_obj
-
-                        client.append_timeline_entry(
-                            page_id, entry['time'], entry['message'],
-                            date_obj=entry_datetime
-                        )
-                        print(f"[{timestamp}] Added: {entry['time']} | {entry['message'][:40]}...")
-                    except NotionError as e:
-                        print(f"[{timestamp}] Failed to add entry: {e}")
+                try:
+                    self._sync_entries_to_page(
+                        client, page_id, date_obj,
+                        new_entries, modified_entries, deleted_entries,
+                        timestamp
+                    )
+                except NotionError as e:
+                    # Page might have been deleted - invalidate cache and retry once
+                    print(f"[{timestamp}] Entry sync failed ({e}), invalidating cache and retrying...")
+                    if date_str:
+                        client.cache.invalidate_date(date_str)
+                    page_id = client.get_or_create_daily_page(date_obj, timeline_root_page_id)
+                    self._sync_entries_to_page(
+                        client, page_id, date_obj,
+                        new_entries, modified_entries, deleted_entries,
+                        timestamp
+                    )
 
             except NotionError as e:
                 print(f"[{timestamp}] Timeline sync failed: {e}")
 
         except Exception as e:
             print(f"[{timestamp}] Timeline sync error: {e}")
+
+    def _sync_entries_to_page(
+        self, client, page_id: str, date_obj: datetime,
+        new_entries: list, modified_entries: list, deleted_entries: list,
+        timestamp: str,
+    ):
+        """Sync timeline entries to a Notion page.
+
+        Raises NotionError on page-level failures (e.g., deleted page) so the
+        caller can invalidate the cache and retry with a fresh page.
+        Per-entry failures are caught and logged without propagating.
+        """
+        from memory_tool.notion.client import NotionError
+
+        # 1. Delete removed entries first
+        for entry in deleted_entries:
+            try:
+                message_key = self._strip_tags_for_key(entry['message'])
+                block_id = client.find_entry_block(page_id, entry['time'], message_key)
+                if block_id:
+                    client.delete_entry_block(block_id)
+                    print(f"[{timestamp}] Deleted: {entry['time']} | {entry['message'][:40]}...")
+                else:
+                    if self.verbose:
+                        print(f"[{timestamp}] Block not found for deletion: {entry['time']}")
+            except NotionError as e:
+                if self._is_page_not_found_error(e):
+                    raise  # Propagate so caller can retry with fresh page
+                print(f"[{timestamp}] Failed to delete entry: {e}")
+
+        # 2. Update modified entries (tag changes - same key, different raw)
+        for entry in modified_entries:
+            try:
+                message_key = self._strip_tags_for_key(entry['message'])
+                block_id = client.find_entry_block(page_id, entry['time'], message_key)
+
+                entry_datetime = self._make_entry_datetime(date_obj, entry['time'])
+
+                if block_id:
+                    client.update_entry_block(
+                        block_id, entry['time'], entry['message'],
+                        date_obj=entry_datetime
+                    )
+                    print(f"[{timestamp}] Updated: {entry['time']} | {entry['message'][:40]}...")
+                else:
+                    if self.verbose:
+                        print(f"[{timestamp}] Block not found, appending: {entry['time']}")
+                    client.append_timeline_entry(
+                        page_id, entry['time'], entry['message'],
+                        date_obj=entry_datetime
+                    )
+                    print(f"[{timestamp}] Added: {entry['time']} | {entry['message'][:40]}...")
+
+            except NotionError as e:
+                if self._is_page_not_found_error(e):
+                    raise
+                print(f"[{timestamp}] Failed to update entry: {e}")
+
+        # 3. Add new entries
+        for entry in new_entries:
+            try:
+                entry_datetime = self._make_entry_datetime(date_obj, entry['time'])
+                client.append_timeline_entry(
+                    page_id, entry['time'], entry['message'],
+                    date_obj=entry_datetime
+                )
+                print(f"[{timestamp}] Added: {entry['time']} | {entry['message'][:40]}...")
+            except NotionError as e:
+                if self._is_page_not_found_error(e):
+                    raise
+                print(f"[{timestamp}] Failed to add entry: {e}")
+
+    @staticmethod
+    def _make_entry_datetime(date_obj: datetime, time_str: str) -> datetime:
+        """Create a datetime from date and time string (HH:MM)."""
+        try:
+            time_parts = time_str.split(':')
+            return date_obj.replace(
+                hour=int(time_parts[0]),
+                minute=int(time_parts[1]),
+                second=0,
+                microsecond=0
+            )
+        except (ValueError, IndexError):
+            return date_obj
+
+    @staticmethod
+    def _is_page_not_found_error(error) -> bool:
+        """Check if a NotionError indicates a deleted/not-found page."""
+        error_str = str(error).lower()
+        return any(keyword in error_str for keyword in [
+            "could not find",
+            "not found",
+            "object_not_found",
+            "archived",
+            "does not exist",
+        ])
 
     def _process_pending_timeline_files(self):
         """Process any timeline files that were queued during an active sync."""
@@ -1252,15 +1353,23 @@ class NotionWatcher:
         print(f"\nStopped. {stats}")
 
     def run_forever(self):
-        """Run watcher until interrupted."""
-        self.start()
+        """Run watcher until interrupted.
+
+        Acquires a lock file to prevent duplicate instances. If another nwatch
+        is already running, prints an error and exits.
+        """
+        self._acquire_lock()
         try:
-            while self._running:
-                time.sleep(1)
-        except KeyboardInterrupt:
-            pass
+            self.start()
+            try:
+                while self._running:
+                    time.sleep(1)
+            except KeyboardInterrupt:
+                pass
+            finally:
+                self.stop()
         finally:
-            self.stop()
+            self._release_lock()
 
 
 def check_watchdog_available() -> bool:

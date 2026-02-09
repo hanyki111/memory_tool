@@ -704,6 +704,8 @@ class Tutorial:
                     "  nsync                    Sync with Notion",
                     "  nsync --timeline --sort  Sort local files by time",
                     "  nsync --timeline --reorder  Reorder Notion entries",
+                    "  nwatch                   Auto-sync on file changes",
+                    "    (singleton guard + cache auto-recovery)",
                 ],
             },
         ]
@@ -1432,6 +1434,8 @@ class Tutorial:
                     "  nsync                           노션 동기화",
                     "  nsync --timeline --sort         로컬 파일 시간순 정렬",
                     "  nsync --timeline --reorder      노션 항목 재정렬",
+                    "  nwatch                          파일 변경 자동 동기화",
+                    "    (중복 실행 방지 + 캐시 자동 복구)",
                 ],
             },
         ]

@@ -47,3 +47,28 @@ class NotionCache:
         """Set page ID for a key and save."""
         self.cache[key] = page_id
         self._save_cache()
+
+    def invalidate(self, key: str):
+        """Remove a specific key from cache and save to disk."""
+        if key in self.cache:
+            del self.cache[key]
+            self._save_cache()
+
+    def invalidate_date(self, date_str: str):
+        """Invalidate cache entries for a specific date.
+
+        Removes both the day key (day_YYYY-MM-DD) and the month key (month_YYYY-MM)
+        so that the next lookup will fetch fresh data from Notion.
+
+        Args:
+            date_str: Date string in YYYY-MM-DD format
+        """
+        # Invalidate day key
+        day_key = f"day_{date_str}"
+        self.invalidate(day_key)
+
+        # Invalidate month key
+        parts = date_str.rsplit("-", 1)
+        if len(parts) == 2:
+            month_key = f"month_{parts[0]}"
+            self.invalidate(month_key)

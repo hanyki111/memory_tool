@@ -1264,6 +1264,10 @@ Bidirectional mode (-b): Local <-> Notion (push and pull)
   - plans: bidirectional sync
 
 Timeline entries are automatically inserted in time-sorted order.
+
+Safety features:
+  - Singleton guard: Only one instance can run at a time (lock file).
+  - Cache auto-recovery: Deleted Notion pages are detected and recreated.
             """,
             "examples": [
                 "nwatch                     # Watch all, Local -> Notion",
@@ -1297,6 +1301,10 @@ Timeline entries are automatically inserted in time-sorted order.
   - plans: 양방향 동기화
 
 타임라인 항목은 자동으로 시간순으로 삽입됩니다.
+
+안전 기능:
+  - 중복 실행 방지: lock file로 인스턴스 하나만 실행 보장
+  - 캐시 자동 복구: 삭제된 Notion 페이지 감지 시 자동 재생성
             """,
             "examples": [
                 "nwatch                     # 전체 감시, Local -> Notion",

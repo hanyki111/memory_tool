@@ -282,6 +282,8 @@ nsync --timeline --sort          # 로컬 파일 기존 항목 시간순 정렬
 nsync --timeline --reorder       # Notion 일별 페이지 내 항목 시간순 재정렬
 
 # 자동 동기화 (파일 변경 감지, 신규 항목 자동 시간순 삽입)
+# - 중복 실행 방지 (lock file로 싱글톤 보장)
+# - 삭제된 페이지 자동 복구 (캐시 무효화 + 재시도)
 nwatch                           # Local → Notion 단방향
 nwatch --bidirectional           # 양방향 (Notion → Local polling 포함)
 nwatch -b -i 60                  # 양방향, 60초 polling 간격

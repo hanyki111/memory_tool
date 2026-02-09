@@ -808,6 +808,12 @@ def notion_watch(
 
     Uses debouncing to batch rapid changes.
 
+    Safety features:
+    - Singleton guard: Only one nwatch instance can run at a time (lock file).
+      A second instance will detect the running process and exit immediately.
+    - Cache auto-recovery: If a cached Notion page is deleted externally,
+      nwatch automatically invalidates the cache and creates a new page.
+
     Examples:
         nwatch                      # Watch all (modules + timeline + plans)
         nwatch --bidirectional      # Enable Notion -> Local sync too
