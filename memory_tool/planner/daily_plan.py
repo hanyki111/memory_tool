@@ -151,6 +151,19 @@ class DailyPlan:
         # Replace completed tasks with check mark (U+2713)
         return re.sub(r'^- \[x\]', '- \u2713', content, flags=re.MULTILINE)
 
+    def _get_recurring_content(self) -> Optional[str]:
+        """Read recurring.md if it exists.
+
+        Returns:
+            File content or None if file doesn't exist
+        """
+        recurring_path = self.base_path / "plans" / "recurring.md"
+        if recurring_path.exists():
+            content = recurring_path.read_text(encoding='utf-8').strip()
+            if content:
+                return content
+        return None
+
     def show_plan(self, target_date: Optional[date] = None, auto_update: bool = True) -> str:
         """Show daily plan content.
 
@@ -178,12 +191,19 @@ class DailyPlan:
                 # Save if changed
                 if updated_content != content:
                     plan_path.write_text(updated_content, encoding='utf-8')
-                return self._format_for_display(updated_content)
+                result = self._format_for_display(updated_content)
             except Exception:
                 # If update fails, just return original content
-                return self._format_for_display(plan_path.read_text(encoding='utf-8'))
+                result = self._format_for_display(plan_path.read_text(encoding='utf-8'))
+        else:
+            result = self._format_for_display(plan_path.read_text(encoding='utf-8'))
 
-        return self._format_for_display(plan_path.read_text(encoding='utf-8'))
+        # Append recurring items if available
+        recurring = self._get_recurring_content()
+        if recurring:
+            result = result.rstrip() + "\n\n---\n\n" + recurring
+
+        return result
 
     def add_task(self, task: str, target_date: Optional[date] = None) -> bool:
         """Add task to daily plan.

@@ -853,7 +853,32 @@ mplan monthly
 # 미완료 작업 이관
 mplan daily carryover            # 어제 미완료 → 오늘
 mplan weekly carryover           # 지난주 미완료 → 이번 주
+
+# Recurring Items (반복 항목)
+# .memory/plans/recurring.md 파일에 작성하면 mplan daily 출력 시 함께 표시
+# 파일을 직접 편집하여 관리 (별도 CLI 없음)
 ```
+
+**Recurring Items:**
+
+`.memory/plans/recurring.md` 파일을 생성하면 `mplan daily` 출력 하단에 자동으로 표시됩니다.
+매일/매주/매월 확인해야 하는 항목(모니터링 지표, 정기 점검 등)을 등록하세요.
+
+```markdown
+# Recurring Items
+
+## Daily
+- 환율 확인
+- VIX 확인
+
+## Weekly
+- 주간 지표 괴리 확인
+
+## Monthly
+- Prediction Log 복기
+```
+
+파일이 진실의 원천이며, 텍스트 에디터로 직접 편집합니다.
 
 **스마트 매칭 우선순위:**
 1. 숫자 입력 → 인덱스로 처리 (1=첫 번째, 2=두 번째...)
