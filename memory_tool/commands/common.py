@@ -2,8 +2,6 @@
 
 from typing import Optional, Callable
 import sys
-import click
-
 import typer
 from rich.console import Console
 
@@ -32,57 +30,6 @@ def get_bilingual_help(en: str, ko: str) -> str:
     """
     lang = get_help_language()
     return ko if lang == "ko" else en
-
-
-def show_bilingual_help(ctx: click.Context, command_name: str) -> None:
-    """Show bilingual help for a command and exit."""
-    from memory_tool.commands.help import HELP_CONTENT
-    from rich.panel import Panel
-    from rich.table import Table
-
-    lang = get_help_language()
-    _console = Console()
-
-    # Normalize command name
-    cmd_map = {
-        "m": "record", "기": "record",
-        "ms": "search", "검": "search",
-        "mask": "ask", "질문": "ask",
-        "mtoday": "today", "오늘": "today",
-        "mweek": "week", "주간": "week",
-        "mmonth": "month", "월간": "month",
-        "mdays": "days", "일수": "days",
-        "msort": "sort",
-        "mbrowse": "browse",
-        "mcheck": "check",
-        "mmodule": "module",
-        "marchive": "archive",
-        "mcontext": "context",
-        "mmap": "map",
-        "mplan": "plan",
-        "msummary": "summary",
-        "mproviders": "providers",
-        "minit": "init",
-        "mstatus": "status",
-        "mtutorial": "tutorial",
-        "malias": "alias",
-        "mconfig": "config",
-        "mhooks": "hooks",
-        "mcompletion": "completion",
-        "노플": "np",
-    }
-    cmd = cmd_map.get(command_name, command_name)
-
-    if cmd in HELP_CONTENT:
-        help_data = HELP_CONTENT[cmd].get(lang, HELP_CONTENT[cmd].get("en", {}))
-
-        if help_data:
-            _show_rich_help(_console, help_data, cmd, command_name, lang)
-            ctx.exit(0)
-
-    # Fall back to default help if no bilingual content
-    _console.print(ctx.get_help())
-    ctx.exit(0)
 
 
 def _show_rich_help(console: Console, help_data: dict, cmd: str, command_name: str, lang: str) -> None:
@@ -162,15 +109,6 @@ def _show_rich_help(console: Console, help_data: dict, cmd: str, command_name: s
         console.print(f" [dim]More info: mhelp {cmd}[/dim]")
     console.print()
 
-
-def bilingual_help_callback(ctx: click.Context, param: click.Parameter, value: bool) -> None:
-    """Callback for --help option that shows bilingual help."""
-    if not value or ctx.resilient_parsing:
-        return
-
-    # Get command name from context
-    command_name = ctx.info_name or ""
-    show_bilingual_help(ctx, command_name)
 
 
 # Shared app instance
