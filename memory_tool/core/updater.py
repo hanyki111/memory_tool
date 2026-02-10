@@ -112,20 +112,43 @@ def compare_versions(current: str, latest: str) -> int:
         return 1
 
 
+def _is_in_virtualenv() -> bool:
+    """Check if running inside a virtual environment."""
+    return (
+        hasattr(sys, "real_prefix")  # virtualenv
+        or (hasattr(sys, "base_prefix") and sys.base_prefix != sys.prefix)  # venv
+    )
+
+
 def do_update(version: str) -> Tuple[bool, str]:
     """Install a specific version from GitHub via pip.
+
+    Handles PEP 668 (externally-managed-environment) by retrying with --user
+    when not inside a virtual environment.
 
     Returns (success, message) tuple.
     """
     install_url = f"git+https://github.com/{GITHUB_REPO}.git@v{version}"
+    base_cmd = [sys.executable, "-m", "pip", "install", "--upgrade"]
 
     try:
         result = subprocess.run(
-            [sys.executable, "-m", "pip", "install", "--upgrade", install_url],
+            base_cmd + [install_url],
             capture_output=True,
             text=True,
             timeout=120,
         )
+
+        # PEP 668: externally-managed-environment → retry with --user
+        if result.returncode != 0 and "externally-managed-environment" in result.stderr:
+            if _is_in_virtualenv():
+                return False, "가상환경 내 설치 실패 — pip 권한을 확인하세요"
+            result = subprocess.run(
+                base_cmd + ["--user", install_url],
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
 
         if result.returncode == 0:
             return True, f"v{version} 설치 완료"
