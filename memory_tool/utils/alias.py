@@ -126,6 +126,7 @@ class AliasManager:
         # ============================================================
         "malias": ("alias", "Manage command aliases", "명령어 별칭 관리", "system"),
         "mconfig": ("config", "Manage config.yaml settings", "config.yaml 설정 관리", "system"),
+        "mupdate": ("update", "Check for updates", "업데이트 확인", "system"),
         "mhelp": ("help", "Show detailed help", "상세 도움말 보기", "system"),
         "mhooks": ("hooks", "Manage git hooks", "Git 훅 관리", "system"),
         "mcompletion": ("completion", "Manage shell completions", "셸 자동완성 관리", "system"),
