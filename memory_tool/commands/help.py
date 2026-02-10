@@ -1696,6 +1696,56 @@ config에서 KB 경로에 .memory 폴더가 포함되어야 합니다.
             ],
         },
     },
+
+    "update": {
+        "en": {
+            "name": "mupdate / update",
+            "summary": "Check for updates and install latest version",
+            "description": """
+Checks GitHub for the latest release tag and compares with the
+currently installed version. If a newer version is available,
+installs it via pip.
+
+Auto-check runs silently in the background (once per 24 hours)
+when using any command. Use --auto / --no-auto to toggle.
+Settings are stored globally at ~/.memory-tool/update.json.
+            """,
+            "examples": [
+                "mupdate              # Check and install updates",
+                "mupdate --check      # Check only (no install)",
+                "mupdate --auto       # Enable auto update check",
+                "mupdate --no-auto    # Disable auto update check",
+            ],
+            "options": [
+                ("--check, -c", "Check only, don't install"),
+                ("--auto", "Enable automatic update check"),
+                ("--no-auto", "Disable automatic update check"),
+            ],
+        },
+        "ko": {
+            "name": "mupdate / update (업데이트)",
+            "summary": "최신 버전 확인 및 업데이트",
+            "description": """
+GitHub에서 최신 릴리즈 태그를 확인하고 현재 설치된 버전과 비교합니다.
+새 버전이 있으면 pip으로 설치합니다.
+
+자동 확인은 아무 명령 실행 시 24시간마다 백그라운드로 동작합니다.
+--auto / --no-auto로 켜고 끌 수 있습니다.
+설정은 ~/.memory-tool/update.json에 전역 저장됩니다.
+            """,
+            "examples": [
+                "mupdate              # 확인 후 업데이트",
+                "mupdate --check      # 확인만 (설치 안 함)",
+                "mupdate --auto       # 자동 확인 켜기",
+                "mupdate --no-auto    # 자동 확인 끄기",
+            ],
+            "options": [
+                ("--check, -c", "확인만 (설치 안 함)"),
+                ("--auto", "자동 업데이트 확인 켜기"),
+                ("--no-auto", "자동 업데이트 확인 끄기"),
+            ],
+        },
+    },
 }
 
 # Command categories for listing
@@ -1709,7 +1759,7 @@ COMMAND_CATEGORIES = {
         "llm": ("AI & LLM", ["ask", "providers"]),
         "federation": ("KB Federation", ["publish", "import-kb"]),
         "notion": ("Notion", ["nm", "nadd", "np", "ns", "nt", "nw", "nsi", "nsync", "nwatch"]),
-        "system": ("System", ["alias", "config", "hooks", "completion"]),
+        "system": ("System", ["update", "alias", "config", "hooks", "completion"]),
     },
     "ko": {
         "core": ("핵심 명령어", ["record", "init", "status", "tutorial"]),
@@ -1720,7 +1770,7 @@ COMMAND_CATEGORIES = {
         "llm": ("AI 기능", ["ask", "providers"]),
         "federation": ("KB 연동", ["publish", "import-kb"]),
         "notion": ("노션 연동", ["nm", "nadd", "np", "ns", "nt", "nw", "nsi", "nsync", "nwatch"]),
-        "system": ("시스템", ["alias", "config", "hooks", "completion"]),
+        "system": ("시스템", ["update", "alias", "config", "hooks", "completion"]),
     },
 }
 

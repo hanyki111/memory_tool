@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "memory-tool"
-version = "1.0.0-alpha"
+version = "1.0.0"
 description = "Time-Space Integrated Knowledge System - Capture knowledge in 0.5 seconds, organize on weekends, use for life"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -105,6 +105,7 @@ mhelp = "memory_tool.cli:help_cli"
 # Federation commands
 mpublish = "memory_tool.cli:publish_cli"
 mimport = "memory_tool.cli:import_cli"
+mupdate = "memory_tool.cli:update_cli"
 
 [tool.setuptools.packages.find]
 where = ["."]

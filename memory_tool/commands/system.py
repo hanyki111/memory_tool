@@ -1,4 +1,4 @@
-"""System-related CLI commands (init, status, alias, completion, tutorial, hooks, migrate)."""
+"""System-related CLI commands (init, status, alias, completion, tutorial, hooks, migrate, update)."""
 
 import sys
 from pathlib import Path
@@ -1307,4 +1307,85 @@ def config(
         console.print(f"[red]ERROR[/red] Config operation failed: {e}")
         import traceback
         console.print(f"[dim]{traceback.format_exc()}[/dim]")
+        sys.exit(1)
+
+
+@app.command()
+def update(
+    check: bool = typer.Option(False, "--check", "-c", help="Check only, don't install"),
+    auto: bool = typer.Option(False, "--auto", help="Enable automatic update check"),
+    no_auto: bool = typer.Option(False, "--no-auto", help="Disable automatic update check"),
+):
+    """Check for updates and install latest version (mupdate command).
+
+    Checks GitHub for the latest release tag and compares with the
+    currently installed version. If a newer version is available,
+    installs it via pip.
+
+    Examples:
+        mupdate              # Check and install updates
+        mupdate --check      # Check only (no install)
+        mupdate --auto       # Enable auto update check
+        mupdate --no-auto    # Disable auto update check
+    """
+    from memory_tool.core.updater import (
+        get_current_version,
+        check_latest_version,
+        compare_versions,
+        do_update,
+        get_auto_check_enabled,
+        set_auto_check_enabled,
+    )
+
+    # Handle --auto / --no-auto toggle
+    if auto or no_auto:
+        enabled = auto and not no_auto
+        set_auto_check_enabled(enabled)
+        state = "[green]ON[/green]" if enabled else "[yellow]OFF[/yellow]"
+        console.print(f"자동 업데이트 확인: {state}")
+        if not check and not (auto and no_auto):
+            return
+
+    current = get_current_version()
+    console.print(f"[cyan]Memory Tool[/cyan] v{current}")
+
+    # Show auto-check status
+    auto_status = get_auto_check_enabled()
+    auto_label = "[green]ON[/green]" if auto_status else "[yellow]OFF[/yellow]"
+    console.print(f"[dim]자동 확인: {auto_label}[/dim]\n")
+
+    # Check latest version
+    console.print("[dim]GitHub에서 최신 버전 확인 중...[/dim]")
+    latest = check_latest_version()
+
+    if latest is None:
+        console.print("[yellow]WARNING[/yellow] 최신 버전을 확인할 수 없습니다")
+        console.print("[dim]네트워크 연결을 확인하거나, GitHub에 태그가 있는지 확인하세요[/dim]")
+        sys.exit(1)
+
+    cmp = compare_versions(current, latest)
+
+    if cmp == 0:
+        console.print(f"[green]OK[/green] 이미 최신 버전입니다 (v{latest})")
+        return
+    elif cmp > 0:
+        console.print(f"[green]OK[/green] 현재 버전(v{current})이 최신 릴리즈(v{latest})보다 앞서 있습니다")
+        return
+
+    # Update available
+    console.print(f"[yellow]업데이트 가능:[/yellow] v{current} → v{latest}")
+
+    if check:
+        console.print("\n[dim]업데이트하려면: mupdate[/dim]")
+        return
+
+    # Do update
+    console.print(f"\n[cyan]v{latest} 설치 중...[/cyan]")
+    success, message = do_update(latest)
+
+    if success:
+        console.print(f"[green]OK[/green] {message}")
+        console.print("[dim]새 버전을 사용하려면 터미널을 재시작하세요[/dim]")
+    else:
+        console.print(f"[red]ERROR[/red] {message}")
         sys.exit(1)

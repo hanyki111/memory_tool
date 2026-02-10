@@ -8,7 +8,7 @@ in the memory_tool.commands package:
 - planning: plan, summary
 - context: context, map (code_map)
 - notion: nm, nadd, ns, nt, nw, nsi, nsync, nwatch
-- system: init, status, alias, completion, tutorial, hooks, migrate_timeline
+- system: init, status, alias, completion, tutorial, hooks, migrate_timeline, update
 """
 
 import typer
@@ -17,6 +17,17 @@ from rich.panel import Panel
 # Import app and console from commands package
 # This also imports all command modules which register their commands with app
 from memory_tool.commands import app, console
+
+
+def _notify_update() -> None:
+    """Show a one-line update notice if a newer version is available."""
+    try:
+        from memory_tool.core.updater import auto_check_update
+        latest = auto_check_update()
+        if latest:
+            console.print(f"[dim]새 버전 v{latest} 사용 가능 — mupdate 로 업데이트[/dim]")
+    except Exception:
+        pass  # Never break the user's command
 
 
 @app.callback(invoke_without_command=True)
@@ -30,7 +41,12 @@ def main(
         console.print(f"Memory Tool v{__version__}")
         raise typer.Exit()
 
+    # Auto update check (throttled, silent on failure)
+    if ctx.invoked_subcommand not in (None, "update"):
+        _notify_update()
+
     if ctx.invoked_subcommand is None:
+        _notify_update()
         console.print(
             Panel.fit(
                 "[bold cyan]Memory Tool[/bold cyan]\n\n"
@@ -319,4 +335,11 @@ def import_cli():
     """Entry point for 'mimport' command."""
     import sys
     sys.argv = ['memory_tool', 'import-kb'] + sys.argv[1:]
+    app()
+
+
+def update_cli():
+    """Entry point for 'mupdate' command."""
+    import sys
+    sys.argv = ['memory_tool', 'update'] + sys.argv[1:]
     app()

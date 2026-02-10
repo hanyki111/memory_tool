@@ -105,17 +105,17 @@ mtutorial --list --lang ko         # 한국어 목록
 
 ### 제공 레슨
 
-| ID | English | 한국어 |
-|----|---------|--------|
-| `installation` | Installation & Setup | 설치 및 초기 설정 |
-| `setup` | CLAUDE.md Setup for AI Integration | CLAUDE.md 설정 (AI 연동) |
-| `daily` | Daily Workflow | 일상 워크플로우 |
-| `ai-integration` | AI Tool Integration (Detailed) | AI 도구 연동 (상세) |
-| `recording` | Recording Best Practices | 기록 모범 사례 |
-| `search` | Search and Retrieval | 검색 및 조회 |
-| `modules` | Module Organization | 모듈 조직 |
-| `korean` | - | 한글 명령어 |
-| `quickref` | Quick Reference Card | 빠른 참조 카드 |
+| ID               | English                            | 한국어                   |
+| ---------------- | ---------------------------------- | ------------------------ |
+| `installation`   | Installation & Setup               | 설치 및 초기 설정        |
+| `setup`          | CLAUDE.md Setup for AI Integration | CLAUDE.md 설정 (AI 연동) |
+| `daily`          | Daily Workflow                     | 일상 워크플로우          |
+| `ai-integration` | AI Tool Integration (Detailed)     | AI 도구 연동 (상세)      |
+| `recording`      | Recording Best Practices           | 기록 모범 사례           |
+| `search`         | Search and Retrieval               | 검색 및 조회             |
+| `modules`        | Module Organization                | 모듈 조직                |
+| `korean`         | -                                  | 한글 명령어              |
+| `quickref`       | Quick Reference Card               | 빠른 참조 카드           |
 
 ---
 
@@ -220,32 +220,32 @@ code .memory\config.yaml
 
 ```yaml
 notion:
-  api_key: "secret_xxx..."           # Integration Secret
-  mode: default                      # default 또는 pat (기업용)
+  api_key: "secret_xxx..." # Integration Secret
+  mode: default # default 또는 pat (기업용)
 
   sync:
     conflict_resolution: "last-write-wins"
     exclude_patterns:
       - "archive/**"
     targets:
-      - "**"                         # 모든 모듈 (또는 특정 경로)
+      - "**" # 모든 모듈 (또는 특정 경로)
 
     # 모듈 동기화 설정
     module:
       enabled: true
-      root_page_id: "abc123..."      # 모듈 루트 페이지 ID
+      root_page_id: "abc123..." # 모듈 루트 페이지 ID
 
     # 타임라인 동기화 설정
     timeline:
       enabled: true
-      root_page_id: "def456..."      # 타임라인 루트 페이지 ID
+      root_page_id: "def456..." # 타임라인 루트 페이지 ID
       bidirectional: true
       sync_days: 30
 
     # 플랜 동기화 설정
     plan:
       enabled: true
-      root_page_id: "ghi789..."      # 플랜 루트 페이지 ID
+      root_page_id: "ghi789..." # 플랜 루트 페이지 ID
       daily: true
       weekly: true
       monthly: true
@@ -299,9 +299,14 @@ nwatch --dry-run                 # 테스트 모드
 pip install memory-tool[watch]
 ```
 
+```zsh
+pip install 'memory-tool[watch]'
+```
+
 **플랫폼별 nwatch 실행:**
 
 **Linux/macOS:**
+
 ```bash
 # 파일 변경 감시 시작
 nwatch                           # Local → Notion
@@ -309,6 +314,7 @@ nwatch --bidirectional           # 양방향 동기화
 ```
 
 **Windows (PowerShell):**
+
 ```powershell
 # 파일 변경 감시 시작
 nwatch                           # Local → Notion
@@ -367,7 +373,7 @@ Project A                    Central KB                    Project B
 ```yaml
 # .memory/config.yaml
 kb:
-  path: /path/to/your/kb/.memory  # 중앙 KB 경로 (.memory 포함)
+  path: /path/to/your/kb/.memory # 중앙 KB 경로 (.memory 포함)
 ```
 
 > **중요:** KB 경로는 `.memory` 폴더까지 포함해야 합니다.
@@ -395,15 +401,15 @@ ms "hybrid search" --with-kb
 
 ### Federation 명령어
 
-| 명령어 | 설명 |
-|--------|------|
-| `mpublish <module>` | 로컬 모듈을 KB에 발행 |
-| `mpublish <module> --dry-run` | 발행 미리보기 |
-| `mpublish <module> --tags a,b` | 태그와 함께 발행 |
-| `mimport --list` | KB 모듈 목록 |
-| `mimport <path> --preview` | KB 모듈 내용 미리보기 |
-| `mimport <path>` | KB 모듈 가져오기 |
-| `mimport <path> --target <local>` | 지정 경로로 가져오기 |
+| 명령어                            | 설명                  |
+| --------------------------------- | --------------------- |
+| `mpublish <module>`               | 로컬 모듈을 KB에 발행 |
+| `mpublish <module> --dry-run`     | 발행 미리보기         |
+| `mpublish <module> --tags a,b`    | 태그와 함께 발행      |
+| `mimport --list`                  | KB 모듈 목록          |
+| `mimport <path> --preview`        | KB 모듈 내용 미리보기 |
+| `mimport <path>`                  | KB 모듈 가져오기      |
+| `mimport <path> --target <local>` | 지정 경로로 가져오기  |
 
 ---
 
@@ -411,18 +417,19 @@ ms "hybrid search" --with-kb
 
 ### 핵심 명령어
 
-| 명령어 | 설명 | 예시 |
-|--------|------|------|
-| `m` | Timeline 기록 | `m "작업 완료"` |
-| `ms` | 검색 | `ms "키워드"` |
-| `mcontext` | Claude 컨텍스트 생성 | `mcontext` |
-| `mtoday` | 오늘 작업 보기 | `mtoday` |
-| `mweek` | 이번 주 작업 보기 | `mweek` |
-| `mmonth` | 이번 달 작업 보기 | `mmonth` |
-| `mdays` | 최근 N일 작업 보기 | `mdays 7` |
-| `mask` | 메모리 기반 Q&A (RAG) | `mask "최근 결정 사항?"` |
-| `mconfig` | 설정 관리 | `mconfig get help.language` |
-| `mhelp` | 상세 도움말 | `mhelp plan` |
+| 명령어     | 설명                  | 예시                        |
+| ---------- | --------------------- | --------------------------- |
+| `m`        | Timeline 기록         | `m "작업 완료"`             |
+| `ms`       | 검색                  | `ms "키워드"`               |
+| `mcontext` | Claude 컨텍스트 생성  | `mcontext`                  |
+| `mtoday`   | 오늘 작업 보기        | `mtoday`                    |
+| `mweek`    | 이번 주 작업 보기     | `mweek`                     |
+| `mmonth`   | 이번 달 작업 보기     | `mmonth`                    |
+| `mdays`    | 최근 N일 작업 보기    | `mdays 7`                   |
+| `mask`     | 메모리 기반 Q&A (RAG) | `mask "최근 결정 사항?"`    |
+| `mconfig`  | 설정 관리             | `mconfig get help.language` |
+| `mupdate`  | 업데이트 확인/설치    | `mupdate --check`           |
+| `mhelp`    | 상세 도움말           | `mhelp plan`                |
 
 ### 기록 명령어
 
@@ -445,6 +452,7 @@ m --date "2025-11-12" --time "14:30" "회고 기록"
 ```
 
 **태그 작성 팁:**
+
 - 소문자, 하이픈 구분 권장: `feature-request`, `bug-fix`
 - 항목당 3-5개 태그로 제한
 - 검색 시 `ms "query" --tag 태그명`으로 필터링
@@ -474,6 +482,7 @@ mtag find "MEMORY TOOL"            # 대괄호 태그 찾기
 ```
 
 **출력 예시 (mtag list):**
+
 ```
 Tags in timeline (15 unique tags)
 
@@ -485,15 +494,17 @@ Tags in timeline (15 unique tags)
 ```
 
 **태그 형식:**
+
 - `#hashtag` - 해시태그 형식
 - `[BRACKET TAG]` - 대괄호 형식 (공백, 대문자 지원)
 
 **기본값 설정 (config.yaml):**
+
 ```yaml
 tags:
-  default_types: ["timeline"]  # 기본 검색 타입
-  sort: "count"                # count 또는 alpha
-  min_count: 1                 # 최소 사용 횟수
+  default_types: ["timeline"] # 기본 검색 타입
+  sort: "count" # count 또는 alpha
+  min_count: 1 # 최소 사용 횟수
 ```
 
 ### 캐시 관리 (mcache)
@@ -508,6 +519,7 @@ mcache --clear-expired    # 만료된 검색 캐시만 삭제
 ```
 
 **캐시 정보:**
+
 - 검색 캐시: `~/.memory/.cache/search/`
 - Notion 캐시: `~/.memory/.cache/notion/`
 - 검색 캐시 기본 TTL: 3600초 (1시간)
@@ -552,9 +564,9 @@ ms "func.*Auth"
 
 ```yaml
 search:
-  hybrid: true           # 하이브리드 검색 기본 활성화
-  text_weight: 0.7       # 키워드 검색 가중치 (70%)
-  semantic_weight: 0.3   # 시맨틱 검색 가중치 (30%)
+  hybrid: true # 하이브리드 검색 기본 활성화
+  text_weight: 0.7 # 키워드 검색 가중치 (70%)
+  semantic_weight: 0.3 # 시맨틱 검색 가중치 (30%)
 ```
 
 ### 별칭 관리 (malias)
@@ -597,33 +609,33 @@ mhelp --list                     # 전체 명령어 목록
 
 로컬 타임라인용 한글 별칭:
 
-| 한글 | 영문 | 설명 |
-|------|------|------|
-| `기` | `m` | 타임라인 기록 |
-| `검` | `ms` | 검색 |
-| `오늘` | `mtoday` | 오늘 타임라인 |
-| `주간` | `mweek` | 이번 주 타임라인 |
-| `월간` | `mmonth` | 이번 달 타임라인 |
-| `일수` | `mdays` | 최근 N일 타임라인 |
+| 한글   | 영문     | 설명              |
+| ------ | -------- | ----------------- |
+| `기`   | `m`      | 타임라인 기록     |
+| `검`   | `ms`     | 검색              |
+| `오늘` | `mtoday` | 오늘 타임라인     |
+| `주간` | `mweek`  | 이번 주 타임라인  |
+| `월간` | `mmonth` | 이번 달 타임라인  |
+| `일수` | `mdays`  | 최근 N일 타임라인 |
 
 Notion용 한글 별칭:
 
-| 한글 | 영문 | 설명 |
-|------|------|------|
-| `노` | `nm` | Notion 기록 |
-| `노플` | `np` | Notion 플랜 추가 |
-| `노검` | `nsi` | Notion 검색 |
-| `노오` | `nt` | Notion 오늘 |
-| `노주` | `nw` | Notion 주간 |
-| `노올` | `ns` | Notion 전체 검색 |
+| 한글   | 영문  | 설명             |
+| ------ | ----- | ---------------- |
+| `노`   | `nm`  | Notion 기록      |
+| `노플` | `np`  | Notion 플랜 추가 |
+| `노검` | `nsi` | Notion 검색      |
+| `노오` | `nt`  | Notion 오늘      |
+| `노주` | `nw`  | Notion 주간      |
+| `노올` | `ns`  | Notion 전체 검색 |
 
 기타:
 
-| 한글 | 영문 | 설명 |
-|------|------|------|
-| `질문` | `mask` | RAG Q&A |
-| `설정` | `mconfig` | 설정 관리 |
-| `도움` | `mhelp` | 상세 도움말 |
+| 한글   | 영문      | 설명        |
+| ------ | --------- | ----------- |
+| `질문` | `mask`    | RAG Q&A     |
+| `설정` | `mconfig` | 설정 관리   |
+| `도움` | `mhelp`   | 상세 도움말 |
 
 ```bash
 # 사용 예시
@@ -697,6 +709,7 @@ mask "OAuth 관련 기록은?"
 ```
 
 **작동 방식:**
+
 1. LLM이 질문을 분석
 2. 적절한 도구 선택 (timeline, search, module, plan)
 3. 컨텍스트 수집 및 답변 생성
@@ -727,12 +740,27 @@ mconfig set tag.display_format bracket   # [태그] 형식 (기본값)
 mconfig set tag.display_format hashtag   # #태그 형식
 ```
 
-| 형식 | 저장 예시 |
-|------|----------|
+| 형식      | 저장 예시                                   |
+| --------- | ------------------------------------------- |
 | `bracket` | `- 14:30 \| [버그] [긴급] 로그인 오류 수정` |
-| `hashtag` | `- 14:30 \| 로그인 오류 수정 #버그 #긴급` |
+| `hashtag` | `- 14:30 \| 로그인 오류 수정 #버그 #긴급`   |
 
 > 💡 **Tip**: `mconfig guide`를 사용하면 대화형으로 모든 설정을 쉽게 구성할 수 있습니다.
+
+### 업데이트 관리 (mupdate)
+
+GitHub에서 최신 버전을 확인하고 자동 업데이트:
+
+```bash
+mupdate              # 최신 버전 확인 + 업데이트 설치
+mupdate --check      # 확인만 (설치 안 함)
+mupdate --auto       # 자동 확인 켜기 (기본값, 24시간마다)
+mupdate --no-auto    # 자동 확인 끄기
+```
+
+자동 확인이 켜져 있으면 아무 명령(`m`, `ms`, `mtoday` 등) 실행 시 24시간마다 백그라운드로 최신 버전을 확인하고, 업데이트가 있으면 한 줄 알림을 표시합니다.
+
+> 설정은 `~/.memory-tool/update.json`에 전역 저장됩니다.
 
 ### LLM 기반 요약 (msummary)
 
@@ -754,12 +782,12 @@ msummary today --force           # 캐시 무시
 
 Memory Tool은 다양한 LLM 제공자를 지원합니다:
 
-| 제공자 | 설명 | API 키 필요 |
-|--------|------|-------------|
-| `ollama` | 로컬 LLM (기본값, 무료) | ❌ |
-| `anthropic` | Claude API | ✅ |
-| `claude-cli` | Claude CLI 도구 사용 | ❌ (CLI 설치 필요) |
-| `gemini-cli` | Google Gemini CLI 사용 | ❌ (CLI 설치 필요) |
+| 제공자       | 설명                    | API 키 필요        |
+| ------------ | ----------------------- | ------------------ |
+| `ollama`     | 로컬 LLM (기본값, 무료) | ❌                 |
+| `anthropic`  | Claude API              | ✅                 |
+| `claude-cli` | Claude CLI 도구 사용    | ❌ (CLI 설치 필요) |
+| `gemini-cli` | Google Gemini CLI 사용  | ❌ (CLI 설치 필요) |
 
 **설정 예시:**
 
@@ -768,7 +796,7 @@ llm:
   # === Ollama (로컬, 무료, 기본값) ===
   provider: "ollama"
   ollama_host: "http://localhost:11434"
-  ollama_model: "qwen3-vl:8b"    # 또는 llama3, mistral 등
+  ollama_model: "qwen3-vl:8b" # 또는 llama3, mistral 등
 
   # === Anthropic API ===
   # provider: "anthropic"
@@ -786,7 +814,7 @@ llm:
   # 공통 설정
   max_tokens: 4096
   temperature: 0.7
-  output_language: "ko"          # 출력 언어 (ko, en)
+  output_language: "ko" # 출력 언어 (ko, en)
 ```
 
 **mask 명령어에서 제공자 직접 지정:**
@@ -870,19 +898,23 @@ mplan weekly carryover           # 지난주 미완료 → 이번 주
 # Recurring Items
 
 ## Daily
+
 - 환율 확인
 - VIX 확인
 
 ## Weekly
+
 - 주간 지표 괴리 확인
 
 ## Monthly
+
 - Prediction Log 복기
 ```
 
 파일이 진실의 원천이며, 텍스트 에디터로 직접 편집합니다.
 
 **스마트 매칭 우선순위:**
+
 1. 숫자 입력 → 인덱스로 처리 (1=첫 번째, 2=두 번째...)
 2. 정확한 일치 (대소문자 무시)
 3. 유니크 Prefix 매칭
