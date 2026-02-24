@@ -302,6 +302,125 @@ def notion_plan(
         sys.exit(1)
 
 
+def _sync_secondary_backend(
+    backend_config,
+    module_path=None,
+    push=False,
+    pull=False,
+    force=False,
+    dry_run=False,
+    verbose=False,
+    days=7,
+    sync_modules=True,
+    sync_timeline=True,
+    sync_plans=True,
+    plan_type="all",
+):
+    """Push-only sync to a single secondary backend.
+
+    Secondary backends are always push-only (Local -> Notion).
+    Pull options are ignored for secondaries.
+    """
+    name = backend_config.name
+    console.print(f"[cyan]Syncing to secondary '{name}' (push-only)...[/cyan]")
+
+    sec_pushed = 0
+    sec_errors = []
+
+    # Module sync
+    if sync_modules and backend_config.get_module_root_page_id():
+        try:
+            from memory_tool.notion.sync import ModuleSyncer
+            sec_syncer = ModuleSyncer(backend_config=backend_config)
+            result = sec_syncer.sync(
+                module_path=module_path,
+                push_only=True,
+                force=force,
+                dry_run=dry_run,
+                verbose=verbose,
+            )
+            sec_pushed += result.pushed
+            if result.failed > 0:
+                sec_errors.extend([r.message for r in result.results if not r.success])
+        except Exception as e:
+            sec_errors.append(f"Module sync: {e}")
+
+    # Timeline sync
+    if sync_timeline and backend_config.get_timeline_root_page_id():
+        try:
+            from memory_tool.notion.timeline_sync import TimelineSyncer
+            sec_timeline = TimelineSyncer(backend_config=backend_config)
+            result = sec_timeline.sync(
+                days=days,
+                push_only=True,
+                dry_run=dry_run,
+                verbose=verbose,
+            )
+            sec_pushed += result.get("pushed", 0)
+            sec_errors.extend(result.get("errors", []))
+        except Exception as e:
+            sec_errors.append(f"Timeline sync: {e}")
+
+    # Plan sync
+    if sync_plans and backend_config.get_plan_root_page_id():
+        try:
+            from memory_tool.notion.plan_sync import PlanSyncer
+            sec_plan = PlanSyncer(backend_config=backend_config)
+            if sec_plan.enabled:
+                result = sec_plan.sync(
+                    plan_type=plan_type,
+                    days=days,
+                    push_only=True,
+                    dry_run=dry_run,
+                    verbose=verbose,
+                )
+                sec_pushed += result.get("pushed", 0)
+                sec_errors.extend(result.get("errors", []))
+        except Exception as e:
+            sec_errors.append(f"Plan sync: {e}")
+
+    # Report
+    if sec_errors:
+        console.print(f"  [yellow]'{name}':[/yellow] {sec_pushed} pushed, {len(sec_errors)} error(s)")
+        for err in sec_errors:
+            console.print(f"    [warning] {err}")
+    elif sec_pushed:
+        console.print(f"  [green]'{name}':[/green] {sec_pushed} pushed")
+    else:
+        console.print(f"  [dim]'{name}': No changes to push[/dim]")
+
+
+def _sync_all_secondaries(
+    backend_mgr,
+    module_path=None,
+    dry_run=False,
+    verbose=False,
+    days=7,
+    sync_modules=True,
+    sync_timeline=True,
+    sync_plans=True,
+    plan_type="all",
+):
+    """Push to all secondary backends. Failures are isolated per-backend."""
+    console.print("[cyan]Pushing to secondary backends...[/cyan]")
+
+    for secondary in backend_mgr.get_secondaries():
+        try:
+            _sync_secondary_backend(
+                secondary,
+                module_path=module_path,
+                dry_run=dry_run,
+                verbose=verbose,
+                days=days,
+                sync_modules=sync_modules,
+                sync_timeline=sync_timeline,
+                sync_plans=sync_plans,
+                plan_type=plan_type,
+            )
+        except Exception as e:
+            console.print(f"  [warning] Secondary '{secondary.name}' failed: {e}")
+
+
 @app.command(name="nsync")
 def notion_sync(
     module_path: str = typer.Argument(None, help="Module path to sync (optional)"),
@@ -329,11 +448,17 @@ def notion_sync(
     sort_timeline: bool = typer.Option(False, "--sort", help="Sort local timeline entries by time after sync"),
     # Reorder option
     reorder: bool = typer.Option(False, "--reorder", help="Reorder Notion timeline pages by time"),
+    # Multi-backend options
+    backend: str = typer.Option(None, "--backend", help="Sync specific backend only (e.g., 'primary', 'team')"),
+    secondary_only: bool = typer.Option(False, "--secondary-only", help="Only push to secondary backends (skip primary)"),
 ):
     """Bidirectional sync with Notion (nsync command).
 
     Default: Syncs all configured types (modules + timeline + plan).
     Use flags to sync specific types only.
+
+    Multi-backend: If additional-backends are configured in config.yaml,
+    primary sync runs first, then secondary push-only mirrors.
 
     Examples:
         nsync                    # Sync all types (modules + timeline + plan)
@@ -355,9 +480,49 @@ def notion_sync(
         nsync --cleanup              # Scan for orphaned pages (dry-run)
         nsync --cleanup --execute    # Actually clean up invalid states
         nsync --cleanup --archive-orphans --execute  # Also archive orphaned pages
+
+        nsync --backend primary      # Primary only
+        nsync --backend team         # Secondary 'team' only (push-only)
+        nsync --secondary-only       # Secondary backends only (skip primary)
     """
     try:
         from memory_tool.notion.sync import ModuleSyncer, NotionSyncError
+        from memory_tool.notion.backend import BackendManager
+
+        # Handle --backend for specific secondary backend
+        if backend and backend != "primary":
+            backend_mgr = BackendManager()
+            target_backend = backend_mgr.get_backend(backend)
+            if not target_backend:
+                console.print(f"[red]ERROR[/red] Backend '{backend}' not found in config.")
+                console.print(f"[dim]Available backends: {', '.join(backend_mgr.get_backend_names())}[/dim]")
+                sys.exit(1)
+            # Push-only sync to specific secondary
+            _sync_secondary_backend(
+                target_backend, module_path=module_path, push=push, pull=pull,
+                force=force, dry_run=dry_run, verbose=verbose, days=days,
+                sync_modules=not (timeline or plan) or module_flag if (module_flag or timeline or plan) else True,
+                sync_timeline=not (module_flag or plan) or timeline if (module_flag or timeline or plan) else True,
+                sync_plans=not (module_flag or timeline) or plan if (module_flag or timeline or plan) else True,
+                plan_type="all",
+            )
+            return
+
+        # Handle --secondary-only: skip primary, only push to secondaries
+        if secondary_only:
+            backend_mgr = BackendManager()
+            if not backend_mgr.has_secondaries():
+                console.print("[yellow]No secondary backends configured.[/yellow]")
+                console.print("[dim]Add additional-backends section to config.yaml[/dim]")
+                return
+            console.print("[cyan]Syncing secondary backends only (push-only)...[/cyan]\n")
+            _sync_all_secondaries(
+                backend_mgr, module_path=module_path, dry_run=dry_run,
+                verbose=verbose, days=days,
+                sync_modules=True, sync_timeline=True, sync_plans=True,
+                plan_type="all",
+            )
+            return
 
         syncer = ModuleSyncer()
 
@@ -536,6 +701,28 @@ def notion_sync(
                 console.print(f"  Daily: {plan_status['sync_daily']}, Weekly: {plan_status['sync_weekly']}, Monthly: {plan_status['sync_monthly']}")
                 console.print(f"  Status: {plan_status['message']}")
                 console.print()
+
+            # Backend status
+            backend_mgr = BackendManager()
+            console.print("[cyan]Backends:[/cyan]")
+            console.print(f"  Primary: [green]active[/green] (bidirectional)")
+            if backend_mgr.has_secondaries():
+                for sec in backend_mgr.get_secondaries():
+                    mod_root = sec.get_module_root_page_id()
+                    tl_root = sec.get_timeline_root_page_id()
+                    plan_root = sec.get_plan_root_page_id()
+                    types = []
+                    if mod_root:
+                        types.append("module")
+                    if tl_root:
+                        types.append("timeline")
+                    if plan_root:
+                        types.append("plan")
+                    types_str = ", ".join(types) if types else "none"
+                    console.print(f"  {sec.name}: [yellow]secondary[/yellow] (push-only, types: {types_str})")
+            else:
+                console.print("  [dim]No secondary backends configured[/dim]")
+            console.print()
 
             return
 
@@ -757,8 +944,8 @@ def notion_sync(
             total_skipped += summary.skipped
             console.print()
 
-        # Print summary
-        console.print("[bold cyan]Summary:[/bold cyan]")
+        # Print primary summary
+        console.print("[bold cyan]Summary (Primary):[/bold cyan]")
         if total_pushed:
             console.print(f"  [green]Pushed:[/green] {total_pushed}")
         if total_pulled:
@@ -773,6 +960,18 @@ def notion_sync(
                 console.print(f"    - {err}")
         if not total_pushed and not total_pulled and not total_updated and not all_errors:
             console.print("  [dim]No changes to sync[/dim]")
+
+        # Secondary backend push (after primary completes)
+        if not secondary_only and backend != "primary":
+            backend_mgr = BackendManager()
+            if backend_mgr.has_secondaries():
+                console.print()
+                _sync_all_secondaries(
+                    backend_mgr, module_path=module_path, dry_run=dry_run,
+                    verbose=verbose, days=days,
+                    sync_modules=sync_modules, sync_timeline=sync_timeline,
+                    sync_plans=sync_plans, plan_type=plan_type,
+                )
 
     except NotionError as e:
         console.print(f"[red]Notion Error:[/red] {e}")
@@ -794,6 +993,7 @@ def notion_watch(
     timeline_only: bool = typer.Option(False, "--timeline-only", "-t", help="Watch only timeline/ directory"),
     plans_only: bool = typer.Option(False, "--plans-only", "-p", help="Watch only plans/ directory"),
     no_plans: bool = typer.Option(False, "--no-plans", help="Exclude plans/ from watching"),
+    no_secondary: bool = typer.Option(False, "--no-secondary", help="Disable secondary backend push"),
     bidirectional: bool = typer.Option(False, "--bidirectional", "-b", help="Enable Notion -> Local sync (polling)"),
     poll_interval: int = typer.Option(120, "--poll-interval", "-i", help="Notion polling interval in seconds (default: 120)"),
 ):
@@ -805,6 +1005,7 @@ def notion_watch(
     - plans/ changes -> syncs plans to Notion
 
     With --bidirectional: Also polls Notion for changes and pulls to local.
+    With additional-backends configured: Automatically pushes to secondaries after primary sync.
 
     Uses debouncing to batch rapid changes.
 
@@ -822,6 +1023,7 @@ def notion_watch(
         nwatch --timeline-only      # Watch only timeline/
         nwatch --plans-only         # Watch only plans/
         nwatch --no-plans           # Watch modules + timeline (exclude plans)
+        nwatch --no-secondary       # Disable secondary backend push
         nwatch --debounce 5         # Wait 5 seconds before syncing
         nwatch --dry-run            # Show what would sync (no actual sync)
         nwatch --quiet              # Less verbose output
@@ -867,6 +1069,7 @@ def notion_watch(
             watch_plans=watch_plans,
             bidirectional=bidirectional,
             poll_interval=poll_interval,
+            no_secondary=no_secondary,
         )
 
         console.print("[cyan]Starting Notion sync watcher...[/cyan]\n")

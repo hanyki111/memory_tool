@@ -352,6 +352,7 @@ class NotionWatcher:
         watch_plans: bool = True,
         bidirectional: bool = False,
         poll_interval: int = 120,
+        no_secondary: bool = False,
     ):
         """Initialize watcher.
 
@@ -365,6 +366,7 @@ class NotionWatcher:
             watch_plans: Watch plans directory
             bidirectional: Enable Notion -> Local sync via polling
             poll_interval: Seconds between Notion polling (default: 120)
+            no_secondary: Disable secondary backend push
         """
         if not WATCHDOG_AVAILABLE:
             raise ImportError(
@@ -384,6 +386,7 @@ class NotionWatcher:
         self.watch_plans = watch_plans
         self.bidirectional = bidirectional
         self.poll_interval = poll_interval
+        self.no_secondary = no_secondary
         self._observer: Optional[Observer] = None
         self._poll_thread: Optional[threading.Thread] = None
         self._running = False
@@ -393,6 +396,7 @@ class NotionWatcher:
         self._timeline_pull_count = 0
         self._plan_sync_count = 0
         self._plan_pull_count = 0
+        self._secondary_sync_count = 0
         self._last_timeline_content: dict = {}  # Track timeline content to find new entries
 
         # Sync lock to prevent race conditions (duplicate page creation)
@@ -566,6 +570,10 @@ class NotionWatcher:
             else:
                 print(f"[{timestamp}] No module changes to sync")
 
+            # Push to secondary backends
+            if not self.no_secondary:
+                self._push_to_secondaries_modules(module_paths, timestamp)
+
         except Exception as e:
             print(f"[{timestamp}] Module sync failed: {e}")
 
@@ -728,6 +736,113 @@ class NotionWatcher:
             print(f"\n[{timestamp}] Processing {len(modules_to_sync)} queued module(s)")
             self._do_module_sync(modules_to_sync, timestamp)
 
+    def _push_to_secondaries_modules(self, module_paths: Set[str], timestamp: str):
+        """Push module changes to all secondary backends.
+
+        Failures are isolated per-backend and don't affect primary sync.
+        """
+        try:
+            from memory_tool.notion.backend import BackendManager
+            from memory_tool.notion.sync import ModuleSyncer
+
+            backend_mgr = BackendManager()
+            if not backend_mgr.has_secondaries():
+                return
+
+            for secondary in backend_mgr.get_secondaries():
+                if not secondary.get_module_root_page_id():
+                    continue
+                try:
+                    sec_syncer = ModuleSyncer(backend_config=secondary)
+                    for module_path in module_paths:
+                        sec_syncer.sync(
+                            module_path=module_path,
+                            push_only=True,
+                            verbose=False,
+                        )
+                    self._secondary_sync_count += 1
+                    if self.verbose:
+                        print(f"[{timestamp}] Secondary '{secondary.name}': module push OK")
+                except Exception as e:
+                    print(f"[{timestamp}] [warning] Secondary '{secondary.name}' module push failed: {e}")
+        except Exception:
+            pass  # BackendManager import or load failure - silently skip
+
+    def _push_to_secondaries_timeline(self, file_path: str, timestamp: str):
+        """Push timeline changes to all secondary backends.
+
+        Failures are isolated per-backend and don't affect primary sync.
+        """
+        try:
+            from memory_tool.notion.backend import BackendManager
+            from memory_tool.notion.timeline_sync import TimelineSyncer
+
+            backend_mgr = BackendManager()
+            if not backend_mgr.has_secondaries():
+                return
+
+            # Extract date from file path
+            date_str = self._extract_date_from_path(file_path)
+            if not date_str:
+                return
+
+            for secondary in backend_mgr.get_secondaries():
+                if not secondary.get_timeline_root_page_id():
+                    continue
+                try:
+                    sec_syncer = TimelineSyncer(
+                        memory_root=self.memory_root,
+                        backend_config=secondary,
+                    )
+                    sec_syncer.sync(
+                        days=1,
+                        push_only=True,
+                        verbose=False,
+                    )
+                    self._secondary_sync_count += 1
+                    if self.verbose:
+                        print(f"[{timestamp}] Secondary '{secondary.name}': timeline push OK")
+                except Exception as e:
+                    print(f"[{timestamp}] [warning] Secondary '{secondary.name}' timeline push failed: {e}")
+        except Exception:
+            pass  # BackendManager import or load failure - silently skip
+
+    def _push_to_secondaries_plans(self, plan_type: str, timestamp: str):
+        """Push plan changes to all secondary backends.
+
+        Failures are isolated per-backend and don't affect primary sync.
+        """
+        try:
+            from memory_tool.notion.backend import BackendManager
+            from memory_tool.notion.plan_sync import PlanSyncer
+
+            backend_mgr = BackendManager()
+            if not backend_mgr.has_secondaries():
+                return
+
+            for secondary in backend_mgr.get_secondaries():
+                if not secondary.get_plan_root_page_id():
+                    continue
+                try:
+                    sec_syncer = PlanSyncer(
+                        memory_root=self.memory_root,
+                        backend_config=secondary,
+                    )
+                    if sec_syncer.enabled:
+                        sec_syncer.sync(
+                            plan_type=plan_type,
+                            days=1,
+                            push_only=True,
+                            verbose=False,
+                        )
+                        self._secondary_sync_count += 1
+                        if self.verbose:
+                            print(f"[{timestamp}] Secondary '{secondary.name}': plan push OK")
+                except Exception as e:
+                    print(f"[{timestamp}] [warning] Secondary '{secondary.name}' plan push failed: {e}")
+        except Exception:
+            pass  # BackendManager import or load failure - silently skip
+
     def _on_timeline_change(self, event_type: str, file_path: str):
         """Handle timeline change by syncing new/modified/deleted entries to Notion.
 
@@ -841,6 +956,10 @@ class NotionWatcher:
 
             except NotionError as e:
                 print(f"[{timestamp}] Timeline sync failed: {e}")
+
+            # Push to secondary backends
+            if not self.no_secondary:
+                self._push_to_secondaries_timeline(file_path, timestamp)
 
         except Exception as e:
             print(f"[{timestamp}] Timeline sync error: {e}")
@@ -1141,6 +1260,10 @@ class NotionWatcher:
             else:
                 print(f"[{timestamp}] No plan changes to sync")
 
+            # Push to secondary backends
+            if not self.no_secondary:
+                self._push_to_secondaries_plans(plan_type, timestamp)
+
         except Exception as e:
             print(f"[{timestamp}] Plan sync failed: {e}")
 
@@ -1194,6 +1317,19 @@ class NotionWatcher:
         print(f"Debounce: {self.debounce_seconds}s")
         if self.bidirectional:
             print(f"Notion poll interval: {self.poll_interval}s")
+
+        # Show secondary backend info
+        if not self.no_secondary:
+            try:
+                from memory_tool.notion.backend import BackendManager
+                backend_mgr = BackendManager()
+                if backend_mgr.has_secondaries():
+                    sec_names = [s.name for s in backend_mgr.get_secondaries()]
+                    print(f"Secondary backends: {', '.join(sec_names)} (push-only)")
+            except Exception:
+                pass
+        else:
+            print("Secondary backends: disabled")
         if self.verbose:
             print(f"[debug] Memory root: {self.memory_root}")
             print(f"[debug] Modules dir: {self.modules_dir} (exists: {self.modules_dir.exists()})")
@@ -1340,6 +1476,8 @@ class NotionWatcher:
         stats = f"Module syncs: {self._module_sync_count}, Timeline syncs: {self._timeline_sync_count}"
         if self._plan_sync_count:
             stats += f", Plan syncs: {self._plan_sync_count}"
+        if self._secondary_sync_count:
+            stats += f", Secondary pushes: {self._secondary_sync_count}"
         if self.bidirectional:
             pulls = []
             if self._module_pull_count:

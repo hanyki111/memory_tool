@@ -331,11 +331,35 @@ nm "Message"                     # Record to Notion
 ns "query"                       # Search Notion
 nt                               # Today's Notion entries
 nw                               # This week's Notion entries
-nsync                            # Sync all
+nsync                            # Sync all (primary + secondary)
 nsync --module                   # Sync modules only
 nsync --timeline                 # Sync timeline only
+nsync --backend team             # Sync specific backend only
+nsync --secondary-only           # Push to secondary backends only
 nwatch                           # Watch and auto-sync
 nwatch -b                        # Bidirectional sync
+nwatch --no-secondary            # Disable secondary push
+```
+
+### Multi-Backend (Multiple Workspaces)
+
+Sync to multiple Notion workspaces using `additional-backends` in config.yaml:
+- **Primary**: Existing `notion:` config (bidirectional sync)
+- **Secondary**: `additional-backends` entries (push-only mirrors)
+
+```yaml
+notion:
+  api_key: "secret_personal"
+  sync:
+    module:
+      root_page_id: "abc123..."
+
+  additional-backends:
+    team:
+      api_key: "secret_team"
+      sync:
+        module:
+          root_page_id: "xyz999..."
 ```
 
 ---

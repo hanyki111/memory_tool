@@ -30,33 +30,54 @@ class NotionSyncError(NotionError):
 class ModuleSyncer:
     """Handles bidirectional sync between local modules and Notion."""
 
-    def __init__(self, base_path: Optional[Path] = None):
+    def __init__(self, base_path: Optional[Path] = None, backend_config=None):
         """Initialize the syncer.
 
         Args:
             base_path: Base path for .memory directory. Defaults to cwd.
+            backend_config: Optional BackendConfig for secondary backend.
+                           If provided, uses that backend's client and sync config.
         """
         self.base_path = base_path or Path.cwd()
         self.memory_path = self.base_path / ".memory"
         self.modules_path = self.memory_path / "modules"
 
         self.config = Config()
+        self.backend_config = backend_config
         self.sync_config = self._load_sync_config()
 
         self.client: Optional[NotionClient] = None
-        self.state_manager = SyncStateManager(self.memory_path)
+        backend_name = backend_config.name if backend_config else None
+        self.state_manager = SyncStateManager(self.memory_path, backend_name=backend_name)
         self.converter = MarkdownNotionConverter()
 
     def _load_sync_config(self) -> SyncConfig:
-        """Load sync configuration from config.yaml."""
+        """Load sync configuration from config.yaml.
+
+        For secondary backends, overrides module root_page_id from backend_config.
+        """
         notion_config = self.config.get("notion", {})
         sync_data = notion_config.get("sync", {})
-        return SyncConfig.from_dict(sync_data, notion_config)
+        config = SyncConfig.from_dict(sync_data, notion_config)
+
+        # Override module root_page_id for secondary backends
+        if self.backend_config and self.backend_config.role == "secondary":
+            sec_root = self.backend_config.get_module_root_page_id()
+            if sec_root and config.module:
+                config.module.root_page_id = sec_root
+
+        return config
 
     def _ensure_client(self):
         """Ensure Notion client is initialized."""
         if self.client is None:
-            self.client = NotionClient()
+            if self.backend_config and self.backend_config.client_config is not None:
+                self.client = NotionClient(
+                    backend_config=self.backend_config.client_config,
+                    backend_name=self.backend_config.name,
+                )
+            else:
+                self.client = NotionClient()
 
     def get_sync_targets(self) -> List[SyncTarget]:
         """Get list of modules to sync based on configuration.

@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### ✨ Added
+- **Primary-Secondary Multi-Backend Notion Sync** - 다중 Notion 워크스페이스 동기화 지원
+  - Primary 백엔드: 기존과 동일한 양방향 sync (Local ↔ Notion A)
+  - Secondary 백엔드: push-only 미러 (Local → Notion B, C, ...)
+  - `additional-backends` config 섹션으로 추가 백엔드 설정
+  - `nsync --backend <name>`: 특정 백엔드만 동기화
+  - `nsync --secondary-only`: secondary 백엔드만 push
+  - `nwatch --no-secondary`: secondary push 비활성화
+  - 백엔드별 독립 state/cache 파일 (`notion_sync_state_{name}.json`)
+  - Secondary 실패 시 primary에 영향 없음 (실패 격리)
+  - 기존 단일 백엔드 config 100% 하위 호환
 - **Plan-Timeline Integration (Phase 4)** - Plan 완료 시 Timeline 자동 기록
   - `mplan daily/weekly/monthly done` 실행 시 Timeline에 자동 기록
   - 양방향 참조 (Plan ↔ Timeline)

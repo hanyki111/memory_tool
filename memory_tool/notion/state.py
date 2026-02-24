@@ -20,15 +20,21 @@ class SyncStateManager:
     STATE_VERSION = "1.0"
     CLOCK_SKEW_BUFFER = timedelta(seconds=5)
 
-    def __init__(self, base_path: Optional[Path] = None):
+    def __init__(self, base_path: Optional[Path] = None, backend_name: str = None):
         """Initialize state manager.
 
         Args:
             base_path: Base path for .memory directory. Defaults to cwd.
+            backend_name: Optional backend name for state isolation.
+                         None/primary uses default 'notion_sync_state.json'.
+                         Secondary uses 'notion_sync_state_{backend_name}.json'.
         """
         self.base_path = base_path or Path.cwd() / ".memory"
         self.cache_dir = self.base_path / "cache"
-        self.state_file = self.cache_dir / "notion_sync_state.json"
+        if backend_name and backend_name != "primary":
+            self.state_file = self.cache_dir / f"notion_sync_state_{backend_name}.json"
+        else:
+            self.state_file = self.cache_dir / "notion_sync_state.json"
         self._state: Optional[Dict[str, Any]] = None
 
     def _ensure_cache_dir(self):

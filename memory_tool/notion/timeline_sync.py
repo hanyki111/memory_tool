@@ -14,21 +14,37 @@ from memory_tool.utils.config import Config
 class TimelineSyncer:
     """Synchronize timeline entries between local .memory/timeline and Notion."""
 
-    def __init__(self, memory_root: Optional[Path] = None):
+    def __init__(self, memory_root: Optional[Path] = None, backend_config=None):
         """Initialize timeline syncer.
 
         Args:
             memory_root: Path to .memory directory (auto-detected if None)
+            backend_config: Optional BackendConfig for secondary backend.
+                           If provided, uses that backend's client and timeline root_page_id.
         """
         self.memory_root = memory_root or self._find_memory_root()
         self.timeline_dir = self.memory_root / "timeline" / "daily"
         self.config = Config()
-        self.client = NotionClient()
+        self.backend_config = backend_config
+
+        if backend_config and backend_config.client_config is not None:
+            self.client = NotionClient(
+                backend_config=backend_config.client_config,
+                backend_name=backend_config.name,
+            )
+        else:
+            self.client = NotionClient()
 
         # Load timeline sync config with legacy fallback
         notion_config = self.config.get("notion", {})
         sync_config = notion_config.get("sync", {})
         self.timeline_config = TimelineSyncConfig.from_dict(sync_config, notion_config)
+
+        # Override root_page_id for secondary backends
+        if backend_config and backend_config.role == "secondary":
+            sec_root = backend_config.get_timeline_root_page_id()
+            if sec_root:
+                self.timeline_config.root_page_id = sec_root
 
         # Entry pattern: "- HH:MM | message"
         self.entry_pattern = re.compile(r"^- (\d{1,2}:\d{2})\s*\|\s*(.+)$", re.MULTILINE)

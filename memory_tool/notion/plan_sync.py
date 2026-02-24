@@ -29,21 +29,37 @@ class PlanSyncer:
                 └── 01 (January)
     """
 
-    def __init__(self, memory_root: Optional[Path] = None):
+    def __init__(self, memory_root: Optional[Path] = None, backend_config=None):
         """Initialize plan syncer.
 
         Args:
             memory_root: Path to .memory directory (auto-detected if None)
+            backend_config: Optional BackendConfig for secondary backend.
+                           If provided, uses that backend's client and plan root_page_id.
         """
         self.memory_root = memory_root or self._find_memory_root()
         self.plans_dir = self.memory_root / "plans"
         self.config = Config()
-        self.client = NotionClient()
+        self.backend_config = backend_config
+
+        if backend_config and backend_config.client_config is not None:
+            self.client = NotionClient(
+                backend_config=backend_config.client_config,
+                backend_name=backend_config.name,
+            )
+        else:
+            self.client = NotionClient()
 
         # Get plan sync config using PlanSyncConfig model
         notion_config = self.config.get("notion", {})
         sync_config = notion_config.get("sync", {})
         self.plan_config = PlanSyncConfig.from_dict(sync_config, notion_config)
+
+        # Override root_page_id for secondary backends
+        if backend_config and backend_config.role == "secondary":
+            sec_root = backend_config.get_plan_root_page_id()
+            if sec_root:
+                self.plan_config.root_page_id = sec_root
 
         # Expose config values (for backward compatibility)
         self.enabled = self.plan_config.enabled

@@ -5,12 +5,22 @@ from typing import Dict, Optional
 
 class NotionCache:
     """Manages local cache for Notion page IDs to reduce API calls."""
-    
-    def __init__(self):
+
+    def __init__(self, backend_name: str = None):
+        """Initialize cache.
+
+        Args:
+            backend_name: Optional backend name for cache isolation.
+                         None/primary uses default 'notion_pages.json'.
+                         Secondary uses 'notion_pages_{backend_name}.json'.
+        """
         # Determine cache path: .memory/cache/notion_pages.json
         self.base_path = Path.cwd() / ".memory"
         self.cache_dir = self.base_path / "cache"
-        self.cache_file = self.cache_dir / "notion_pages.json"
+        if backend_name and backend_name != "primary":
+            self.cache_file = self.cache_dir / f"notion_pages_{backend_name}.json"
+        else:
+            self.cache_file = self.cache_dir / "notion_pages.json"
         
         self._ensure_cache_dir()
         self.cache: Dict[str, str] = self._load_cache()

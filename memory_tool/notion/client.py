@@ -32,54 +32,83 @@ class NotionClient:
             default_page_id: "abc123..."
     """
 
-    def __init__(self):
-        self.config = Config()
-        notion_config = self.config.get("notion", {})
+    def __init__(self, backend_config: dict = None, backend_name: str = None):
+        """Initialize Notion client.
 
-        # Determine mode: "default" or "pat"
-        self.mode = notion_config.get("mode", "default")
+        Args:
+            backend_config: Optional dict with api_key, mode, base_url, notion_version
+                           for secondary backend. If None, uses Config() (primary).
+            backend_name: Optional backend name for cache isolation.
+        """
+        if backend_config:
+            # Secondary backend mode: use provided config dict
+            self.mode = backend_config.get("mode", "default")
 
-        if self.mode == "pat":
-            # PAT mode: use settings from notion.pat section
-            pat_config = notion_config.get("pat", {})
-            self.api_key = pat_config.get("api_key")
-            self.default_page_id = pat_config.get("default_page_id") or notion_config.get("default_page_id")
-            self.base_url = pat_config.get("base_url")
-            self.notion_version = pat_config.get("notion_version")
-
-            # Fallback to env var
-            if not self.api_key:
-                self.api_key = os.environ.get("NOTION_PAT_KEY")
+            if self.mode == "pat":
+                pat_config = backend_config.get("pat", {})
+                self.api_key = pat_config.get("api_key") or backend_config.get("api_key")
+                self.default_page_id = pat_config.get("default_page_id") or backend_config.get("default_page_id")
+                self.base_url = pat_config.get("base_url") or backend_config.get("base_url")
+                self.notion_version = pat_config.get("notion_version") or backend_config.get("notion_version")
+            else:
+                self.api_key = backend_config.get("api_key")
+                self.default_page_id = backend_config.get("default_page_id")
+                self.base_url = backend_config.get("base_url")
+                self.notion_version = backend_config.get("notion_version")
 
             if not self.api_key:
                 raise NotionError(
-                    "PAT mode: API key not found. "
-                    "Configure 'notion.pat.api_key' in config.yaml or set NOTION_PAT_KEY env var."
-                )
-
-            if not self.base_url:
-                raise NotionError(
-                    "PAT mode: base_url is required. "
-                    "Configure 'notion.pat.base_url' in config.yaml."
+                    f"Backend '{backend_name or 'unknown'}': API key not found in backend_config."
                 )
         else:
-            # Default mode: standard Notion API
-            self.api_key = notion_config.get("api_key")
-            self.default_page_id = notion_config.get("default_page_id")
-            self.base_url = None
-            self.notion_version = None
+            # Primary mode: use Config() (existing behavior)
+            self.config = Config()
+            notion_config = self.config.get("notion", {})
 
-            # Fallback to env var
-            if not self.api_key:
-                self.api_key = os.environ.get("NOTION_API_KEY")
+            # Determine mode: "default" or "pat"
+            self.mode = notion_config.get("mode", "default")
 
-            if not self.api_key:
-                raise NotionError(
-                    "Notion API key not found. "
-                    "Configure 'notion.api_key' in config.yaml or set NOTION_API_KEY env var."
-                )
+            if self.mode == "pat":
+                # PAT mode: use settings from notion.pat section
+                pat_config = notion_config.get("pat", {})
+                self.api_key = pat_config.get("api_key")
+                self.default_page_id = pat_config.get("default_page_id") or notion_config.get("default_page_id")
+                self.base_url = pat_config.get("base_url")
+                self.notion_version = pat_config.get("notion_version")
 
-        self.cache = NotionCache()
+                # Fallback to env var
+                if not self.api_key:
+                    self.api_key = os.environ.get("NOTION_PAT_KEY")
+
+                if not self.api_key:
+                    raise NotionError(
+                        "PAT mode: API key not found. "
+                        "Configure 'notion.pat.api_key' in config.yaml or set NOTION_PAT_KEY env var."
+                    )
+
+                if not self.base_url:
+                    raise NotionError(
+                        "PAT mode: base_url is required. "
+                        "Configure 'notion.pat.base_url' in config.yaml."
+                    )
+            else:
+                # Default mode: standard Notion API
+                self.api_key = notion_config.get("api_key")
+                self.default_page_id = notion_config.get("default_page_id")
+                self.base_url = None
+                self.notion_version = None
+
+                # Fallback to env var
+                if not self.api_key:
+                    self.api_key = os.environ.get("NOTION_API_KEY")
+
+                if not self.api_key:
+                    raise NotionError(
+                        "Notion API key not found. "
+                        "Configure 'notion.api_key' in config.yaml or set NOTION_API_KEY env var."
+                    )
+
+        self.cache = NotionCache(backend_name=backend_name)
 
         try:
             # Build client options

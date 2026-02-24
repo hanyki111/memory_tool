@@ -253,6 +253,45 @@ notion:
 
 **레거시 호환:** 기존 `default_page_id`, `sync.root_page_id` 설정도 자동 인식됩니다.
 
+#### 다중 워크스페이스 (Multi-Backend)
+
+개인 워크스페이스와 팀 워크스페이스에 동시에 동기화하려면 `additional-backends` 섹션을 추가합니다.
+기존 `notion:` 설정이 Primary (양방향), 추가 백엔드가 Secondary (push-only)로 동작합니다.
+
+```yaml
+notion:
+  # 기존 설정 그대로 (Primary 백엔드)
+  api_key: "secret_personal"
+  sync:
+    module:
+      root_page_id: "abc123..."
+    timeline:
+      root_page_id: "def456..."
+
+  # 추가 백엔드 (Secondary, push-only)
+  additional-backends:
+    team:
+      api_key: "secret_team"
+      mode: "default"
+      sync:
+        module:
+          root_page_id: "xyz999..."
+        timeline:
+          root_page_id: "uvw888..."
+        plan:
+          root_page_id: "rst777..."
+```
+
+**다중 백엔드 명령어:**
+
+```bash
+nsync                            # Primary 양방향 + Secondary push
+nsync --backend team             # team 백엔드에만 push
+nsync --secondary-only           # Secondary만 push (Primary skip)
+nwatch                           # Primary watch + Secondary push
+nwatch --no-secondary            # Secondary push 비활성화
+```
+
 #### 6단계: 사용
 
 ```bash
@@ -281,6 +320,11 @@ nsync --timeline --days 7        # 최근 7일 동기화
 nsync --timeline --sort          # 로컬 파일 기존 항목 시간순 정렬
 nsync --timeline --reorder       # Notion 일별 페이지 내 항목 시간순 재정렬
 
+# 다중 백엔드 (Multi-Backend)
+nsync --backend team             # 특정 secondary 백엔드에만 push
+nsync --secondary-only           # secondary 백엔드만 push (primary skip)
+nsync --status                   # 백엔드별 상태 표시
+
 # 자동 동기화 (파일 변경 감지, 신규 항목 자동 시간순 삽입)
 # - 중복 실행 방지 (lock file로 싱글톤 보장)
 # - 삭제된 페이지 자동 복구 (캐시 무효화 + 재시도)
@@ -290,6 +334,7 @@ nwatch -b -i 60                  # 양방향, 60초 polling 간격
 nwatch --debounce 5              # 5초 대기 후 동기화
 nwatch --modules-only            # 모듈만 감시
 nwatch --timeline-only           # 타임라인만 감시
+nwatch --no-secondary            # secondary 백엔드 push 비활성화
 nwatch --dry-run                 # 테스트 모드
 ```
 
@@ -345,6 +390,7 @@ WSL에서 Windows 마운트 드라이브(/mnt/...)를 감시할 경우, 파일 �
 - **모듈 페이지**: 하위 파일 페이지들의 컨테이너
 - **파일 페이지**: 개별 .md 파일 내용 (편집 가능)
 - **충돌 해결**: Last-Write-Wins (마지막 수정이 우선)
+- **Multi-Backend**: Primary (양방향) + Secondary (push-only) 지원
 
 ---
 

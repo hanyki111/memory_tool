@@ -402,6 +402,9 @@ Supports modules, timeline, and plans synchronization.
 
 New timeline entries are automatically inserted in time-sorted order.
 
+Multi-backend: If additional-backends are configured in config.yaml,
+primary sync runs first, then secondary push-only mirrors.
+
 Options for fixing existing out-of-order entries:
   --sort     Sort local timeline files by time
   --reorder  Reorder timeline entries within Notion daily pages
@@ -417,6 +420,8 @@ Options for fixing existing out-of-order entries:
                 "nsync --status            # Show sync status",
                 "nsync --timeline --sort   # Sync and sort local files",
                 "nsync --timeline --reorder # Reorder Notion pages by time",
+                "nsync --backend team      # Push to secondary 'team' only",
+                "nsync --secondary-only    # Push to all secondaries only",
             ],
             "options": [
                 ("--module", "Sync modules only"),
@@ -427,6 +432,8 @@ Options for fixing existing out-of-order entries:
                 ("--status", "Show synchronization status"),
                 ("--sort", "Sort existing local timeline entries by time"),
                 ("--reorder", "Reorder timeline entries in Notion daily pages"),
+                ("--backend", "Sync specific backend only (e.g., 'primary', 'team')"),
+                ("--secondary-only", "Only push to secondary backends (skip primary)"),
             ],
         },
         "ko": {
@@ -437,6 +444,9 @@ Options for fixing existing out-of-order entries:
 모듈, 타임라인, 계획 동기화를 지원합니다.
 
 신규 타임라인 항목은 자동으로 시간순으로 삽입됩니다.
+
+다중 백엔드: config.yaml에 additional-backends 설정 시
+primary 동기화 후 secondary push-only 미러가 실행됩니다.
 
 기존 항목 순서 정리 옵션:
   --sort     로컬 타임라인 파일의 기존 항목 시간순 정렬
@@ -453,6 +463,8 @@ Options for fixing existing out-of-order entries:
                 "nsync --status            # 동기화 상태 확인",
                 "nsync --timeline --sort   # 동기화 후 로컬 파일 정렬",
                 "nsync --timeline --reorder # Notion 페이지 시간순 재정렬",
+                "nsync --backend team      # secondary 'team'에만 푸시",
+                "nsync --secondary-only    # secondary 백엔드만 푸시",
             ],
             "options": [
                 ("--module", "모듈만 동기화"),
@@ -463,6 +475,8 @@ Options for fixing existing out-of-order entries:
                 ("--status", "동기화 상태 표시"),
                 ("--sort", "로컬 타임라인 기존 항목 시간순 정렬"),
                 ("--reorder", "Notion 일별 페이지 내 항목 재정렬"),
+                ("--backend", "특정 백엔드만 동기화 (예: 'primary', 'team')"),
+                ("--secondary-only", "secondary 백엔드만 푸시 (primary 건너뜀)"),
             ],
         },
     },
@@ -1263,6 +1277,9 @@ Bidirectional mode (-b): Local <-> Notion (push and pull)
   - timeline: bidirectional sync (entries sorted by time)
   - plans: bidirectional sync
 
+Multi-backend: With additional-backends configured, automatically pushes
+to secondary backends after each primary sync. Use --no-secondary to disable.
+
 Timeline entries are automatically inserted in time-sorted order.
 
 Safety features:
@@ -1276,6 +1293,7 @@ Safety features:
                 "nwatch --modules-only      # Watch modules only",
                 "nwatch --timeline-only     # Watch timeline only",
                 "nwatch --plans-only        # Watch plans only",
+                "nwatch --no-secondary      # Disable secondary backend push",
                 "nwatch --dry-run           # Preview without syncing",
             ],
             "options": [
@@ -1284,6 +1302,7 @@ Safety features:
                 ("--modules-only", "Watch modules only"),
                 ("--timeline-only", "Watch timeline only"),
                 ("--plans-only", "Watch plans only"),
+                ("--no-secondary", "Disable secondary backend push"),
                 ("--dry-run, -n", "Show what would sync without syncing"),
             ],
         },
@@ -1300,6 +1319,9 @@ Safety features:
   - timeline: 양방향 동기화 (시간순 정렬)
   - plans: 양방향 동기화
 
+다중 백엔드: additional-backends 설정 시 primary 동기화 후
+secondary 백엔드에 자동 푸시. --no-secondary로 비활성화 가능.
+
 타임라인 항목은 자동으로 시간순으로 삽입됩니다.
 
 안전 기능:
@@ -1313,6 +1335,7 @@ Safety features:
                 "nwatch --modules-only      # 모듈만 감시",
                 "nwatch --timeline-only     # 타임라인만 감시",
                 "nwatch --plans-only        # 계획만 감시",
+                "nwatch --no-secondary      # secondary 백엔드 푸시 비활성화",
                 "nwatch --dry-run           # 동기화 없이 미리보기",
             ],
             "options": [
@@ -1321,6 +1344,7 @@ Safety features:
                 ("--modules-only", "모듈만 감시"),
                 ("--timeline-only", "타임라인만 감시"),
                 ("--plans-only", "계획만 감시"),
+                ("--no-secondary", "secondary 백엔드 푸시 비활성화"),
                 ("--dry-run, -n", "동기화 없이 미리보기"),
             ],
         },
