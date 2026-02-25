@@ -153,6 +153,11 @@ class DocumentHealthChecker:
 
         for path in self.modules_dir.rglob("*"):
             if path.is_dir():
+                # Skip archive directories and their children
+                rel = path.relative_to(self.modules_dir)
+                parts = rel.parts
+                if "archive" in parts:
+                    continue
                 # Check if it contains module.md or decisions.md or current.md
                 if any((path / f).exists() for f in ["module.md", "decisions.md", "current.md"]):
                     module_dirs.append(path)
