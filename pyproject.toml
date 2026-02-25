@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "memory-tool"
-version = "1.0.0"
+version = "1.1.0"
 description = "Time-Space Integrated Knowledge System - Capture knowledge in 0.5 seconds, organize on weekends, use for life"
 readme = "README.md"
 requires-python = ">=3.10"
