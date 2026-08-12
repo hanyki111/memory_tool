@@ -201,36 +201,27 @@ class ContextGatherer:
         Returns:
             Current state string or None
         """
-        # Look for current.md in any module
+        # Look for single-file modules or legacy current.md
         modules_dir = self.memory_root / "modules"
         if not modules_dir.exists():
             return None
 
-        for module_dir in modules_dir.iterdir():
-            if not module_dir.is_dir():
+        for item in modules_dir.rglob("*.md"):
+            if "archive" in item.parts or item.name.startswith("_") or item.name.isupper():
                 continue
 
-            current_file = module_dir / "current.md"
-            if current_file.exists():
-                try:
-                    content = current_file.read_text(encoding="utf-8")
+            try:
+                content = item.read_text(encoding="utf-8")
+                status_pattern = r"##\s+Current\s+Status(.+?)(?=##|\Z)"
+                match = re.search(status_pattern, content, re.DOTALL | re.IGNORECASE)
 
-                    # Extract just the status section
-                    # Pattern: ## Current Status ... (up to next ##)
-                    status_pattern = r"##\s+Current\s+Status(.+?)(?=##|\Z)"
-                    match = re.search(status_pattern, content, re.DOTALL | re.IGNORECASE)
-
-                    if match:
-                        status = match.group(1).strip()
-
-                        # Truncate if too long
-                        if len(status) > 500:
-                            status = status[:500] + "... [truncated]"
-
-                        return status
-
-                except Exception:
-                    continue
+                if match:
+                    status = match.group(1).strip()
+                    if len(status) > 500:
+                        status = status[:500] + "... [truncated]"
+                    return status
+            except Exception:
+                continue
 
         return None
 

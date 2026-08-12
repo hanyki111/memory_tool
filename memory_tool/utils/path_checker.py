@@ -262,25 +262,25 @@ class PathChecker:
         Returns:
             ModuleCheckResult with all path checks
         """
-        module_path = self.modules_path / module_name
-        related_files = get_module_related_files(module_path)
+        file_path = self.modules_path / f"{module_name}.md"
+        legacy_dir = self.modules_path / module_name
+        
+        target_path = file_path if file_path.exists() else legacy_dir
+        related_files = get_module_related_files(target_path)
 
-        # Determine source file path for error reporting
-        current_md_path = module_path / "current.md"
-        source_file = str(current_md_path.relative_to(self.base_path))
+        source_file = str((file_path if file_path.exists() else legacy_dir / "current.md").relative_to(self.base_path))
 
         result = ModuleCheckResult(
             module_name=module_name,
-            module_path=module_path,
+            module_path=target_path,
             related_files=related_files,
         )
 
-        # Check all paths with smart resolution
         for path_str in related_files.all_paths():
             line_number = related_files.get_line_number(path_str)
             path_result = self.check_path(
                 path_str,
-                module_path=module_path,
+                module_path=target_path,
                 source_file=source_file,
                 line_number=line_number,
             )
@@ -289,29 +289,25 @@ class PathChecker:
         return result
 
     def check_all_modules(self, include_archived: bool = False) -> CheckSummary:
-        """Check all modules in the project.
-
-        Args:
-            include_archived: Include archived modules (default: False)
-
-        Returns:
-            CheckSummary with all results
-        """
+        """Check all modules in the project."""
         summary = CheckSummary()
 
         if not self.modules_path.exists():
             return summary
 
-        # Find all modules (directories with current.md)
-        for current_file in self.modules_path.rglob("current.md"):
-            module_dir = current_file.parent
-            module_name = str(
-                module_dir.relative_to(self.modules_path)
-            ).replace("\\", "/")
+        # Find all modules (.md files and legacy current.md)
+        modules = set()
+        for md_file in self.modules_path.rglob("*.md"):
+            if "archive" in md_file.parts or md_file.name.startswith("_") or md_file.name.isupper() or md_file.name == "MIGRATION-SUMMARY.md":
+                continue
+            if md_file.name in ["module.md", "current.md", "decisions.md", "dependencies.md", "interface.md"]:
+                legacy_dir = md_file.parent
+                modules.add(str(legacy_dir.relative_to(self.modules_path)).replace("\\", "/"))
+            else:
+                modules.add(str(md_file.relative_to(self.modules_path).with_suffix("")).replace("\\", "/"))
 
-            # Skip archived modules unless explicitly included
+        for module_name in sorted(list(modules)):
             if not include_archived:
-                # Check if module is in archive folder
                 if module_name.startswith("archive/") or "/archive/" in module_name:
                     continue
 

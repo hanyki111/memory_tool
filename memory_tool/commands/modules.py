@@ -15,7 +15,7 @@ from memory_tool.llm.client import LLMClient
 
 @app.command()
 def module(
-    action: str = typer.Argument(..., help="Action: create, list, tree, rename, archive, unarchive, connections, graph, rebuild-graph, check-links, suggest-links, suggest-ai, ai-organize, auto-tag, graph-history, graph-diff, graph-snapshot, from-text"),
+    action: str = typer.Argument(..., help="Action: create, list, tree, rename, archive, unarchive, migrate, connections, graph, rebuild-graph, check-links, suggest-links, suggest-ai, ai-organize, auto-tag, graph-history, graph-diff, graph-snapshot, from-text"),
     name: str = typer.Argument(None, help="Module name or path (e.g., 'projects/website')"),
     description: str = typer.Option("", "--desc", "-d", help="Module description"),
     reason: str = typer.Option("", "--reason", "-r", help="Reason for archiving"),
@@ -35,7 +35,7 @@ def module(
     lang: Optional[str] = typer.Option(None, "--lang", help="Output language for from-text: 'ko', 'en', 'auto'"),
     structure: Optional[str] = typer.Option(None, "--structure", "-s", help="Module structure type for from-text: 'feature' (software), 'topic' (learning/KB), 'auto'"),
 ):
-    """Manage modules (supports hierarchical paths, wiki-style [[connections]], and AI suggestions)."""
+    """Manage modules (supports single-file modules, hierarchical paths, wiki-style [[connections]], and AI suggestions)."""
     action = arg_str(action)
     name = opt_str(name)
     format = opt_str(format)
@@ -56,14 +56,8 @@ def module(
             module_path = manager.create(name, description, tag_list)
 
             rel_path = module_path.relative_to(Path.cwd())
-            console.print(f"\n[green]OK[/green] Module created: {name}")
-            console.print(f"[dim]Location: {rel_path}[/dim]")
-            console.print(f"\n[dim]Files created:[/dim]")
-            console.print(f"  - module.md      (module definition)")
-            console.print(f"  - current.md     (current status)")
-            console.print(f"  - decisions.md   (decisions)")
-            console.print(f"  - dependencies.md (dependencies)")
-            console.print(f"  - interface.md   (interface/API)")
+            console.print(f"\n[green]OK[/green] Single-file module created: {name}")
+            console.print(f"[dim]File location: {rel_path}[/dim]")
 
             try:
                 from memory_tool.utils.suggestion_helper import check_and_suggest_after_command
@@ -71,6 +65,19 @@ def module(
                 check_and_suggest_after_command(memory_dir, "module", force=False)
             except Exception:
                 pass
+
+        elif action.lower() == "migrate":
+            if name:
+                resolved_name = resolve_module_name(name)
+                console.print(f"[cyan]Migrating module '{resolved_name}' to single file...[/cyan]")
+                res = manager.migrate_module(resolved_name)
+                console.print(f"[green]OK[/green] Migrated module: [bold]{res}[/bold]")
+            else:
+                console.print("[cyan]Migrating all legacy multi-file modules to single-file format...[/cyan]")
+                migrated = manager.migrate_all_modules()
+                console.print(f"\n[green]OK[/green] Successfully migrated {len(migrated)} modules:")
+                for m in migrated:
+                    console.print(f"  - {m}")
 
         elif action.lower() == "list":
             modules = manager.list_modules(include_archived=archived)

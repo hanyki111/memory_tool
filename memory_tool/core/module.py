@@ -28,72 +28,48 @@ class ModuleManager:
         self.archive_path = self.modules_path / "archive"
 
     def is_initialized(self) -> bool:
-        """Check if .memory/modules/ exists.
-
-        Returns:
-            True if modules directory exists
-        """
+        """Check if .memory/modules/ exists."""
         return self.modules_path.exists()
 
     def _validate_module_name(self, name: str) -> None:
-        """Validate module name or path.
-
-        Args:
-            name: Module name or path to validate (e.g., 'module' or 'projects/website')
-
-        Raises:
-            ModuleError: If name is invalid
-        """
-        # Split path components
+        """Validate module name or path."""
         parts = name.split('/')
-
-        # Check for reserved names
         reserved = ["archive", "templates", ".git"]
 
-        # Validate each path component
         for part in parts:
             if not part:
                 raise ModuleError(f"Invalid module path: {name}. Empty path component.")
 
-            # Check for valid characters (word characters including Unicode, space, dash)
-            # \w matches alphanumeric + underscore + Unicode letters (Korean, Japanese, etc.)
-            # \s allows spaces in module names
             if not re.match(r'^[\w\s-]+$', part):
                 raise ModuleError(
                     f"Invalid module path component: {part}. "
                     f"Use only letters, numbers, spaces, dashes, and underscores."
                 )
 
-            # Check for reserved names
             if part.lower() in reserved:
                 raise ModuleError(f"Reserved name in path: {part}")
 
+    def get_module_file_path(self, name: str) -> Path:
+        """Get file path for a module."""
+        return self.modules_path / f"{name}.md"
+
     def module_exists(self, name: str) -> bool:
-        """Check if module exists.
-
-        Args:
-            name: Module name
-
-        Returns:
-            True if module exists
-        """
-        module_path = self.modules_path / name
-        return module_path.exists() and module_path.is_dir()
+        """Check if module exists (as single file or old directory format)."""
+        file_path = self.get_module_file_path(name)
+        if file_path.exists() and file_path.is_file():
+            return True
+        # Check for legacy directory format
+        dir_path = self.modules_path / name
+        return dir_path.exists() and dir_path.is_dir() and (dir_path / "module.md").exists() or (dir_path / "current.md").exists()
 
     def is_archived(self, name: str) -> bool:
-        """Check if module is archived.
-
-        Args:
-            name: Module name
-
-        Returns:
-            True if module is in archive
-        """
+        """Check if module is archived."""
         if not self.archive_path.exists():
             return False
 
-        archive_module_path = self.archive_path / name
-        return archive_module_path.exists() and archive_module_path.is_dir()
+        archive_module_file = self.archive_path / f"{name}.md"
+        archive_module_dir = self.archive_path / name
+        return (archive_module_file.exists() and archive_module_file.is_file()) or (archive_module_dir.exists() and archive_module_dir.is_dir())
 
     def create(
         self,
@@ -101,15 +77,15 @@ class ModuleManager:
         description: str = "",
         tags: Optional[List[str]] = None,
     ) -> Path:
-        """Create new module structure.
+        """Create new single-file module structure.
 
         Args:
-            name: Module name
+            name: Module name or path (e.g. 'memory-tool' or 'memory-tool/core-system')
             description: Module description
             tags: Module tags
 
         Returns:
-            Path to created module directory
+            Path to created single markdown file
 
         Raises:
             ModuleError: If creation fails
@@ -122,44 +98,33 @@ class ModuleManager:
 
         self._validate_module_name(name)
 
-        # Check if module already exists
-        module_path = self.modules_path / name
-        if module_path.exists():
+        if self.module_exists(name):
             raise ModuleError(f"Module already exists: {name}")
 
-        # Create module directory
-        try:
-            module_path.mkdir(parents=True, exist_ok=False)
-        except Exception as e:
-            raise ModuleError(f"Failed to create module directory: {e}")
+        file_path = self.get_module_file_path(name)
+        file_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Generate module files
         timestamp = datetime.now().strftime("%Y-%m-%d")
         tags_str = ", ".join(tags) if tags else ""
+        desc_str = description if description else "TODO: Describe the purpose of this module"
 
-        # module.md
-        module_md = f"""# Module: {name}
+        content = f"""# Module: {name}
 
 **Created:** {timestamp}
 **Tags:** {tags_str}
 
-## Purpose
+## Overview
 
-{description if description else "TODO: Describe the purpose of this module"}
+### Purpose
+{desc_str}
 
-## Scope
-
+### Scope
 TODO: Define what is included and excluded from this module
 
-## Architecture
+### Architecture
+TODO: Describe high-level architecture and design decisions
 
-TODO: Describe the high-level architecture and design decisions
-"""
-
-        # current.md
-        current_md = f"""# Current Status
-
-## {timestamp}
+## Current Status
 
 ### In Progress
 - [ ] TODO: Add current tasks
@@ -173,126 +138,85 @@ None
 ### Next Steps
 1. TODO: Define next actions
 
-## Known Issues
-None
+## Decisions
 
-## Notes
-- TODO: Add important notes
-"""
-
-        # decisions.md
-        decisions_md = f"""# Decisions
-
-## Decision 1: Module Creation ({timestamp})
-
+### Decision 1: Module Creation ({timestamp})
 **Context:** Initial module setup
-
 **Decision:** Created {name} module
-
-**Rationale:** {description if description else "TODO: Document rationale"}
-
-**Consequences:**
-- Module structure established
-- Ready for development
-
+**Rationale:** {desc_str}
 **Status:** Accepted
-"""
 
-        # dependencies.md
-        dependencies_md = f"""# Dependencies
+## Dependencies
 
-## Internal Dependencies
-
+### Internal Dependencies
 None yet
 
-## External Dependencies
-
+### External Dependencies
 None yet
 
-## Dependents
-
+### Dependents
 None yet
 
-## Notes
+## Interface
 
-- TODO: Document dependencies as they are identified
-"""
-
-        # interface.md
-        interface_md = f"""# Interface
-
-## Public API
-
+### Public API
 TODO: Document public interfaces, commands, or APIs
 
-## Data Structures
-
+### Data Structures
 TODO: Document key data structures
-
-## Examples
-
-TODO: Add usage examples
 """
 
-        # Write files
         try:
-            (module_path / "module.md").write_text(module_md, encoding="utf-8")
-            (module_path / "current.md").write_text(current_md, encoding="utf-8")
-            (module_path / "decisions.md").write_text(decisions_md, encoding="utf-8")
-            (module_path / "dependencies.md").write_text(dependencies_md, encoding="utf-8")
-            (module_path / "interface.md").write_text(interface_md, encoding="utf-8")
+            file_path.write_text(content, encoding="utf-8")
         except Exception as e:
-            # Clean up on failure
-            import shutil
-            shutil.rmtree(module_path, ignore_errors=True)
-            raise ModuleError(f"Failed to create module files: {e}")
+            raise ModuleError(f"Failed to create module file: {e}")
 
-        return module_path
+        return file_path
 
     def discover_all_modules(self) -> List[Path]:
-        """Discover all modules recursively by finding current.md files.
+        """Discover all modules recursively by finding .md files and legacy dirs.
 
         Returns:
-            List of module paths relative to modules_path
+            List of module relative paths (without .md extension) sorted by path.
         """
         if not self.modules_path.exists():
             return []
 
-        modules = []
-        for current_file in self.modules_path.rglob("current.md"):
-            module_dir = current_file.parent
+        modules = set()
 
-            # Skip archive directories
-            if "archive" in module_dir.parts:
+        # 1. Discover single-file modules (.md)
+        for md_file in self.modules_path.rglob("*.md"):
+            # Skip archive directory
+            if "archive" in md_file.parts:
+                continue
+            # Skip uppercase meta summary files or index files starting with _ or uppercase special files
+            if md_file.name.startswith("_") or md_file.name.isupper() or md_file.name in ["MIGRATION-SUMMARY.md"]:
+                continue
+            # Skip legacy files inside old module directories (module.md, current.md, etc.) if parent is legacy module
+            if md_file.name in ["module.md", "current.md", "decisions.md", "dependencies.md", "interface.md"]:
+                # Check if it's legacy module directory
+                legacy_dir = md_file.parent
+                try:
+                    rel_legacy = legacy_dir.relative_to(self.modules_path)
+                    modules.add(rel_legacy)
+                except ValueError:
+                    pass
                 continue
 
-            # Get relative path from modules_path
             try:
-                rel_path = module_dir.relative_to(self.modules_path)
-                modules.append(rel_path)
+                rel_path = md_file.relative_to(self.modules_path)
+                # Remove .md suffix
+                module_name_path = rel_path.with_suffix("")
+                modules.add(module_name_path)
             except ValueError:
                 continue
 
-        # Sort by path
-        modules.sort(key=lambda p: str(p))
-        return modules
+        result = list(modules)
+        result.sort(key=lambda p: str(p))
+        return result
 
     def find_module_by_name(self, name: str, exact: bool = False) -> List[str]:
-        """Find module(s) by name, searching all module paths.
-
-        Args:
-            name: Module name to search for (e.g., 'website' or 'memory-system')
-            exact: If True, only exact name matches. If False, matches end of path.
-
-        Returns:
-            List of matching module paths (relative to modules_path).
-            Empty list if no matches found.
-
-        Examples:
-            find_module_by_name('website') -> ['projects/website', 'archive-projects/old-website']
-            find_module_by_name('memory-system') -> ['memory-system']
-            find_module_by_name('projects/website', exact=True) -> ['projects/website']
-        """
+        """Find module(s) by name, searching all module paths."""
         all_modules = self.discover_all_modules()
         matches = []
 
@@ -301,52 +225,43 @@ TODO: Add usage examples
             module_parts = module_path.parts
 
             if exact:
-                # Exact match: full path must match
                 if module_str == name:
                     matches.append(module_str)
             else:
-                # Flexible match: name matches last component OR full path
                 if module_str == name or module_parts[-1] == name:
                     matches.append(module_str)
 
         return matches
 
     def list_modules(self, include_archived: bool = False) -> Dict[str, List[str]]:
-        """List all modules (hierarchical paths).
-
-        Args:
-            include_archived: Whether to include archived modules
-
-        Returns:
-            Dictionary with 'active' (list of paths) and optionally 'archived' lists
-        """
+        """List all modules."""
         result = {"active": []}
 
         if not self.modules_path.exists():
             return result
 
-        # List active modules (find all current.md files)
         discovered = self.discover_all_modules()
         result["active"] = [str(p) for p in discovered]
 
-        # List archived modules (flat structure in archive/)
         if include_archived and self.archive_path.exists():
             archived = []
-            for item in self.archive_path.iterdir():
-                if item.is_dir() and not item.name.startswith("."):
-                    archived.append(item.name)
+            for item in self.archive_path.rglob("*"):
+                if "archive" in item.parts:
+                    if item.is_file() and item.suffix == ".md" and not item.name.startswith("_"):
+                        rel = item.relative_to(self.archive_path).with_suffix("")
+                        archived.append(str(rel))
+                    elif item.is_dir() and not item.name.startswith("."):
+                        if (item / "module.md").exists() or (item / "current.md").exists():
+                            rel = item.relative_to(self.archive_path)
+                            archived.append(str(rel))
+            archived = list(set(archived))
             archived.sort()
             result["archived"] = archived
 
         return result
 
     def build_module_tree(self) -> Dict:
-        """Build hierarchical tree structure of modules.
-
-        Returns:
-            Nested dictionary representing module hierarchy
-            Example: {'projects': {'website': {}, 'app': {}}, 'areas': {}}
-        """
+        """Build hierarchical tree structure of modules."""
         modules = self.discover_all_modules()
         tree = {}
 
@@ -354,8 +269,7 @@ TODO: Add usage examples
             parts = module_path.parts
             current = tree
 
-            # Build nested structure
-            for i, part in enumerate(parts):
+            for part in parts:
                 if part not in current:
                     current[part] = {}
                 current = current[part]
@@ -363,240 +277,248 @@ TODO: Add usage examples
         return tree
 
     def get_module_info(self, name: str) -> Dict:
-        """Get information about a module.
+        """Get information about a module."""
+        file_path = self.get_module_file_path(name)
+        legacy_dir = self.modules_path / name
 
-        Args:
-            name: Module name or path
-
-        Returns:
-            Dictionary with module information (path, parent, children)
-        """
-        module_path = self.modules_path / name
-
-        if not module_path.exists():
+        exists = file_path.exists() or (legacy_dir.exists() and legacy_dir.is_dir())
+        if not exists:
             raise ModuleError(f"Module not found: {name}")
 
-        # Check if it's actually a module (has current.md)
-        if not (module_path / "current.md").exists():
-            raise ModuleError(f"Not a valid module (missing current.md): {name}")
-
-        # Get parent
         rel_path = Path(name)
         parent = str(rel_path.parent) if rel_path.parent != Path(".") else None
 
-        # Get children (direct subdirectories with current.md)
+        all_modules = self.discover_all_modules()
         children = []
-        for item in module_path.iterdir():
-            if item.is_dir() and (item / "current.md").exists():
-                # Skip archive
-                if item.name == "archive":
-                    continue
-                child_path = f"{name}/{item.name}" if name != "." else item.name
-                children.append(child_path)
+        for mod in all_modules:
+            mod_str = str(mod)
+            if mod_str != name and mod_str.startswith(f"{name}/"):
+                # Direct child check
+                sub = mod_str[len(name) + 1:]
+                if "/" not in sub:
+                    children.append(mod_str)
 
         children.sort()
 
         return {
             "name": name,
-            "path": module_path,
+            "path": file_path if file_path.exists() else legacy_dir,
             "parent": parent,
             "children": children,
         }
 
-    def archive(self, name: str, reason: str = "") -> Path:
-        """Archive a module.
+    def migrate_module(self, name_or_path: str) -> Path:
+        """Migrate a legacy multi-file module directory into a single markdown file.
 
         Args:
-            name: Module name
-            reason: Reason for archiving
+            name_or_path: Module relative path (e.g. 'memory-tool/core-system')
 
         Returns:
-            Path to archived module
-
-        Raises:
-            ModuleError: If archiving fails
+            Path to newly created single module markdown file (.md)
         """
+        dir_path = self.modules_path / name_or_path
+        if not dir_path.exists() or not dir_path.is_dir():
+            # Check if it's already a single file
+            file_path = self.get_module_file_path(name_or_path)
+            if file_path.exists():
+                return file_path
+            raise ModuleError(f"Legacy module directory not found: {name_or_path}")
+
+        # Files to combine in standard order
+        std_files = ["module.md", "current.md", "decisions.md", "dependencies.md", "interface.md"]
+        combined_sections = []
+
+        # Read module.md first or create header
+        module_md_path = dir_path / "module.md"
+        if module_md_path.exists():
+            combined_sections.append(module_md_path.read_text(encoding="utf-8").strip())
+        else:
+            combined_sections.append(f"# Module: {Path(name_or_path).name}\n")
+
+        # Section mapping for other standard files
+        section_titles = {
+            "current.md": "## Current Status",
+            "decisions.md": "## Decisions",
+            "dependencies.md": "## Dependencies",
+            "interface.md": "## Interface",
+        }
+
+        for fname, default_title in section_titles.items():
+            fpath = dir_path / fname
+            if fpath.exists():
+                content = fpath.read_text(encoding="utf-8").strip()
+                # Avoid duplicate title if already present in content
+                if not content.startswith("#"):
+                    content = f"{default_title}\n\n{content}"
+                combined_sections.append(content)
+
+        # Catch any additional non-standard .md files in legacy directory (not subdirectories)
+        for extra_file in dir_path.iterdir():
+            if extra_file.is_file() and extra_file.suffix == ".md" and extra_file.name not in std_files:
+                content = extra_file.read_text(encoding="utf-8").strip()
+                combined_sections.append(f"## {extra_file.stem.capitalize()}\n\n{content}")
+
+        combined_content = "\n\n---\n\n".join(combined_sections) + "\n"
+
+        target_file = self.get_module_file_path(name_or_path)
+        target_file.parent.mkdir(parents=True, exist_ok=True)
+        target_file.write_text(combined_content, encoding="utf-8")
+
+        # Clean up legacy standard files
+        for fname in std_files:
+            fpath = dir_path / fname
+            if fpath.exists():
+                fpath.unlink()
+
+        # Remove empty legacy directory if no subdirectories/submodules remain
+        remaining_items = list(dir_path.iterdir())
+        if not remaining_items:
+            dir_path.rmdir()
+
+        return target_file
+
+    def migrate_all_modules(self) -> List[Path]:
+        """Find and migrate all legacy multi-file module directories into single files.
+
+        Returns:
+            List of created/migrated single module .md file paths.
+        """
+        migrated = []
+        if not self.modules_path.exists():
+            return migrated
+
+        # Find all legacy directories containing module.md or current.md
+        legacy_dirs = []
+        for current_file in list(self.modules_path.rglob("current.md")) + list(self.modules_path.rglob("module.md")):
+            d = current_file.parent
+            if "archive" not in d.parts and d not in legacy_dirs:
+                legacy_dirs.append(d)
+
+        # Sort deeper directories first so submodules are migrated before parent directories
+        legacy_dirs.sort(key=lambda p: len(p.parts), reverse=True)
+
+        for d in legacy_dirs:
+            try:
+                rel = d.relative_to(self.modules_path)
+                mpath = self.migrate_module(str(rel))
+                migrated.append(mpath)
+            except Exception as e:
+                print(f"Warning: Failed to migrate {d}: {e}")
+
+        return migrated
+
+    def archive(self, name: str, reason: str = "") -> Path:
+        """Archive a module."""
         if not self.is_initialized():
             raise ModuleError(
                 f"Modules directory not found at {self.modules_path}. "
                 f"Run 'minit' to initialize."
             )
 
-        # Check if module exists
-        module_path = self.modules_path / name
-        if not module_path.exists():
+        file_path = self.get_module_file_path(name)
+        dir_path = self.modules_path / name
+
+        if not file_path.exists() and not dir_path.exists():
             raise ModuleError(f"Module not found: {name}")
 
-        # Check if already archived
         if self.is_archived(name):
             raise ModuleError(f"Module already archived: {name}")
 
-        # Create archive directory if needed
         self.archive_path.mkdir(parents=True, exist_ok=True)
-
-        # Move module to archive
         import shutil
-        archive_module_path = self.archive_path / name
 
-        try:
-            shutil.move(str(module_path), str(archive_module_path))
-        except Exception as e:
-            raise ModuleError(f"Failed to move module to archive: {e}")
+        target_archive = self.archive_path / f"{name}.md"
+        target_archive.parent.mkdir(parents=True, exist_ok=True)
 
-        # Update archive index
+        if file_path.exists():
+            shutil.move(str(file_path), str(target_archive))
+        elif dir_path.exists():
+            shutil.move(str(dir_path), str(self.archive_path / name))
+
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
         index_path = self.archive_path / "_index.md"
 
-        # Read existing index
         if index_path.exists():
             index_content = index_path.read_text(encoding="utf-8")
         else:
             index_content = "# Archived Modules\n\n"
 
-        # Add new entry
         new_entry = f"""## {name}
 - **Archived:** {timestamp}
 - **Reason:** {reason if reason else "No reason specified"}
-- **Location:** ./{name}/
+- **Location:** ./{name}.md
 
 """
-
         index_content += new_entry
+        index_path.write_text(index_content, encoding="utf-8")
 
-        # Write updated index
-        try:
-            index_path.write_text(index_content, encoding="utf-8")
-        except Exception as e:
-            raise ModuleError(f"Failed to update archive index: {e}")
-
-        return archive_module_path
+        return target_archive
 
     def unarchive(self, name: str) -> Path:
-        """Restore module from archive.
-
-        Args:
-            name: Module name
-
-        Returns:
-            Path to restored module
-
-        Raises:
-            ModuleError: If restoration fails
-        """
+        """Restore module from archive."""
         if not self.archive_path.exists():
             raise ModuleError("Archive directory not found")
 
-        # Check if module is in archive
-        archive_module_path = self.archive_path / name
-        if not archive_module_path.exists():
+        archive_file = self.archive_path / f"{name}.md"
+        archive_dir = self.archive_path / name
+
+        if not archive_file.exists() and not archive_dir.exists():
             raise ModuleError(f"Module not found in archive: {name}")
 
-        # Check if active module with same name exists
-        module_path = self.modules_path / name
-        if module_path.exists():
+        if self.module_exists(name):
             raise ModuleError(
-                f"Active module with name '{name}' already exists. "
-                f"Archive or rename it first."
+                f"Active module with name '{name}' already exists. Archive or rename it first."
             )
 
-        # Move module from archive to active
         import shutil
+        file_path = self.get_module_file_path(name)
+        file_path.parent.mkdir(parents=True, exist_ok=True)
 
-        try:
-            shutil.move(str(archive_module_path), str(module_path))
-        except Exception as e:
-            raise ModuleError(f"Failed to restore module from archive: {e}")
+        if archive_file.exists():
+            shutil.move(str(archive_file), str(file_path))
+            res = file_path
+        else:
+            shutil.move(str(archive_dir), str(self.modules_path / name))
+            res = self.modules_path / name
 
-        # Update archive index (remove entry)
-        index_path = self.archive_path / "_index.md"
-        if index_path.exists():
-            try:
-                content = index_path.read_text(encoding="utf-8")
-
-                # Remove this module's entry (section starting with ## name)
-                lines = content.split("\n")
-                new_lines = []
-                skip_until_next_header = False
-
-                for line in lines:
-                    if line.startswith(f"## {name}"):
-                        skip_until_next_header = True
-                        continue
-                    elif line.startswith("## ") and skip_until_next_header:
-                        skip_until_next_header = False
-
-                    if not skip_until_next_header:
-                        new_lines.append(line)
-
-                # Write updated index
-                index_path.write_text("\n".join(new_lines), encoding="utf-8")
-            except Exception as e:
-                # Non-fatal: module is restored but index not updated
-                pass
-
-        return module_path
+        return res
 
     def rename(self, old_name: str, new_name: str) -> Path:
-        """Rename a module.
-
-        Args:
-            old_name: Current module name/path
-            new_name: New module name/path
-
-        Returns:
-            Path to renamed module
-
-        Raises:
-            ModuleError: If renaming fails
-        """
+        """Rename a module."""
         if not self.is_initialized():
             raise ModuleError(
                 f"Modules directory not found at {self.modules_path}. "
                 f"Run 'minit' to initialize."
             )
 
-        # Validate new name
         self._validate_module_name(new_name)
 
-        # Check if old module exists
-        old_path = self.modules_path / old_name
-        if not old_path.exists():
+        old_file = self.get_module_file_path(old_name)
+        old_dir = self.modules_path / old_name
+
+        if not old_file.exists() and not old_dir.exists():
             raise ModuleError(f"Module not found: {old_name}")
 
-        # Check if new module already exists
-        new_path = self.modules_path / new_name
-        if new_path.exists():
+        if self.module_exists(new_name):
             raise ModuleError(f"Module already exists: {new_name}")
 
-        # Create parent directory for new path if needed
-        new_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # Move module
         import shutil
-        try:
-            shutil.move(str(old_path), str(new_path))
-        except Exception as e:
-            raise ModuleError(f"Failed to rename module: {e}")
+        new_file = self.get_module_file_path(new_name)
+        new_file.parent.mkdir(parents=True, exist_ok=True)
 
-        # Update module.md with new name
-        module_md_path = new_path / "module.md"
-        if module_md_path.exists():
+        if old_file.exists():
+            shutil.move(str(old_file), str(new_file))
             try:
-                content = module_md_path.read_text(encoding="utf-8")
-                # Update the title if it contains the old name
-                old_basename = Path(old_name).name
-                new_basename = Path(new_name).name
-                content = content.replace(
-                    f"# Module: {old_basename}",
-                    f"# Module: {new_basename}"
-                )
-                content = content.replace(
-                    f"# Module: {old_name}",
-                    f"# Module: {new_name}"
-                )
-                module_md_path.write_text(content, encoding="utf-8")
+                content = new_file.read_text(encoding="utf-8")
+                old_base = Path(old_name).name
+                new_base = Path(new_name).name
+                content = content.replace(f"# Module: {old_base}", f"# Module: {new_base}")
+                content = content.replace(f"# Module: {old_name}", f"# Module: {new_name}")
+                new_file.write_text(content, encoding="utf-8")
             except Exception:
-                # Non-fatal: module renamed but content not updated
                 pass
+            return new_file
+        else:
+            shutil.move(str(old_dir), str(self.modules_path / new_name))
+            return self.modules_path / new_name
 
-        return new_path

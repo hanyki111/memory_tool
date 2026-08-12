@@ -55,25 +55,28 @@ class DocumentHealthChecker:
 
         issues = []
 
-        # Recursively find all module directories
+        # Recursively find all module files (.md) or legacy directories
+        for module_file in self.modules_dir.rglob("*.md"):
+            if "archive" in module_file.parts or module_file.name.startswith("_") or module_file.name.isupper() or module_file.name == "MIGRATION-SUMMARY.md":
+                continue
+            if module_file.name in ["module.md", "current.md", "decisions.md", "dependencies.md", "interface.md"]:
+                continue
+
+            module_name = str(module_file.relative_to(self.modules_dir).with_suffix("")).replace("\\", "/")
+            issue = self._check_file(module_name, "module", module_file)
+            if issue:
+                issues.append(issue)
+
+        # Check legacy directories if any exist
         for module_dir in self._find_module_dirs():
             module_name = self._get_module_name(module_dir)
+            for file_type, fname in [("decisions", "decisions.md"), ("current", "current.md")]:
+                fpath = module_dir / fname
+                if fpath.exists():
+                    issue = self._check_file(module_name, file_type, fpath)
+                    if issue:
+                        issues.append(issue)
 
-            # Check decisions.md
-            decisions_path = module_dir / "decisions.md"
-            if decisions_path.exists():
-                issue = self._check_file(module_name, "decisions", decisions_path)
-                if issue:
-                    issues.append(issue)
-
-            # Check current.md
-            current_path = module_dir / "current.md"
-            if current_path.exists():
-                issue = self._check_file(module_name, "current", current_path)
-                if issue:
-                    issues.append(issue)
-
-        # Sort by severity (critical first) and line count (largest first)
         severity_order = {"critical": 0, "warning": 1, "ok": 2}
         issues.sort(key=lambda x: (severity_order[x.severity], -x.line_count))
 
