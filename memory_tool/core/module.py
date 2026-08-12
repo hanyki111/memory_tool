@@ -50,26 +50,33 @@ class ModuleManager:
                 raise ModuleError(f"Reserved name in path: {part}")
 
     def get_module_file_path(self, name: str) -> Path:
-        """Get file path for a module."""
-        return self.modules_path / f"{name}.md"
+        """Get file path for a module following [Folder]/[Folder].md convention."""
+        mod_basename = Path(name).name
+        return self.modules_path / name / f"{mod_basename}.md"
 
     def module_exists(self, name: str) -> bool:
-        """Check if module exists (as single file or old directory format)."""
+        """Check if module exists (as single file in folder or old format)."""
         file_path = self.get_module_file_path(name)
         if file_path.exists() and file_path.is_file():
             return True
-        # Check for legacy directory format
+        # Check flat single file format (e.g., .memory/modules/name.md)
+        flat_file = self.modules_path / f"{name}.md"
+        if flat_file.exists() and flat_file.is_file():
+            return True
+        # Check legacy directory format
         dir_path = self.modules_path / name
-        return dir_path.exists() and dir_path.is_dir() and (dir_path / "module.md").exists() or (dir_path / "current.md").exists()
+        return dir_path.exists() and dir_path.is_dir() and ((dir_path / "module.md").exists() or (dir_path / "current.md").exists())
 
     def is_archived(self, name: str) -> bool:
         """Check if module is archived."""
         if not self.archive_path.exists():
             return False
 
-        archive_module_file = self.archive_path / f"{name}.md"
-        archive_module_dir = self.archive_path / name
-        return (archive_module_file.exists() and archive_module_file.is_file()) or (archive_module_dir.exists() and archive_module_dir.is_dir())
+        mod_basename = Path(name).name
+        archive_encapsulated = self.archive_path / name / f"{mod_basename}.md"
+        archive_flat = self.archive_path / f"{name}.md"
+        archive_dir = self.archive_path / name
+        return archive_encapsulated.exists() or archive_flat.exists() or (archive_dir.exists() and archive_dir.is_dir())
 
     def create(
         self,
@@ -77,7 +84,7 @@ class ModuleManager:
         description: str = "",
         tags: Optional[List[str]] = None,
     ) -> Path:
-        """Create new single-file module structure.
+        """Create new single-file module structure at [Folder]/[Folder].md.
 
         Args:
             name: Module name or path (e.g. 'memory-tool' or 'memory-tool/core-system')
@@ -174,7 +181,7 @@ TODO: Document key data structures
         return file_path
 
     def discover_all_modules(self) -> List[Path]:
-        """Discover all modules recursively by finding .md files and legacy dirs.
+        """Discover all modules recursively by finding module markdown files.
 
         Returns:
             List of module relative paths (without .md extension) sorted by path.
@@ -184,17 +191,16 @@ TODO: Document key data structures
 
         modules = set()
 
-        # 1. Discover single-file modules (.md)
         for md_file in self.modules_path.rglob("*.md"):
             # Skip archive directory
             if "archive" in md_file.parts:
                 continue
-            # Skip uppercase meta summary files or index files starting with _ or uppercase special files
+            # Skip uppercase meta summary files or index files starting with _ or special files
             if md_file.name.startswith("_") or md_file.name.isupper() or md_file.name in ["MIGRATION-SUMMARY.md"]:
                 continue
-            # Skip legacy files inside old module directories (module.md, current.md, etc.) if parent is legacy module
+
+            # Case 1: Legacy multi-file module (module.md, current.md, etc.)
             if md_file.name in ["module.md", "current.md", "decisions.md", "dependencies.md", "interface.md"]:
-                # Check if it's legacy module directory
                 legacy_dir = md_file.parent
                 try:
                     rel_legacy = legacy_dir.relative_to(self.modules_path)
@@ -203,11 +209,19 @@ TODO: Document key data structures
                     pass
                 continue
 
+            # Case 2: [Folder]/[Folder].md (e.g. memory-tool/core-system/core-system.md)
+            if md_file.stem == md_file.parent.name:
+                try:
+                    rel_path = md_file.parent.relative_to(self.modules_path)
+                    modules.add(rel_path)
+                    continue
+                except ValueError:
+                    pass
+
+            # Case 3: Flat single-file module (e.g. memory-tool/core-system.md)
             try:
-                rel_path = md_file.relative_to(self.modules_path)
-                # Remove .md suffix
-                module_name_path = rel_path.with_suffix("")
-                modules.add(module_name_path)
+                rel_path = md_file.relative_to(self.modules_path).with_suffix("")
+                modules.add(rel_path)
             except ValueError:
                 continue
 
@@ -245,15 +259,14 @@ TODO: Document key data structures
 
         if include_archived and self.archive_path.exists():
             archived = []
-            for item in self.archive_path.rglob("*"):
-                if "archive" in item.parts:
-                    if item.is_file() and item.suffix == ".md" and not item.name.startswith("_"):
+            for item in self.archive_path.rglob("*.md"):
+                if "archive" in item.parts and not item.name.startswith("_") and not item.name.isupper():
+                    if item.stem == item.parent.name:
+                        rel = item.parent.relative_to(self.archive_path)
+                        archived.append(str(rel))
+                    else:
                         rel = item.relative_to(self.archive_path).with_suffix("")
                         archived.append(str(rel))
-                    elif item.is_dir() and not item.name.startswith("."):
-                        if (item / "module.md").exists() or (item / "current.md").exists():
-                            rel = item.relative_to(self.archive_path)
-                            archived.append(str(rel))
             archived = list(set(archived))
             archived.sort()
             result["archived"] = archived
@@ -279,9 +292,10 @@ TODO: Document key data structures
     def get_module_info(self, name: str) -> Dict:
         """Get information about a module."""
         file_path = self.get_module_file_path(name)
+        flat_file = self.modules_path / f"{name}.md"
         legacy_dir = self.modules_path / name
 
-        exists = file_path.exists() or (legacy_dir.exists() and legacy_dir.is_dir())
+        exists = file_path.exists() or flat_file.exists() or (legacy_dir.exists() and legacy_dir.is_dir())
         if not exists:
             raise ModuleError(f"Module not found: {name}")
 
@@ -293,49 +307,58 @@ TODO: Document key data structures
         for mod in all_modules:
             mod_str = str(mod)
             if mod_str != name and mod_str.startswith(f"{name}/"):
-                # Direct child check
                 sub = mod_str[len(name) + 1:]
                 if "/" not in sub:
                     children.append(mod_str)
 
         children.sort()
 
+        actual_path = file_path if file_path.exists() else (flat_file if flat_file.exists() else legacy_dir)
+
         return {
             "name": name,
-            "path": file_path if file_path.exists() else legacy_dir,
+            "path": actual_path,
             "parent": parent,
             "children": children,
         }
 
     def migrate_module(self, name_or_path: str) -> Path:
-        """Migrate a legacy multi-file module directory into a single markdown file.
+        """Migrate legacy multi-file or flat module into [Folder]/[Folder].md directory encapsulated structure.
 
         Args:
             name_or_path: Module relative path (e.g. 'memory-tool/core-system')
 
         Returns:
-            Path to newly created single module markdown file (.md)
+            Path to newly created single module markdown file (.md) inside its own folder.
         """
+        target_file = self.get_module_file_path(name_or_path)
+        flat_file = self.modules_path / f"{name_or_path}.md"
         dir_path = self.modules_path / name_or_path
+
+        # Case A: Module is flat file (e.g., .memory/modules/memory-tool/core-system.md)
+        if flat_file.exists() and flat_file.is_file() and flat_file != target_file:
+            target_file.parent.mkdir(parents=True, exist_ok=True)
+            import shutil
+            shutil.move(str(flat_file), str(target_file))
+            return target_file
+
+        # Case B: Already in target format
+        if target_file.exists() and target_file.is_file():
+            return target_file
+
+        # Case C: Legacy directory with multiple files
         if not dir_path.exists() or not dir_path.is_dir():
-            # Check if it's already a single file
-            file_path = self.get_module_file_path(name_or_path)
-            if file_path.exists():
-                return file_path
             raise ModuleError(f"Legacy module directory not found: {name_or_path}")
 
-        # Files to combine in standard order
         std_files = ["module.md", "current.md", "decisions.md", "dependencies.md", "interface.md"]
         combined_sections = []
 
-        # Read module.md first or create header
         module_md_path = dir_path / "module.md"
         if module_md_path.exists():
             combined_sections.append(module_md_path.read_text(encoding="utf-8").strip())
         else:
             combined_sections.append(f"# Module: {Path(name_or_path).name}\n")
 
-        # Section mapping for other standard files
         section_titles = {
             "current.md": "## Current Status",
             "decisions.md": "## Decisions",
@@ -347,38 +370,29 @@ TODO: Document key data structures
             fpath = dir_path / fname
             if fpath.exists():
                 content = fpath.read_text(encoding="utf-8").strip()
-                # Avoid duplicate title if already present in content
                 if not content.startswith("#"):
                     content = f"{default_title}\n\n{content}"
                 combined_sections.append(content)
 
-        # Catch any additional non-standard .md files in legacy directory (not subdirectories)
         for extra_file in dir_path.iterdir():
-            if extra_file.is_file() and extra_file.suffix == ".md" and extra_file.name not in std_files:
+            if extra_file.is_file() and extra_file.suffix == ".md" and extra_file.name not in std_files and extra_file.name != target_file.name:
                 content = extra_file.read_text(encoding="utf-8").strip()
                 combined_sections.append(f"## {extra_file.stem.capitalize()}\n\n{content}")
 
         combined_content = "\n\n---\n\n".join(combined_sections) + "\n"
 
-        target_file = self.get_module_file_path(name_or_path)
         target_file.parent.mkdir(parents=True, exist_ok=True)
         target_file.write_text(combined_content, encoding="utf-8")
 
-        # Clean up legacy standard files
         for fname in std_files:
             fpath = dir_path / fname
             if fpath.exists():
                 fpath.unlink()
 
-        # Remove empty legacy directory if no subdirectories/submodules remain
-        remaining_items = list(dir_path.iterdir())
-        if not remaining_items:
-            dir_path.rmdir()
-
         return target_file
 
     def migrate_all_modules(self) -> List[Path]:
-        """Find and migrate all legacy multi-file module directories into single files.
+        """Find and migrate all legacy multi-file or flat module files into [Folder]/[Folder].md format.
 
         Returns:
             List of created/migrated single module .md file paths.
@@ -387,23 +401,19 @@ TODO: Document key data structures
         if not self.modules_path.exists():
             return migrated
 
-        # Find all legacy directories containing module.md or current.md
-        legacy_dirs = []
-        for current_file in list(self.modules_path.rglob("current.md")) + list(self.modules_path.rglob("module.md")):
-            d = current_file.parent
-            if "archive" not in d.parts and d not in legacy_dirs:
-                legacy_dirs.append(d)
+        # 1. First discover all existing module names
+        all_modules = self.discover_all_modules()
 
-        # Sort deeper directories first so submodules are migrated before parent directories
-        legacy_dirs.sort(key=lambda p: len(p.parts), reverse=True)
+        # Sort deeper modules first so submodules migrate before parents
+        all_modules.sort(key=lambda p: len(p.parts), reverse=True)
 
-        for d in legacy_dirs:
+        for mod_path in all_modules:
+            mod_str = str(mod_path).replace("\\", "/")
             try:
-                rel = d.relative_to(self.modules_path)
-                mpath = self.migrate_module(str(rel))
-                migrated.append(mpath)
+                res = self.migrate_module(mod_str)
+                migrated.append(res)
             except Exception as e:
-                print(f"Warning: Failed to migrate {d}: {e}")
+                print(f"Warning: Failed to migrate module '{mod_str}': {e}")
 
         return migrated
 
