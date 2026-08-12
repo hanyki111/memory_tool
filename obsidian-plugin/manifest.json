@@ -1,0 +1,10 @@
+{
+  "id": "obsidian-memory-tool",
+  "name": "Memory Tool Integration",
+  "version": "1.0.0",
+  "minAppVersion": "0.15.0",
+  "description": "Seamless integration with memory_tool CLI: 0.5s Timeline capture, Module management, and AI Context Generator.",
+  "author": "memory_tool",
+  "authorUrl": "https://github.com/hanyki111/memory_tool",
+  "isDesktopOnly": true
+}

@@ -58,3 +58,7 @@ memory_tool*planner/
 memory_tool*search/
 memory_tool*tui/
 memory_tool*utils/
+
+# Obsidian Plugin
+obsidian-plugin/node_modules/
+obsidian-plugin/main.js

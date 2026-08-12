@@ -1,0 +1,39 @@
+/* Styles for obsidian-memory-tool plugin */
+
+.memory-tool-record-modal {
+  padding: 16px;
+}
+
+.memory-tool-record-modal h3 {
+  margin-top: 0;
+  margin-bottom: 12px;
+  color: var(--text-accent);
+}
+
+.memory-tool-input-textarea {
+  width: 100%;
+  min-height: 100px;
+  margin-bottom: 12px;
+  font-family: var(--font-interface);
+  font-size: 14px;
+}
+
+.memory-tool-modal-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.memory-tool-form-group {
+  margin-bottom: 12px;
+}
+
+.memory-tool-form-group label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.memory-tool-form-group input {
+  width: 100%;
+}
