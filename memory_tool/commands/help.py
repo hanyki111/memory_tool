@@ -883,15 +883,41 @@ Reports broken links and missing files.
 Create, view, and manage knowledge modules.
 Modules are the spatial organization of your knowledge.
 
-Each module contains:
-- current.md: Current state and ongoing work
-- decisions.md: Important decisions and rationale
-- archive/: Historical records
+A module is one markdown file at [Folder]/[Folder].md holding its purpose,
+current state, decisions, dependencies and interface.
+
+Templates (--kind / --nature)
+-----------------------------
+--kind selects a document skeleton. It answers: when this document is wrong,
+is the *knowledge* wrong, or just the *document*?
+
+  knowledge        the knowledge itself is the artifact
+  implementation   code is the source of truth and this module summarizes it
+
+--nature applies to knowledge modules only, and selects the body outline.
+It answers: what makes this module need updating?
+
+  concept     understanding deepens    -> problem, analogy, principle, example
+  reference   the subject is patched   -> lookup tables, formulas, sources
+  analysis    new evidence appears     -> facts, interpretation, red team
+  tracker     time passes              -> snapshots, scenarios, prediction log
+  method      application feedback     -> premises, procedure, failure modes
+
+If unsure between analysis and tracker, ask whether the document has an expiry
+date. If still unsure, choose analysis -- the outline can be swapped later.
+
+Omitting --kind produces the original generic template. Set a project-wide
+default with: mconfig set modules.default_kind knowledge
+
+A project's own templates in <base>/templates/<kind>/ take precedence over the
+bundled ones, so local edits are preserved.
             """,
             "examples": [
                 "mmodule list               # List all modules",
                 "mmodule tree               # Tree view of modules",
                 "mmodule create newproject  # Create new module",
+                "mmodule create asyncio --kind knowledge --nature concept",
+                "mmodule create api --kind implementation --desc \"REST endpoints\"",
                 "mmodule graph              # Visualize connections",
             ],
             "options": [
@@ -908,15 +934,43 @@ Each module contains:
 지식 모듈을 생성, 조회, 관리합니다.
 모듈은 지식의 공간적 조직입니다.
 
-각 모듈에는 다음이 포함됩니다:
-- current.md: 현재 상태와 진행 중인 작업
-- decisions.md: 중요한 결정 사항과 근거
-- archive/: 과거 기록
+모듈은 [폴더]/[폴더].md 하나의 마크다운 파일이며, 목적·현재 상태·결정·의존성·
+인터페이스를 모두 담습니다.
+
+템플릿 (--kind / --nature)
+--------------------------
+--kind 는 문서 골격을 고릅니다. 판별 질문 하나:
+  "이 문서가 틀렸을 때, 틀린 것은 *지식*인가 *문서*인가?"
+
+  knowledge        지식 자체가 산출물 (지식이 틀린 것)
+  implementation   코드가 정본이고 이 모듈은 그 요약 (문서만 낡은 것)
+
+주제가 소프트웨어인지로 판별하지 않습니다. 대응 코드베이스가 없다면 knowledge 입니다.
+
+--nature 는 knowledge 모듈에만 적용되며 본문 목차를 고릅니다. 판별 질문:
+  "무엇이 이 모듈을 갱신시키는가?"
+
+  concept     내 이해가 깊어질 때   -> 문제, 비유, 원리, 예제, 한계, 오해
+  reference   대상이 패치될 때      -> 조회표, 변수, 공식, 출처, 버전 이력
+  analysis    새 증거가 나올 때     -> 사실, 해석, Red Team, Impact
+  tracker     시간이 흐를 때        -> 스냅샷, 시나리오, 예측 로그
+  method      적용 피드백이 올 때   -> 전제, 절차, 체크리스트, 실패 모드
+
+analysis 와 tracker 가 헷갈리면 "이 문서에 유효기간이 있는가?" 하나로 가릅니다.
+그래도 애매하면 analysis 로 두고 넘어갑니다 — 본문만 나중에 갈아끼우면 됩니다.
+분류를 고민하다 기록을 미루는 것이 가장 나쁩니다 (Time First 원칙).
+
+--kind 를 생략하면 기존 범용 템플릿이 생성됩니다. 프로젝트 기본값 설정:
+  mconfig set modules.default_kind knowledge
+
+<기반폴더>/templates/<kind>/ 에 프로젝트 자체 템플릿이 있으면 그것이 우선합니다.
             """,
             "examples": [
                 "mmodule list               # 모든 모듈 나열",
                 "mmodule tree               # 모듈 트리 보기",
                 "mmodule create newproject  # 새 모듈 생성",
+                "mmodule create asyncio --kind knowledge --nature concept",
+                "mmodule create api --kind implementation --desc \"REST 엔드포인트\"",
                 "mmodule graph              # 연결 시각화",
             ],
             "options": [

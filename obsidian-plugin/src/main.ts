@@ -3,6 +3,7 @@ import { MemoryToolCli } from "./cli/memoryToolCli";
 import { RecordModal } from "./modals/RecordModal";
 import { CreateModuleModal } from "./modals/CreateModuleModal";
 import { ModuleSuggestModal } from "./modals/ModuleSuggestModal";
+import { AskModal } from "./modals/AskModal";
 import {
   DEFAULT_BASE,
   describePrefix,
@@ -59,6 +60,11 @@ export default class MemoryToolPlugin extends Plugin {
       } catch (err: any) {
         new Notice(`Failed to build context: ${err.message}`);
       }
+    });
+
+    // 2b. Ribbon Icon: Ask Your Memory
+    this.addRibbonIcon("help-circle", "Ask Your Memory (mask)", () => {
+      new AskModal(this.app, this.cli, () => this.basePrefix).open();
     });
 
     // 3. Command: Quick Record Timeline (Hotkey: Ctrl+Alt+M)
@@ -120,7 +126,17 @@ export default class MemoryToolPlugin extends Plugin {
       },
     });
 
-    // 8. Command: Show resolved base folder
+    // 8. Command: Ask Your Memory (Hotkey: Ctrl+Alt+A)
+    this.addCommand({
+      id: "ask-memory",
+      name: "Ask Your Memory (mask)",
+      hotkeys: [{ modifiers: ["Mod", "Alt"], key: "a" }],
+      callback: () => {
+        new AskModal(this.app, this.cli, () => this.basePrefix).open();
+      },
+    });
+
+    // 9. Command: Show resolved base folder
     this.addCommand({
       id: "show-base-folder",
       name: "Show Knowledge Base Folder (mbase)",

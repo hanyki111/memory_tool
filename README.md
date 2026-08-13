@@ -164,6 +164,76 @@ MEMORY_TOOL_BASE=memory              # 기반 폴더 이름 또는 절대 경로
 
 ---
 
+## 모듈 템플릿 (MOP v3.2)
+
+`mmodule create` 는 두 가지 분류로 문서 골격을 고를 수 있습니다.
+
+### Kind — 문서 골격
+
+> **판별 질문:** 이 문서가 틀렸을 때, 틀린 것은 *지식*인가 *문서*인가?
+
+| Kind | 의미 | 고유 실패 모드 |
+|---|---|---|
+| `knowledge` | 지식 자체가 산출물 | 틀림 (언제 기준으로 맞았는지 모름) |
+| `implementation` | 코드가 정본, 이 모듈은 요약 | 낡음 |
+
+주제가 소프트웨어인지로 판별하지 않습니다. 대응 코드베이스가 없으면 `knowledge` 입니다.
+
+### Nature — 본문 목차 (`knowledge` 전용)
+
+> **판별 질문:** 무엇이 이 모듈을 갱신시키는가?
+
+| Nature | 갱신 트리거 | 본문 형태 | 유효기간 |
+|---|---|---|---|
+| `concept` | 내 이해가 깊어질 때 | 서사형 (문제→비유→원리→예제) | 반영구 |
+| `reference` | 대상이 패치·개정될 때 | 조회형 (조회표→공식→출처) | 버전 종속 |
+| `analysis` | 새 증거가 나올 때 | 논증형 (사실→해석→Red Team) | 수개월 |
+| `tracker` | 시간이 흐를 때 | 운영형 (스냅샷→예측 로그) | 수일~수주 |
+| `method` | 적용 피드백이 올 때 | 절차형 (전제→절차→실패 모드) | 반영구 |
+
+`analysis` ↔ `tracker` 가 헷갈리면 **"이 문서에 유효기간이 있는가?"** 하나로 가릅니다.
+애매하면 `analysis` 로 두고 넘어가세요 — 본문만 나중에 갈아끼우면 됩니다.
+분류를 고민하다 기록을 미루는 것이 가장 나쁩니다.
+
+### 사용
+
+```bash
+mmodule create "asyncio" --kind knowledge --nature concept
+mmodule create "게임 분석/니케/전투 공식" --kind knowledge --nature reference
+mmodule create "api-server" --kind implementation --desc "REST 엔드포인트"
+
+# 프로젝트 기본값 설정 (매번 --kind 안 쓰기)
+mconfig set modules.default_kind knowledge
+```
+
+`--kind` 를 생략하면 기존 범용 템플릿이 생성됩니다 (동작 변경 없음).
+`--nature` 만 주면 `knowledge` 로 간주합니다.
+
+### 프로젝트별 템플릿 재정의
+
+`<기반폴더>/templates/<kind>/` 에 자신의 템플릿을 두면 번들 기본값보다 우선합니다.
+
+```
+<기반폴더>/templates/
+├── knowledge/
+│   ├── module.md       (필수)
+│   ├── current.md      (필수)
+│   ├── natures.md      성격별 §2 본문 5종
+│   ├── decisions.md
+│   ├── dependencies.md
+│   └── interface.md
+└── implementation/
+    └── ...
+```
+
+`module.md` 와 `current.md` 가 모두 있어야 유효한 템플릿 세트로 인식되며,
+불완전하면 번들 기본값으로 폴백합니다.
+
+**치환되는 placeholder:** `[모듈명]`, `[경로]`, `[주제]`, `[모듈]`, `YYYY-MM-DD`,
+`**Kind:**`, `**Nature:**`, `**Tags:**`, 그리고 `## 목적과 목표` 아래의 설명.
+
+---
+
 ## 튜토리얼
 
 Memory Tool의 상세한 사용법을 단계별로 학습할 수 있습니다.

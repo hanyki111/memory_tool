@@ -10,10 +10,29 @@ Obsidian 내에서 `memory_tool` CLI 기능을 사용할 수 있는 커뮤니티
 | 단축키 | 기능 |
 | :--- | :--- |
 | `Ctrl+Alt+M` | ⏱️ 타임라인 0.5초 빠른 기록 |
+| `Ctrl+Alt+A` | 🤔 지식베이스에 질문 (`mask`) |
 | `Ctrl+Alt+G` | 🔍 모듈 퍼지 검색 & 즉시 이동 |
 | `Ctrl+P` → `Create Module` | 📂 새 모듈 생성 (`mmodule create`) |
 | `Ctrl+P` → `Build AI Context` | 🧠 AI 컨텍스트 빌드 (`mcontext`) |
 | `Ctrl+P` → `Check Module Path Health` | 🏥 모듈 경로 건강 체크 (`mcheck`) |
+| `Ctrl+P` → `Show Knowledge Base Folder` | 📁 인식된 기반 폴더 확인 (`mbase`) |
+
+---
+
+## 🤔 지식베이스에 질문하기 (mask)
+
+`Ctrl+Alt+A` 또는 좌측 리본의 ❓ 아이콘으로 엽니다.
+
+- 답변은 **Markdown 으로 렌더링**됩니다 — 표, 목록, 코드 블록이 그대로 보입니다.
+- **경과 시간이 표시**됩니다. LLM 응답은 수십 초가 걸릴 수 있어, 멈춘 것과 구분됩니다.
+- **Sources** 를 펼치면 근거 파일 목록이 나오고, vault 안의 파일은 클릭해서 바로 열립니다.
+- **Insert into note** 로 질문과 답변을 현재 노트 끝에 callout 형태로 추가합니다.
+- **Fast mode** 토글: 도구를 쓰는 에이전트 대신 키워드 검색만 사용합니다. 빠르지만
+  찾은 내용을 후속 조사하지는 못합니다.
+
+> LLM 제공자가 설정되어 있어야 합니다. `mconfig get llm.provider` 로 확인하고,
+> 사용 가능한 목록은 `mproviders` 로 볼 수 있습니다. 제공자가 없으면 모달에
+> 사용 가능한 제공자를 포함한 오류가 표시됩니다.
 
 ---
 

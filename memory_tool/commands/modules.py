@@ -35,6 +35,8 @@ def module(
     preview: bool = typer.Option(False, "--preview", "-p", help="Preview generated module without saving (for from-text action)"),
     lang: Optional[str] = typer.Option(None, "--lang", help="Output language for from-text: 'ko', 'en', 'auto'"),
     structure: Optional[str] = typer.Option(None, "--structure", "-s", help="Module structure type for from-text: 'feature' (software), 'topic' (learning/KB), 'auto'"),
+    kind: Optional[str] = typer.Option(None, "--kind", "-k", help="Template kind for create: 'knowledge' or 'implementation'"),
+    nature: Optional[str] = typer.Option(None, "--nature", help="Body outline for knowledge modules: concept, reference, analysis, tracker, method"),
 ):
     """Manage modules (supports single-file modules, hierarchical paths, wiki-style [[connections]], and AI suggestions)."""
     action = arg_str(action)
@@ -52,13 +54,28 @@ def module(
                 sys.exit(1)
 
             tag_list = [t.strip() for t in tags.split(",")] if tags else []
+            kind_opt = opt_str(kind)
+            nature_opt = opt_str(nature)
 
             console.print(f"[cyan]Creating module '{name}'...[/cyan]")
-            module_path = manager.create(name, description, tag_list)
+            module_path = manager.create(
+                name, description, tag_list, kind=kind_opt, nature=nature_opt
+            )
 
             rel_path = display_path(module_path)
             console.print(f"\n[green]OK[/green] Single-file module created: {name}")
             console.print(f"[dim]File location: {rel_path}[/dim]")
+
+            if kind_opt or nature_opt:
+                label = kind_opt or "knowledge"
+                if nature_opt:
+                    label += f" / {nature_opt}"
+                console.print(f"[dim]Template: {label}[/dim]")
+            else:
+                console.print(
+                    "[dim]Tip: --kind knowledge|implementation applies the MOP "
+                    "templates. See 'mhelp module'.[/dim]"
+                )
 
             try:
                 from memory_tool.utils.suggestion_helper import check_and_suggest_after_command

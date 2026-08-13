@@ -1,11 +1,22 @@
 """Q&A CLI commands for Memory Tool."""
 
+import json
 import sys
 from typing import Optional
 
 import typer
 
 from memory_tool.commands.common import app, console, opt_str
+
+
+def _emit_json(payload: dict) -> None:
+    """Print a single-line JSON result for programmatic callers.
+
+    Uses print() rather than the rich console: rich hard-wraps at the terminal
+    width, which would corrupt the payload and, for plain text answers, inserts
+    line breaks mid-sentence that break Markdown rendering downstream.
+    """
+    print(json.dumps(payload, ensure_ascii=False))
 
 
 @app.command(name="ask")
@@ -19,6 +30,9 @@ def memory_ask(
     no_plans: bool = typer.Option(False, "--no-plans", help="Don't search plans (simple mode only)"),
     days: int = typer.Option(30, "--days", "-d", help="Days of timeline to search (simple mode only)"),
     max_context: int = typer.Option(15, "--max-context", "-c", help="Maximum context items (simple mode only)"),
+    json_output: bool = typer.Option(
+        False, "--json", help="Emit the answer as JSON on one line (for editors and scripts)"
+    ),
 ):
     """Ask a question about your memory (mask command).
 
@@ -54,6 +68,7 @@ def memory_ask(
                 no_plans=no_plans,
                 days=days,
                 max_context=max_context,
+                as_json=json_output,
             )
         else:
             # Use agentic approach (default)
@@ -61,14 +76,25 @@ def memory_ask(
                 question=question,
                 provider=provider,
                 verbose=verbose,
+                as_json=json_output,
             )
 
     except RuntimeError as e:
+        from memory_tool.llm.client import LLMClient
+        available = LLMClient.list_available_providers()
+
+        if json_output:
+            _emit_json({
+                "ok": False,
+                "question": question,
+                "error": str(e),
+                "available_providers": available,
+            })
+            sys.exit(1)
+
         console.print(f"[red]Error:[/red] {e}")
         console.print("\n[dim]Available LLM providers:[/dim]")
 
-        from memory_tool.llm.client import LLMClient
-        available = LLMClient.list_available_providers()
         if available:
             for p in available:
                 console.print(f"  - {p}")
@@ -80,6 +106,10 @@ def memory_ask(
         sys.exit(1)
 
     except Exception as e:
+        if json_output:
+            _emit_json({"ok": False, "question": question, "error": str(e)})
+            sys.exit(1)
+
         console.print(f"[red]Error:[/red] {e}")
         if verbose:
             import traceback
@@ -91,21 +121,33 @@ def _ask_agent(
     question: str,
     provider: Optional[str],
     verbose: bool,
+    as_json: bool = False,
 ):
     """Ask using the agentic approach."""
     from memory_tool.core.memory_agent import MemoryAgent
 
     agent = MemoryAgent()
 
-    if verbose:
+    if verbose and not as_json:
         console.print(f"[dim]Question: {question}[/dim]\n")
         console.print("[bold cyan]Agent Process:[/bold cyan]\n")
 
     result = agent.ask(
         question=question,
         provider=provider,
-        verbose=verbose,
+        verbose=verbose and not as_json,
     )
+
+    if as_json:
+        _emit_json({
+            "ok": True,
+            "mode": "agent",
+            "question": question,
+            "answer": result.answer,
+            "provider": result.provider,
+            "tools": [tc.tool for tc in result.tool_calls],
+        })
+        return
 
     # Show answer
     if verbose:
@@ -141,13 +183,15 @@ def _ask_simple(
     no_plans: bool,
     days: int,
     max_context: int,
+    as_json: bool = False,
 ):
     """Ask using simple keyword-based RAG."""
     from memory_tool.core.memory_qa import MemoryQA
 
     qa = MemoryQA()
 
-    console.print(f"[dim]Searching memory for: {question}[/dim]\n")
+    if not as_json:
+        console.print(f"[dim]Searching memory for: {question}[/dim]\n")
 
     result = qa.ask(
         question=question,
@@ -158,6 +202,24 @@ def _ask_simple(
         max_context_items=max_context,
         provider=provider,
     )
+
+    if as_json:
+        _emit_json({
+            "ok": True,
+            "mode": "simple",
+            "question": question,
+            "answer": result.answer,
+            "provider": result.provider,
+            "context_count": len(result.contexts),
+            # Forward-slashed and de-duplicated: these are shown as links, and
+            # the same file often supplies several context snippets.
+            "sources": sorted({
+                str(getattr(c, "source", "")).replace("\\", "/")
+                for c in result.contexts
+                if getattr(c, "source", "")
+            }),
+        })
+        return
 
     # Show answer
     console.print(f"[bold cyan]Answer:[/bold cyan]\n")

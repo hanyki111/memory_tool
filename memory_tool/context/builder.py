@@ -62,31 +62,75 @@ class ContextBuilder:
             date = today - timedelta(days=i)
             year_month = date.strftime("%Y-%m")
             day = date.strftime("%d")
-            file_path = timeline_path / year_month / f"{day}.md"
 
-            if file_path.exists():
-                paths.append(file_path)
+            # Entries are written to timeline/daily/YYYY-MM/DD.md; the
+            # unprefixed path is the pre-migration location. Checking only the
+            # legacy one meant no timeline ever reached the context file.
+            candidates = (
+                timeline_path / "daily" / year_month / f"{day}.md",
+                timeline_path / year_month / f"{day}.md",
+            )
+
+            for file_path in candidates:
+                if file_path.exists():
+                    paths.append(file_path)
+                    break
 
         return paths
 
-    def get_module_statuses(self) -> Dict[str, Path]:
-        """Get current.md paths for all modules (recursive).
+    def _context_path(self, path: Path) -> str:
+        """Render a path for the context file.
+
+        Always forward-slashed and relative to the project root, so the result
+        is stable across platforms and usable as-is by tools reading the file.
+        A base folder of "." leaves no prefix, which is correct.
+        """
+        try:
+            rel = path.relative_to(self.base_path)
+        except ValueError:
+            return str(path).replace("\\", "/")
+        return str(rel).replace("\\", "/")
+
+    def _module_manager(self):
+        """ModuleManager for this project, for layout-aware module discovery."""
+        from memory_tool.core.module import ModuleManager
+
+        return ModuleManager(self.base_path)
+
+    def get_module_docs(self) -> Dict[str, Path]:
+        """Get the primary document path for every module.
+
+        Handles all three module layouts. The previous ``rglob("current.md")``
+        found only legacy multi-file modules, so projects using the current
+        single-file layout appeared to have almost no modules.
 
         Returns:
-            Dictionary mapping module names to current.md paths
+            Dictionary mapping module names to their main markdown file
         """
         modules_path = self.memory_path / "modules"
         if not modules_path.exists():
             return {}
 
-        statuses = {}
+        manager = self._module_manager()
+        docs = {}
 
-        # Recursively find all current.md files
-        for current_file in modules_path.rglob("current.md"):
-            # Get module name as relative path from modules/
-            module_rel_path = current_file.parent.relative_to(modules_path)
-            module_name = str(module_rel_path).replace("\\", "/")
-            statuses[module_name] = current_file
+        for module_rel in manager.discover_all_modules():
+            module_name = str(module_rel).replace("\\", "/")
+            doc = manager.resolve_module_doc(module_name)
+            if doc is not None:
+                docs[module_name] = doc
+
+        return docs
+
+    def get_module_statuses(self) -> Dict[str, Path]:
+        """Get the primary document path for all modules (recursive).
+
+        Retained for backward compatibility; delegates to get_module_docs().
+
+        Returns:
+            Dictionary mapping module names to their main markdown file
+        """
+        statuses = self.get_module_docs()
 
         return statuses
 
@@ -240,21 +284,32 @@ class ContextBuilder:
                 except Exception:
                     pass  # Skip files that can't be read
 
-            # Check current.md
+            # Check the module's main document. Under the single-file layout
+            # everything lives in <folder>/<folder>.md rather than current.md,
+            # so checking only current.md missed those modules entirely.
             current_file = module_path / "current.md"
+            if not current_file.exists():
+                candidate = module_path / f"{module_path.name}.md"
+                current_file = candidate if candidate.exists() else current_file
+
             if current_file.exists():
                 try:
                     content = current_file.read_text(encoding="utf-8")
                     line_count = len(content.splitlines())
 
-                    if line_count > 200:
-                        if line_count > 400:
+                    # A single-file module holds what used to be five files, so
+                    # judge it against the combined budget instead of current.md's.
+                    is_single_file = current_file.name != "current.md"
+                    warn_at, urgent_at = (600, 1000) if is_single_file else (200, 400)
+
+                    if line_count > warn_at:
+                        if line_count > urgent_at:
                             suggestion = "⚠️ Very large, consider archiving"
                         else:
                             suggestion = "Consider reviewing"
                         health_issues.append({
                             "module": module_name,
-                            "file": "current.md",
+                            "file": current_file.name,
                             "lines": line_count,
                             "suggestion": suggestion,
                         })
@@ -285,16 +340,15 @@ class ContextBuilder:
         if not modules_path.exists():
             return mappings
 
-        for current_file in modules_path.rglob("current.md"):
+        for module_name, current_file in self.get_module_docs().items():
+            # For a flat single-file module the document sits beside its
+            # siblings, so the module "directory" is the file's own folder.
             module_dir = current_file.parent
-            module_name = str(
-                module_dir.relative_to(modules_path)
-            ).replace("\\", "/")
 
             # Parse Related Files
             related_files = get_module_related_files(module_dir)
 
-            # Extract description from current.md (first > blockquote)
+            # Extract description from the module doc (first > blockquote)
             description = ""
             try:
                 content = current_file.read_text(encoding="utf-8")
@@ -358,10 +412,9 @@ class ContextBuilder:
             lines.append("## Recent Timeline")
             lines.append("")
             for path in timeline_paths:
-                rel_path = path.relative_to(self.base_path)
                 # Extract date from path
                 date_str = path.parent.name + "-" + path.stem
-                lines.append(f"- **{date_str}**: `./{rel_path}`")
+                lines.append(f"- **{date_str}**: `{self._context_path(path)}`")
             lines.append("")
         else:
             lines.append("## Recent Timeline")
@@ -433,8 +486,7 @@ class ContextBuilder:
             lines.append("## Module Status")
             lines.append("")
             for module_name, status_path in sorted(module_statuses.items()):
-                rel_path = status_path.relative_to(self.base_path)
-                lines.append(f"- **{module_name}**: `./{rel_path}`")
+                lines.append(f"- **{module_name}**: `{self._context_path(status_path)}`")
             lines.append("")
         else:
             lines.append("## Module Status")

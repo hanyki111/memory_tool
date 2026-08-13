@@ -68,6 +68,43 @@ class ModuleManager:
         dir_path = self.modules_path / name
         return dir_path.exists() and dir_path.is_dir() and ((dir_path / "module.md").exists() or (dir_path / "current.md").exists())
 
+    #: Filenames used by the legacy multi-file module layout, in the order they
+    #: should be preferred when looking for a module's main document.
+    LEGACY_DOC_NAMES = ("current.md", "module.md")
+
+    def resolve_module_doc(self, name: str) -> Optional[Path]:
+        """Find a module's primary markdown document.
+
+        Three layouts exist and all are still readable:
+          1. ``<name>/<basename>.md``  -- current single-file encapsulation
+          2. ``<name>.md``             -- flat single file
+          3. ``<name>/current.md``     -- legacy multi-file
+
+        Callers that only checked for ``current.md`` silently skipped every
+        module in the first two layouts.
+
+        Args:
+            name: Module name or relative path
+
+        Returns:
+            Path to the module's main document, or None if none exists.
+        """
+        encapsulated = self.get_module_file_path(name)
+        if encapsulated.is_file():
+            return encapsulated
+
+        flat = self.modules_path / f"{name}.md"
+        if flat.is_file():
+            return flat
+
+        module_dir = self.modules_path / name
+        for legacy_name in self.LEGACY_DOC_NAMES:
+            legacy = module_dir / legacy_name
+            if legacy.is_file():
+                return legacy
+
+        return None
+
     def is_archived(self, name: str) -> bool:
         """Check if module is archived."""
         if not self.archive_path.exists():
@@ -84,6 +121,8 @@ class ModuleManager:
         name: str,
         description: str = "",
         tags: Optional[List[str]] = None,
+        kind: Optional[str] = None,
+        nature: Optional[str] = None,
     ) -> Path:
         """Create new single-file module structure at [Folder]/[Folder].md.
 
@@ -91,6 +130,11 @@ class ModuleManager:
             name: Module name or path (e.g. 'memory-tool' or 'memory-tool/core-system')
             description: Module description
             tags: Module tags
+            kind: Template kind -- "knowledge" or "implementation". When omitted,
+                the value of ``modules.default_kind`` in config is used; if that
+                is unset too, the original generic template is produced.
+            nature: Body outline for knowledge modules (concept, reference,
+                analysis, tracker, method)
 
         Returns:
             Path to created single markdown file
@@ -111,6 +155,17 @@ class ModuleManager:
 
         file_path = self.get_module_file_path(name)
         file_path.parent.mkdir(parents=True, exist_ok=True)
+
+        resolved_kind = self._resolve_kind(kind, nature)
+        if resolved_kind is not None:
+            return self._create_from_template(
+                file_path=file_path,
+                name=name,
+                kind=resolved_kind,
+                nature=nature,
+                description=description,
+                tags=tags,
+            )
 
         timestamp = datetime.now().strftime("%Y-%m-%d")
         tags_str = ", ".join(tags) if tags else ""
@@ -173,6 +228,67 @@ TODO: Document public interfaces, commands, or APIs
 ### Data Structures
 TODO: Document key data structures
 """
+
+        try:
+            file_path.write_text(content, encoding="utf-8")
+        except Exception as e:
+            raise ModuleError(f"Failed to create module file: {e}")
+
+        return file_path
+
+    def _resolve_kind(self, kind: Optional[str], nature: Optional[str]) -> Optional[str]:
+        """Decide which template kind to use.
+
+        Explicit ``kind`` wins. Otherwise ``modules.default_kind`` from config
+        applies, which lets a knowledge-oriented project opt in once instead of
+        passing --kind on every create. A bare ``nature`` implies knowledge,
+        since only knowledge modules have one.
+
+        Returns:
+            The kind name, or None to use the original generic template.
+        """
+        if kind:
+            return kind
+        if nature:
+            from memory_tool.core.module_templates import NATURE_KIND
+
+            return NATURE_KIND
+
+        try:
+            from memory_tool.utils.config import Config
+
+            configured = Config(self.memory_path).get("modules.default_kind")
+        except Exception:
+            return None
+
+        return configured or None
+
+    def _create_from_template(
+        self,
+        file_path: Path,
+        name: str,
+        kind: str,
+        nature: Optional[str],
+        description: str,
+        tags: Optional[List[str]],
+    ) -> Path:
+        """Write a module assembled from the MOP templates."""
+        from memory_tool.core.module_templates import (
+            TemplateError,
+            build_module_document,
+        )
+
+        try:
+            content = build_module_document(
+                name=name,
+                kind=kind,
+                nature=nature,
+                description=description,
+                tags=tags,
+                memory_path=self.memory_path,
+            )
+        except TemplateError as e:
+            raise ModuleError(str(e)) from e
 
         try:
             file_path.write_text(content, encoding="utf-8")

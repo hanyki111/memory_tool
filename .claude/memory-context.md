@@ -1,12 +1,12 @@
 # Memory Context
 
-**Generated:** 2026-08-13 21:03
+**Generated:** 2026-08-13 23:20
 
 ---
 
 ## Recent Timeline
 
-*No recent timeline entries found.*
+- **2026-08-13**: `.memory/timeline/daily/2026-08/13.md`
 
 ---
 
@@ -18,7 +18,21 @@
 
 ## Module Status
 
-- **archive/memory-system**: `./.memory\modules\archive\memory-system\current.md`
+- **master**: `.memory/modules/master/master.md`
+- **memory-tool**: `.memory/modules/memory-tool/memory-tool.md`
+- **memory-tool/core-system**: `.memory/modules/memory-tool/core-system/core-system.md`
+- **memory-tool/core-system/PLAN-phase3-plan-system**: `.memory/modules/memory-tool/core-system/PLAN-phase3-plan-system/PLAN-phase3-plan-system.md`
+- **memory-tool/knowledge-graph-system**: `.memory/modules/memory-tool/knowledge-graph-system/knowledge-graph-system.md`
+- **memory-tool/knowledge-graph-system/discussion**: `.memory/modules/memory-tool/knowledge-graph-system/discussion/discussion.md`
+- **memory-tool/llm-integration**: `.memory/modules/memory-tool/llm-integration/llm-integration.md`
+- **memory-tool/module-system**: `.memory/modules/memory-tool/module-system/module-system.md`
+- **memory-tool/project-management**: `.memory/modules/memory-tool/project-management/project-management.md`
+- **memory-tool/project-management/MIGRATION-PLAN**: `.memory/modules/memory-tool/project-management/MIGRATION-PLAN/MIGRATION-PLAN.md`
+- **memory-tool/project-management/PLAN-document-consolidation**: `.memory/modules/memory-tool/project-management/PLAN-document-consolidation/PLAN-document-consolidation.md`
+- **memory-tool/project-management/PLAN-external-release**: `.memory/modules/memory-tool/project-management/PLAN-external-release/PLAN-external-release.md`
+- **memory-tool/project-management/PLAN-phase5a-document-management**: `.memory/modules/memory-tool/project-management/PLAN-phase5a-document-management/PLAN-phase5a-document-management.md`
+- **memory-tool/search-system**: `.memory/modules/memory-tool/search-system/search-system.md`
+- **memory-tool/ui-system**: `.memory/modules/memory-tool/ui-system/ui-system.md`
 
 ---
 
@@ -26,12 +40,23 @@
 
 ### 🔴 CRITICAL (>600/400 lines)
 
+- **memory-tool/memory-tool.md**: 8222 lines - ⚠️ Very large, should archive soon
+  - Quick action: `marchive memory-tool --module memory-tool --interactive`
 - **archive/memory-system/decisions.md**: 692 lines - ⚠️ Very large, should archive soon
   - Quick action: `marchive decisions --module archive/memory-system --interactive`
+- **memory-tool/core-system/core-system.md**: 1070 lines - ⚠️ Very large, should archive soon
+  - Quick action: `marchive core-system --module memory-tool/core-system --interactive`
+- **memory-tool/knowledge-graph-system/knowledge-graph-system.md**: 1315 lines - ⚠️ Very large, should archive soon
+  - Quick action: `marchive knowledge-graph-system --module memory-tool/knowledge-graph-system --interactive`
+- **memory-tool/project-management/project-management.md**: 2640 lines - ⚠️ Very large, should archive soon
+  - Quick action: `marchive project-management --module memory-tool/project-management --interactive`
 
 ### 🟡 WARNING (300-600/200-400 lines)
 
 - **archive/memory-system/current.md**: 234 lines - Consider reviewing
+- **memory-tool/llm-integration/llm-integration.md**: 831 lines - Consider reviewing
+- **memory-tool/module-system/module-system.md**: 667 lines - Consider reviewing
+- **memory-tool/knowledge-graph-system/discussion/discussion.md**: 608 lines - Consider reviewing
 
 ### ✅ Quick Actions
 

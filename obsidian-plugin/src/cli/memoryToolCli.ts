@@ -1,5 +1,64 @@
 import { exec } from "child_process";
 
+/**
+ * Escape a value for embedding in a double-quoted shell argument.
+ *
+ * Backslashes first, then quotes -- reversing the order would double-escape the
+ * backslashes introduced by the quote replacement. Newlines are collapsed
+ * because a raw newline would terminate the command.
+ */
+function escapeArg(value: string): string {
+  return value
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/[\r\n]+/g, " ")
+    .trim();
+}
+
+/**
+ * Find the last line of output that parses as a JSON object.
+ *
+ * Update notices and warnings can precede the payload, so scanning backwards is
+ * more robust than assuming the JSON is the only output.
+ */
+function parseLastJsonObject(output: string): Record<string, any> | null {
+  const lines = output
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.startsWith("{"));
+
+  for (let i = lines.length - 1; i >= 0; i--) {
+    try {
+      const data = JSON.parse(lines[i]);
+      if (data && typeof data === "object") return data;
+    } catch {
+      // keep scanning
+    }
+  }
+  return null;
+}
+
+/** Per-call overrides for a CLI invocation. */
+interface ExecOptions {
+  /** Kill the process after this many ms (LLM calls need a generous value). */
+  timeout?: number;
+  /** stdout buffer cap; long answers and module lists can be large. */
+  maxBuffer?: number;
+}
+
+/** A memory Q&A result from `mask --json`. */
+export interface AskResult {
+  question: string;
+  answer: string;
+  provider: string;
+  /** "agent" (tool-using) or "simple" (keyword RAG) */
+  mode: string;
+  /** Tools the agent invoked; empty in simple mode */
+  tools: string[];
+  /** Files that supplied context, vault-relative where available */
+  sources: string[];
+}
+
 /** Resolved locations reported by `mbase show --json`. */
 export interface BaseInfo {
   /** Absolute project root path */
@@ -30,14 +89,24 @@ export class MemoryToolCli {
     this.pythonPath = path || "python";
   }
 
-  private executeCommand(cmd: string): Promise<string> {
+  private executeCommand(cmd: string, opts: ExecOptions = {}): Promise<string> {
     return new Promise((resolve, reject) => {
       const fullCmd = `${this.pythonPath} -m memory_tool ${cmd}`;
-      const options = this.cwd ? { cwd: this.cwd } : {};
+
+      const options: Record<string, unknown> = {
+        // memory_tool prints Korean; without this Windows uses cp949 and mangles it.
+        env: { ...process.env, PYTHONIOENCODING: "utf-8" },
+        maxBuffer: opts.maxBuffer ?? 1024 * 1024 * 16,
+      };
+      if (this.cwd) options.cwd = this.cwd;
+      if (opts.timeout) options.timeout = opts.timeout;
 
       exec(fullCmd, options, (error, stdout, stderr) => {
         if (error) {
-          reject(new Error(stderr || error.message));
+          // A failing command may still have written a useful message to stdout
+          // (the CLI reports errors there), so prefer whichever is non-empty.
+          const detail = (stderr || "").trim() || (stdout || "").trim();
+          reject(new Error(detail || error.message));
         } else {
           resolve(stdout.trim());
         }
@@ -93,6 +162,53 @@ export class MemoryToolCli {
   }
 
   /**
+   * Ask a natural-language question about the knowledge base (mask).
+   *
+   * Uses --json so the answer arrives unwrapped: the human-facing output is
+   * hard-wrapped to the terminal width, which inserts line breaks mid-sentence
+   * and breaks Markdown rendering in a note.
+   *
+   * @param question Natural language question
+   * @param opts simple: keyword RAG instead of the agent; provider: override;
+   *             timeoutMs: how long to wait for the model
+   */
+  public async ask(
+    question: string,
+    opts: { simple?: boolean; provider?: string; timeoutMs?: number } = {}
+  ): Promise<AskResult> {
+    const parts = [`ask "${escapeArg(question)}"`, "--json"];
+    if (opts.simple) parts.push("--simple");
+    if (opts.provider) parts.push(`--provider "${escapeArg(opts.provider)}"`);
+
+    const output = await this.executeCommand(parts.join(" "), {
+      timeout: opts.timeoutMs ?? 300000,
+    });
+
+    const data = parseLastJsonObject(output);
+    if (!data) {
+      throw new Error(`Could not parse the answer from memory_tool:\n${output}`);
+    }
+    if (data.ok === false) {
+      const providers = Array.isArray(data.available_providers)
+        ? data.available_providers.join(", ")
+        : "";
+      throw new Error(
+        String(data.error ?? "memory_tool reported a failure") +
+          (providers ? ` (available providers: ${providers})` : "")
+      );
+    }
+
+    return {
+      question: String(data.question ?? question),
+      answer: String(data.answer ?? ""),
+      provider: String(data.provider ?? "unknown"),
+      mode: String(data.mode ?? ""),
+      tools: Array.isArray(data.tools) ? data.tools.map(String) : [],
+      sources: Array.isArray(data.sources) ? data.sources.map(String) : [],
+    };
+  }
+
+  /**
    * Ask memory_tool where the knowledge base is, as absolute paths.
    *
    * Absolute paths matter: the base *name* is relative to the project root,
@@ -101,29 +217,19 @@ export class MemoryToolCli {
    */
   public async getBaseInfo(): Promise<BaseInfo> {
     const output = await this.executeCommand("base show --json");
+    const data = parseLastJsonObject(output);
 
-    // Other lines (update notices, warnings) may precede the JSON, so scan
-    // backwards for the last line that parses as an object.
-    const lines = output.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
-    for (let i = lines.length - 1; i >= 0; i--) {
-      if (!lines[i].startsWith("{")) continue;
-      try {
-        const data = JSON.parse(lines[i]);
-        if (typeof data.base === "string" && typeof data.root === "string") {
-          return {
-            root: data.root,
-            base: data.base,
-            baseName: data.base_name ?? "",
-            source: data.source ?? "unknown",
-            found: Boolean(data.found),
-          };
-        }
-      } catch {
-        // keep scanning
-      }
+    if (!data || typeof data.base !== "string" || typeof data.root !== "string") {
+      throw new Error("memory_tool did not report a usable base folder");
     }
 
-    throw new Error("memory_tool did not report a usable base folder");
+    return {
+      root: data.root,
+      base: data.base,
+      baseName: data.base_name ?? "",
+      source: data.source ?? "unknown",
+      found: Boolean(data.found),
+    };
   }
 }
 

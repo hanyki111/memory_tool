@@ -37,3 +37,84 @@
 .memory-tool-form-group input {
   width: 100%;
 }
+
+/* --- Ask (mask) modal --- */
+
+.memory-tool-ask-modal {
+  padding: 16px;
+}
+
+.memory-tool-ask-modal h3 {
+  margin-top: 0;
+  margin-bottom: 12px;
+  color: var(--text-accent);
+}
+
+.memory-tool-ask-modal .memory-tool-input-textarea {
+  min-height: 72px;
+}
+
+.memory-tool-ask-status {
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* An LLM answer can be long, so cap the height and scroll inside the modal
+   rather than letting it push the buttons off screen. */
+.memory-tool-ask-answer {
+  max-height: 45vh;
+  overflow-y: auto;
+  margin-top: 8px;
+}
+
+.memory-tool-ask-answer:not(:empty) {
+  padding: 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  background-color: var(--background-secondary);
+}
+
+.memory-tool-ask-answer > :first-child {
+  margin-top: 0;
+}
+
+.memory-tool-ask-answer > :last-child {
+  margin-bottom: 0;
+}
+
+/* Wide answer content (tables, code) scrolls on its own axis so the modal
+   itself never scrolls sideways. */
+.memory-tool-ask-answer pre,
+.memory-tool-ask-answer table {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.memory-tool-ask-error {
+  color: var(--text-error);
+}
+
+.memory-tool-ask-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.memory-tool-ask-sources {
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.memory-tool-ask-sources summary {
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+.memory-tool-ask-sources ul {
+  margin: 6px 0 0;
+  padding-left: 20px;
+}
+
+.memory-tool-ask-sources a {
+  cursor: pointer;
+}
