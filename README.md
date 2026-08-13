@@ -79,6 +79,91 @@ mcontext
 
 ---
 
+## 기반 폴더 설정 (Base Folder)
+
+기본적으로 지식베이스는 `.memory/` 에 저장됩니다. 하지만 **Obsidian 은 `.` 으로 시작하는
+폴더를 숨김 처리**하기 때문에, 볼트 안에서는 `.memory/` 를 다룰 수 없습니다.
+
+기반 폴더 이름은 설정으로 바꿀 수 있습니다.
+
+### 확인
+
+```bash
+mbase show           # 현재 기반 폴더와 그것을 찾은 경로(포인터/레거시/환경변수)
+```
+
+### 초기화 시 지정
+
+```bash
+minit                    # .memory/ (기본값)
+minit --base memory      # memory/ — Obsidian 에서 보이는 이름
+minit --base .           # 프로젝트 루트 자체를 기반 폴더로 사용
+```
+
+`--base .` 를 쓰면 기록 경로에 접두사가 붙지 않습니다.
+
+```
+minit --base memory        →  memory/timeline/daily/2026-08/13.md
+minit --base .             →  timeline/daily/2026-08/13.md
+```
+
+### 나중에 변경 (rename)
+
+```bash
+mbase set memory --dry-run   # 무엇이 바뀌는지 먼저 확인
+mbase set memory             # .memory/ → memory/
+mbase set .                  # 내용을 프로젝트 루트로 이동
+mbase set . --rewrite-all    # 이동 + 모든 마크다운 참조 재작성
+```
+
+`mbase set` 은 적용 전에 계획을 보여주고 확인을 받습니다. 이동 중 실패하면 자동으로
+롤백하므로 지식베이스가 두 위치에 쪼개지지 않습니다.
+
+| 옵션 | 설명 |
+|---|---|
+| `--dry-run` | 변경 없이 계획만 출력 |
+| `--rewrite-all` | 모듈 Related Files 뿐 아니라 모든 마크다운 참조까지 재작성 |
+| `--no-rewrite` | 마크다운 참조를 건드리지 않음 |
+| `--no-git-update` | `.gitignore` 를 건드리지 않음 |
+| `--root <경로>` | 대상 프로젝트를 명시 (상위 프로젝트일 때 필수) |
+| `-y`, `--yes` | 확인 프롬프트 생략 |
+
+### 동작 방식
+
+프로젝트 루트의 작은 포인터 파일 `.memory-tool.yml` 이 기반 폴더 이름을 담습니다.
+
+```yaml
+base: "memory"
+```
+
+실제 설정은 그대로 `<기반폴더>/config.yaml` 에 있습니다. 설정 파일이 기반 폴더 *안에*
+있으므로, 설정을 읽어서 폴더 이름을 알아내는 것은 순환 문제가 됩니다. 포인터 파일이
+그 고리를 끊습니다.
+
+포인터 파일이 없는 기존 프로젝트는 자동으로 `.memory/` 를 사용하므로 **별도 마이그레이션이
+필요하지 않습니다.**
+
+환경 변수로 덮어쓸 수도 있습니다 (테스트·CI 용):
+
+```bash
+MEMORY_TOOL_ROOT=/path/to/project    # 프로젝트 루트
+MEMORY_TOOL_BASE=memory              # 기반 폴더 이름 또는 절대 경로
+```
+
+### 주의 사항
+
+- **`--base .` 일 때 검색 범위**: 프로젝트 루트가 기반 폴더이면 `timeline`, `modules`,
+  `concepts`, `plans`, `reviews`, `summaries`, `docs` 만 검색·색인합니다. `venv/`,
+  `.git/`, `node_modules/` 로 내려가지 않기 위한 제한이며, 다른 위치의 노트는
+  검색되지 않습니다.
+- **`.gitignore`**: `.memory/` → `memory/` 로 바꾸면 `mbase` 가 규칙도 함께 바꿔
+  계속 무시 상태를 유지합니다. 볼트를 커밋하고 싶다면 그 줄을 직접 지우세요.
+  루트로 옮기는 경우 규칙을 주석 처리하고 경고합니다 — `git status` 를 먼저 확인하세요.
+- **타 프로젝트의 `kb.path`**: 이 프로젝트를 가리키는 다른 프로젝트의 설정은 자동으로
+  고쳐지지 않습니다. 직접 수정해야 합니다.
+
+---
+
 ## 튜토리얼
 
 Memory Tool의 상세한 사용법을 단계별로 학습할 수 있습니다.

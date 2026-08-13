@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import Optional
 from datetime import datetime, timedelta
 
+from memory_tool.utils.paths import base_dir_for_root, get_project_root
+
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Vertical, Horizontal, VerticalScroll
@@ -97,14 +99,8 @@ class MemoryBrowser(App):
         self.title = "Memory Tool - Enhanced Browser"
 
     def _find_project_root(self) -> Path:
-        """Find project root (parent of .memory/) directory."""
-        current = Path.cwd()
-        while current != current.parent:
-            memory_path = current / ".memory"
-            if memory_path.exists() and memory_path.is_dir():
-                return current
-            current = current.parent
-        return Path.cwd()
+        """Find the project root (the directory containing the base folder)."""
+        return get_project_root()
 
     def compose(self) -> ComposeResult:
         """Create child widgets."""

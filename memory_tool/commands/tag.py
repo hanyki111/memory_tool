@@ -11,6 +11,7 @@ import typer
 
 from memory_tool.commands.common import app, console
 from memory_tool.utils.config import Config
+from memory_tool.utils.paths import get_base_path
 
 
 def get_display_width(text: str) -> int:
@@ -147,7 +148,7 @@ def _run_tag_list(
     """Internal function to run tag list logic."""
     from memory_tool.search.filters import TagCollector
 
-    memory_path = Path.cwd() / ".memory"
+    memory_path = get_base_path()
     if not memory_path.exists():
         console.print("[red]ERROR[/red] .memory/ not found. Run 'minit' first.")
         raise typer.Exit(1)
@@ -311,7 +312,7 @@ def tag_replace(
     """
     from memory_tool.search.filters import TagManager
 
-    memory_path = Path.cwd() / ".memory"
+    memory_path = get_base_path()
     if not memory_path.exists():
         console.print("[red]ERROR[/red] .memory/ not found. Run 'minit' first.")
         raise typer.Exit(1)
@@ -387,7 +388,7 @@ def tag_delete(
     """
     from memory_tool.search.filters import TagManager
 
-    memory_path = Path.cwd() / ".memory"
+    memory_path = get_base_path()
     if not memory_path.exists():
         console.print("[red]ERROR[/red] .memory/ not found. Run 'minit' first.")
         raise typer.Exit(1)
@@ -458,7 +459,7 @@ def tag_find(
     """
     from memory_tool.search.filters import TagManager
 
-    memory_path = Path.cwd() / ".memory"
+    memory_path = get_base_path()
     if not memory_path.exists():
         console.print("[red]ERROR[/red] .memory/ not found. Run 'minit' first.")
         raise typer.Exit(1)

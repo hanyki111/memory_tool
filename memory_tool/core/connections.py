@@ -9,6 +9,7 @@ import sqlite3
 from pathlib import Path
 from typing import List, Dict, Set, Tuple, Optional
 from datetime import datetime
+from memory_tool.utils.paths import get_base_path
 
 
 class ConnectionError(Exception):
@@ -144,7 +145,7 @@ class ConnectionGraph:
             db_path: Path to SQLite database (defaults to .memory/.connections.db)
         """
         if db_path is None:
-            db_path = Path.cwd() / ".memory" / ".connections.db"
+            db_path = get_base_path() / ".connections.db"
 
         self.db_path = db_path
         self._ensure_database()
@@ -401,7 +402,7 @@ class ConnectionGraph:
             Number of connections found
         """
         if modules_path is None:
-            modules_path = Path.cwd() / ".memory" / "modules"
+            modules_path = get_base_path() / "modules"
 
         if not modules_path.exists():
             raise ConnectionError(f"Modules directory not found: {modules_path}")
@@ -662,7 +663,7 @@ class ConnectionGraph:
         Returns:
             True if module directory exists
         """
-        modules_dir = Path.cwd() / ".memory" / "modules"
+        modules_dir = get_base_path() / "modules"
         module_dir = modules_dir / module_path
         return module_dir.exists() and module_dir.is_dir()
 
@@ -709,7 +710,7 @@ class ConnectionGraph:
         Returns:
             Description string or None if not found
         """
-        modules_dir = Path.cwd() / ".memory" / "modules"
+        modules_dir = get_base_path() / "modules"
         module_md = modules_dir / module_path / "module.md"
 
         if not module_md.exists():

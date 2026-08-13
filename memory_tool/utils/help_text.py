@@ -602,7 +602,84 @@ Claude Code 연동을 위한 .claude/ 디렉토리도 생성합니다.
     minit                          # 현재 디렉토리에 초기화
     minit --force                  # 재초기화 (덮어쓰기)
     minit --kb /path/to/kb         # 지식 베이스 경로 설정
+    minit --base memory            # 기반 폴더를 memory/ 로 (Obsidian 에서 보임)
+    minit --base .                 # 현재 디렉토리 자체를 기반 폴더로
     minit --update-docs            # 문서 템플릿 업데이트
+""",
+        },
+    },
+
+    "base": {
+        "short": {
+            "en": "Show or change the knowledge base folder",
+            "ko": "지식베이스 기반 폴더 확인 및 변경",
+        },
+        "long": {
+            "en": """Show or change the folder that holds the knowledge base.
+
+The base folder holds timeline/, modules/, concepts/ and config.yaml. Its name
+is recorded in a .memory-tool.yml pointer file at the project root, so it can be
+renamed without breaking anything.
+
+Obsidian hides dot-prefixed folders, so the default ".memory" is invisible
+inside a vault. Use a visible name, or the vault root itself.
+
+Actions:
+  show    Print the base folder and how it was determined
+  set     Rename the base folder
+
+Only recognized knowledge base entries are moved (timeline, modules, concepts,
+plans, reviews, summaries, docs, config.yaml and generated caches), so unrelated
+project files are never touched. A failed move rolls back.
+
+Options:
+  --dry-run         Show the plan without changing anything
+  --rewrite-all     Rewrite all markdown refs, not just Related Files sections
+  --no-rewrite      Leave markdown references alone
+  --no-git-update   Leave .gitignore alone
+  --root PATH       Name the target project explicitly
+  --porcelain       With 'show': print only the base folder name
+  -y, --yes         Skip the confirmation prompt
+
+Examples:
+    mbase show                     # Where is the base folder, and why
+    mbase show --porcelain         # Just the name, for scripts
+    mbase set memory               # .memory/ -> memory/
+    mbase set . --dry-run          # Preview moving content to the project root
+    mbase set . --rewrite-all      # Move to root and rewrite all markdown refs
+""",
+            "ko": """지식베이스를 담고 있는 기반 폴더를 확인하거나 변경합니다.
+
+기반 폴더는 timeline/, modules/, concepts/, config.yaml 을 담습니다. 폴더 이름은
+프로젝트 루트의 .memory-tool.yml 포인터 파일에 기록되므로, 이름을 바꿔도 아무것도
+깨지지 않습니다.
+
+Obsidian 은 . 으로 시작하는 폴더를 숨기므로 기본값 ".memory" 는 볼트에서 보이지
+않습니다. 보이는 이름이나 볼트 루트를 사용하세요.
+
+작업:
+  show    기반 폴더와 그것을 찾은 경로 표시
+  set     기반 폴더 이름 변경
+
+인식된 지식베이스 항목만 이동합니다 (timeline, modules, concepts, plans, reviews,
+summaries, docs, config.yaml, 생성된 캐시). 무관한 프로젝트 파일은 건드리지 않으며,
+이동 실패 시 자동 롤백됩니다.
+
+옵션:
+  --dry-run         변경 없이 계획만 표시
+  --rewrite-all     Related Files 뿐 아니라 모든 마크다운 참조 재작성
+  --no-rewrite      마크다운 참조를 건드리지 않음
+  --no-git-update   .gitignore 를 건드리지 않음
+  --root 경로       대상 프로젝트를 명시
+  --porcelain       show 와 함께: 기반 폴더 이름만 출력
+  -y, --yes         확인 프롬프트 생략
+
+예시:
+    mbase show                     # 기반 폴더 위치와 판단 근거
+    mbase show --porcelain         # 이름만 출력 (스크립트용)
+    mbase set memory               # .memory/ -> memory/
+    mbase set . --dry-run          # 루트로 이동 미리보기
+    mbase set . --rewrite-all      # 루트로 이동 + 모든 마크다운 참조 재작성
 """,
         },
     },

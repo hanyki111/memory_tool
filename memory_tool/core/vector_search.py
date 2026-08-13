@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import List, Dict, Optional, Tuple
 from datetime import datetime
 import re
+from memory_tool.utils.paths import get_base_path
 
 try:
     from sentence_transformers import SentenceTransformer
@@ -210,17 +211,12 @@ class VectorSearcher:
         self.cache = EmbeddingCache(self.cache_dir)
 
     def _find_memory_root(self) -> Path:
-        """Find .memory/ directory in current or parent directories."""
-        current = Path.cwd()
-        while current != current.parent:
-            memory_path = current / ".memory"
-            if memory_path.exists() and memory_path.is_dir():
-                return memory_path
-            current = current.parent
+        """Find the knowledge base folder.
 
-        raise VectorSearchError(
-            "No .memory/ directory found. Run 'minit' first."
-        )
+        Delegates to the central resolver so the configurable base folder
+        name (and a base of ".") is honoured.
+        """
+        return get_base_path()
 
     def _collect_timeline_entries(
         self,

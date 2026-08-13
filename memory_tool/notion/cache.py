@@ -2,6 +2,7 @@ import json
 import os
 from pathlib import Path
 from typing import Dict, Optional
+from memory_tool.utils.paths import get_base_path
 
 class NotionCache:
     """Manages local cache for Notion page IDs to reduce API calls."""
@@ -15,7 +16,7 @@ class NotionCache:
                          Secondary uses 'notion_pages_{backend_name}.json'.
         """
         # Determine cache path: .memory/cache/notion_pages.json
-        self.base_path = Path.cwd() / ".memory"
+        self.base_path = get_base_path()
         self.cache_dir = self.base_path / "cache"
         if backend_name and backend_name != "primary":
             self.cache_file = self.cache_dir / f"notion_pages_{backend_name}.json"

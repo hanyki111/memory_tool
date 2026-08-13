@@ -3,6 +3,7 @@
 from typing import Optional
 import typer
 from memory_tool.commands.common import app, console
+from memory_tool.utils.paths import get_base_path
 
 
 # Detailed help content (bilingual)
@@ -1543,6 +1544,102 @@ Bash, Zsh, PowerShell을 지원합니다.
         },
     },
 
+    "base": {
+        "en": {
+            "name": "mbase / base",
+            "summary": "Show or change the knowledge base folder",
+            "description": """
+Show or change the folder that holds the knowledge base.
+
+The base folder holds timeline/, modules/, concepts/ and config.yaml. Its name
+is recorded in a .memory-tool.yml pointer file at the project root, so it can
+be renamed at any time.
+
+Obsidian hides dot-prefixed folders, so the default ".memory" is invisible
+inside a vault. Use a visible name, or the vault root itself.
+
+Base folder and timeline path:
+  .memory   ->  .memory/timeline/daily/2026-08/13.md   (hidden in Obsidian)
+  memory    ->  memory/timeline/daily/2026-08/13.md
+  .         ->  timeline/daily/2026-08/13.md
+
+Safety:
+  - Only recognized entries move (timeline, modules, concepts, plans, reviews,
+    summaries, docs, config.yaml, generated caches). Project files are untouched.
+  - A failed move rolls back, so the base is never split across two locations.
+  - The working directory must be the project root, or --root must name it.
+
+With base ".", only the known content folders are searched and indexed, so
+venv/, .git/ and node_modules/ are never scanned.
+            """,
+            "examples": [
+                "mbase show                  # Where is the base folder, and why",
+                "mbase show --porcelain      # Just the name, for scripts",
+                "mbase set memory --dry-run  # Preview the rename",
+                "mbase set memory            # .memory/ -> memory/",
+                "mbase set .                 # Move content to the project root",
+                "mbase set . --rewrite-all   # Also rewrite all markdown refs",
+            ],
+            "options": [
+                ("show", "Print the base folder and how it was determined"),
+                ("set", "Rename the base folder"),
+                ("--dry-run", "Show the plan without changing anything"),
+                ("--rewrite-all", "Rewrite all markdown refs, not just Related Files"),
+                ("--no-rewrite", "Leave markdown references alone"),
+                ("--no-git-update", "Leave .gitignore alone"),
+                ("--root PATH", "Name the target project explicitly"),
+                ("--porcelain", "With 'show': print only the base folder name"),
+                ("-y, --yes", "Skip the confirmation prompt"),
+            ],
+        },
+        "ko": {
+            "name": "mbase / base (기반 폴더)",
+            "summary": "지식베이스 기반 폴더 확인 및 변경",
+            "description": """
+지식베이스를 담고 있는 기반 폴더를 확인하거나 변경합니다.
+
+기반 폴더는 timeline/, modules/, concepts/, config.yaml 을 담습니다. 폴더 이름은
+프로젝트 루트의 .memory-tool.yml 포인터 파일에 기록되므로 언제든 바꿀 수 있습니다.
+
+Obsidian 은 . 으로 시작하는 폴더를 숨기므로 기본값 ".memory" 는 볼트에서 보이지
+않습니다. 보이는 이름이나 볼트 루트를 사용하세요.
+
+기반 폴더와 타임라인 경로:
+  .memory   ->  .memory/timeline/daily/2026-08/13.md   (Obsidian 에서 숨김)
+  memory    ->  memory/timeline/daily/2026-08/13.md
+  .         ->  timeline/daily/2026-08/13.md
+
+안전 장치:
+  - 인식된 항목만 이동합니다 (timeline, modules, concepts, plans, reviews,
+    summaries, docs, config.yaml, 생성된 캐시). 프로젝트 파일은 건드리지 않습니다.
+  - 이동 실패 시 롤백되어 지식베이스가 두 위치로 쪼개지지 않습니다.
+  - 현재 디렉토리가 프로젝트 루트여야 하며, 아니면 --root 로 명시해야 합니다.
+
+기반 폴더가 "." 인 경우 알려진 콘텐츠 폴더만 검색·색인하므로 venv/, .git/,
+node_modules/ 는 절대 스캔하지 않습니다.
+            """,
+            "examples": [
+                "mbase show                  # 기반 폴더 위치와 판단 근거",
+                "mbase show --porcelain      # 이름만 출력 (스크립트용)",
+                "mbase set memory --dry-run  # 변경 내용 미리보기",
+                "mbase set memory            # .memory/ -> memory/",
+                "mbase set .                 # 내용을 프로젝트 루트로 이동",
+                "mbase set . --rewrite-all   # 모든 마크다운 참조까지 재작성",
+            ],
+            "options": [
+                ("show", "기반 폴더와 판단 근거 표시"),
+                ("set", "기반 폴더 이름 변경"),
+                ("--dry-run", "변경 없이 계획만 표시"),
+                ("--rewrite-all", "Related Files 외 모든 마크다운 참조 재작성"),
+                ("--no-rewrite", "마크다운 참조를 건드리지 않음"),
+                ("--no-git-update", ".gitignore 를 건드리지 않음"),
+                ("--root 경로", "대상 프로젝트를 명시"),
+                ("--porcelain", "show 와 함께: 기반 폴더 이름만 출력"),
+                ("-y, --yes", "확인 프롬프트 생략"),
+            ],
+        },
+    },
+
     "config": {
         "en": {
             "name": "mconfig / config",
@@ -1815,7 +1912,7 @@ def _set_config_language(lang: str) -> bool:
     from pathlib import Path
 
     try:
-        memory_path = Path.cwd() / ".memory"
+        memory_path = get_base_path()
         config_path = memory_path / "config.yaml"
 
         if not memory_path.exists():
@@ -2246,6 +2343,7 @@ def _show_command_help(command: str, lang: str):
         "mplan": "plan",
         "mtag": "tag",
         "mcache": "cache",
+        "mbase": "base", "기반": "base",
     }
     cmd = cmd_map.get(command, command)
 

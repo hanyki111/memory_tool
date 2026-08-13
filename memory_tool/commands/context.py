@@ -9,6 +9,7 @@ import typer
 from memory_tool.commands.common import app, console, resolve_module_name
 from memory_tool.context.builder import ContextBuilder, ContextError
 from memory_tool.utils.path_checker import PathChecker
+from memory_tool.utils.paths import display_path, get_base_path
 
 
 @app.command()
@@ -35,7 +36,7 @@ def context(
     if check_health_only:
         from memory_tool.utils.health_checker import DocumentHealthChecker
 
-        memory_dir = Path.cwd() / ".memory"
+        memory_dir = get_base_path()
         checker = DocumentHealthChecker(memory_dir)
 
         critical_issues = checker.get_critical_issues()
@@ -72,7 +73,7 @@ def context(
 
         if not quiet:
             try:
-                rel_path = result_path.relative_to(Path.cwd())
+                rel_path = display_path(result_path)
             except ValueError:
                 rel_path = result_path
             console.print(f"[green]OK[/green] Context built successfully")
@@ -139,7 +140,7 @@ def context(
             from memory_tool.context.related_files import get_module_related_files
             from memory_tool.core.module import ModuleManager
 
-            memory_path = Path.cwd() / ".memory"
+            memory_path = get_base_path()
             if not memory_path.exists():
                 console.print("[yellow]![/yellow] .memory/ not found, skipping interface update")
             else:
@@ -308,7 +309,7 @@ def code_map(
             sys.exit(0)
 
         if interface:
-            memory_path = Path.cwd() / ".memory"
+            memory_path = get_base_path()
             if not memory_path.exists():
                 console.print("[red]ERROR[/red] .memory/ not found. Run 'minit' first.")
                 sys.exit(1)
@@ -327,7 +328,7 @@ def code_map(
             interface_file.write_text(interface_content, encoding="utf-8")
 
             console.print(f"[green]OK[/green] Generated interface.md for {module_name}")
-            console.print(f"  → {interface_file.relative_to(Path.cwd())}")
+            console.print(f"  → {display_path(interface_file)}")
             return
 
         formatter = CodeMapFormatter(depth=DepthLevel(depth), include_private=private)

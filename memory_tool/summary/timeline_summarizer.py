@@ -11,6 +11,7 @@ from ..llm.prompt_builder import PromptBuilder
 from ..core.timeline import Timeline
 from ..utils.config import Config
 from .context import ContextGatherer
+from memory_tool.utils.paths import display_path, get_base_path
 
 
 class TimelineSummarizer:
@@ -33,7 +34,7 @@ class TimelineSummarizer:
         self.prompt_builder = PromptBuilder(max_context_tokens=max_tokens)
 
         # Summary directory
-        self.summary_dir = Path.cwd() / ".memory" / "summaries"
+        self.summary_dir = get_base_path() / "summaries"
         self.summary_dir.mkdir(parents=True, exist_ok=True)
 
     def get_content_hash(self, file_path: Path) -> str:
@@ -135,7 +136,7 @@ class TimelineSummarizer:
         # Get relative path, handling both absolute and relative paths
         try:
             if source_file.is_absolute():
-                source_path = source_file.relative_to(Path.cwd()).as_posix()
+                source_path = display_path(source_file).as_posix()
             else:
                 source_path = source_file.as_posix()
         except ValueError:

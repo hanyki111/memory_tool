@@ -13,6 +13,7 @@ from textual.widgets import (
     ListView,
 )
 from rich.text import Text
+from memory_tool.utils.paths import base_dir_for_root
 
 
 class NodeList(ListView):
@@ -76,7 +77,7 @@ class GraphMode(Static):
     def __init__(self, base_path: Path, **kwargs):
         super().__init__(**kwargs)
         self.base_path = base_path
-        self.db_path = base_path / ".memory" / ".connections.db"
+        self.db_path = base_dir_for_root(base_path) / ".connections.db"
         self.selected_node: Optional[str] = None
         self.nodes: List[Tuple[str, int]] = []  # (module_name, connection_count)
         self.sort_by_connections = True

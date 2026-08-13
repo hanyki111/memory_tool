@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from ..llm.client import LLMClient
 from .module import ModuleManager
+from memory_tool.utils.paths import base_dir_for_root, get_project_root
 
 
 @dataclass
@@ -49,9 +50,9 @@ class AIModuleGenerator:
             llm_client: LLM client (creates one if not provided)
         """
         if base_path is None:
-            base_path = Path.cwd()
+            base_path = get_project_root()
         self.base_path = Path(base_path)
-        self.memory_path = self.base_path / ".memory"
+        self.memory_path = base_dir_for_root(self.base_path)
         self.modules_path = self.memory_path / "modules"
 
         self.llm_client = llm_client or LLMClient()

@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from memory_tool.utils.paths import base_dir_for_root, get_project_root
 
 
 @dataclass
@@ -40,9 +41,9 @@ class MemoryQA:
             base_path: Base path for project. Defaults to current directory.
         """
         if base_path is None:
-            base_path = Path.cwd()
+            base_path = get_project_root()
         self.base_path = Path(base_path)
-        self.memory_path = self.base_path / ".memory"
+        self.memory_path = base_dir_for_root(self.base_path)
 
         # Load config
         from memory_tool.utils.config import Config

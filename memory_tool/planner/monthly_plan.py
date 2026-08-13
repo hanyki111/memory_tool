@@ -8,6 +8,7 @@ import calendar
 from datetime import datetime, date, timedelta
 from pathlib import Path
 from typing import Optional, Tuple, List
+from memory_tool.utils.paths import get_base_path
 
 
 class MonthlyPlan:
@@ -27,16 +28,12 @@ class MonthlyPlan:
         self.template_path = self.plans_path / "templates" / "monthly.md"
 
     def _find_memory_root(self) -> Path:
-        """Find .memory/ directory in current or parent directories."""
-        current = Path.cwd()
-        while current != current.parent:
-            memory_path = current / ".memory"
-            if memory_path.exists() and memory_path.is_dir():
-                return memory_path
-            current = current.parent
+        """Find the knowledge base folder.
 
-        # Default to current directory
-        return Path.cwd() / ".memory"
+        Delegates to the central resolver so the configurable base folder
+        name (and a base of ".") is honoured.
+        """
+        return get_base_path()
 
     def get_plan_path(self, target_date: Optional[date] = None) -> Path:
         """Get path for monthly plan file.

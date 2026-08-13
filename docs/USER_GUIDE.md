@@ -38,6 +38,7 @@
 - [Performance Optimization](#performance-optimization)
 
 ### [Part 5: Configuration](#part-5-configuration)
+- [Base Folder](#base-folder)
 - [config.yaml Reference](#configyaml-reference)
 - [Environment Variables](#environment-variables)
 - [Best Practices](#best-practices)
@@ -3345,6 +3346,96 @@ du -sh .memory/modules
 ---
 
 # Part 5: Configuration
+
+## Base Folder
+
+The knowledge base lives in `.memory/` by default. Because **Obsidian hides
+dot-prefixed folders**, that default is unusable inside a vault, so the folder
+name is configurable.
+
+### Where is it?
+
+```bash
+mbase show              # Base folder, and how it was determined
+mbase show --porcelain  # Just the folder name (for scripts)
+```
+
+### Choosing it at init time
+
+```bash
+minit                # .memory/            (default)
+minit --base memory  # memory/             visible in Obsidian
+minit --base .       # the project root itself
+```
+
+The base determines every content path:
+
+| Base | Timeline path |
+|---|---|
+| `.memory` | `.memory/timeline/daily/2026-08/13.md` |
+| `memory` | `memory/timeline/daily/2026-08/13.md` |
+| `.` | `timeline/daily/2026-08/13.md` |
+
+### Renaming it later
+
+```bash
+mbase set memory --dry-run   # Preview first
+mbase set memory             # .memory/ -> memory/
+mbase set .                  # Move content to the project root
+```
+
+`mbase set` prints a plan and asks for confirmation. It moves only recognized
+knowledge-base entries (`timeline/`, `modules/`, `concepts/`, `plans/`,
+`reviews/`, `summaries/`, `docs/`, `config.yaml` and generated caches), so
+unrelated project files are never touched. A failed move rolls back.
+
+| Option | Effect |
+|---|---|
+| `--dry-run` | Show the plan, change nothing |
+| `--rewrite-all` | Rewrite every markdown reference, not just Related Files |
+| `--no-rewrite` | Leave markdown references alone |
+| `--no-git-update` | Leave `.gitignore` alone |
+| `--root <path>` | Name the target project explicitly |
+| `-y`, `--yes` | Skip the confirmation prompt |
+
+By default only **Related Files** sections are rewritten, because those are what
+`mcheck` validates. Prose and historical records keep their original wording;
+use `--rewrite-all` to change those too.
+
+### How discovery works
+
+A small pointer file at the project root records the name:
+
+```yaml
+# .memory-tool.yml
+base: "memory"
+```
+
+The real settings stay at `<base>/config.yaml`. Since that file lives *inside*
+the folder being named, reading config to discover the folder would be circular
+— the pointer file breaks the cycle.
+
+Discovery order:
+
+1. `MEMORY_TOOL_ROOT` / `MEMORY_TOOL_BASE` environment variables
+2. `.memory-tool.yml` pointer file, searched upward from the working directory
+3. A legacy `.memory/` directory, searched upward
+
+Step 3 means **existing projects need no migration**.
+
+### Caveats
+
+- **Search scope with `--base .`**: only the known content folders are searched
+  and indexed. This keeps `venv/`, `.git/` and `node_modules/` out, but notes
+  stored elsewhere in the project will not be found.
+- **`minit --base .` refuses to overwrite** an existing `README.md`,
+  `config.yaml`, `docs/` and so on. Use a subfolder base, or move those aside.
+- **`mbase set` requires the working directory to be the project root**, or
+  `--root` to name it. Discovery walks upward, so without this a rename run in
+  an unrelated folder could target a parent project.
+- **Cross-project `kb.path`** references are not auto-updated.
+
+---
 
 ## config.yaml Reference
 

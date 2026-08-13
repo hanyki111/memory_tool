@@ -8,6 +8,7 @@ from typing import Optional, Literal
 from ..llm.client import LLMClient
 from ..llm.prompts import get_prompt_for_language, detect_language
 from ..utils.config import Config
+from memory_tool.utils.paths import display_path, get_base_path
 
 
 class ModuleSummarizer:
@@ -24,7 +25,7 @@ class ModuleSummarizer:
         self.config = Config()
 
         # Summary directory
-        self.summary_dir = Path.cwd() / ".memory" / "summaries"
+        self.summary_dir = get_base_path() / "summaries"
         self.summary_dir.mkdir(parents=True, exist_ok=True)
 
     def _get_output_language(
@@ -158,7 +159,7 @@ class ModuleSummarizer:
         # Get relative path, handling both absolute and relative paths
         try:
             if module_path.is_absolute():
-                source_path = module_path.relative_to(Path.cwd()).as_posix()
+                source_path = display_path(module_path).as_posix()
             else:
                 source_path = module_path.as_posix()
         except ValueError:
@@ -231,7 +232,7 @@ generated: {timestamp}
 
         # Get module relative path for summary filename
         try:
-            module_relative = module_path.relative_to(Path.cwd() / ".memory" / "modules")
+            module_relative = module_path.relative_to(get_base_path() / "modules")
             module_relative_path = module_relative.as_posix()
         except ValueError:
             # If not in standard location, use module name
@@ -286,7 +287,7 @@ generated: {timestamp}
             FileNotFoundError: If modules directory doesn't exist
         """
         if modules_root is None:
-            modules_root = Path.cwd() / ".memory" / "modules"
+            modules_root = get_base_path() / "modules"
 
         if not modules_root.exists():
             raise FileNotFoundError(f"Modules directory not found: {modules_root}")

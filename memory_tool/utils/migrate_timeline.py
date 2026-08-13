@@ -7,6 +7,7 @@ to new structure (timeline/daily/YYYY-MM/DD.md).
 from pathlib import Path
 from typing import List, Tuple
 import shutil
+from memory_tool.utils.paths import base_dir_for_root, get_project_root
 
 
 class TimelineMigrationError(Exception):
@@ -24,9 +25,9 @@ class TimelineMigrator:
             base_path: Base path for .memory/ directory. Defaults to current directory.
         """
         if base_path is None:
-            base_path = Path.cwd()
+            base_path = get_project_root()
         self.base_path = Path(base_path)
-        self.memory_path = self.base_path / ".memory"
+        self.memory_path = base_dir_for_root(self.base_path)
         self.timeline_path = self.memory_path / "timeline"
         self.daily_path = self.timeline_path / "daily"
 

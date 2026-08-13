@@ -11,6 +11,7 @@ from memory_tool.context.related_files import (
     RelatedFilesParser,
     get_module_related_files,
 )
+from memory_tool.utils.paths import base_dir_for_root, get_project_root
 
 
 @dataclass
@@ -166,9 +167,9 @@ class PathChecker:
             base_path: Base path for the project. Defaults to cwd.
         """
         if base_path is None:
-            base_path = Path.cwd()
+            base_path = get_project_root()
         self.base_path = Path(base_path)
-        self.memory_path = self.base_path / ".memory"
+        self.memory_path = base_dir_for_root(self.base_path)
         self.modules_path = self.memory_path / "modules"
         self.cache_path = self.memory_path / self.CACHE_FILE
         self.parser = RelatedFilesParser()

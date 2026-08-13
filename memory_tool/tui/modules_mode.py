@@ -13,6 +13,7 @@ from textual.widgets import (
 )
 from textual.widgets.tree import TreeNode
 from rich.text import Text
+from memory_tool.utils.paths import base_dir_for_root
 
 
 class ModulesMode(Static):
@@ -67,7 +68,7 @@ class ModulesMode(Static):
     def __init__(self, base_path: Path, **kwargs):
         super().__init__(**kwargs)
         self.base_path = base_path
-        self.modules_path = base_path / ".memory" / "modules"
+        self.modules_path = base_dir_for_root(base_path) / "modules"
         self.selected_module: Optional[str] = None
         self.module_tree_data: Dict = {}
 
@@ -178,7 +179,7 @@ class ModulesMode(Static):
         from memory_tool.core.connections import ConnectionGraph
 
         try:
-            graph = ConnectionGraph(db_path=self.base_path / ".memory" / ".connections.db")
+            graph = ConnectionGraph(db_path=base_dir_for_root(self.base_path) / ".connections.db")
 
             # Get outgoing connections
             outgoing = graph.get_connections_from(module_name)

@@ -4,6 +4,7 @@ from pathlib import Path
 from datetime import date, datetime, timedelta
 from typing import Dict, List, Optional, Literal
 import re
+from memory_tool.utils.paths import get_base_path
 
 
 class ContextGatherer:
@@ -17,7 +18,7 @@ class ContextGatherer:
             memory_root: Path to .memory/ directory. Defaults to .memory/ in cwd.
         """
         if memory_root is None:
-            memory_root = Path.cwd() / ".memory"
+            memory_root = get_base_path()
         self.memory_root = Path(memory_root)
 
     def gather_for_timeline(

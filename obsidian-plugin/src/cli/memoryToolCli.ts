@@ -78,4 +78,20 @@ export class MemoryToolCli {
   public async checkHealth(): Promise<string> {
     return this.executeCommand("check");
   }
+
+  /**
+   * Ask memory_tool which folder holds the knowledge base.
+   *
+   * Returns the folder name relative to the vault root, or "." when the vault
+   * root itself is the base. Obsidian hides dot-prefixed folders, so a vault
+   * is usually configured with a visible name or with ".".
+   */
+  public async getBaseName(): Promise<string> {
+    const output = await this.executeCommand("base show --porcelain");
+    const name = output.trim().split("\n").pop()?.trim() ?? "";
+    if (!name) {
+      throw new Error("memory_tool did not report a base folder name");
+    }
+    return name;
+  }
 }

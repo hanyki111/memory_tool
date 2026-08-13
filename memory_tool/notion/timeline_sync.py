@@ -9,6 +9,7 @@ import time as time_module
 from memory_tool.notion.client import NotionClient, NotionError
 from memory_tool.notion.models import TimelineSyncConfig
 from memory_tool.utils.config import Config
+from memory_tool.utils.paths import get_base_path
 
 
 class TimelineSyncer:
@@ -50,20 +51,12 @@ class TimelineSyncer:
         self.entry_pattern = re.compile(r"^- (\d{1,2}:\d{2})\s*\|\s*(.+)$", re.MULTILINE)
 
     def _find_memory_root(self) -> Path:
-        """Find .memory directory from current working directory."""
-        current = Path.cwd()
+        """Find the knowledge base folder.
 
-        if (current / ".memory").exists():
-            return current / ".memory"
-
-        for parent in current.parents:
-            if (parent / ".memory").exists():
-                return parent / ".memory"
-
-        raise FileNotFoundError(
-            "Could not find .memory directory. "
-            "Run 'minit' to initialize or navigate to a project with .memory/"
-        )
+        Delegates to the central resolver so the configurable base folder
+        name (and a base of ".") is honoured.
+        """
+        return get_base_path()
 
     def _get_local_timezone_str(self) -> str:
         """Get local timezone offset string (e.g., +09:00)."""

@@ -11,6 +11,7 @@ from .embedding_cache import (
     get_embedding_cache,
     SimilarityCalculator,
 )
+from memory_tool.utils.paths import get_base_path
 
 
 class SuggestionCache:
@@ -247,19 +248,8 @@ class AIConnectionSuggester:
         self.embedding_filter = EmbeddingPreFilter(cache_dir=cache_dir) if use_embedding_filter else None
 
     def _find_cache_dir(self) -> Path:
-        """Find or create cache directory."""
-        # Look for .memory/ directory
-        current = Path.cwd()
-        while current != current.parent:
-            memory_path = current / ".memory"
-            if memory_path.exists() and memory_path.is_dir():
-                cache_dir = memory_path / ".cache"
-                cache_dir.mkdir(parents=True, exist_ok=True)
-                return cache_dir
-            current = current.parent
-
-        # Fall back to current directory
-        cache_dir = Path.cwd() / ".memory" / ".cache"
+        """Find or create the cache directory inside the knowledge base folder."""
+        cache_dir = get_base_path() / ".cache"
         cache_dir.mkdir(parents=True, exist_ok=True)
         return cache_dir
 

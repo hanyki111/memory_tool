@@ -10,6 +10,7 @@ import typer
 from memory_tool.commands.common import app, console, opt_str, arg_str, resolve_module_name
 from memory_tool.llm.client import LLMClient
 from memory_tool.summary import TimelineSummarizer, ModuleSummarizer
+from memory_tool.utils.paths import display_path, get_base_path
 
 
 def _interactive_carryover(tasks: List[str], task_type: str = "task") -> List[str]:
@@ -93,7 +94,7 @@ def summary(
                 else:
                     console.print(f"[cyan]Summarizing decisions.md from '{resolved_module}'...[/cyan]")
 
-                module_path = Path.cwd() / ".memory" / "modules" / resolved_module
+                module_path = get_base_path() / "modules" / resolved_module
                 decisions_file = module_path / "decisions.md"
 
                 if not decisions_file.exists():
@@ -129,7 +130,7 @@ Provide a clear, structured summary in markdown format."""
                         system_prompt="You are a technical analyst specializing in software project documentation."
                     )
                 else:
-                    cache_dir = Path.cwd() / ".memory" / "summaries"
+                    cache_dir = get_base_path() / "summaries"
                     cache_file = cache_dir / f"{cache_key}.md"
 
                     if cache_file.exists():
@@ -151,7 +152,7 @@ Provide a clear, structured summary in markdown format."""
                     console.print(f"[cyan]Summarizing module '{resolved_module}'...[/cyan]")
 
                 summarizer = ModuleSummarizer(llm_client)
-                module_path = Path.cwd() / ".memory" / "modules" / resolved_module
+                module_path = get_base_path() / "modules" / resolved_module
 
                 summary_text = summarizer.summarize_module(
                     module_path, force=force, output_language=lang
@@ -293,7 +294,7 @@ def plan(
         import subprocess
         import os
 
-        memory_path = Path.cwd() / ".memory"
+        memory_path = get_base_path()
 
         if not memory_path.exists():
             console.print("[red]ERROR[/red] .memory/ not found. Run 'minit' first.")
@@ -398,7 +399,7 @@ def plan(
                     # Default: create plan
                     plan_path = plan_mgr.create_plan()
                     console.print(f"[green]OK[/green] Daily plan ready")
-                    console.print(f"  → {plan_path.relative_to(Path.cwd())}")
+                    console.print(f"  → {display_path(plan_path)}")
 
                     editor = os.environ.get('EDITOR')
                     if editor:
@@ -495,7 +496,7 @@ def plan(
 
                     plan_path = plan_mgr.create_plan()
                     console.print(f"[green]OK[/green] Weekly plan ready")
-                    console.print(f"  → {plan_path.relative_to(Path.cwd())}")
+                    console.print(f"  → {display_path(plan_path)}")
 
                     editor = os.environ.get('EDITOR')
                     if editor:
@@ -537,7 +538,7 @@ def plan(
                 else:
                     plan_path = plan_mgr.create_plan()
                     console.print(f"[green]OK[/green] Monthly plan ready")
-                    console.print(f"  → {plan_path.relative_to(Path.cwd())}")
+                    console.print(f"  → {display_path(plan_path)}")
 
                     editor = os.environ.get('EDITOR')
                     if editor:
@@ -588,7 +589,7 @@ def plan(
                 else:
                     plan_path = plan_mgr.create_plan(name)
                     console.print(f"[green]OK[/green] Module plan ready: {name}")
-                    console.print(f"  → {plan_path.relative_to(Path.cwd())}")
+                    console.print(f"  → {display_path(plan_path)}")
 
                     editor = os.environ.get('EDITOR')
                     if editor:
@@ -622,7 +623,7 @@ def plan(
 
             filepath = manager.save_plan(plan_obj)
             console.print(f"[green]OK[/green] Plan created:")
-            console.print(f"  → {filepath.relative_to(Path.cwd())}")
+            console.print(f"  → {display_path(filepath)}")
 
         elif action == "list":
             plans = manager.list_plans()

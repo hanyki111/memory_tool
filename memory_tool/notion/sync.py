@@ -20,6 +20,7 @@ from memory_tool.notion.models import (
     ConflictResolution,
 )
 from memory_tool.utils.config import Config
+from memory_tool.utils.paths import base_dir_for_root
 
 
 class NotionSyncError(NotionError):
@@ -39,7 +40,7 @@ class ModuleSyncer:
                            If provided, uses that backend's client and sync config.
         """
         self.base_path = base_path or Path.cwd()
-        self.memory_path = self.base_path / ".memory"
+        self.memory_path = base_dir_for_root(self.base_path)
         self.modules_path = self.memory_path / "modules"
 
         self.config = Config()

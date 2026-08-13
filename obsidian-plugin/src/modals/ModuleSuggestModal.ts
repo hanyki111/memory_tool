@@ -1,13 +1,16 @@
 import { App, FuzzySuggestModal, TFile } from "obsidian";
 import { MemoryToolCli } from "../cli/memoryToolCli";
+import { DEFAULT_BASE, moduleCandidatePaths } from "../paths";
 
 export class ModuleSuggestModal extends FuzzySuggestModal<string> {
   private cli: MemoryToolCli;
   private modules: string[] = [];
+  private getBaseName: () => string;
 
-  constructor(app: App, cli: MemoryToolCli) {
+  constructor(app: App, cli: MemoryToolCli, getBaseName?: () => string) {
     super(app);
     this.cli = cli;
+    this.getBaseName = getBaseName ?? (() => DEFAULT_BASE);
     this.setPlaceholder("Type to search active memory_tool modules...");
   }
 
@@ -25,12 +28,8 @@ export class ModuleSuggestModal extends FuzzySuggestModal<string> {
   }
 
   onChooseItem(item: string, evt: MouseEvent | KeyboardEvent): void {
-    const modBasename = item.split("/").pop() || item;
-    // Follows [Folder]/[Folder].md convention
-    const possiblePaths = [
-      `.memory/modules/${item}/${modBasename}.md`,
-      `.memory/modules/${item}.md`,
-    ];
+    // Follows [Folder]/[Folder].md convention, under the configured base folder
+    const possiblePaths = moduleCandidatePaths(this.getBaseName(), item);
 
     let foundFile: TFile | null = null;
 

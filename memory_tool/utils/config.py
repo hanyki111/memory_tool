@@ -85,7 +85,8 @@ class Config:
         """Initialize config manager.
 
         Args:
-            memory_path: Path to .memory/ directory. If None, searches from cwd.
+            memory_path: Path to the base folder. If None, it is resolved from
+                the pointer file (or a legacy .memory/ directory).
         """
         if memory_path is None:
             memory_path = self._find_memory_path()
@@ -95,24 +96,18 @@ class Config:
         self._config = None
 
     def _find_memory_path(self) -> Optional[Path]:
-        """Find .memory/ directory from current directory upwards.
+        """Find the base folder, honouring the configurable base name.
+
+        The base folder name is not necessarily ".memory", so this delegates to
+        the central resolver rather than probing a hardcoded name.
 
         Returns:
-            Path to .memory/ if found, None otherwise
+            Path to the base folder if one exists, None otherwise
         """
-        current = Path.cwd()
+        from memory_tool.utils.paths import get_paths
 
-        # Check current and parent directories (up to 5 levels)
-        for _ in range(5):
-            memory_path = current / ".memory"
-            if memory_path.exists() and memory_path.is_dir():
-                return memory_path
-
-            if current.parent == current:
-                break
-            current = current.parent
-
-        return None
+        paths = get_paths()
+        return paths.base if paths.found else None
 
     def load(self, strict: bool = False) -> dict:
         """Load configuration from config.yaml.

@@ -19,6 +19,7 @@ from memory_tool.core.sort import TimelineSorter, SortError
 from memory_tool.context.builder import ContextBuilder
 from memory_tool.utils.config import Config
 from memory_tool.review import ReviewManager
+from memory_tool.utils.paths import display_path, get_base_path
 
 
 @app.command(
@@ -90,7 +91,7 @@ def record(
 
         time_str = dt.strftime("%H:%M")
         date_str = dt.strftime("%Y-%m-%d")
-        rel_path = file_path.relative_to(Path.cwd())
+        rel_path = display_path(file_path)
 
         console.print(f"[green]OK[/green] Recorded at {date_str} {time_str}")
         console.print(f"[dim]-> {rel_path}[/dim]")
@@ -102,7 +103,7 @@ def record(
                 console.print("[dim]Auto-updating context...[/dim]")
                 builder = ContextBuilder()
                 context_path = builder.write_context()
-                rel_context = context_path.relative_to(Path.cwd())
+                rel_context = display_path(context_path)
                 console.print(f"[dim]-> {rel_context} updated[/dim]")
         except Exception as e:
             console.print(f"[yellow]Warning:[/yellow] Auto-update failed: {e}")
@@ -111,7 +112,7 @@ def record(
         try:
             from memory_tool.utils.suggestion_helper import check_and_suggest_after_command
 
-            memory_dir = Path.cwd() / ".memory"
+            memory_dir = get_base_path()
             check_and_suggest_after_command(memory_dir, "m", force=False)
         except Exception:
             pass
@@ -702,7 +703,7 @@ def review(
         import os
         import subprocess
 
-        memory_path = Path.cwd() / ".memory"
+        memory_path = get_base_path()
 
         if not memory_path.exists():
             console.print("[red]ERROR[/red] .memory/ not found. Run 'minit' first.")
@@ -765,7 +766,7 @@ def review(
 
                 week_id = manager.weekly.get_week_id()
                 console.print(f"[green]OK[/green] Weekly review created: {week_id}")
-                console.print(f"  → {review_file.relative_to(Path.cwd())}")
+                console.print(f"  → {display_path(review_file)}")
 
             else:
                 console.print("[cyan]Creating monthly review...[/cyan]")
@@ -773,7 +774,7 @@ def review(
 
                 month_name = datetime.now().strftime("%B %Y")
                 console.print(f"[green]OK[/green] Monthly review created: {month_name}")
-                console.print(f"  → {review_file.relative_to(Path.cwd())}")
+                console.print(f"  → {display_path(review_file)}")
 
             if editor:
                 editor_cmd = os.environ.get("EDITOR", "notepad" if sys.platform == "win32" else "vi")

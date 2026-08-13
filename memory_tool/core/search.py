@@ -6,6 +6,7 @@ from typing import Optional, List, Dict
 from dataclasses import dataclass
 from datetime import date, datetime
 from fnmatch import fnmatch
+from memory_tool.utils.paths import base_dir_for_root, get_project_root
 
 # Import db for SQLite search (optional)
 try:
@@ -43,9 +44,9 @@ class MemorySearcher:
             base_path: Base path for project. Defaults to current directory.
         """
         if base_path is None:
-            base_path = Path.cwd()
+            base_path = get_project_root()
         self.base_path = Path(base_path)
-        self.memory_path = self.base_path / ".memory"
+        self.memory_path = base_dir_for_root(self.base_path)
 
         # Load config
         from memory_tool.utils.config import Config
@@ -177,6 +178,29 @@ class MemorySearcher:
         config = Config(self.memory_path)
         return config.get_kb_path()
 
+    def _local_search_roots(self) -> List[Path]:
+        """Directories to scan for local content.
+
+        When the base folder *is* the project root (``base: "."``), scanning the
+        base directly would descend into ``venv/``, ``.git/``, ``node_modules/``
+        and every unrelated source folder. In that case only the known content
+        subfolders are searched.
+
+        Returns:
+            Existing directories to search.
+        """
+        from memory_tool.utils.paths import CONTENT_SUBDIRS, base_dir_for_root
+
+        if base_dir_for_root(self.base_path) != self.base_path:
+            # Base is a real subfolder -- scanning it wholesale is safe.
+            return [self.memory_path] if self.memory_path.exists() else []
+
+        return [
+            self.memory_path / name
+            for name in CONTENT_SUBDIRS
+            if (self.memory_path / name).is_dir()
+        ]
+
     def get_search_paths(
         self,
         scope: str = "local",
@@ -193,10 +217,9 @@ class MemorySearcher:
         """
         paths = []
 
-        # Local .memory/
+        # Local knowledge base
         if scope in ("local", "all"):
-            if self.memory_path.exists():
-                paths.append(self.memory_path)
+            paths.extend(self._local_search_roots())
 
         # Knowledge base
         if scope == "kb" or with_kb or scope == "all":

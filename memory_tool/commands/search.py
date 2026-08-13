@@ -16,6 +16,11 @@ from memory_tool.utils.path_checker import PathChecker, format_check_result
 from memory_tool.utils.config import Config
 from memory_tool.search.filters import TagCollector
 from memory_tool.search.formatter import deduplicate_results
+from memory_tool.utils.paths import (
+    GLOBAL_CACHE_DIRNAME,
+    base_dir_for_root,
+    get_base_path,
+)
 
 
 @app.command(
@@ -140,7 +145,9 @@ def search(
 
     if not no_cache:
         from memory_tool.search import SearchCache
-        cache_dir = Path.home() / ".memory" / ".cache" / "search"
+        # Global, cross-project cache in the user's home directory. Deliberately
+        # not the per-project base folder, so renaming a base never touches it.
+        cache_dir = Path.home() / GLOBAL_CACHE_DIRNAME / ".cache" / "search"
         search_cache = SearchCache(cache_dir, ttl_seconds=cache_ttl)
 
         cached_results = search_cache.get(query, **cache_key_params)
@@ -392,7 +399,7 @@ def search(
             )
 
             if module_filter:
-                modules_path = searcher.base_path / ".memory" / "modules"
+                modules_path = base_dir_for_root(searcher.base_path) / "modules"
                 module_filter_path = modules_path / module_filter
 
                 filtered_results = []
@@ -457,7 +464,7 @@ def search(
 
         try:
             from memory_tool.utils.suggestion_helper import check_and_suggest_after_command
-            memory_dir = Path.cwd() / ".memory"
+            memory_dir = get_base_path()
             check_and_suggest_after_command(memory_dir, "search", force=False)
         except Exception:
             pass
@@ -564,7 +571,7 @@ def index(
     try:
         from memory_tool.db import IndexManager
 
-        memory_path = Path.cwd() / ".memory"
+        memory_path = get_base_path()
 
         if not memory_path.exists():
             console.print("[red]ERROR[/red] .memory/ not found. Run 'minit' first.")
@@ -711,11 +718,13 @@ def cache(
     import shutil
     from memory_tool.search import SearchCache
 
-    cache_base = Path.home() / ".memory" / ".cache"
+    # Global, cross-project cache in the user's home directory -- independent of
+    # the per-project base folder, so a base rename never invalidates it.
+    cache_base = Path.home() / GLOBAL_CACHE_DIRNAME / ".cache"
     search_cache_dir = cache_base / "search"
 
-    # Notion cache is project-local: .memory/cache/
-    project_cache_dir = Path.cwd() / ".memory" / "cache"
+    # Notion cache is project-local, inside the configured base folder
+    project_cache_dir = get_base_path() / "cache"
     notion_cache_file = project_cache_dir / "notion_pages.json"
 
     # Determine which caches to operate on

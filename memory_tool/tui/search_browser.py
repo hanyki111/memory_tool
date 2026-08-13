@@ -7,6 +7,8 @@ import re
 from pathlib import Path
 from typing import Optional, List
 
+from memory_tool.utils.paths import get_base_path, get_project_root
+
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Vertical, Horizontal
@@ -143,16 +145,8 @@ class SearchBrowser(App):
         self.title = "Memory Tool - Search Browser"
 
     def _find_project_root(self) -> Path:
-        """Find project root (parent of .memory/) directory."""
-        current = Path.cwd()
-        while current != current.parent:
-            memory_path = current / ".memory"
-            if memory_path.exists() and memory_path.is_dir():
-                return current  # Return project root, not .memory
-            current = current.parent
-
-        # Default to current directory
-        return Path.cwd()
+        """Find the project root (the directory containing the base folder)."""
+        return get_project_root()
 
     def compose(self) -> ComposeResult:
         """Create child widgets."""

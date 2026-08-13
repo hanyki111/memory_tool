@@ -16,6 +16,8 @@ from pathlib import Path
 from typing import Optional, Callable, Set
 from datetime import datetime
 
+from memory_tool.utils.paths import get_paths
+
 try:
     from watchdog.observers.polling import PollingObserver as Observer
     from watchdog.events import FileSystemEventHandler
@@ -411,20 +413,22 @@ class NotionWatcher:
         self._pending_timeline_event_type: str = "modified"  # Event type for pending files
 
     def _find_memory_root(self) -> Path:
-        """Find .memory directory from current working directory."""
-        current = Path.cwd()
+        """Find the knowledge base folder from the current working directory.
 
-        if (current / ".memory").exists():
-            return current / ".memory"
+        Delegates to the central resolver so the configurable base folder name
+        (and a base of ".") is honoured.
 
-        for parent in current.parents:
-            if (parent / ".memory").exists():
-                return parent / ".memory"
-
-        raise FileNotFoundError(
-            "Could not find .memory directory. "
-            "Run 'minit' to initialize or navigate to a project with .memory/"
-        )
+        Raises:
+            FileNotFoundError: If no initialized base folder is found.
+        """
+        paths = get_paths()
+        if not paths.found:
+            raise FileNotFoundError(
+                f"Could not find a Memory Tool base folder (looked for "
+                f"'{paths.base_name}'). Run 'minit' to initialize, or navigate "
+                f"to an initialized project."
+            )
+        return paths.base
 
     # --- Process singleton guard (lock file) ---
 

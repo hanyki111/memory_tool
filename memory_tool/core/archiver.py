@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Tuple
 from datetime import datetime, timedelta
 from dateutil import parser as date_parser
+from memory_tool.utils.paths import base_dir_for_root, get_project_root
 
 
 class ArchiverError(Exception):
@@ -26,9 +27,9 @@ class Archiver:
                         Defaults to 'memory-system' for backwards compatibility.
         """
         if base_path is None:
-            base_path = Path.cwd()
+            base_path = get_project_root()
         self.base_path = Path(base_path)
-        self.memory_path = self.base_path / ".memory"
+        self.memory_path = base_dir_for_root(self.base_path)
 
         # Default to memory-system for backwards compatibility
         if module_name is None:

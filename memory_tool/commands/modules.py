@@ -11,6 +11,7 @@ from memory_tool.commands.common import (
 )
 from memory_tool.core.module import ModuleManager, ModuleError
 from memory_tool.llm.client import LLMClient
+from memory_tool.utils.paths import display_path, get_base_path
 
 
 @app.command()
@@ -55,13 +56,13 @@ def module(
             console.print(f"[cyan]Creating module '{name}'...[/cyan]")
             module_path = manager.create(name, description, tag_list)
 
-            rel_path = module_path.relative_to(Path.cwd())
+            rel_path = display_path(module_path)
             console.print(f"\n[green]OK[/green] Single-file module created: {name}")
             console.print(f"[dim]File location: {rel_path}[/dim]")
 
             try:
                 from memory_tool.utils.suggestion_helper import check_and_suggest_after_command
-                memory_dir = Path.cwd() / ".memory"
+                memory_dir = get_base_path()
                 check_and_suggest_after_command(memory_dir, "module", force=False)
             except Exception:
                 pass
@@ -112,7 +113,7 @@ def module(
             console.print(f"[cyan]Archiving module '{resolved_name}'...[/cyan]")
             archive_path = manager.archive(resolved_name, reason)
 
-            rel_path = archive_path.relative_to(Path.cwd())
+            rel_path = display_path(archive_path)
             console.print(f"\n[green]OK[/green] Module archived: {resolved_name}")
             console.print(f"[dim]Location: {rel_path}[/dim]")
 
@@ -157,7 +158,7 @@ def module(
             console.print(f"[cyan]Renaming module '{resolved_name}' -> '{new_name}'...[/cyan]")
             new_path = manager.rename(resolved_name, new_name)
 
-            rel_path = new_path.relative_to(Path.cwd())
+            rel_path = display_path(new_path)
             console.print(f"\n[green]OK[/green] Module renamed: {resolved_name} -> {new_name}")
             console.print(f"[dim]New location: {rel_path}[/dim]")
 
@@ -594,7 +595,7 @@ def module(
             console.print(f"[cyan]Restoring module '{name}' from archive...[/cyan]")
             module_path = manager.unarchive(name)
 
-            rel_path = module_path.relative_to(Path.cwd())
+            rel_path = display_path(module_path)
             console.print(f"\n[green]OK[/green] Module restored: {name}")
             console.print(f"[dim]Location: {rel_path}[/dim]")
 
@@ -653,7 +654,7 @@ def module(
                     console.print(f"[dim]To save, run without --preview flag[/dim]")
                 else:
                     module_path = generator.save_module(generated)
-                    rel_path = module_path.relative_to(Path.cwd())
+                    rel_path = display_path(module_path)
 
                     structure_label = "Feature-based" if generated.structure_type == "feature" else "Topic-based"
                     console.print(f"\n[green]OK[/green] Module created: {generated.name}")
@@ -802,11 +803,11 @@ def archive(
 
                 if dry_run:
                     console.print(f"[cyan]Would archive {num_archived} decisions to:[/cyan]")
-                    console.print(f"  {archive_path.relative_to(Path.cwd())}")
+                    console.print(f"  {display_path(archive_path)}")
                     console.print(f"\n[dim]Mode: {mode}={value}[/dim]")
                 else:
                     console.print(f"[green]OK[/green] Archived {num_archived} decisions")
-                    console.print(f"  → {archive_path.relative_to(Path.cwd())}")
+                    console.print(f"  → {display_path(archive_path)}")
                     console.print(f"\n[dim]Backup: decisions.md.bak[/dim]")
 
             except ArchiverError as e:
@@ -824,10 +825,10 @@ def archive(
 
                 if dry_run:
                     console.print(f"[cyan]Would archive current.md to:[/cyan]")
-                    console.print(f"  {archive_path.relative_to(Path.cwd())}")
+                    console.print(f"  {display_path(archive_path)}")
                 else:
                     console.print(f"[green]OK[/green] Archived current.md")
-                    console.print(f"  → {archive_path.relative_to(Path.cwd())}")
+                    console.print(f"  → {display_path(archive_path)}")
                     console.print(f"\n[dim]Backup: current.md.bak[/dim]")
 
             except ArchiverError as e:
@@ -906,7 +907,7 @@ def browse(
             console.print("Or: pip install textual>=0.47.0")
             sys.exit(1)
 
-        memory_path = Path.cwd() / ".memory"
+        memory_path = get_base_path()
 
         if not memory_path.exists():
             console.print("[red]ERROR[/red] .memory/ not found. Run 'minit' first.")

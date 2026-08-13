@@ -14,6 +14,7 @@ from rich.table import Table
 from memory_tool.commands.common import app, console
 from memory_tool.core.federation import Publisher, Importer, Registry
 from memory_tool.utils.config import Config
+from memory_tool.utils.paths import get_base_path
 
 
 @app.command("publish")
@@ -50,7 +51,7 @@ def publish(
         mpublish search-system --force            # Force republish
     """
     # Find .memory path
-    memory_path = Path.cwd() / ".memory"
+    memory_path = get_base_path()
     if not memory_path.exists():
         console.print("[red]Error:[/red] .memory/ not found. Run 'minit' first.")
         raise typer.Exit(1)
@@ -153,7 +154,7 @@ def import_kb(
         mimport Projects/memory-tool/search-system --target ref/search  # Custom path
     """
     # Find .memory path
-    memory_path = Path.cwd() / ".memory"
+    memory_path = get_base_path()
     if not memory_path.exists():
         console.print("[red]Error:[/red] .memory/ not found. Run 'minit' first.")
         raise typer.Exit(1)

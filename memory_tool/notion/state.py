@@ -12,6 +12,7 @@ from memory_tool.notion.models import (
     SyncDirection,
     ConflictResolution,
 )
+from memory_tool.utils.paths import get_base_path
 
 
 class SyncStateManager:
@@ -29,7 +30,7 @@ class SyncStateManager:
                          None/primary uses default 'notion_sync_state.json'.
                          Secondary uses 'notion_sync_state_{backend_name}.json'.
         """
-        self.base_path = base_path or Path.cwd() / ".memory"
+        self.base_path = base_path or get_base_path()
         self.cache_dir = self.base_path / "cache"
         if backend_name and backend_name != "primary":
             self.state_file = self.cache_dir / f"notion_sync_state_{backend_name}.json"

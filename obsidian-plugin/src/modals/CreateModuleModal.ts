@@ -1,12 +1,15 @@
 import { App, Modal, Notice } from "obsidian";
 import { MemoryToolCli } from "../cli/memoryToolCli";
+import { DEFAULT_BASE, moduleCandidatePaths } from "../paths";
 
 export class CreateModuleModal extends Modal {
   private cli: MemoryToolCli;
+  private getBaseName: () => string;
 
-  constructor(app: App, cli: MemoryToolCli) {
+  constructor(app: App, cli: MemoryToolCli, getBaseName?: () => string) {
     super(app);
     this.cli = cli;
+    this.getBaseName = getBaseName ?? (() => DEFAULT_BASE);
   }
 
   onOpen() {
@@ -64,14 +67,14 @@ export class CreateModuleModal extends Modal {
         await this.cli.createModule(name, desc, tags);
         new Notice(`Module created: ${name}`);
 
-        // Open newly created single-file module in Obsidian
-        const modBasename = name.split("/").pop() || name;
-        const targetPath = `.memory/modules/${name}/${modBasename}.md`;
-        const file = this.app.vault.getAbstractFileByPath(targetPath);
-
-        if (file) {
-          // @ts-ignore
-          this.app.workspace.getLeaf(false).openFile(file);
+        // Open newly created single-file module, under the configured base folder
+        for (const targetPath of moduleCandidatePaths(this.getBaseName(), name)) {
+          const file = this.app.vault.getAbstractFileByPath(targetPath);
+          if (file) {
+            // @ts-ignore
+            this.app.workspace.getLeaf(false).openFile(file);
+            break;
+          }
         }
 
         this.close();

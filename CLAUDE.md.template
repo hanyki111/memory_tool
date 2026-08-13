@@ -18,8 +18,14 @@
 | **Before Claude session** | `mcontext` | Generates `.claude/memory-context.md` |
 | **Searching past work** | `ms "query"` | `ms "how did we implement auth"` |
 | **View today's work** | `mtoday` | Shows today's timeline |
+| **Where is the memory folder** | `mbase show` | Prints the knowledge base folder |
 
 **CRITICAL:** Use `m` command for timeline entries. Do NOT manually edit timeline files.
+
+**Base folder:** The knowledge base folder is configurable and is **not always
+`.memory/`**. Run `mbase show` (or `mbase show --porcelain` for just the name)
+instead of assuming a path. When it is `.`, content lives directly at the project
+root (`timeline/`, `modules/`).
 
 ---
 

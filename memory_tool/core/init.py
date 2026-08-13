@@ -1,10 +1,19 @@
-"""Initialization functionality for .memory/ structure."""
+"""Initialization functionality for the knowledge base structure."""
 
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 import shutil
 import yaml
+
+from memory_tool.utils.paths import (
+    DEFAULT_BASE,
+    ROOT_BASE,
+    InvalidBaseNameError,
+    read_pointer,
+    validate_base_name,
+    write_pointer,
+)
 
 
 class InitializationError(Exception):
@@ -20,52 +29,120 @@ class AlreadyInitializedError(InitializationError):
 class MemoryInitializer:
     """Initializer for .memory/ structure."""
 
-    def __init__(self, base_path: Optional[Path] = None):
+    def __init__(
+        self,
+        base_path: Optional[Path] = None,
+        base_name: Optional[str] = None,
+    ):
         """Initialize memory initializer.
 
         Args:
-            base_path: Base path for project. Defaults to current directory.
+            base_path: Project root. Defaults to current directory.
+            base_name: Name for the knowledge base folder. Defaults to an
+                existing project's configured name, else ".memory". Use "." to
+                make the project root itself the base folder.
+
+        Raises:
+            InitializationError: If base_name is unusable.
         """
         if base_path is None:
             base_path = Path.cwd()
         self.base_path = Path(base_path)
-        self.memory_path = self.base_path / ".memory"
+
+        if base_name is None:
+            # Respect an already-configured base folder so --force and
+            # --update-docs keep working on existing projects.
+            self.base_name = read_pointer(self.base_path) or DEFAULT_BASE
+        else:
+            try:
+                self.base_name = validate_base_name(base_name)
+            except InvalidBaseNameError as e:
+                raise InitializationError(str(e)) from e
+
+        self.memory_path = (
+            self.base_path
+            if self.base_name == ROOT_BASE
+            else self.base_path / self.base_name
+        )
         self.claude_path = self.base_path / ".claude"
         # Get memory_tool's installation directory
         self.memory_tool_root = Path(__file__).parent.parent.parent
 
+    @property
+    def is_root_base(self) -> bool:
+        """True when the project root itself is the knowledge base folder."""
+        return self.base_name == ROOT_BASE
+
     def is_initialized(self) -> bool:
-        """Check if .memory/ already exists.
+        """Check whether the knowledge base already exists.
+
+        A root base always "exists" as a directory, so it is judged by markers
+        Memory Tool itself creates. ``config.yaml`` is deliberately not one of
+        them -- it is far too common a filename in an ordinary project.
 
         Returns:
-            True if .memory/ directory exists
+            True if the knowledge base is already set up
         """
+        if self.is_root_base:
+            return (
+                read_pointer(self.base_path) == ROOT_BASE
+                or (self.memory_path / "timeline").is_dir()
+            )
         return self.memory_path.exists()
+
+    def root_base_collisions(self) -> list:
+        """Files a root-base init would overwrite in an existing project.
+
+        With ``--base .`` the knowledge base shares a directory with the
+        project, so ``README.md`` and ``config.yaml`` would land on top of the
+        project's own files. Those are not ours to overwrite.
+
+        Returns:
+            Existing paths that this initialization would otherwise clobber.
+        """
+        if not self.is_root_base:
+            return []
+
+        candidates = ["README.md", "config.yaml", "timeline", "modules", "concepts",
+                      "templates", "docs"]
+        return [
+            self.memory_path / name
+            for name in candidates
+            if (self.memory_path / name).exists()
+        ]
 
     def get_structure(self) -> dict:
         """Get the directory structure to create.
 
+        Paths are relative to the project root and built from the configured
+        base folder name, so they follow a renamed or root-level base.
+
         Returns:
             Dictionary mapping paths to types ('dir' or 'file')
         """
-        return {
-            ".memory": "dir",
-            ".memory/timeline": "dir",
-            ".memory/modules": "dir",
-            ".memory/concepts": "dir",
-            ".memory/templates": "dir",
-            ".memory/docs": "dir",
-            ".memory/.gitkeep": "file",
-            ".memory/timeline/.gitkeep": "file",
-            ".memory/modules/.gitkeep": "file",
-            ".memory/concepts/.gitkeep": "file",
-            ".memory/templates/.gitkeep": "file",
-            ".memory/docs/.gitkeep": "file",
-            ".claude": "dir",
-            ".claude/skills": "dir",
-            ".claude/skills/mt-publish": "dir",
-            ".claude/skills/mt-master-module": "dir",
-        }
+        base = self.base_name
+
+        def under(*parts: str) -> str:
+            """Join a path under the base folder, flattening a root base."""
+            segments = [p for p in ((base,) if base != ROOT_BASE else ()) + parts]
+            return "/".join(segments)
+
+        structure = {}
+
+        if base != ROOT_BASE:
+            structure[base] = "dir"
+            structure[under(".gitkeep")] = "file"
+
+        for name in ("timeline", "modules", "concepts", "templates", "docs"):
+            structure[under(name)] = "dir"
+            structure[under(name, ".gitkeep")] = "file"
+
+        structure[".claude"] = "dir"
+        structure[".claude/skills"] = "dir"
+        structure[".claude/skills/mt-publish"] = "dir"
+        structure[".claude/skills/mt-master-module"] = "dir"
+
+        return structure
 
     def create_config_yaml(self) -> Path:
         """Create initial config.yaml.
@@ -1049,17 +1126,39 @@ Action: Split by clear criteria
         Raises:
             AlreadyInitializedError: If already initialized and force=False
         """
+        already = self.is_initialized()
+
         # Check if already initialized
-        if self.is_initialized() and not force:
+        if already and not force:
             raise AlreadyInitializedError(
-                f".memory/ already exists at {self.memory_path}. "
+                f"A knowledge base already exists at {self.memory_path}. "
                 f"Use --force to reinitialize."
             )
+
+        # A fresh root-base init must not write over the project's own files.
+        # --force deliberately does NOT override this: it is meant for
+        # reinitializing a knowledge base, not for overwriting a project.
+        if not already:
+            collisions = self.root_base_collisions()
+            if collisions:
+                names = ", ".join(sorted(p.name for p in collisions))
+                raise InitializationError(
+                    f"Cannot use the project root as the base folder: these already "
+                    f"exist and would be overwritten or merged into: {names}.\n"
+                    f"Use a subfolder instead (minit --base memory), or move the "
+                    f"conflicting entries aside first."
+                )
 
         created = {
             "directories": [],
             "files": [],
         }
+
+        # Record the base folder name so every command can find it, regardless
+        # of what the folder is called (or that it is the project root).
+        pointer_path = write_pointer(self.base_path, self.base_name)
+        created["files"].append(pointer_path)
+        created["base_name"] = self.base_name
 
         # Create directory structure
         structure = self.get_structure()

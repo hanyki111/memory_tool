@@ -9,6 +9,7 @@ This package contains modularized CLI commands organized by functionality:
 - notion: all Notion integration commands
 - system: init, status, alias, completion, tutorial, hooks, migrate_timeline
 - qa: ask (RAG-based Q&A)
+- base_folder: base (show/rename the knowledge base folder)
 """
 
 from memory_tool.commands.common import app, console
@@ -26,5 +27,6 @@ from memory_tool.commands import qa
 from memory_tool.commands import help
 from memory_tool.commands import federation
 from memory_tool.commands import tag
+from memory_tool.commands import base_folder
 
 __all__ = ["app", "console"]

@@ -16,6 +16,7 @@ from textual.widgets import (
 from textual.reactive import reactive
 from rich.text import Text
 from rich.panel import Panel
+from memory_tool.utils.paths import base_dir_for_root
 
 
 class TimelineList(ListView):
@@ -78,7 +79,7 @@ class TimelineMode(Static):
     def __init__(self, base_path: Path, **kwargs):
         super().__init__(**kwargs)
         self.base_path = base_path
-        self.timeline_path = base_path / ".memory" / "timeline"
+        self.timeline_path = base_dir_for_root(base_path) / "timeline"
         self.dates: List[datetime] = []
         self.selected_date: Optional[datetime] = None
         self.entries: Dict[str, List[str]] = {}

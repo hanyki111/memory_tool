@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 from typing import Optional, List, Dict, Tuple
 from datetime import datetime
+from memory_tool.utils.paths import get_base_path
 
 
 class GraphVersion:
@@ -59,7 +60,7 @@ class GraphVersionManager:
             db_path: Path to connections database (defaults to .memory/.connections.db)
         """
         if db_path is None:
-            db_path = Path.cwd() / ".memory" / ".connections.db"
+            db_path = get_base_path() / ".connections.db"
 
         self.db_path = db_path
         self._ensure_version_table()

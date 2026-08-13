@@ -6,6 +6,7 @@ from typing import Optional
 
 from .weekly_review import WeeklyReview
 from .monthly_review import MonthlyReview
+from memory_tool.utils.paths import get_project_root
 
 
 class ReviewManager:
@@ -15,10 +16,10 @@ class ReviewManager:
         """Initialize review manager.
 
         Args:
-            base_path: Base path for .memory/ directory. Defaults to current directory.
+            base_path: Project root. Defaults to the resolved project root.
         """
         if base_path is None:
-            base_path = Path.cwd()
+            base_path = get_project_root()
         self.base_path = Path(base_path)
         self.weekly = WeeklyReview(base_path)
         self.monthly = MonthlyReview(base_path)

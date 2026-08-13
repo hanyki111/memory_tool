@@ -7,6 +7,7 @@ from typing import Optional
 import typer
 
 from memory_tool.commands.common import app, console, opt_str, resolve_module_name
+from memory_tool.utils.paths import base_dir_for_root, display_path, get_project_root
 
 
 @app.command(
@@ -18,14 +19,25 @@ def init(
     kb: Optional[str] = typer.Option(None, "--kb", help="Path to knowledge base directory"),
     update_docs: bool = typer.Option(False, "--update-docs", help="Update documentation templates only"),
     update_all: bool = typer.Option(False, "--update-all", help="Update all templates (creates backups)"),
+    base: Optional[str] = typer.Option(
+        None,
+        "--base",
+        help="Knowledge base folder name (default: .memory). Use '.' for the project root.",
+    ),
 ):
-    """Initialize .memory/ structure (minit command).
+    """Initialize the knowledge base structure (minit command).
 
-    Creates the .memory/ directory structure with timeline, modules, plans,
-    and configuration files. Also creates .claude/ for Claude Code integration.
+    Creates the knowledge base folder with timeline, modules, plans and
+    configuration files, plus .claude/ for Claude Code integration.
+
+    The folder name is recorded in a .memory-tool.yml pointer file, so it can be
+    changed later with 'mbase set'. Because Obsidian hides dot-prefixed folders,
+    use a visible name (or the vault root) when working inside a vault.
 
     Examples:
-        minit                      # Initialize in current directory
+        minit                      # Initialize .memory/ in current directory
+        minit --base memory        # Use a visible memory/ folder
+        minit --base .             # Use the current directory as the base
         minit --force              # Reinitialize (overwrites)
         minit --update-docs        # Update documentation templates
     """
@@ -45,7 +57,11 @@ def init(
         console.print(f"[red]ERROR[/red] Path is not a directory: {target_path}")
         sys.exit(1)
 
-    initializer = MemoryInitializer(target_path)
+    try:
+        initializer = MemoryInitializer(target_path, base_name=base)
+    except InitializationError as e:
+        console.print(f"[red]ERROR[/red] {e}")
+        sys.exit(1)
 
     try:
         # Handle --update-docs or --update-all mode
@@ -67,14 +83,34 @@ def init(
         created = initializer.initialize(force=force, kb_path=kb)
 
         # Success message
-        console.print(f"[green]OK[/green] Initialized .memory/ at: {target_path}")
+        base_label = (
+            "the project root" if initializer.is_root_base else f"{initializer.base_name}/"
+        )
+        console.print(f"[green]OK[/green] Initialized knowledge base at: {initializer.memory_path}")
+        console.print(f"[dim]Base folder: {base_label}[/dim]")
         console.print(f"[dim]Created {len(created['directories'])} directories, {len(created['files'])} files[/dim]")
 
         if kb:
             console.print(f"[dim]Knowledge base: {kb}[/dim]")
 
+        if initializer.is_root_base:
+            from memory_tool.utils.paths import CONTENT_SUBDIRS
+
+            console.print(
+                f"\n[dim]Records go straight to timeline/, modules/, ... "
+                f"Only these folders are searched: {', '.join(CONTENT_SUBDIRS)}[/dim]"
+            )
+        elif initializer.base_name.startswith("."):
+            console.print(
+                f"\n[yellow]NOTE[/yellow] '{initializer.base_name}' is hidden in Obsidian."
+            )
+            console.print(
+                "[dim]For vault use: minit --base memory, or change later with "
+                "'mbase set memory'.[/dim]"
+            )
+
         # Claude Code integration info
-        template_path = target_path / ".memory" / "templates" / "CLAUDE.md.template"
+        template_path = initializer.memory_path / "templates" / "CLAUDE.md.template"
         console.print(f"\n[cyan]Claude Code Integration:[/cyan]")
         console.print(f"[dim]Template: {template_path}[/dim]")
         console.print(f"[dim]Copy sections to your CLAUDE.md to integrate with Claude Code[/dim]")
@@ -96,8 +132,8 @@ def init(
 @app.command()
 def status():
     """Show statistics (mstatus command)."""
-    base_path = Path.cwd()
-    memory_path = base_path / ".memory"
+    base_path = get_project_root()
+    memory_path = base_dir_for_root(base_path)
 
     if not memory_path.exists():
         console.print("[red]ERROR[/red] .memory/ not found in current directory")
@@ -143,11 +179,25 @@ def status():
         concept_files = list(concepts_path.glob("*.md")) if concepts_path.exists() else []
         concepts_count = len(concept_files)
 
-        # Calculate .memory size
+        # Calculate knowledge base size. When the base folder is the project
+        # root, only the content subfolders count -- otherwise this would report
+        # the size of venv/, .git/ and the rest of the project.
+        from memory_tool.utils.paths import CONTENT_SUBDIRS
+
+        if base_dir_for_root(base_path) == base_path:
+            size_roots = [
+                memory_path / name
+                for name in CONTENT_SUBDIRS
+                if (memory_path / name).is_dir()
+            ]
+        else:
+            size_roots = [memory_path]
+
         total_size = 0
-        for item in memory_path.rglob("*"):
-            if item.is_file():
-                total_size += item.stat().st_size
+        for root in size_roots:
+            for item in root.rglob("*"):
+                if item.is_file():
+                    total_size += item.stat().st_size
 
         size_mb = total_size / (1024 * 1024)
 
@@ -823,7 +873,7 @@ def hooks(
                     console.print("Valid types: document-health, pre-commit, post-checkout")
                     sys.exit(1)
 
-                console.print(f"\n[green]OK[/green] Hook installed: {hook_path.relative_to(Path.cwd())}")
+                console.print(f"\n[green]OK[/green] Hook installed: {display_path(hook_path)}")
                 console.print(f"\n[dim]This hook will automatically {hook_description}.")
                 console.print("You can disable it by removing the hook file.[/dim]")
 
@@ -988,8 +1038,8 @@ def config(
     import yaml
     from memory_tool.utils.config import Config
 
-    base_path = Path.cwd()
-    memory_path = base_path / ".memory"
+    base_path = get_project_root()
+    memory_path = base_dir_for_root(base_path)
     config_path = memory_path / "config.yaml"
 
     if not memory_path.exists():

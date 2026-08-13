@@ -110,6 +110,44 @@ Copy-Item "obsidian-plugin\styles.css" $pluginDir
 
 ---
 
+### 5단계: 기반 폴더 설정 (중요)
+
+**Obsidian 은 `.` 으로 시작하는 폴더를 숨김 처리합니다.** 따라서 기본값인 `.memory/` 는
+Obsidian 파일 탐색기에 나타나지 않고, 타임라인·모듈 파일을 볼트에서 열 수 없습니다.
+
+Vault 에서 쓰려면 기반 폴더를 보이는 이름이나 볼트 루트로 바꾸세요.
+
+```bash
+# 볼트 폴더에서 실행
+
+mbase show                   # 현재 상태 확인
+mbase set memory --dry-run   # 무엇이 바뀌는지 미리보기
+mbase set memory             # .memory/ → memory/  (볼트에서 보임)
+
+# 또는 볼트 루트 자체를 기반 폴더로
+mbase set .                  # → timeline/, modules/ 가 볼트 최상단에
+```
+
+플러그인은 기반 폴더를 **자동으로 감지**합니다 (`mbase show --porcelain` 사용).
+자동 감지가 실패하거나 다른 위치를 쓰고 싶다면:
+
+1. Obsidian **설정** → **Memory Tool Integration**
+2. **Knowledge Base Folder** 항목에 폴더 이름 입력 (볼트 루트는 `.`)
+3. 비워두면 자동 감지
+
+명령 팔레트의 **Show Knowledge Base Folder (mbase)** 로 현재 인식된 폴더를 확인할 수 있습니다.
+
+| 기반 폴더 | Obsidian 에서 | 타임라인 경로 |
+| :--- | :--- | :--- |
+| `.memory` | ❌ 숨김 | `.memory/timeline/daily/2026-08/13.md` |
+| `memory` | ✅ 보임 | `memory/timeline/daily/2026-08/13.md` |
+| `.` (루트) | ✅ 보임 | `timeline/daily/2026-08/13.md` |
+
+> `mbase set .` 로 볼트 루트를 쓰는 경우, `timeline`, `modules`, `concepts`, `plans`,
+> `reviews`, `summaries`, `docs` 폴더만 검색·색인 대상입니다.
+
+---
+
 ## 📅 Obsidian Calendar 연동 설정
 
 > 달력에서 날짜를 클릭하면 `memory_tool`의 해당 날짜 타임라인 파일로 자동 이동합니다.
@@ -124,9 +162,17 @@ Obsidian **설정** → **Daily Notes** 또는 **Periodic Notes**:
 | 항목 | 값 |
 | :--- | :--- |
 | **Date format** | `YYYY-MM/DD` |
-| **New file location** | `.memory/timeline/daily` |
+| **New file location** | `<기반폴더>/timeline/daily` |
 
-설정 완료 후 달력에서 날짜를 클릭하면 `.memory/timeline/daily/2026-08/13.md` 와 같이 `memory_tool` 타임라인 파일로 즉시 이동합니다.
+**New file location** 은 기반 폴더에 맞춰 입력하세요:
+
+| 기반 폴더 | New file location |
+| :--- | :--- |
+| `memory` | `memory/timeline/daily` |
+| `.` (볼트 루트) | `timeline/daily` |
+| `.memory` | `.memory/timeline/daily` (Obsidian 에서 숨겨져 동작하지 않을 수 있음) |
+
+설정 완료 후 달력에서 날짜를 클릭하면 `memory/timeline/daily/2026-08/13.md` 와 같이 `memory_tool` 타임라인 파일로 즉시 이동합니다.
 
 ---
 

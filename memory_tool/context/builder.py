@@ -10,6 +10,7 @@ from memory_tool.context.related_files import (
     RelatedFiles,
     get_module_related_files,
 )
+from memory_tool.utils.paths import base_dir_for_root, get_project_root
 
 
 class ContextError(Exception):
@@ -27,9 +28,9 @@ class ContextBuilder:
             base_path: Base path for project. Defaults to current directory.
         """
         if base_path is None:
-            base_path = Path.cwd()
+            base_path = get_project_root()
         self.base_path = Path(base_path)
-        self.memory_path = self.base_path / ".memory"
+        self.memory_path = base_dir_for_root(self.base_path)
         self.claude_path = self.base_path / ".claude"
         self.config = Config(self.memory_path)
 

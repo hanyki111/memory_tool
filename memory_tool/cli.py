@@ -142,6 +142,13 @@ def status_cli():
     app()
 
 
+def base_cli():
+    """Entry point for 'mbase' command."""
+    import sys
+    sys.argv = ['memory_tool', 'base'] + sys.argv[1:]
+    app()
+
+
 def alias_cli():
     """Entry point for 'malias' command."""
     import sys
