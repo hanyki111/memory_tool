@@ -491,6 +491,39 @@ mcheck                   # Verify module paths
         template_path.write_text(content, encoding="utf-8")
         return template_path
 
+    def _copy_obsidian_templates(self) -> list[Path]:
+        """Copy Obsidian helper templates into <base>/templates/obsidian/.
+
+        The Daily Note template matters for anyone pairing the Calendar plugin
+        with the timeline: pointing Obsidian at it makes a Calendar-created file
+        a valid timeline file, so `m` appends to it instead of treating the
+        note's own content as the header.
+
+        Returns:
+            List of paths to created files (empty if the source is unavailable)
+        """
+        created_files: list[Path] = []
+
+        source_dir = Path(__file__).parent.parent / "templates" / "obsidian"
+        if not source_dir.exists():
+            return created_files
+
+        dest_dir = self.memory_path / "templates" / "obsidian"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+
+        for source in sorted(source_dir.glob("*.md")):
+            dest = dest_dir / source.name
+            # Never clobber a template the user has edited.
+            if dest.exists():
+                continue
+            try:
+                shutil.copy2(source, dest)
+                created_files.append(dest)
+            except OSError:
+                continue
+
+        return created_files
+
     def _copy_docs_templates(self) -> list[Path]:
         """Copy documentation templates from templates/docs/ to .memory/docs/.
 
@@ -1197,6 +1230,9 @@ Action: Split by clear criteria
 
             quick_ref_path = self.create_quick_reference()
             created["files"].append(quick_ref_path)
+
+        # Copy Obsidian helper templates (Daily Note for Calendar pairing)
+        created["files"].extend(self._copy_obsidian_templates())
 
         # Create .claude/ structure with skills and guidelines
         skill_files = self.create_claude_skills()

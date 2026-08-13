@@ -46,6 +46,33 @@ class Timeline:
         self.timeline_path = self.memory_path / "timeline"
         self.use_daily_structure = use_daily_structure
 
+    @staticmethod
+    def resolve_existing_file(timeline_path: Path, target_date) -> Optional[Path]:
+        """Find an existing timeline file for a date, whichever layout it uses.
+
+        Entries are written to ``timeline/daily/YYYY-MM/DD.md``; the unprefixed
+        path is the pre-migration location. Callers that check only one of the
+        two silently report "no timeline file" for days that do exist.
+
+        Args:
+            timeline_path: The ``timeline`` directory
+            target_date: date or datetime to look up
+
+        Returns:
+            The existing path, or None if neither location has the file.
+        """
+        year_month = target_date.strftime("%Y-%m")
+        day = target_date.strftime("%d")
+
+        for candidate in (
+            timeline_path / "daily" / year_month / f"{day}.md",
+            timeline_path / year_month / f"{day}.md",
+        ):
+            if candidate.exists():
+                return candidate
+
+        return None
+
     def get_timeline_file(self, date: datetime, create: bool = True) -> Path:
         """Get timeline file path for a given date.
 

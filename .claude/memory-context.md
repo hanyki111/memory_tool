@@ -1,11 +1,12 @@
 # Memory Context
 
-**Generated:** 2026-08-13 23:20
+**Generated:** 2026-08-14 00:25
 
 ---
 
 ## Recent Timeline
 
+- **2026-08-14**: `.memory/timeline/daily/2026-08/14.md`
 - **2026-08-13**: `.memory/timeline/daily/2026-08/13.md`
 
 ---
@@ -44,7 +45,7 @@
   - Quick action: `marchive memory-tool --module memory-tool --interactive`
 - **archive/memory-system/decisions.md**: 692 lines - ⚠️ Very large, should archive soon
   - Quick action: `marchive decisions --module archive/memory-system --interactive`
-- **memory-tool/core-system/core-system.md**: 1070 lines - ⚠️ Very large, should archive soon
+- **memory-tool/core-system/core-system.md**: 1160 lines - ⚠️ Very large, should archive soon
   - Quick action: `marchive core-system --module memory-tool/core-system --interactive`
 - **memory-tool/knowledge-graph-system/knowledge-graph-system.md**: 1315 lines - ⚠️ Very large, should archive soon
   - Quick action: `marchive knowledge-graph-system --module memory-tool/knowledge-graph-system --interactive`

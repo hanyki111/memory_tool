@@ -623,12 +623,10 @@ def sort(
 
         elif date_or_all.lower() == "today":
             today_date = date.today()
-            year_month = today_date.strftime("%Y-%m")
-            day = today_date.strftime("%d")
 
-            file_path = sorter.timeline_path / year_month / f"{day}.md"
+            file_path = Timeline.resolve_existing_file(sorter.timeline_path, today_date)
 
-            if not file_path.exists():
+            if file_path is None:
                 console.print(f"[yellow]No timeline file for today ({today_date.strftime('%Y-%m-%d')})[/yellow]")
                 sys.exit(0)
 
@@ -652,12 +650,9 @@ def sort(
                 console.print("[dim]Use YYYY-MM-DD format (e.g., 2025-11-14)[/dim]")
                 sys.exit(1)
 
-            year_month = target_date.strftime("%Y-%m")
-            day = target_date.strftime("%d")
+            file_path = Timeline.resolve_existing_file(sorter.timeline_path, target_date)
 
-            file_path = sorter.timeline_path / year_month / f"{day}.md"
-
-            if not file_path.exists():
+            if file_path is None:
                 console.print(f"[yellow]No timeline file for {date_or_all}[/yellow]")
                 sys.exit(0)
 

@@ -115,63 +115,61 @@ class TimelineSorter:
             if not lines:
                 return (0, 0)
 
-            # Separate header, entries, and footer
-            header_lines = []
-            entry_lines = []
-            footer_lines = []
+            # Reorder each contiguous run of timed entries in place, leaving
+            # every other line exactly where it is.
+            #
+            # Only "- HH:MM | ..." counts as an entry. Treating any "- " line as
+            # one meant a note's own list items -- an Obsidian Daily Note
+            # template's "- [ ] task", for instance -- were pulled out of their
+            # section, appended after the entries, and had their surrounding
+            # headings and blank lines dropped.
+            new_lines: List[str] = []
+            # Each entry carries its own continuation lines so they move with it.
+            run: List[Tuple[time, int, List[str]]] = []
+            total = 0
+            sorted_count = 0
 
-            in_entries = False
+            def flush_run() -> None:
+                """Emit the pending run of entries in time order."""
+                if not run:
+                    return
+                # Sort by time, then original position, so entries sharing a
+                # timestamp keep the order they were recorded in.
+                run.sort(key=lambda item: (item[0], item[1]))
+                for _, _, block in run:
+                    new_lines.extend(block)
+                run.clear()
 
-            for line in lines:
-                # Check if it's an entry (starts with -)
-                if line.strip().startswith("-"):
-                    in_entries = True
-                    entry_lines.append(line)
-                elif not in_entries:
-                    # Before entries (header)
-                    header_lines.append(line)
-                else:
-                    # After entries start (footer - shouldn't normally happen)
-                    # But keep them just in case
-                    if line.strip():  # Non-empty line after entries
-                        footer_lines.append(line)
-
-            # Parse entries
-            timed_entries = []
-            untimed_entries = []
-
-            for line in entry_lines:
-                entry_time, original_line = self._parse_entry(line)
+            for index, line in enumerate(lines):
+                entry_time, _ = self._parse_entry(line.strip())
 
                 if entry_time is not None:
-                    timed_entries.append((entry_time, original_line))
-                else:
-                    untimed_entries.append(original_line)
+                    total += 1
+                    sorted_count += 1
+                    run.append((entry_time, index, [line]))
+                    continue
 
-            # Sort timed entries
-            timed_entries.sort(key=lambda x: x[0])
+                # An indented line belongs to the entry above it (a sub-bullet
+                # added while editing the note), so it travels with that entry
+                # instead of being stranded when the order changes.
+                if run and line[:1] in (" ", "\t"):
+                    run[-1][2].append(line)
+                    if line.strip().startswith("-"):
+                        total += 1
+                    continue
 
-            # Reconstruct file
-            new_lines = []
+                # Untimed top-level "- " lines still count toward the reported
+                # total, for continuity with previous output, but never move.
+                if line.strip().startswith("-"):
+                    total += 1
 
-            # Add header
-            new_lines.extend(header_lines)
-
-            # Add sorted timed entries
-            for _, line in timed_entries:
+                flush_run()
                 new_lines.append(line)
 
-            # Add untimed entries at the end
-            new_lines.extend(untimed_entries)
-
-            # Add footer
-            new_lines.extend(footer_lines)
+            flush_run()
 
             # Write back
             file_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
-
-            total = len(entry_lines)
-            sorted_count = len(timed_entries)
 
             return (total, sorted_count)
 

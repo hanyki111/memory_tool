@@ -1,5 +1,6 @@
 """System-related CLI commands (init, status, alias, completion, tutorial, hooks, migrate, update)."""
 
+import re
 import sys
 from pathlib import Path
 from typing import Optional
@@ -149,11 +150,14 @@ def status():
         # Count entries in timeline files
         total_entries = 0
         latest_date = None
+        # A timeline entry is "- HH:MM | ...". Counting every "- " line also
+        # counted a note's own list items -- an Obsidian Daily Note template's
+        # "- [ ] task", or a sub-bullet under an entry -- inflating the total.
+        entry_pattern = re.compile(r"^-\s*\d{1,2}:\d{1,2}\s*\|")
         for tf in timeline_files:
             content = tf.read_text(encoding="utf-8")
             lines = content.splitlines()
-            # Count lines starting with "-" (entries)
-            entries = [line for line in lines if line.strip().startswith("-")]
+            entries = [line for line in lines if entry_pattern.match(line.strip())]
             total_entries += len(entries)
 
             # Track latest date
@@ -231,7 +235,6 @@ def status():
                 daily_plans = len(list(daily_path.rglob("*.md")))
                 # Get today's progress
                 from datetime import date
-                import re
                 today = date.today()
                 today_plan = daily_path / today.strftime("%Y-%m") / f"{today.strftime('%d')}.md"
                 if today_plan.exists():
@@ -247,7 +250,6 @@ def status():
                 weekly_plans = len(list(weekly_path.rglob("*.md")))
                 # Get this week's progress
                 from datetime import date
-                import re
                 today = date.today()
                 iso_cal = today.isocalendar()
                 week_num = iso_cal[1]

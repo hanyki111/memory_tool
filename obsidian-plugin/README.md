@@ -201,22 +201,61 @@ mbase show     # 중첩 폴더가 있으면 WARNING 으로 알려줍니다
 
 ### Daily Notes 설정
 
-Obsidian **설정** → **Daily Notes** 또는 **Periodic Notes**:
+Obsidian **설정** → **Daily Notes** (또는 **Periodic Notes**) 에서 3개를 맞춥니다.
 
 | 항목 | 값 |
 | :--- | :--- |
 | **Date format** | `YYYY-MM/DD` |
-| **New file location** | `<기반폴더>/timeline/daily` |
+| **New file location** | `<vault기준 경로>/timeline/daily` |
+| **Template file location** | `<vault기준 경로>/templates/obsidian/timeline-daily-note` |
 
-**New file location** 은 기반 폴더에 맞춰 입력하세요:
+`Date format` 에 슬래시를 넣으면 Obsidian 이 **하위 폴더를 만듭니다.** 그래서
+`YYYY-MM/DD` 가 `2026-08/14.md` 를 만들고, memory_tool 구조와 정확히 일치합니다.
 
-| 기반 폴더 | New file location |
+**New file location** 은 vault 루트 기준입니다 — 기반 폴더가 아니라 **vault 위치**에
+따라 달라집니다:
+
+| Vault 루트 | 기반 폴더 | New file location |
+| :--- | :--- | :--- |
+| `프로젝트/.memory` | `.memory` (= vault 루트) | `timeline/daily` |
+| `프로젝트` | `memory` | `memory/timeline/daily` |
+| `프로젝트` | `.` (= vault 루트) | `timeline/daily` |
+
+헷갈리면 명령 팔레트 → **Show Knowledge Base Folder (mbase)** 로 확인하세요.
+`the vault root` 로 나오면 `timeline/daily`, `memory/` 로 나오면 `memory/timeline/daily` 입니다.
+
+### ⚠️ 템플릿을 반드시 맞춰야 하는 이유
+
+Calendar 로 날짜를 클릭하면 **Obsidian 이 파일을 먼저 만듭니다.** 이때 일반적인
+Daily Note 템플릿(할 일 체크박스, 메모 섹션 등)을 쓰면 memory_tool 과 충돌합니다.
+
+`minit` 이 `<기반폴더>/templates/obsidian/timeline-daily-note.md` 를 만들어 둡니다.
+내용은 한 줄입니다:
+
+```markdown
+# {{date:YYYY-MM-DD}} Timeline
+```
+
+이것을 **Template file location** 으로 지정하면 Calendar 가 만든 파일이 곧바로
+정상적인 타임라인 파일이 되고, `m` 이 그 뒤에 기록을 이어 붙입니다.
+
+**템플릿을 비워두는 것도 괜찮습니다** — `m` 이 헤더를 자동 생성합니다.
+
+반면 **체크박스가 있는 템플릿은 쓰지 마세요.** 실측 결과:
+
+| 문제 | 증상 |
 | :--- | :--- |
-| `memory` | `memory/timeline/daily` |
-| `.` (볼트 루트) | `timeline/daily` |
-| `.memory` | `.memory/timeline/daily` (Obsidian 에서 숨겨져 동작하지 않을 수 있음) |
+| 기록 위치 | 기록이 템플릿 맨 뒤(예: `## 참고자료` 아래)에 붙습니다 |
+| 헤더 인식 | 템플릿의 첫 `##` 가 헤더로 인식되어 `# YYYY-MM-DD Timeline` 이 안 생깁니다 |
 
-설정 완료 후 달력에서 날짜를 클릭하면 `memory/timeline/daily/2026-08/13.md` 와 같이 `memory_tool` 타임라인 파일로 즉시 이동합니다.
+> `- [ ] 할 일` 같은 체크박스가 타임라인 기록으로 오인되던 문제(`mstatus` 개수 부풀림,
+> `msort` 가 템플릿 구조를 뒤섞음)는 수정되었습니다. 이제 `- HH:MM \|` 형식만
+> 기록으로 취급하며, 정렬 시 그 외 줄과 들여쓴 하위 항목은 제자리를 지킵니다.
+
+### 정리
+
+설정 후 달력에서 날짜를 클릭하면 memory_tool 타임라인 파일로 바로 이동하고,
+`Ctrl+Alt+M` 기록과 Calendar 클릭이 **같은 파일**을 가리킵니다.
 
 ---
 
