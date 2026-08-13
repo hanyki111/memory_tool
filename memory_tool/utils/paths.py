@@ -397,6 +397,39 @@ def base_dir_for_root(root: Path) -> Path:
     return root if name == ROOT_BASE else root / name
 
 
+def _looks_initialized(path: Path) -> bool:
+    """True if `path` looks like a real, initialized knowledge base folder.
+
+    Requires both ``config.yaml`` and ``timeline/``. ``config.yaml`` alone is far
+    too common in ordinary projects to be a reliable marker.
+    """
+    return (path / CONFIG_FILENAME).is_file() and (path / "timeline").is_dir()
+
+
+def _is_nested_artifact(parent: Path, candidate: Path) -> bool:
+    """Detect a nested duplicate base folder left by the old double-append bug.
+
+    Older versions built paths as ``Path.cwd() / ".memory"`` with no upward
+    search. Running a command from *inside* the base folder therefore created
+    ``<base>/.memory/`` and recorded into it. Because the resolver walks upward,
+    that leftover folder would be found first and keep hijacking every command.
+
+    The signature is unambiguous: the artifact is created purely by recording, so
+    it only ever contains ``timeline/`` and never a ``config.yaml``, while its
+    parent is a fully initialized base folder.
+
+    Args:
+        parent: Directory being examined during the upward walk
+        candidate: The ``parent/.memory`` directory found there
+
+    Returns:
+        True if `candidate` is an artifact and `parent` is the real base.
+    """
+    if (candidate / CONFIG_FILENAME).is_file():
+        return False  # a real, configured base of its own
+    return _looks_initialized(parent)
+
+
 def _candidate_roots(start: Path) -> List[Path]:
     """Yield `start` and its parents, up to MAX_SEARCH_DEPTH."""
     roots = []
@@ -490,6 +523,16 @@ def resolve_base(start: Optional[Path] = None) -> MemoryPaths:
         # Legacy: an unmarked .memory/ directory from before this was configurable.
         legacy = root / DEFAULT_BASE
         if legacy.is_dir():
+            # Don't be hijacked by a nested duplicate left by the old
+            # double-append bug -- prefer the real base folder that contains it.
+            if _is_nested_artifact(root, legacy):
+                return MemoryPaths(
+                    root=root.parent,
+                    base=root,
+                    base_name=root.name,
+                    found=True,
+                    source="nested-artifact",
+                )
             return MemoryPaths(
                 root=root,
                 base=legacy,

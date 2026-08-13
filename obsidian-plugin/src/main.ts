@@ -3,11 +3,16 @@ import { MemoryToolCli } from "./cli/memoryToolCli";
 import { RecordModal } from "./modals/RecordModal";
 import { CreateModuleModal } from "./modals/CreateModuleModal";
 import { ModuleSuggestModal } from "./modals/ModuleSuggestModal";
-import { DEFAULT_BASE, ROOT_BASE } from "./paths";
+import {
+  DEFAULT_BASE,
+  describePrefix,
+  normalizePrefix,
+  vaultRelativeBase,
+} from "./paths";
 
 interface MemoryToolSettings {
   pythonPath: string;
-  /** Base folder override. Empty means auto-detect from memory_tool. */
+  /** Base folder override, relative to the vault root. Empty = auto-detect. */
   baseFolder: string;
 }
 
@@ -20,16 +25,22 @@ export default class MemoryToolPlugin extends Plugin {
   settings: MemoryToolSettings = DEFAULT_SETTINGS;
   cli: MemoryToolCli = new MemoryToolCli();
 
-  /** Resolved base folder name, relative to the vault root ("." = vault root). */
-  baseName: string = DEFAULT_BASE;
+  /**
+   * Knowledge base location as a vault-relative prefix.
+   * "" means the vault root itself is the base folder.
+   */
+  basePrefix: string = DEFAULT_BASE;
+
+  /** Absolute path of the vault root. */
+  vaultRoot: string = "";
 
   async onload() {
     await this.loadSettings();
 
     // Get current vault root path
     // @ts-ignore
-    const basePath = this.app.vault.adapter.getBasePath ? this.app.vault.adapter.getBasePath() : "";
-    this.cli.setCwd(basePath);
+    this.vaultRoot = this.app.vault.adapter.getBasePath ? this.app.vault.adapter.getBasePath() : "";
+    this.cli.setCwd(this.vaultRoot);
     this.cli.setPythonPath(this.settings.pythonPath);
 
     await this.resolveBaseFolder();
@@ -65,7 +76,7 @@ export default class MemoryToolPlugin extends Plugin {
       id: "create-module",
       name: "Create Module",
       callback: () => {
-        new CreateModuleModal(this.app, this.cli, () => this.baseName).open();
+        new CreateModuleModal(this.app, this.cli, () => this.basePrefix).open();
       },
     });
 
@@ -75,7 +86,7 @@ export default class MemoryToolPlugin extends Plugin {
       name: "Go to Module",
       hotkeys: [{ modifiers: ["Mod", "Alt"], key: "g" }],
       callback: () => {
-        new ModuleSuggestModal(this.app, this.cli, () => this.baseName).open();
+        new ModuleSuggestModal(this.app, this.cli, () => this.basePrefix).open();
       },
     });
 
@@ -115,9 +126,7 @@ export default class MemoryToolPlugin extends Plugin {
       name: "Show Knowledge Base Folder (mbase)",
       callback: async () => {
         await this.resolveBaseFolder();
-        const where =
-          this.baseName === ROOT_BASE ? "the vault root" : `${this.baseName}/`;
-        new Notice(`Knowledge base folder: ${where}`);
+        new Notice(`Knowledge base folder: ${describePrefix(this.basePrefix)}`);
       },
     });
 
@@ -128,27 +137,59 @@ export default class MemoryToolPlugin extends Plugin {
   onunload() {}
 
   /**
-   * Determine which vault folder holds the knowledge base.
+   * Determine where the knowledge base sits *relative to the vault root*.
    *
-   * A manual override wins; otherwise memory_tool is asked, which honours the
-   * pointer file, the legacy .memory/ folder and environment overrides alike.
-   * Detection failure is not fatal -- the plugin falls back to the historical
-   * default so its other commands keep working.
+   * memory_tool reports the base folder relative to the project root, which is
+   * not the same reference point: when the vault is the base folder itself, the
+   * correct prefix is "" even though memory_tool reports ".memory". Using the
+   * name directly produced .memory/.memory/... and silently found nothing.
+   * Working from the absolute path avoids that entirely.
+   *
+   * A manual override wins. Detection failure is not fatal -- the plugin falls
+   * back to the historical default so its other commands keep working.
    */
   async resolveBaseFolder(): Promise<void> {
     const override = this.settings.baseFolder.trim();
     if (override) {
-      this.baseName = override === "./" ? ROOT_BASE : override;
+      this.basePrefix = normalizePrefix(override);
       return;
     }
 
+    let info;
     try {
-      this.baseName = await this.cli.getBaseName();
+      info = await this.cli.getBaseInfo();
     } catch (err: any) {
-      this.baseName = DEFAULT_BASE;
+      this.basePrefix = DEFAULT_BASE;
       new Notice(
-        `memory_tool: could not detect the knowledge base folder, using ` +
-          `${DEFAULT_BASE}/. Set it manually in settings if that is wrong.`
+        "memory_tool: could not detect the knowledge base folder, assuming " +
+          `${DEFAULT_BASE}/. Set it manually in the plugin settings if that is wrong.`
+      );
+      return;
+    }
+
+    const prefix = vaultRelativeBase(this.vaultRoot, info.base);
+
+    if (prefix === null) {
+      // The base folder is not inside this vault, so Obsidian cannot open its
+      // files at all. Say so plainly rather than silently failing later.
+      this.basePrefix = DEFAULT_BASE;
+      new Notice(
+        `memory_tool: the knowledge base (${info.base}) is outside this vault, ` +
+          "so its files cannot be opened here. Open that folder as the vault, or " +
+          "set the folder manually in the plugin settings.",
+        10000
+      );
+      return;
+    }
+
+    this.basePrefix = prefix;
+
+    if (info.source === "nested-artifact") {
+      new Notice(
+        "memory_tool: a leftover nested .memory/ folder was found and ignored. " +
+          "Entries recorded there by older versions are not visible in normal " +
+          "commands -- run 'mbase show' for details.",
+        10000
       );
     }
   }
@@ -191,16 +232,14 @@ class MemoryToolSettingTab extends PluginSettingTab {
           })
       );
 
-    const current =
-      this.plugin.baseName === ROOT_BASE ? "the vault root" : `${this.plugin.baseName}/`;
-
     new Setting(containerEl)
       .setName("Knowledge Base Folder")
       .setDesc(
         `Folder holding timeline/ and modules/, relative to the vault root. ` +
-          `Leave empty to detect it automatically (currently: ${current}). ` +
-          `Use "." for the vault root itself. Note that Obsidian hides ` +
-          `dot-prefixed folders such as ".memory".`
+          `Leave empty to detect it automatically (currently: ` +
+          `${describePrefix(this.plugin.basePrefix)}). Use "." when the vault root ` +
+          `itself is the knowledge base — which is the case if you opened the ` +
+          `.memory folder as your vault.`
       )
       .addText((text) =>
         text

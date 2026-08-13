@@ -110,41 +110,66 @@ Copy-Item "obsidian-plugin\styles.css" $pluginDir
 
 ---
 
-### 5단계: 기반 폴더 설정 (중요)
+### 5단계: 기반 폴더 확인
 
-**Obsidian 은 `.` 으로 시작하는 폴더를 숨김 처리합니다.** 따라서 기본값인 `.memory/` 는
-Obsidian 파일 탐색기에 나타나지 않고, 타임라인·모듈 파일을 볼트에서 열 수 없습니다.
+플러그인은 지식베이스 폴더를 **자동으로 감지**합니다. 어떤 vault 배치를 쓰든
+아래 세 가지 모두 지원됩니다.
 
-Vault 에서 쓰려면 기반 폴더를 보이는 이름이나 볼트 루트로 바꾸세요.
+| Vault 루트 | 기반 폴더 | 플러그인이 쓰는 경로 |
+| :--- | :--- | :--- |
+| `프로젝트/.memory` | `.memory` (= vault 루트) | `timeline/…`, `modules/…` |
+| `프로젝트` | `.memory` | `.memory/timeline/…` (Obsidian 에서 숨김) |
+| `프로젝트` | `memory` | `memory/timeline/…` |
+| `프로젝트` | `.` (= vault 루트) | `timeline/…`, `modules/…` |
 
-```bash
-# 볼트 폴더에서 실행
+**`.memory` 폴더 자체를 vault 로 여는 경우**(가장 흔한 설정)에는 아무 설정도 필요
+없습니다. vault 루트가 이미 기반 폴더이므로 그 안의 `timeline/`, `modules/` 가
+Obsidian 에서 정상적으로 보입니다.
 
-mbase show                   # 현재 상태 확인
-mbase set memory --dry-run   # 무엇이 바뀌는지 미리보기
-mbase set memory             # .memory/ → memory/  (볼트에서 보임)
+확인 방법:
 
-# 또는 볼트 루트 자체를 기반 폴더로
-mbase set .                  # → timeline/, modules/ 가 볼트 최상단에
-```
+- 명령 팔레트 → **Show Knowledge Base Folder (mbase)**
+- 또는 터미널에서 `mbase show`
 
-플러그인은 기반 폴더를 **자동으로 감지**합니다 (`mbase show --porcelain` 사용).
-자동 감지가 실패하거나 다른 위치를 쓰고 싶다면:
+자동 감지가 틀렸거나 다른 위치를 쓰고 싶다면:
 
 1. Obsidian **설정** → **Memory Tool Integration**
-2. **Knowledge Base Folder** 항목에 폴더 이름 입력 (볼트 루트는 `.`)
+2. **Knowledge Base Folder** 에 **vault 루트 기준** 상대 경로 입력
+   (vault 루트가 곧 기반 폴더이면 `.`)
 3. 비워두면 자동 감지
 
-명령 팔레트의 **Show Knowledge Base Folder (mbase)** 로 현재 인식된 폴더를 확인할 수 있습니다.
+> **주의:** 기반 폴더가 vault **밖**에 있으면 Obsidian 이 그 파일을 열 수 없습니다.
+> 이 경우 플러그인이 명확히 경고합니다. 해당 폴더를 vault 로 열거나, vault 안으로
+> 옮기세요.
 
-| 기반 폴더 | Obsidian 에서 | 타임라인 경로 |
-| :--- | :--- | :--- |
-| `.memory` | ❌ 숨김 | `.memory/timeline/daily/2026-08/13.md` |
-| `memory` | ✅ 보임 | `memory/timeline/daily/2026-08/13.md` |
-| `.` (루트) | ✅ 보임 | `timeline/daily/2026-08/13.md` |
+### 폴더 이름을 바꾸고 싶다면 (선택)
 
-> `mbase set .` 로 볼트 루트를 쓰는 경우, `timeline`, `modules`, `concepts`, `plans`,
-> `reviews`, `summaries`, `docs` 폴더만 검색·색인 대상입니다.
+`.memory` 라는 이름 자체가 거슬리거나, 프로젝트 루트를 vault 로 쓰면서 지식베이스를
+보이게 하고 싶을 때만 필요합니다.
+
+```bash
+mbase show                   # 현재 상태
+mbase set memory --dry-run   # 미리보기
+mbase set memory             # .memory/ → memory/
+```
+
+> `mbase set .` 로 프로젝트 루트를 기반 폴더로 쓰는 경우, `timeline`, `modules`,
+> `concepts`, `plans`, `reviews`, `summaries`, `docs` 폴더만 검색·색인 대상입니다.
+
+### 문제 해결: 기록은 되는데 Obsidian 에서 안 보임
+
+구버전에서 vault 루트(= `.memory` 폴더) 안에서 명령을 실행하면 `.memory/.memory/`
+라는 중첩 폴더가 생기고 기록이 그쪽으로 들어갔습니다. `.` 으로 시작하니 Obsidian 이
+숨겨서 보이지 않습니다.
+
+현재 버전은 이 중첩 폴더를 자동으로 무시하고 경고합니다. 확인·정리:
+
+```bash
+mbase show     # 중첩 폴더가 있으면 WARNING 으로 알려줍니다
+```
+
+경고가 보이면, 남기고 싶은 기록을 진짜 타임라인으로 옮긴 뒤 `<기반폴더>/.memory/`
+폴더를 삭제하세요.
 
 ---
 

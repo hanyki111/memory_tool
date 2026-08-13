@@ -1,16 +1,17 @@
-import { App, FuzzySuggestModal, TFile } from "obsidian";
+import { App, FuzzySuggestModal, Notice, TFile } from "obsidian";
 import { MemoryToolCli } from "../cli/memoryToolCli";
 import { DEFAULT_BASE, moduleCandidatePaths } from "../paths";
 
 export class ModuleSuggestModal extends FuzzySuggestModal<string> {
   private cli: MemoryToolCli;
   private modules: string[] = [];
-  private getBaseName: () => string;
+  /** Returns the vault-relative base prefix ("" = the vault root). */
+  private getBasePrefix: () => string;
 
-  constructor(app: App, cli: MemoryToolCli, getBaseName?: () => string) {
+  constructor(app: App, cli: MemoryToolCli, getBasePrefix?: () => string) {
     super(app);
     this.cli = cli;
-    this.getBaseName = getBaseName ?? (() => DEFAULT_BASE);
+    this.getBasePrefix = getBasePrefix ?? (() => DEFAULT_BASE);
     this.setPlaceholder("Type to search active memory_tool modules...");
   }
 
@@ -29,7 +30,7 @@ export class ModuleSuggestModal extends FuzzySuggestModal<string> {
 
   onChooseItem(item: string, evt: MouseEvent | KeyboardEvent): void {
     // Follows [Folder]/[Folder].md convention, under the configured base folder
-    const possiblePaths = moduleCandidatePaths(this.getBaseName(), item);
+    const possiblePaths = moduleCandidatePaths(this.getBasePrefix(), item);
 
     let foundFile: TFile | null = null;
 
@@ -43,6 +44,14 @@ export class ModuleSuggestModal extends FuzzySuggestModal<string> {
 
     if (foundFile) {
       this.app.workspace.getLeaf(false).openFile(foundFile);
+      return;
     }
+
+    // Say why nothing opened -- a wrong base folder used to fail silently here.
+    new Notice(
+      `Could not find '${item}' in this vault. Looked in: ` +
+        `${possiblePaths.join(", ")}. Check the Knowledge Base Folder setting.`,
+      8000
+    );
   }
 }

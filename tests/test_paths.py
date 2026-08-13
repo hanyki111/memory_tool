@@ -541,3 +541,101 @@ def test_exists_reflects_disk_state(tmp_path):
     (tmp_path / "memory").mkdir()
     clear_cache()
     assert resolve_base(tmp_path).exists() is True
+
+
+# ---------------------------------------------------------------------------
+# Nested-artifact guard (the .memory/.memory double-append bug)
+# ---------------------------------------------------------------------------
+
+
+def make_initialized_base(base):
+    """A base folder complete enough to be recognized as initialized."""
+    base.mkdir(parents=True, exist_ok=True)
+    (base / "config.yaml").write_text("version: '1.0'\n", encoding="utf-8")
+    (base / "timeline").mkdir(exist_ok=True)
+    (base / "modules").mkdir(exist_ok=True)
+    return base
+
+
+def make_nested_artifact(base):
+    """Reproduce what the old `Path.cwd() / '.memory'` bug created."""
+    stray = base / DEFAULT_BASE / "timeline" / "daily" / "2026-08"
+    stray.mkdir(parents=True, exist_ok=True)
+    (stray / "13.md").write_text("- 00:31 | recorded into the wrong place", encoding="utf-8")
+    return base / DEFAULT_BASE
+
+
+def test_nested_artifact_does_not_hijack_resolution(tmp_path):
+    """Running from inside the base folder must resolve to the base, not the stray.
+
+    This is the Obsidian case: the plugin sets cwd to the vault root, which is
+    the base folder itself.
+    """
+    base = make_initialized_base(tmp_path / DEFAULT_BASE)
+    make_nested_artifact(base)
+
+    paths = resolve_base(base)
+
+    assert paths.base == base.resolve()
+    assert paths.root == tmp_path.resolve()
+    assert paths.source == "nested-artifact"
+    assert paths.timeline == base.resolve() / "timeline"
+
+
+def test_nested_artifact_guard_works_for_a_visible_base_too(tmp_path):
+    base = make_initialized_base(tmp_path / "memory")
+    make_nested_artifact(base)
+
+    paths = resolve_base(base)
+
+    assert paths.base == base.resolve()
+    assert paths.base_name == "memory"
+
+
+def test_real_nested_base_with_config_is_respected(tmp_path):
+    """A genuine .memory/ that has its own config.yaml is not an artifact."""
+    outer = make_initialized_base(tmp_path / DEFAULT_BASE)
+    inner = make_initialized_base(outer / DEFAULT_BASE)
+
+    paths = resolve_base(outer)
+
+    assert paths.base == inner.resolve()
+    assert paths.source == "legacy"
+
+
+def test_project_with_unrelated_config_yaml_is_not_mistaken_for_a_base(tmp_path):
+    """config.yaml alone must not make a project root look initialized."""
+    (tmp_path / "config.yaml").write_text("my_app: true", encoding="utf-8")
+    (tmp_path / "docs").mkdir()
+    base = tmp_path / DEFAULT_BASE
+    (base / "timeline").mkdir(parents=True)
+
+    paths = resolve_base(tmp_path)
+
+    assert paths.base == base.resolve()
+    assert paths.source == "legacy"
+
+
+def test_pointer_file_still_wins_over_nested_artifact(tmp_path):
+    base = make_initialized_base(tmp_path / "memory")
+    make_nested_artifact(base)
+    write_pointer(tmp_path, "memory")
+
+    paths = resolve_base(tmp_path)
+
+    assert paths.base == base
+    assert paths.source == "pointer"
+
+
+def test_normal_project_resolution_is_unaffected_by_the_guard(tmp_path):
+    """No stray folder: the ordinary upward walk must behave exactly as before."""
+    base = make_initialized_base(tmp_path / DEFAULT_BASE)
+
+    from_root = resolve_base(tmp_path)
+    assert from_root.base == base.resolve()
+    assert from_root.source == "legacy"
+
+    clear_cache()
+    from_inside = resolve_base(base)
+    assert from_inside.base == base.resolve()
+    assert from_inside.root == tmp_path.resolve()

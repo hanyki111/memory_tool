@@ -20,17 +20,40 @@ SOURCE_LABEL = {
     "legacy": "legacy .memory/ folder (no pointer file yet)",
     "env": "MEMORY_TOOL_ROOT / MEMORY_TOOL_BASE environment variable",
     "default": "default (nothing initialized here)",
+    "nested-artifact": "this folder itself (a leftover nested .memory/ was ignored)",
 }
 
 
-def _show(porcelain: bool = False) -> None:
+def _show(porcelain: bool = False, as_json: bool = False) -> None:
     """Print the resolved base folder and how it was determined.
 
     Args:
-        porcelain: Print only the base folder name, for scripts and the
-            Obsidian plugin to consume.
+        porcelain: Print only the base folder name, for scripts.
+        as_json: Print absolute paths as JSON. The Obsidian plugin needs this:
+            the base *name* is relative to the project root, but Obsidian needs
+            paths relative to the vault root, and those differ whenever the vault
+            is the base folder itself. Only absolute paths let the caller work
+            out its own relative path.
     """
     paths = resolve_base()
+
+    if as_json:
+        import json
+
+        # Single line, no markup, so callers can parse the last line of output.
+        print(
+            json.dumps(
+                {
+                    "root": str(paths.root),
+                    "base": str(paths.base),
+                    "base_name": paths.base_name,
+                    "source": paths.source,
+                    "found": paths.found,
+                    "content_subdirs": list(CONTENT_SUBDIRS),
+                }
+            )
+        )
+        return
 
     if porcelain:
         # Deliberately plain: one line, no markup, no rich wrapping.
@@ -44,6 +67,21 @@ def _show(porcelain: bool = False) -> None:
     console.print(f"  Resolved via : {SOURCE_LABEL.get(paths.source, paths.source)}")
     console.print(f"  Initialized  : {'yes' if paths.found else 'no'}")
 
+    if paths.source == "nested-artifact":
+        stray = paths.base / ".memory"
+        console.print(
+            f"\n[yellow]WARNING[/yellow] A leftover nested base folder exists: {stray}"
+        )
+        console.print(
+            "[dim]Older versions created it when a command ran from inside the base "
+            "folder, and recorded into it. It is being ignored, but anything already "
+            "written there is invisible to normal commands.[/dim]"
+        )
+        console.print(
+            "[dim]Move any entries you want to keep into the real timeline, then "
+            "delete the folder.[/dim]"
+        )
+
     if paths.is_root_base:
         console.print(
             "\n[dim]The project root is the base folder, so records are written "
@@ -56,11 +94,12 @@ def _show(porcelain: bool = False) -> None:
     elif paths.is_hidden_base:
         console.print(
             f"\n[yellow]NOTE[/yellow] '{paths.base_name}' starts with a dot, so "
-            f"Obsidian hides it."
+            f"Obsidian hides it when the vault is the project root."
         )
         console.print(
-            "[dim]Use a visible name (mbase set memory) or the vault root "
-            "(mbase set .) to work with it in Obsidian.[/dim]"
+            f"[dim]Either open {paths.base} itself as the vault (its contents are "
+            f"then visible), or give the folder a visible name with "
+            f"'mbase set memory'.[/dim]"
         )
 
     if paths.found:
@@ -254,6 +293,9 @@ def base(
     porcelain: bool = typer.Option(
         False, "--porcelain", help="With 'show': print only the base folder name"
     ),
+    json_output: bool = typer.Option(
+        False, "--json", help="With 'show': print absolute paths as JSON"
+    ),
 ):
     """Show or change the knowledge base folder (mbase command).
 
@@ -273,7 +315,7 @@ def base(
     action = (action or "show").lower()
 
     if action == "show":
-        _show(porcelain=porcelain)
+        _show(porcelain=porcelain, as_json=json_output)
         return
 
     if action == "set":
