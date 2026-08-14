@@ -762,6 +762,7 @@ def notion_sync(
             # Sort timeline if requested
             if sort_timeline and not dry_run:
                 from memory_tool.core.sort import TimelineSorter
+                from memory_tool.core.timeline import Timeline
                 from datetime import timedelta
 
                 sorter = TimelineSorter()
@@ -770,12 +771,11 @@ def notion_sync(
                 sorted_count = 0
                 for day_offset in range(days):
                     target_date = today - timedelta(days=day_offset)
-                    year_month = target_date.strftime("%Y-%m")
-                    # Use int() to remove leading zero (e.g., "01" -> "1")
-                    day_num = str(target_date.day)
-                    file_path = sorter.timeline_path / "daily" / year_month / f"{day_num}.md"
+                    file_path = Timeline.resolve_existing_file(
+                        sorter.timeline_path, target_date
+                    )
 
-                    if file_path.exists():
+                    if file_path is not None:
                         try:
                             sorter.sort_file(file_path, create_backup=False)
                             sorted_count += 1

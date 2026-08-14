@@ -145,14 +145,11 @@ class WeeklyReview:
             date_str = current.strftime("%m/%d")
 
             # Check both legacy and new timeline structures
-            year_month = current.strftime("%Y-%m")
-            day = current.strftime("%d")
+            from memory_tool.core.timeline import Timeline
 
-            # Try legacy path first
-            legacy_path = self.timeline_path / year_month / f"{day}.md"
-            timeline_file = legacy_path if legacy_path.exists() else self.timeline_path / "daily" / year_month / f"{day}.md"
+            timeline_file = Timeline.resolve_existing_file(self.timeline_path, current)
 
-            if timeline_file.exists():
+            if timeline_file is not None:
                 # Count entries (lines starting with "- HH:MM")
                 content = timeline_file.read_text(encoding="utf-8")
                 entry_count = len([line for line in content.split("\n") if line.strip().startswith("- ") and "|" in line])

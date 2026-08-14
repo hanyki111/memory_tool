@@ -185,14 +185,11 @@ class MonthlyReview:
 
         for day in range(1, last_day_num + 1):
             date = datetime(year, month, day)
-            year_month = date.strftime("%Y-%m")
-            day_str = date.strftime("%d")
+            from memory_tool.core.timeline import Timeline
 
-            # Check both legacy and new timeline structures
-            legacy_path = self.timeline_path / year_month / f"{day_str}.md"
-            timeline_file = legacy_path if legacy_path.exists() else self.timeline_path / "daily" / year_month / f"{day_str}.md"
+            timeline_file = Timeline.resolve_existing_file(self.timeline_path, date)
 
-            if timeline_file.exists():
+            if timeline_file is not None:
                 # Count entries (lines starting with "- HH:MM")
                 content = timeline_file.read_text(encoding="utf-8")
                 entry_count = len([line for line in content.split("\n") if line.strip().startswith("- ") and "|" in line])

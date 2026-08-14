@@ -160,16 +160,13 @@ def status():
             entries = [line for line in lines if entry_pattern.match(line.strip())]
             total_entries += len(entries)
 
-            # Track latest date
-            year_month = tf.parent.name
-            day = tf.stem
-            try:
-                from datetime import datetime
-                file_date = datetime.strptime(f"{year_month}-{day}", "%Y-%m-%d")
-                if latest_date is None or file_date > latest_date:
-                    latest_date = file_date
-            except:
-                pass
+            # Track latest date. Derived from the whole path, since the stem is
+            # either "21" or "2026-08-21" depending on the filename layout.
+            from memory_tool.core.timeline import date_from_timeline_path
+
+            file_date = date_from_timeline_path(tf)
+            if file_date is not None and (latest_date is None or file_date > latest_date):
+                latest_date = file_date
 
         # Count modules
         modules_path = memory_path / "modules"
@@ -941,23 +938,140 @@ def hooks(
         sys.exit(1)
 
 
+def _migrate_timeline_filenames(layout: str, dry_run: bool, yes: bool) -> None:
+    """Rename timeline files into a naming layout, then record the choice."""
+    from memory_tool.core.timeline import (
+        FILENAME_LAYOUTS,
+        TimelineError,
+        apply_filename_migration,
+        plan_filename_migration,
+    )
+
+    layout = layout.strip().lower()
+    if layout not in FILENAME_LAYOUTS:
+        console.print(f"[red]ERROR[/red] Unknown filename layout: '{layout}'")
+        console.print(f"[dim]Choose one of: {', '.join(FILENAME_LAYOUTS)}[/dim]")
+        sys.exit(1)
+
+    memory_path = base_dir_for_root(get_project_root())
+    timeline_path = memory_path / "timeline"
+
+    if not timeline_path.is_dir():
+        console.print(f"[red]ERROR[/red] No timeline directory at {timeline_path}")
+        sys.exit(1)
+
+    try:
+        moves, conflicts = plan_filename_migration(timeline_path, layout)
+    except TimelineError as e:
+        console.print(f"[red]ERROR[/red] {e}")
+        sys.exit(1)
+
+    example = "2026-08-21.md" if layout == "date" else "21.md"
+    console.print(f"[cyan]Timeline filename migration[/cyan] -> '{layout}' ({example})\n")
+
+    if conflicts:
+        console.print(f"[yellow]Skipped ({len(conflicts)}):[/yellow]")
+        for source, target, reason in conflicts[:10]:
+            console.print(f"  {display_path(source)} -> {target.name}  [dim]({reason})[/dim]")
+        if len(conflicts) > 10:
+            console.print(f"  [dim]... and {len(conflicts) - 10} more[/dim]")
+        console.print()
+
+    if not moves:
+        console.print("[green]OK[/green] Every timeline file already uses this layout.")
+        _set_timeline_filename_config(memory_path, layout)
+        return
+
+    console.print(f"[bold]Renames ({len(moves)}):[/bold]")
+    for source, target in moves[:10]:
+        console.print(f"  {display_path(source)} -> {target.name}")
+    if len(moves) > 10:
+        console.print(f"  [dim]... and {len(moves) - 10} more[/dim]")
+
+    if dry_run:
+        console.print("\n[dim]Dry run -- nothing was changed.[/dim]")
+        return
+
+    if not yes:
+        console.print()
+        if not typer.confirm(f"Rename {len(moves)} file(s)?", default=False):
+            console.print("[dim]Cancelled -- nothing was changed.[/dim]")
+            return
+
+    try:
+        applied = apply_filename_migration(moves)
+    except TimelineError as e:
+        console.print(f"\n[red]ERROR[/red] {e}")
+        sys.exit(1)
+
+    _set_timeline_filename_config(memory_path, layout)
+
+    console.print(f"\n[green]OK[/green] Renamed {len(applied)} file(s)")
+    console.print(f"[dim]config: timeline.filename = {layout}[/dim]")
+
+    if layout == "date":
+        console.print(
+            "\n[dim]Obsidian Daily Notes 'Date format' should now be "
+            "YYYY-MM/YYYY-MM-DD[/dim]"
+        )
+
+
+def _set_timeline_filename_config(memory_path: Path, layout: str) -> None:
+    """Persist the chosen layout so new files follow it."""
+    import yaml
+
+    config_path = memory_path / "config.yaml"
+    try:
+        data = {}
+        if config_path.exists():
+            data = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+        data.setdefault("timeline", {})["filename"] = layout
+        config_path.write_text(
+            yaml.dump(data, default_flow_style=False, allow_unicode=True, sort_keys=True),
+            encoding="utf-8",
+        )
+    except Exception as e:
+        console.print(
+            f"[yellow]WARNING[/yellow] Files renamed, but config was not updated: {e}"
+        )
+        console.print(f"[dim]Set it by hand: mconfig set timeline.filename {layout}[/dim]")
+
+
 @app.command()
 def migrate_timeline(
     dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be migrated without actually moving files"),
+    filename: Optional[str] = typer.Option(
+        None,
+        "--filename",
+        help="Rename files to a naming layout instead: 'date' (2026-08-21.md) or 'day' (21.md)",
+    ),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt"),
 ):
-    """Migrate timeline files from legacy structure to new daily/ structure.
+    """Migrate timeline files to the new structure, or rename them.
 
-    This command migrates timeline files from:
-      timeline/YYYY-MM/DD.md (legacy)
-    To:
-      timeline/daily/YYYY-MM/DD.md (new structure)
+    Without --filename this migrates the directory structure:
+      timeline/YYYY-MM/DD.md  ->  timeline/daily/YYYY-MM/DD.md
 
-    Use --dry-run to preview what would be migrated.
+    With --filename it renames files within their existing folders:
+      --filename date   21.md  ->  2026-08-21.md
+      --filename day    2026-08-21.md  ->  21.md
+
+    Use 'date' when pairing with Obsidian's Calendar or Periodic Notes plugins:
+    they identify a daily note by parsing its *filename* alone, so every month's
+    21.md collides and clicking a date opens the wrong month.
+
+    Reading always accepts both layouts, so a partial migration stays readable.
 
     Examples:
-        mmigrate-timeline              # Perform migration
-        mmigrate-timeline --dry-run    # Preview migration
+        mmigrate-timeline                        # Structure migration
+        mmigrate-timeline --dry-run              # Preview
+        mmigrate-timeline --filename date        # Rename for Obsidian Calendar
+        mmigrate-timeline --filename date --dry-run
     """
+    if filename is not None:
+        _migrate_timeline_filenames(filename, dry_run=dry_run, yes=yes)
+        return
+
     try:
         from memory_tool.utils.migrate_timeline import TimelineMigrator
 

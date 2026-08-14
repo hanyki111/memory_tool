@@ -205,12 +205,43 @@ Obsidian **설정** → **Daily Notes** (또는 **Periodic Notes**) 에서 3개�
 
 | 항목 | 값 |
 | :--- | :--- |
-| **Date format** | `YYYY-MM/DD` |
+| **Date format** | `YYYY-MM/YYYY-MM-DD` |
 | **New file location** | `<vault기준 경로>/timeline/daily` |
 | **Template file location** | `<vault기준 경로>/templates/obsidian/timeline-daily-note` |
 
-`Date format` 에 슬래시를 넣으면 Obsidian 이 **하위 폴더를 만듭니다.** 그래서
-`YYYY-MM/DD` 가 `2026-08/14.md` 를 만들고, memory_tool 구조와 정확히 일치합니다.
+`Date format` 에 슬래시를 넣으면 Obsidian 이 **하위 폴더를 만듭니다.**
+`YYYY-MM/YYYY-MM-DD` 는 `2026-08/2026-08-14.md` 를 만듭니다.
+
+### ⚠️ `YYYY-MM/DD` 를 쓰면 안 되는 이유
+
+폴더는 맞지만 **파일명에 월 정보가 없어서** Calendar 가 날짜를 구분하지 못합니다.
+플러그인 내부 동작이 비대칭이기 때문입니다:
+
+| 동작 | 사용하는 것 | 결과 |
+| :--- | :--- | :--- |
+| 파일 **생성** | 전체 포맷 | `2026-08/14.md` ✅ |
+| 파일 **탐색** | `format.split("/").pop()` → `DD` | 파일명 `14` 만 봄 ❌ |
+
+탐색이 파일명만 보므로 모든 달의 `14.md` 가 충돌하고, 먼저 발견된 것(보통 가장 이른 달)이
+열립니다. **8월 21일을 눌렀는데 1월 21일 문서가 뜨는** 증상이 이것입니다.
+
+`YYYY-MM/YYYY-MM-DD` 는 파일명이 `2026-08-14` 라 고유하므로 정상 동작합니다.
+
+### 기존 파일 변환
+
+memory_tool 은 기본적으로 `14.md` 로 기록하므로, Calendar 를 쓰려면 한 번 변환해야 합니다.
+
+```bash
+mmigrate-timeline --filename date --dry-run   # 미리보기
+mmigrate-timeline --filename date             # 변환 + config 자동 설정
+```
+
+- 폴더 구조는 그대로 두고 **파일 이름만** 바꿉니다 (`2026-08/14.md` → `2026-08/2026-08-14.md`)
+- 같은 날짜 파일이 이미 있으면 덮어쓰지 않고 건너뛰고 보고합니다
+- 실패 시 자동 롤백되며, 되돌리려면 `--filename day`
+- 읽기는 **두 방식 모두** 지원하므로 변환 도중에도 모든 기록이 보입니다
+
+변환 후 `config.yaml` 에 `timeline.filename: date` 가 기록되어 새 기록도 같은 방식을 씁니다.
 
 **New file location** 은 vault 루트 기준입니다 — 기반 폴더가 아니라 **vault 위치**에
 따라 달라집니다:

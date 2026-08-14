@@ -75,33 +75,14 @@ class MemorySearcher:
             Date object or None if not a timeline file
         """
         # Check if it's in timeline directory
-        parts = path.parts
-        if "timeline" not in parts:
+        if "timeline" not in path.parts:
             return None
 
-        try:
-            # Find timeline index
-            timeline_idx = parts.index("timeline")
+        # Handles both "YYYY-MM/DD.md" and "YYYY-MM/YYYY-MM-DD.md", and does not
+        # care how deep the file sits, so the daily/ subfolder works too.
+        from memory_tool.core.timeline import date_from_timeline_path
 
-            # Next part should be YYYY-MM
-            if timeline_idx + 1 >= len(parts):
-                return None
-            year_month = parts[timeline_idx + 1]
-
-            # File name should be DD.md
-            if timeline_idx + 2 >= len(parts):
-                return None
-            day_file = parts[timeline_idx + 2]
-
-            # Parse YYYY-MM
-            year, month = year_month.split("-")
-
-            # Parse DD from DD.md
-            day = day_file.replace(".md", "")
-
-            return date(int(year), int(month), int(day))
-        except (ValueError, IndexError):
-            return None
+        return date_from_timeline_path(path)
 
     def _is_in_date_range(
         self,

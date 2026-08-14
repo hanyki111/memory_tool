@@ -203,30 +203,16 @@ class TimelineSorter:
 
             # Check date range if specified
             if from_date or to_date:
-                # Extract date from path: timeline/YYYY-MM/DD.md
-                try:
-                    parts = md_file.parts
-                    timeline_idx = parts.index("timeline")
+                # Handles "YYYY-MM/DD.md" and "YYYY-MM/YYYY-MM-DD.md" alike.
+                from memory_tool.core.timeline import date_from_timeline_path
 
-                    if timeline_idx + 2 >= len(parts):
-                        continue
+                file_date = date_from_timeline_path(md_file)
+                if file_date is None:
+                    continue
 
-                    year_month = parts[timeline_idx + 1]
-                    day_file = parts[timeline_idx + 2]
-
-                    year, month = year_month.split("-")
-                    day = day_file.replace(".md", "")
-
-                    file_date = date(int(year), int(month), int(day))
-
-                    # Check range
-                    if from_date and file_date < from_date:
-                        continue
-                    if to_date and file_date > to_date:
-                        continue
-
-                except (ValueError, IndexError):
-                    # If can't parse date, skip
+                if from_date and file_date < from_date:
+                    continue
+                if to_date and file_date > to_date:
                     continue
 
             files.append(md_file)

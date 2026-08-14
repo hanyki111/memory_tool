@@ -14,6 +14,161 @@ except Exception:
     INDEXING_AVAILABLE = False
 
 
+#: How a timeline file is named within its YYYY-MM folder.
+#:
+#: ``day``  -- "21.md". The original layout: compact, but the month lives only
+#:             in the folder name.
+#: ``date`` -- "2026-08-21.md". Needed by Obsidian's Calendar and Periodic Notes
+#:             plugins, which identify a daily note by parsing its *basename*
+#:             alone (they take the date format's last "/" segment). With
+#:             "day" naming every month's 21.md collides and the first one found
+#:             wins, so clicking a date opens the wrong month.
+FILENAME_LAYOUTS = ("day", "date")
+DEFAULT_FILENAME_LAYOUT = "day"
+
+#: "2026-08-21.md"
+_DATE_STEM = re.compile(r"^(\d{4})-(\d{2})-(\d{2})$")
+#: "21.md", which only yields a date together with its "YYYY-MM" parent folder.
+_DAY_STEM = re.compile(r"^(\d{1,2})$")
+_MONTH_DIR = re.compile(r"^(\d{4})-(\d{2})$")
+
+
+def timeline_filename(target_date, layout: str = DEFAULT_FILENAME_LAYOUT) -> str:
+    """Build the filename for a timeline date.
+
+    Args:
+        target_date: date or datetime
+        layout: "day" or "date"
+
+    Returns:
+        Filename including the .md suffix.
+    """
+    if layout == "date":
+        return f"{target_date.strftime('%Y-%m-%d')}.md"
+    return f"{target_date.strftime('%d')}.md"
+
+
+def date_from_timeline_path(path: Path):
+    """Derive the date a timeline file represents, for either naming layout.
+
+    Callers used to join the parent folder with the file stem, which silently
+    produced nonsense such as "2026-08-2026-08-21" once filenames carried the
+    full date.
+
+    Args:
+        path: Path to a timeline markdown file
+
+    Returns:
+        datetime.date, or None if the path is not a dated timeline file.
+    """
+    from datetime import date as _date
+
+    stem = path.stem
+
+    match = _DATE_STEM.match(stem)
+    if match:
+        try:
+            return _date(int(match.group(1)), int(match.group(2)), int(match.group(3)))
+        except ValueError:
+            return None
+
+    match = _DAY_STEM.match(stem)
+    if match:
+        parent = _MONTH_DIR.match(path.parent.name)
+        if not parent:
+            return None
+        try:
+            return _date(int(parent.group(1)), int(parent.group(2)), int(match.group(1)))
+        except ValueError:
+            return None
+
+    return None
+
+
+def plan_filename_migration(timeline_path: Path, layout: str) -> Tuple[list, list]:
+    """Plan renaming every timeline file into the requested naming layout.
+
+    Args:
+        timeline_path: The ``timeline`` directory
+        layout: Target layout, "day" or "date"
+
+    Returns:
+        (moves, conflicts) where moves is a list of (source, target) pairs and
+        conflicts is a list of (source, target, reason) that cannot be applied.
+    """
+    if layout not in FILENAME_LAYOUTS:
+        raise TimelineError(
+            f"Unknown filename layout: '{layout}'. "
+            f"Choose one of: {', '.join(FILENAME_LAYOUTS)}"
+        )
+
+    moves = []
+    conflicts = []
+    claimed = {}
+
+    if not timeline_path.is_dir():
+        return moves, conflicts
+
+    for path in sorted(timeline_path.rglob("*.md")):
+        file_date = date_from_timeline_path(path)
+        if file_date is None:
+            continue  # not a dated timeline file; leave it alone
+
+        target = path.parent / timeline_filename(file_date, layout)
+        if target == path:
+            continue
+
+        if target.exists():
+            conflicts.append((path, target, "target already exists"))
+            continue
+
+        # Two sources cannot both claim one target (a folder holding both
+        # 21.md and 2026-08-21.md for the same day).
+        if target in claimed:
+            conflicts.append((path, target, f"also claimed by {claimed[target].name}"))
+            continue
+
+        claimed[target] = path
+        moves.append((path, target))
+
+    return moves, conflicts
+
+
+def apply_filename_migration(moves: list) -> list:
+    """Execute a rename plan, rolling back if any step fails.
+
+    Args:
+        moves: (source, target) pairs from plan_filename_migration()
+
+    Returns:
+        The moves that were applied.
+
+    Raises:
+        TimelineError: If a rename fails; completed renames are undone first.
+    """
+    import shutil
+
+    done = []
+    try:
+        for source, target in moves:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(source), str(target))
+            done.append((source, target))
+    except Exception as e:
+        for source, target in reversed(done):
+            try:
+                shutil.move(str(target), str(source))
+            except Exception:
+                raise TimelineError(
+                    f"Rename failed ({e}) and rollback also failed. Timeline files "
+                    f"are split between two naming layouts -- both are still "
+                    f"readable, but re-run the migration to finish."
+                ) from e
+        raise TimelineError(f"Rename failed, rolled back cleanly: {e}") from e
+
+    return done
+
+
 class TimelineError(Exception):
     """Base exception for timeline operations."""
     pass
@@ -32,12 +187,19 @@ class DistantPastWarning(TimelineError):
 class Timeline:
     """Timeline manager for recording messages."""
 
-    def __init__(self, base_path: Optional[Path] = None, use_daily_structure: bool = True):
+    def __init__(
+        self,
+        base_path: Optional[Path] = None,
+        use_daily_structure: bool = True,
+        filename_layout: Optional[str] = None,
+    ):
         """Initialize timeline manager.
 
         Args:
-            base_path: Base path for .memory/ directory. Defaults to current directory.
+            base_path: Base path for the knowledge base. Defaults to the project root.
             use_daily_structure: Use new daily/ structure (default: True). Set to False for legacy.
+            filename_layout: "day" (21.md) or "date" (2026-08-21.md). Defaults to
+                the ``timeline.filename`` config value.
         """
         if base_path is None:
             base_path = get_project_root()
@@ -45,6 +207,44 @@ class Timeline:
         self.memory_path = base_dir_for_root(self.base_path)
         self.timeline_path = self.memory_path / "timeline"
         self.use_daily_structure = use_daily_structure
+        self.filename_layout = filename_layout or self._configured_layout()
+
+    def _configured_layout(self) -> str:
+        """Read the filename layout from config, falling back to the default."""
+        try:
+            from memory_tool.utils.config import Config
+
+            configured = Config(self.memory_path).get("timeline.filename")
+        except Exception:
+            return DEFAULT_FILENAME_LAYOUT
+
+        if configured in FILENAME_LAYOUTS:
+            return configured
+        return DEFAULT_FILENAME_LAYOUT
+
+    @staticmethod
+    def candidate_paths(timeline_path: Path, target_date) -> List[Path]:
+        """Every location a timeline file for a date could occupy.
+
+        Covers both directory structures (daily/ and the pre-migration layout)
+        and both filename layouts, so a knowledge base part-way through a
+        migration stays fully readable.
+
+        Args:
+            timeline_path: The ``timeline`` directory
+            target_date: date or datetime to look up
+
+        Returns:
+            Candidate paths, most current layout first.
+        """
+        year_month = target_date.strftime("%Y-%m")
+        candidates = []
+
+        for directory in (timeline_path / "daily" / year_month, timeline_path / year_month):
+            for layout in ("date", "day"):
+                candidates.append(directory / timeline_filename(target_date, layout))
+
+        return candidates
 
     @staticmethod
     def resolve_existing_file(timeline_path: Path, target_date) -> Optional[Path]:
@@ -61,13 +261,7 @@ class Timeline:
         Returns:
             The existing path, or None if neither location has the file.
         """
-        year_month = target_date.strftime("%Y-%m")
-        day = target_date.strftime("%d")
-
-        for candidate in (
-            timeline_path / "daily" / year_month / f"{day}.md",
-            timeline_path / year_month / f"{day}.md",
-        ):
+        for candidate in Timeline.candidate_paths(timeline_path, target_date):
             if candidate.exists():
                 return candidate
 
@@ -81,29 +275,27 @@ class Timeline:
             create: If True, use new daily/ structure. If False, check both locations.
 
         Returns:
-            Path to timeline markdown file (daily/YYYY-MM/DD.md or YYYY-MM/DD.md for legacy)
+            Path to the timeline markdown file, named per the configured layout.
         """
         year_month = date.strftime("%Y-%m")
-        day = date.strftime("%d")
+        filename = timeline_filename(date, self.filename_layout)
 
-        if create and self.use_daily_structure:
-            # New structure: timeline/daily/YYYY-MM/DD.md
-            return self.timeline_path / "daily" / year_month / f"{day}.md"
-        elif create:
-            # Legacy structure: timeline/YYYY-MM/DD.md
-            return self.timeline_path / year_month / f"{day}.md"
-        else:
-            # Reading: Prefer legacy path if it exists (for backward compatibility during migration)
-            # This ensures old entries are not hidden when both files exist
-            legacy_path = self.timeline_path / year_month / f"{day}.md"
-            if legacy_path.exists():
-                return legacy_path
-            # Try new structure if legacy doesn't exist
-            new_path = self.timeline_path / "daily" / year_month / f"{day}.md"
-            if new_path.exists():
-                return new_path
-            # Return new path as default (for existence checks)
-            return new_path
+        if create:
+            directory = (
+                self.timeline_path / "daily" / year_month
+                if self.use_daily_structure
+                else self.timeline_path / year_month
+            )
+            return directory / filename
+
+        # Reading: return whichever layout actually exists, so a knowledge base
+        # part-way through a migration is still fully readable.
+        existing = self.resolve_existing_file(self.timeline_path, date)
+        if existing is not None:
+            return existing
+
+        # Nothing on disk -- return where a new file would go, for existence checks.
+        return self.timeline_path / "daily" / year_month / filename
 
     def parse_time(
         self,
@@ -262,10 +454,13 @@ class Timeline:
         if header:
             lines.append(header)
         else:
-            # Generate default header
-            date_str = file_path.stem  # DD from DD.md
-            year_month = file_path.parent.name  # YYYY-MM
-            lines.append(f"# {year_month}-{date_str} Timeline")
+            # Generate default header. Derived from the path rather than the
+            # stem alone, since the stem may be "21" or "2026-08-21".
+            file_date = date_from_timeline_path(file_path)
+            if file_date is not None:
+                lines.append(f"# {file_date.strftime('%Y-%m-%d')} Timeline")
+            else:
+                lines.append(f"# {file_path.stem} Timeline")
 
         lines.extend(entries)
 
@@ -321,16 +516,10 @@ class Timeline:
         # Get timeline file
         # During migration transition: if legacy file exists for this date, append to it
         # This prevents splitting entries across old and new structures
-        year_month = dt.strftime("%Y-%m")
-        day = dt.strftime("%d")
-        legacy_path = self.timeline_path / year_month / f"{day}.md"
-
-        if legacy_path.exists():
-            # Use legacy file if it exists (backward compatibility during migration)
-            file_path = legacy_path
-        else:
-            # Use new structure for new files
-            file_path = self.get_timeline_file(dt)
+        # Append to whatever file already holds this date, in any layout, so a
+        # day's entries are never split across two differently-named files.
+        existing = self.resolve_existing_file(self.timeline_path, dt)
+        file_path = existing if existing is not None else self.get_timeline_file(dt)
 
         # Read existing content
         header, entries = self.read_timeline(file_path)

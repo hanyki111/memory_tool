@@ -14,6 +14,7 @@ from memory_tool.core.timeline import (
     TimelineError,
     FutureTimeError,
     DistantPastWarning,
+    date_from_timeline_path,
 )
 from memory_tool.core.sort import TimelineSorter, SortError
 from memory_tool.context.builder import ContextBuilder
@@ -194,9 +195,8 @@ def week():
         console.print(f"[cyan]Week of {monday.strftime('%Y-%m-%d')} Timeline:[/cyan]\n")
 
         for file_path, content in week_files:
-            year_month = file_path.parent.name
-            day = file_path.stem
-            date_str = f"{year_month}-{day}"
+            file_date = date_from_timeline_path(file_path)
+            date_str = file_date.strftime("%Y-%m-%d") if file_date else file_path.stem
 
             console.print(f"[bold]{date_str}[/bold]")
             console.print(sanitize_output(content))
@@ -229,9 +229,8 @@ def month():
         console.print(f"[cyan]{month_name} Timeline:[/cyan]\n")
 
         for file_path, content in month_files:
-            year_month = file_path.parent.name
-            day = file_path.stem
-            date_str = f"{year_month}-{day}"
+            file_date = date_from_timeline_path(file_path)
+            date_str = file_date.strftime("%Y-%m-%d") if file_date else file_path.stem
 
             console.print(f"[bold]{date_str}[/bold]")
             console.print(sanitize_output(content))
@@ -272,9 +271,8 @@ def days(
         console.print(f"[cyan]Timeline: Last {num_days} days ({start_date.strftime('%Y-%m-%d')} ~ {today_dt.strftime('%Y-%m-%d')}):[/cyan]\n")
 
         for file_path, content in days_files:
-            year_month = file_path.parent.name
-            day = file_path.stem
-            date_str = f"{year_month}-{day}"
+            file_date = date_from_timeline_path(file_path)
+            date_str = file_date.strftime("%Y-%m-%d") if file_date else file_path.stem
 
             console.print(f"[bold]{date_str}[/bold]")
             console.print(sanitize_output(content))

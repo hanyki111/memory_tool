@@ -58,23 +58,16 @@ class ContextBuilder:
         paths = []
         today = datetime.now().date()
 
+        from memory_tool.core.timeline import Timeline
+
         for i in range(days):
             date = today - timedelta(days=i)
-            year_month = date.strftime("%Y-%m")
-            day = date.strftime("%d")
 
-            # Entries are written to timeline/daily/YYYY-MM/DD.md; the
-            # unprefixed path is the pre-migration location. Checking only the
-            # legacy one meant no timeline ever reached the context file.
-            candidates = (
-                timeline_path / "daily" / year_month / f"{day}.md",
-                timeline_path / year_month / f"{day}.md",
-            )
-
-            for file_path in candidates:
-                if file_path.exists():
-                    paths.append(file_path)
-                    break
+            # Checks both directory structures and both filename layouts, so a
+            # partially migrated knowledge base stays fully readable.
+            file_path = Timeline.resolve_existing_file(timeline_path, date)
+            if file_path is not None:
+                paths.append(file_path)
 
         return paths
 

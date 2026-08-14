@@ -149,17 +149,15 @@ class PlanTimelineIntegration:
         Returns:
             Path to timeline file
         """
+        from memory_tool.core.timeline import Timeline, timeline_filename
+
+        existing = Timeline.resolve_existing_file(self.timeline_path, target_date)
+        if existing is not None:
+            return existing
+
+        # Nothing on disk yet: return where a new file would be written.
         year_month = target_date.strftime("%Y-%m")
-        day = target_date.strftime("%d")
-
-        # Try new structure first
-        new_path = self.timeline_path / "daily" / year_month / f"{day}.md"
-        if new_path.exists():
-            return new_path
-
-        # Fall back to legacy structure
-        legacy_path = self.timeline_path / year_month / f"{day}.md"
-        return legacy_path
+        return self.timeline_path / "daily" / year_month / timeline_filename(target_date)
 
     def get_relative_path(self, from_path: Path, to_path: Path) -> str:
         """Get relative path from one file to another.
