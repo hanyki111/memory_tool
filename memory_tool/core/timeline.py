@@ -134,6 +134,37 @@ def plan_filename_migration(timeline_path: Path, layout: str) -> Tuple[list, lis
     return moves, conflicts
 
 
+def find_basename_clashes(timeline_path: Path, moves: Optional[list] = None) -> dict:
+    """Find dates whose file would share a basename with another file.
+
+    Obsidian identifies a daily note by its filename alone, ignoring the folder,
+    so two files named 2026-01-08.md in different folders are as ambiguous as
+    the "21.md" naming this migration exists to fix. Path-level collision checks
+    do not catch this, because the two paths genuinely differ.
+
+    Args:
+        timeline_path: The ``timeline`` directory
+        moves: Optional pending (source, target) pairs, so a plan can be
+            checked before it is applied
+
+    Returns:
+        {basename: [paths]} for each basename claimed more than once.
+    """
+    renamed = {source: target for source, target in (moves or [])}
+    by_name = {}
+
+    if not timeline_path.is_dir():
+        return {}
+
+    for path in sorted(timeline_path.rglob("*.md")):
+        if date_from_timeline_path(path) is None:
+            continue
+        final = renamed.get(path, path)
+        by_name.setdefault(final.name, []).append(final)
+
+    return {name: paths for name, paths in by_name.items() if len(paths) > 1}
+
+
 def apply_filename_migration(moves: list) -> list:
     """Execute a rename plan, rolling back if any step fails.
 

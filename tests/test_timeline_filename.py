@@ -317,3 +317,160 @@ def test_timeline_is_readable_after_migrating_to_any_layout(tmp_path, layout):
     found = Timeline.resolve_existing_file(root / "timeline", date(2026, 8, 21))
     assert found is not None
     assert "content" in found.read_text(encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# Multi-project discovery
+# ---------------------------------------------------------------------------
+
+
+def test_discovers_knowledge_bases_under_a_parent(tmp_path):
+    from memory_tool.utils.paths import discover_knowledge_bases
+
+    for name in ("projA", "projB"):
+        make_base(tmp_path / name)
+        write_file(tmp_path / name, "2026-08", "21.md")
+    (tmp_path / "not-a-project" / "src").mkdir(parents=True)
+
+    found = discover_knowledge_bases(tmp_path, include_self=False)
+
+    assert {p.root.name for p in found} == {"projA", "projB"}
+
+
+def test_discovery_ignores_directories_without_content(tmp_path):
+    from memory_tool.utils.paths import discover_knowledge_bases
+
+    # A bare folder, and one with an empty base folder
+    (tmp_path / "plain").mkdir()
+    (tmp_path / "empty" / ".memory").mkdir(parents=True)
+
+    assert discover_knowledge_bases(tmp_path, include_self=False) == []
+
+
+def test_discovery_does_not_walk_upward(tmp_path):
+    """A child without its own base must not be credited with the parent's."""
+    from memory_tool.utils.paths import discover_knowledge_bases
+
+    make_base(tmp_path)
+    write_file(tmp_path, "2026-08", "21.md")
+    (tmp_path / "child").mkdir()
+
+    found = discover_knowledge_bases(tmp_path / "child", include_self=True)
+
+    assert found == []
+
+
+def test_discovery_finds_a_renamed_base_folder(tmp_path):
+    from memory_tool.utils.paths import discover_knowledge_bases, write_pointer
+
+    project = tmp_path / "proj"
+    project.mkdir()
+    write_pointer(project, "memory")
+    (project / "memory" / "timeline").mkdir(parents=True)
+    clear_cache()
+
+    found = discover_knowledge_bases(tmp_path, include_self=False)
+
+    assert len(found) == 1
+    assert found[0].base == project / "memory"
+
+
+def test_each_project_migrates_independently(tmp_path):
+    """One project's layout must not depend on another's."""
+    projects = []
+    for name in ("a", "b"):
+        root = tmp_path / name
+        make_base(root)
+        write_file(root, "2026-08", "21.md")
+        projects.append(root)
+
+    # Migrate only the first
+    moves, _ = plan_filename_migration(projects[0] / "timeline", "date")
+    apply_filename_migration(moves)
+
+    assert (projects[0] / "timeline" / "daily" / "2026-08" / "2026-08-21.md").exists()
+    assert (projects[1] / "timeline" / "daily" / "2026-08" / "21.md").exists()
+
+
+# ---------------------------------------------------------------------------
+# Basename clashes (what Obsidian actually cannot resolve)
+# ---------------------------------------------------------------------------
+
+
+def test_no_clash_reported_for_a_clean_timeline(tmp_path):
+    from memory_tool.core.timeline import find_basename_clashes
+
+    root = make_base(tmp_path)
+    write_file(root, "2026-01", "2026-01-08.md")
+    write_file(root, "2026-08", "2026-08-21.md")
+
+    assert find_basename_clashes(root / "timeline") == {}
+
+
+def test_clash_across_folders_is_reported(tmp_path):
+    """Different paths, same filename -- Obsidian sees one note, not two."""
+    from memory_tool.core.timeline import find_basename_clashes
+
+    root = make_base(tmp_path)
+    write_file(root, "2026-01", "2026-01-08.md")
+    loose = root / "timeline" / "2026-01-08.md"
+    loose.write_text("# 2026-01-08\n- 09:00 | other\n", encoding="utf-8")
+
+    clashes = find_basename_clashes(root / "timeline")
+
+    assert set(clashes) == {"2026-01-08.md"}
+    assert len(clashes["2026-01-08.md"]) == 2
+
+
+def test_clash_is_detected_in_a_pending_plan(tmp_path):
+    """The warning must be available before anything is renamed."""
+    from memory_tool.core.timeline import find_basename_clashes
+
+    root = make_base(tmp_path)
+    write_file(root, "2026-01", "08.md")  # becomes 2026-01-08.md
+    loose = root / "timeline" / "2026-01-08.md"
+    loose.write_text("# 2026-01-08\n- 09:00 | other\n", encoding="utf-8")
+
+    moves, _ = plan_filename_migration(root / "timeline", "date")
+    clashes = find_basename_clashes(root / "timeline", moves)
+
+    assert "2026-01-08.md" in clashes
+
+
+def test_day_layout_clashes_are_visible_too(tmp_path):
+    """The original problem: every month's 21.md is the same basename."""
+    from memory_tool.core.timeline import find_basename_clashes
+
+    root = make_base(tmp_path)
+    for month in ("2026-01", "2026-02", "2026-08"):
+        write_file(root, month, "21.md")
+
+    clashes = find_basename_clashes(root / "timeline")
+
+    assert set(clashes) == {"21.md"}
+    assert len(clashes["21.md"]) == 3
+
+
+def test_migrating_to_date_resolves_the_clash(tmp_path):
+    from memory_tool.core.timeline import find_basename_clashes
+
+    root = make_base(tmp_path)
+    for month in ("2026-01", "2026-02", "2026-08"):
+        write_file(root, month, "21.md")
+
+    moves, _ = plan_filename_migration(root / "timeline", "date")
+    apply_filename_migration(moves)
+
+    assert find_basename_clashes(root / "timeline") == {}
+
+
+def test_non_timeline_files_are_not_counted_as_clashes(tmp_path):
+    from memory_tool.core.timeline import find_basename_clashes
+
+    root = make_base(tmp_path)
+    for month in ("2026-01", "2026-02"):
+        directory = root / "timeline" / "daily" / month
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "README.md").write_text("notes", encoding="utf-8")
+
+    assert find_basename_clashes(root / "timeline") == {}

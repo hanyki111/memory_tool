@@ -581,6 +581,64 @@ def clear_cache() -> None:
     _cache.clear()
 
 
+def discover_knowledge_bases(parent: Path, include_self: bool = True) -> List[MemoryPaths]:
+    """Find initialized knowledge bases directly under a directory.
+
+    Each immediate child is resolved on its own terms -- pointer file first,
+    then the legacy folder -- without walking upward, so a project is never
+    credited with a parent's knowledge base.
+
+    Args:
+        parent: Directory to look in
+        include_self: Also consider `parent` itself
+
+    Returns:
+        MemoryPaths for each directory that holds knowledge base content,
+        sorted by project root.
+    """
+    parent = Path(parent)
+    if not parent.is_dir():
+        return []
+
+    found = []
+    seen = set()
+
+    candidates = []
+    if include_self:
+        candidates.append(parent)
+    try:
+        candidates.extend(sorted(p for p in parent.iterdir() if p.is_dir()))
+    except OSError:
+        return []
+
+    for root in candidates:
+        base = base_dir_for_root(root)
+        # Require actual content, not just a directory that happens to exist.
+        if not any((base / name).is_dir() for name in CONTENT_SUBDIRS):
+            continue
+
+        resolved = base.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+
+        name = read_pointer(root)
+        if name is None:
+            name = DEFAULT_BASE if base != root else ROOT_BASE
+
+        found.append(
+            MemoryPaths(
+                root=root,
+                base=base,
+                base_name=name,
+                found=True,
+                source="pointer" if read_pointer(root) else "legacy",
+            )
+        )
+
+    return found
+
+
 def display_path(path: Path, start: Optional[Path] = None) -> str:
     """Render a path for human-readable output, never raising.
 

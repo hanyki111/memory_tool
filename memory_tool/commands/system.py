@@ -3,7 +3,7 @@
 import re
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 import typer
 
@@ -938,12 +938,77 @@ def hooks(
         sys.exit(1)
 
 
-def _migrate_timeline_filenames(layout: str, dry_run: bool, yes: bool) -> None:
-    """Rename timeline files into a naming layout, then record the choice."""
+def _resolve_migration_targets(roots, scan) -> list:
+    """Work out which knowledge bases a filename migration should cover.
+
+    Args:
+        roots: Explicit project roots (repeatable --root)
+        scan: Parent directory to search for knowledge bases
+
+    Returns:
+        List of MemoryPaths, de-duplicated by resolved base folder.
+    """
+    from memory_tool.utils.paths import (
+        MemoryPaths,
+        base_dir_for_root,
+        discover_knowledge_bases,
+        get_paths,
+        read_pointer,
+    )
+
+    targets = []
+    seen = set()
+
+    def add(paths) -> None:
+        key = paths.base.resolve()
+        if key not in seen:
+            seen.add(key)
+            targets.append(paths)
+
+    for raw in roots or []:
+        root = Path(raw).expanduser()
+        if not root.is_dir():
+            console.print(f"[yellow]WARNING[/yellow] Not a directory, skipped: {root}")
+            continue
+        # Resolve on the directory's own terms; do not walk up, or a project
+        # without its own knowledge base would silently target its parent's.
+        base = base_dir_for_root(root)
+        add(
+            MemoryPaths(
+                root=root,
+                base=base,
+                base_name=read_pointer(root) or base.name,
+                found=base.is_dir(),
+                source="explicit",
+            )
+        )
+
+    if scan:
+        parent = Path(scan).expanduser()
+        if not parent.is_dir():
+            console.print(f"[red]ERROR[/red] --scan is not a directory: {parent}")
+            sys.exit(1)
+        for paths in discover_knowledge_bases(parent):
+            add(paths)
+
+    if not targets:
+        add(get_paths())
+
+    return targets
+
+
+def _migrate_timeline_filenames(layout: str, dry_run: bool, yes: bool, roots=None, scan=None) -> None:
+    """Rename timeline files into a naming layout, then record the choice.
+
+    Handles any number of knowledge bases in one run: a filename layout is a
+    property of each project, and a user pairing several projects with Obsidian
+    needs them converted consistently.
+    """
     from memory_tool.core.timeline import (
         FILENAME_LAYOUTS,
         TimelineError,
         apply_filename_migration,
+        find_basename_clashes,
         plan_filename_migration,
     )
 
@@ -953,40 +1018,100 @@ def _migrate_timeline_filenames(layout: str, dry_run: bool, yes: bool) -> None:
         console.print(f"[dim]Choose one of: {', '.join(FILENAME_LAYOUTS)}[/dim]")
         sys.exit(1)
 
-    memory_path = base_dir_for_root(get_project_root())
-    timeline_path = memory_path / "timeline"
-
-    if not timeline_path.is_dir():
-        console.print(f"[red]ERROR[/red] No timeline directory at {timeline_path}")
-        sys.exit(1)
-
-    try:
-        moves, conflicts = plan_filename_migration(timeline_path, layout)
-    except TimelineError as e:
-        console.print(f"[red]ERROR[/red] {e}")
-        sys.exit(1)
-
+    targets = _resolve_migration_targets(roots, scan)
     example = "2026-08-21.md" if layout == "date" else "21.md"
     console.print(f"[cyan]Timeline filename migration[/cyan] -> '{layout}' ({example})\n")
 
-    if conflicts:
-        console.print(f"[yellow]Skipped ({len(conflicts)}):[/yellow]")
-        for source, target, reason in conflicts[:10]:
-            console.print(f"  {display_path(source)} -> {target.name}  [dim]({reason})[/dim]")
-        if len(conflicts) > 10:
-            console.print(f"  [dim]... and {len(conflicts) - 10} more[/dim]")
-        console.print()
+    # Plan everything before touching anything, so the whole scope is visible.
+    plans = []
+    for paths in targets:
+        timeline_path = paths.base / "timeline"
+        if not timeline_path.is_dir():
+            continue
+        try:
+            moves, conflicts = plan_filename_migration(timeline_path, layout)
+        except TimelineError as e:
+            console.print(f"[yellow]WARNING[/yellow] {paths.root.name}: {e}")
+            continue
+        plans.append((paths, moves, conflicts))
 
-    if not moves:
-        console.print("[green]OK[/green] Every timeline file already uses this layout.")
-        _set_timeline_filename_config(memory_path, layout)
+    if not plans:
+        console.print("[yellow]No knowledge base with a timeline/ directory was found.[/yellow]")
+        console.print("[dim]Use --root <path> or --scan <parent> to point at one.[/dim]")
         return
 
-    console.print(f"[bold]Renames ({len(moves)}):[/bold]")
-    for source, target in moves[:10]:
-        console.print(f"  {display_path(source)} -> {target.name}")
-    if len(moves) > 10:
-        console.print(f"  [dim]... and {len(moves) - 10} more[/dim]")
+    total_moves = sum(len(m) for _, m, _ in plans)
+    total_conflicts = sum(len(c) for _, _, c in plans)
+    multi = len(plans) > 1
+
+    def relative_to_project(path: Path, paths) -> str:
+        """Render a path against its own project, not the working directory.
+
+        display_path() anchors on the current project, which turns every other
+        project's files into wrapped absolute paths.
+        """
+        for anchor in (paths.base, paths.root):
+            try:
+                return str(path.relative_to(anchor)).replace("\\", "/")
+            except ValueError:
+                continue
+        return str(path).replace("\\", "/")
+
+    for paths, moves, conflicts in plans:
+        if multi:
+            label = f"[bold]{paths.root.name}[/bold]"
+            if not moves and not conflicts:
+                console.print(f"{label}  [dim]already migrated[/dim]")
+                continue
+            console.print(f"{label}  [dim]{len(moves)} rename(s)[/dim]")
+
+        shown = 3 if multi else 10
+        for source, target in moves[:shown]:
+            console.print(f"  {relative_to_project(source, paths)} -> {target.name}")
+        if len(moves) > shown:
+            console.print(f"  [dim]... and {len(moves) - shown} more[/dim]")
+
+        for source, target, reason in conflicts:
+            console.print(
+                f"  [yellow]skip[/yellow] {relative_to_project(source, paths)}"
+                f" -> {target.name}  [dim]({reason})[/dim]"
+            )
+        if multi:
+            console.print()
+
+    console.print(
+        f"[bold]Total:[/bold] {total_moves} rename(s) across {len(plans)} knowledge base(s)"
+        + (f", {total_conflicts} skipped" if total_conflicts else "")
+    )
+
+    # A rename can be individually valid yet still leave two files sharing a
+    # basename in different folders -- which is the same ambiguity Obsidian
+    # cannot resolve, so it must be surfaced rather than silently created.
+    if layout == "date":
+        flagged = []
+        for paths, moves, _ in plans:
+            clashes = find_basename_clashes(paths.base / "timeline", moves)
+            if clashes:
+                flagged.append((paths, clashes))
+
+        if flagged:
+            console.print(
+                f"\n[yellow]Duplicate filenames ({sum(len(c) for _, c in flagged)}):[/yellow]"
+                " [dim]Obsidian identifies notes by filename, so it will open only"
+                " one of each pair.[/dim]"
+            )
+            for paths, clashes in flagged:
+                for name, duplicates in sorted(clashes.items()):
+                    console.print(f"  [bold]{paths.root.name}[/bold] {name}")
+                    for duplicate in duplicates:
+                        console.print(f"    {relative_to_project(duplicate, paths)}")
+            console.print("[dim]Merge or remove the extras to resolve.[/dim]")
+
+    if total_moves == 0:
+        console.print("\n[green]OK[/green] Every timeline file already uses this layout.")
+        for paths, _, _ in plans:
+            _set_timeline_filename_config(paths.base, layout)
+        return
 
     if dry_run:
         console.print("\n[dim]Dry run -- nothing was changed.[/dim]")
@@ -994,20 +1119,33 @@ def _migrate_timeline_filenames(layout: str, dry_run: bool, yes: bool) -> None:
 
     if not yes:
         console.print()
-        if not typer.confirm(f"Rename {len(moves)} file(s)?", default=False):
+        if not typer.confirm(f"Rename {total_moves} file(s)?", default=False):
             console.print("[dim]Cancelled -- nothing was changed.[/dim]")
             return
 
-    try:
-        applied = apply_filename_migration(moves)
-    except TimelineError as e:
-        console.print(f"\n[red]ERROR[/red] {e}")
-        sys.exit(1)
+    applied_total = 0
+    failed = []
+    for paths, moves, _ in plans:
+        if not moves:
+            _set_timeline_filename_config(paths.base, layout)
+            continue
+        try:
+            applied = apply_filename_migration(moves)
+        except TimelineError as e:
+            # Each knowledge base is independent; one failure must not abandon
+            # the rest, and the failed one has already rolled itself back.
+            failed.append((paths.root.name, str(e)))
+            continue
+        applied_total += len(applied)
+        _set_timeline_filename_config(paths.base, layout)
 
-    _set_timeline_filename_config(memory_path, layout)
-
-    console.print(f"\n[green]OK[/green] Renamed {len(applied)} file(s)")
+    console.print(f"\n[green]OK[/green] Renamed {applied_total} file(s)")
     console.print(f"[dim]config: timeline.filename = {layout}[/dim]")
+
+    if failed:
+        console.print(f"\n[red]Failed ({len(failed)}):[/red]")
+        for name, error in failed:
+            console.print(f"  {name}: {error}")
 
     if layout == "date":
         console.print(
@@ -1046,6 +1184,12 @@ def migrate_timeline(
         help="Rename files to a naming layout instead: 'date' (2026-08-21.md) or 'day' (21.md)",
     ),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt"),
+    root: Optional[List[str]] = typer.Option(
+        None, "--root", help="Project to migrate; repeat for several (with --filename)"
+    ),
+    scan: Optional[str] = typer.Option(
+        None, "--scan", help="Migrate every knowledge base found under this directory (with --filename)"
+    ),
 ):
     """Migrate timeline files to the new structure, or rename them.
 
@@ -1062,15 +1206,27 @@ def migrate_timeline(
 
     Reading always accepts both layouts, so a partial migration stays readable.
 
+    By default only the current project is migrated. --root targets another one
+    and may be repeated; --scan finds every knowledge base under a directory, so
+    a whole workspace can be converted in one pass. Every project is planned
+    before anything is renamed, and each is applied independently -- one failure
+    rolls that project back and leaves the others intact.
+
     Examples:
         mmigrate-timeline                        # Structure migration
         mmigrate-timeline --dry-run              # Preview
-        mmigrate-timeline --filename date        # Rename for Obsidian Calendar
-        mmigrate-timeline --filename date --dry-run
+        mmigrate-timeline --filename date        # This project
+        mmigrate-timeline --filename date --root ../other-project
+        mmigrate-timeline --filename date --scan E:/code_projects --dry-run
+        mmigrate-timeline --filename date --scan E:/code_projects
     """
     if filename is not None:
-        _migrate_timeline_filenames(filename, dry_run=dry_run, yes=yes)
+        _migrate_timeline_filenames(filename, dry_run=dry_run, yes=yes, roots=root, scan=scan)
         return
+
+    if root or scan:
+        console.print("[yellow]WARNING[/yellow] --root and --scan apply only with --filename")
+        console.print("[dim]The structure migration always targets the current project.[/dim]")
 
     try:
         from memory_tool.utils.migrate_timeline import TimelineMigrator

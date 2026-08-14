@@ -243,6 +243,41 @@ mmigrate-timeline --filename date             # 변환 + config 자동 설정
 
 변환 후 `config.yaml` 에 `timeline.filename: date` 가 기록되어 새 기록도 같은 방식을 씁니다.
 
+#### 여러 프로젝트 한 번에
+
+파일명 방식은 프로젝트마다 설정되므로, 여러 지식베이스를 Obsidian 과 함께 쓴다면
+모두 변환해야 합니다.
+
+```bash
+# 특정 프로젝트 (반복 지정 가능)
+mmigrate-timeline --filename date --root ../other-project --root ../another
+
+# 폴더 아래 모든 지식베이스를 찾아서
+mmigrate-timeline --filename date --scan E:/code_projects --dry-run
+mmigrate-timeline --filename date --scan E:/code_projects
+```
+
+- 이름을 바꾸기 **전에 전체 계획을 먼저 보여줍니다**
+- 프로젝트마다 독립적으로 적용되므로, 하나가 실패해도 그 프로젝트만 롤백되고
+  나머지는 그대로 완료됩니다
+- `--scan` 은 바로 아래 폴더만 확인하며, 상위로 거슬러 올라가지 않습니다
+  (지식베이스가 없는 폴더가 부모 것을 잘못 물려받지 않도록)
+
+#### 파일명 중복 경고
+
+폴더가 달라도 **파일명이 같으면** Obsidian 은 하나만 엽니다. 변환 후 그런 쌍이 남으면
+경고합니다:
+
+```
+Duplicate filenames (1): Obsidian identifies notes by filename...
+  project_name 2026-01-08.md
+    timeline/2026-01-08.md
+    timeline/daily/2026-01/2026-01-08.md
+```
+
+보통 구조 마이그레이션이 중간에 멈춰 같은 날짜가 두 곳에 남은 경우입니다.
+내용을 확인해 병합하거나 하나를 지우면 해결됩니다.
+
 **New file location** 은 vault 루트 기준입니다 — 기반 폴더가 아니라 **vault 위치**에
 따라 달라집니다:
 
