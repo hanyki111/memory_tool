@@ -1,6 +1,6 @@
 # Memory Context
 
-**Generated:** 2026-08-14 11:59
+**Generated:** 2026-08-14 12:10
 
 ---
 
@@ -45,7 +45,7 @@
   - Quick action: `marchive memory-tool --module memory-tool --interactive`
 - **archive/memory-system/decisions.md**: 692 lines - ⚠️ Very large, should archive soon
   - Quick action: `marchive decisions --module archive/memory-system --interactive`
-- **memory-tool/core-system/core-system.md**: 1160 lines - ⚠️ Very large, should archive soon
+- **memory-tool/core-system/core-system.md**: 1273 lines - ⚠️ Very large, should archive soon
   - Quick action: `marchive core-system --module memory-tool/core-system --interactive`
 - **memory-tool/knowledge-graph-system/knowledge-graph-system.md**: 1315 lines - ⚠️ Very large, should archive soon
   - Quick action: `marchive knowledge-graph-system --module memory-tool/knowledge-graph-system --interactive`

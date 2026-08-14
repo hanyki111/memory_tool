@@ -234,6 +234,81 @@ mconfig set modules.default_kind knowledge
 
 ---
 
+## Obsidian 연동
+
+Obsidian 볼트 안에서 memory_tool 을 쓰기 위한 설정입니다.
+전용 플러그인도 있습니다 — [obsidian-plugin/README.md](obsidian-plugin/README.md)
+
+### 1. 기반 폴더를 보이게
+
+Obsidian 은 `.` 으로 시작하는 폴더를 숨기므로 기본값 `.memory/` 는 볼트에서 보이지 않습니다.
+`.memory` 폴더 자체를 볼트로 열거나, 이름을 바꾸세요 (위 [기반 폴더 설정](#기반-폴더-설정-base-folder) 참고).
+
+### 2. 타임라인 파일명 (Calendar 연동 시 필수)
+
+Calendar / Periodic Notes 플러그인은 데일리 노트를 **파일명만 보고** 식별합니다.
+날짜 포맷의 마지막 `/` 조각만 사용하기 때문입니다:
+
+```js
+const format = settings.format.split("/").pop();   // "YYYY-MM/DD" → "DD"
+moment(file.basename, format, true);               // "21" 만 파싱
+```
+
+따라서 기본 파일명 `21.md` 는 **모든 달의 21일이 충돌**하고, 날짜를 클릭하면
+엉뚱한 달의 문서가 열립니다. 파일 생성은 전체 포맷을 쓰므로 폴더는 제대로 만들어지지만
+탐색만 어긋나는 비대칭입니다.
+
+`timeline.filename` 설정으로 해결합니다:
+
+| 값 | 파일 경로 | Calendar |
+|---|---|---|
+| `day` (기본) | `timeline/daily/2026-08/21.md` | ❌ 달 구분 불가 |
+| `date` | `timeline/daily/2026-08/2026-08-21.md` | ✅ |
+
+```bash
+mmigrate-timeline --filename date --dry-run   # 미리보기
+mmigrate-timeline --filename date             # 변환 + config 자동 기록
+```
+
+폴더 구조는 그대로 두고 **파일 이름만** 바꿉니다. 읽기는 두 방식을 모두 지원하므로
+변환 도중에도 기록이 사라지지 않으며, 되돌리려면 `--filename day` 입니다.
+
+**여러 프로젝트를 한 번에:**
+
+```bash
+mmigrate-timeline --filename date --root ../other --root ../another
+mmigrate-timeline --filename date --scan E:/code_projects --dry-run
+```
+
+전체 계획을 먼저 보여주고, 프로젝트마다 독립적으로 적용됩니다 (하나가 실패해도
+그 프로젝트만 롤백). 폴더가 달라도 파일명이 겹치면 Obsidian 이 하나만 열게 되므로
+그런 쌍이 남으면 경고합니다.
+
+### 3. Daily Notes 설정
+
+Obsidian **설정 → Daily Notes**:
+
+| 항목 | 값 |
+|---|---|
+| Date format | `YYYY-MM/YYYY-MM-DD` |
+| New file location | `<볼트 기준 경로>/timeline/daily` |
+| Template file location | `<볼트 기준 경로>/templates/obsidian/timeline-daily-note` |
+
+**New file location 은 기반 폴더가 아니라 볼트 루트 기준**입니다. 볼트가 `.memory` 폴더
+자체라면 접두사 없이 `timeline/daily` 입니다.
+
+`minit` 이 만들어두는 데일리 노트 템플릿은 한 줄입니다:
+
+```markdown
+# {{date:YYYY-MM-DD}} Timeline
+```
+
+이걸 지정하면 Calendar 가 만든 파일이 곧바로 정상 타임라인이 되고 `m` 이 이어 붙입니다.
+**체크박스가 있는 일반 템플릿은 피하세요** — 기록이 템플릿 맨 뒤에 붙고, 첫 `##` 가
+헤더로 인식됩니다.
+
+---
+
 ## 튜토리얼
 
 Memory Tool의 상세한 사용법을 단계별로 학습할 수 있습니다.
@@ -628,9 +703,20 @@ ms "hybrid search" --with-kb
 | `mmonth`   | 이번 달 작업 보기     | `mmonth`                    |
 | `mdays`    | 최근 N일 작업 보기    | `mdays 7`                   |
 | `mask`     | 메모리 기반 Q&A (RAG) | `mask "최근 결정 사항?"`    |
+| `mbase`    | 기반 폴더 확인/변경   | `mbase show`                |
 | `mconfig`  | 설정 관리             | `mconfig get help.language` |
 | `mupdate`  | 업데이트 확인/설치    | `mupdate --check`           |
 | `mhelp`    | 상세 도움말           | `mhelp plan`                |
+
+**마이그레이션 명령어**
+
+| 명령어 | 설명 | 예시 |
+|---|---|---|
+| `mbase set` | 기반 폴더 이름 변경 (이동 + 참조 재작성) | `mbase set memory --dry-run` |
+| `mmigrate-timeline` | 타임라인 구조 마이그레이션 | `mmigrate-timeline --dry-run` |
+| `mmigrate-timeline --filename` | 타임라인 파일명 방식 변경 | `mmigrate-timeline --filename date` |
+
+모두 `--dry-run` 으로 미리보기를 지원하고, 실패 시 자동 롤백됩니다.
 
 ### 기록 명령어
 
