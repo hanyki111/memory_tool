@@ -34,8 +34,186 @@
   margin-bottom: 4px;
 }
 
-.memory-tool-form-group input {
+.memory-tool-form-group input,
+.memory-tool-form-group select {
   width: 100%;
+}
+
+.memory-tool-hint {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.memory-tool-hidden {
+  display: none;
+}
+
+/* --- Quick capture modal --- */
+
+/* Chrome-free by design: the modal is a single input, so the usual title bar
+   and padding would be most of what is on screen. */
+.memory-tool-quick-modal {
+  padding: 0;
+}
+
+.memory-tool-quick-modal .modal-close-button {
+  display: none;
+}
+
+.memory-tool-quick-input {
+  width: 100%;
+  padding: 14px 16px;
+  border: none;
+  border-radius: var(--radius-m);
+  background: transparent;
+  font-family: var(--font-interface);
+  font-size: 15px;
+  line-height: 1.5;
+  resize: none;
+}
+
+.memory-tool-quick-input:focus {
+  box-shadow: none;
+  outline: none;
+}
+
+/* --- Side panel --- */
+
+.memory-tool-panel {
+  padding: 8px 12px 16px;
+}
+
+.memory-tool-capture {
+  margin-bottom: 12px;
+}
+
+.memory-tool-capture-input {
+  width: 100%;
+  padding: 8px 10px;
+  font-family: var(--font-interface);
+  font-size: 14px;
+  line-height: 1.4;
+  resize: vertical;
+}
+
+.memory-tool-capture-status {
+  min-height: 16px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.memory-tool-status-error {
+  color: var(--text-error);
+}
+
+.memory-tool-section {
+  border-top: 1px solid var(--background-modifier-border);
+  padding-top: 8px;
+  margin-top: 8px;
+}
+
+.memory-tool-section > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  list-style: none;
+}
+
+.memory-tool-section > summary::-webkit-details-marker {
+  display: none;
+}
+
+.memory-tool-section-action {
+  display: inline-flex;
+  opacity: 0.6;
+}
+
+.memory-tool-section-action:hover {
+  opacity: 1;
+}
+
+.memory-tool-section-action svg {
+  width: 14px;
+  height: 14px;
+}
+
+.memory-tool-today,
+.memory-tool-modules {
+  margin-top: 8px;
+}
+
+.memory-tool-entry {
+  display: flex;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.memory-tool-entry-time {
+  flex: 0 0 auto;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.memory-tool-entry-text {
+  overflow-wrap: anywhere;
+}
+
+.memory-tool-empty {
+  padding: 4px 0;
+  font-size: 13px;
+  color: var(--text-faint);
+}
+
+.memory-tool-open-file {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-accent);
+  cursor: pointer;
+}
+
+.memory-tool-module-filter {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.memory-tool-module {
+  padding: 4px 6px;
+  border-radius: var(--radius-s);
+  font-size: 13px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.memory-tool-module:hover {
+  background-color: var(--background-modifier-hover);
+}
+
+.memory-tool-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.memory-tool-actions button {
+  width: 100%;
+}
+
+.memory-tool-base-note {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-faint);
 }
 
 /* --- Ask (mask) modal --- */

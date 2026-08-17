@@ -3,8 +3,8 @@
   "name": "Memory Tool Integration",
   "version": "1.0.0",
   "minAppVersion": "0.15.0",
-  "description": "Seamless integration with memory_tool CLI: 0.5s Timeline capture, Module management, and AI Context Generator.",
-  "author": "memory_tool",
+  "description": "memory_tool integration: instant timeline capture (works offline on mobile), module navigation, and AI context building.",
+  "author": "hanyki111",
   "authorUrl": "https://github.com/hanyki111/memory_tool",
-  "isDesktopOnly": true
+  "isDesktopOnly": false
 }

@@ -62,8 +62,23 @@ class Connection:
 class ConnectionParser:
     """Parse wiki-style links from Markdown files."""
 
-    # Regex pattern for [[module-name]] or [[module/path]]
-    LINK_PATTERN = re.compile(r'\[\[([a-zA-Z0-9_/-]+)\]\]')
+    #: Matches [[target]], [[target|alias]], [[target#section]], [[target^block]].
+    #:
+    #: The target is "anything that is not structural punctuation" rather than an
+    #: explicit character class. The previous class -- [a-zA-Z0-9_/-]+ -- was
+    #: ASCII-only, so every link to a non-English module was invisible to the
+    #: graph: no connection, no backlink, and no broken-link warning either,
+    #: because a link that never parses cannot be reported as broken.
+    #:
+    #: Only the target is captured. Obsidian resolves the alias, section and
+    #: block parts for display; they are not part of the module's identity.
+    LINK_PATTERN = re.compile(
+        r'\[\['
+        r'\s*([^\[\]|#^]+?)\s*'     # target, trimmed
+        r'(?:[#^][^\[\]|]*)?'       # optional #section / ^block
+        r'(?:\|[^\[\]]*)?'          # optional |alias
+        r'\]\]'
+    )
 
     @classmethod
     def parse_file(cls, file_path: Path, module_path: str) -> List[Connection]:

@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "node esbuild.config.mjs",
     "build": "node esbuild.config.mjs production",
-    "test": "node --test tests/paths.test.mjs"
+    "test": "node --test tests/paths.test.mjs tests/timeline.test.mjs tests/vaultScan.test.mjs"
   },
   "keywords": [
     "obsidian",
@@ -14,7 +14,7 @@
     "memory-tool",
     "knowledge-management"
   ],
-  "author": "memory_tool",
+  "author": "hanyki111",
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^18.11.9",
@@ -24,6 +24,6 @@
     "esbuild": "0.17.3",
     "obsidian": "latest",
     "tslib": "2.4.1",
-    "typescript": "4.9.3"
+    "typescript": "^5.9.3"
   }
 }

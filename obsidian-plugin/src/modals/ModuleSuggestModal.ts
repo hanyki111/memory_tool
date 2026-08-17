@@ -1,23 +1,32 @@
 import { App, FuzzySuggestModal, Notice, TFile } from "obsidian";
-import { MemoryToolCli } from "../cli/memoryToolCli";
 import { DEFAULT_BASE, moduleCandidatePaths } from "../paths";
 
 export class ModuleSuggestModal extends FuzzySuggestModal<string> {
-  private cli: MemoryToolCli;
+  /**
+   * Supplies the module list.
+   *
+   * Injected rather than calling the CLI directly so the same modal works on
+   * mobile, where the list comes from a vault scan instead of `mmodule list`.
+   */
+  private lister: () => Promise<string[]>;
   private modules: string[] = [];
   /** Returns the vault-relative base prefix ("" = the vault root). */
   private getBasePrefix: () => string;
 
-  constructor(app: App, cli: MemoryToolCli, getBasePrefix?: () => string) {
+  constructor(
+    app: App,
+    lister: () => Promise<string[]>,
+    getBasePrefix?: () => string
+  ) {
     super(app);
-    this.cli = cli;
+    this.lister = lister;
     this.getBasePrefix = getBasePrefix ?? (() => DEFAULT_BASE);
     this.setPlaceholder("Type to search active memory_tool modules...");
   }
 
   async onOpen() {
     super.onOpen();
-    this.modules = await this.cli.listModules();
+    this.modules = await this.lister();
   }
 
   getItems(): string[] {

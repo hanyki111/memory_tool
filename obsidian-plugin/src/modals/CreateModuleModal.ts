@@ -1,11 +1,23 @@
 import { App, Modal, Notice, TFile } from "obsidian";
 import { MemoryToolCli } from "../cli/memoryToolCli";
 import { DEFAULT_BASE, moduleCandidatePaths } from "../paths";
+import { KINDS, ModuleKind, ModuleNature, NATURES } from "../moduleKinds";
 
+/**
+ * Create a module, asking the two MOP decision questions first.
+ *
+ * The answers are passed to `mmodule create --kind --nature`; memory_tool owns
+ * template resolution and assembly, including the project-over-bundled override
+ * and the Nature outline splice. The modal's job is only to make the two
+ * questions unavoidable at the moment the module is created, which is the point
+ * at which they are cheap to answer and easy to skip.
+ */
 export class CreateModuleModal extends Modal {
   private cli: MemoryToolCli;
-  /** Returns the vault-relative base prefix ("" = the vault root). */
   private getBasePrefix: () => string;
+
+  private kind: ModuleKind = "knowledge";
+  private nature: ModuleNature = "concept";
 
   constructor(app: App, cli: MemoryToolCli, getBasePrefix?: () => string) {
     super(app);
@@ -18,104 +30,143 @@ export class CreateModuleModal extends Modal {
     contentEl.empty();
     contentEl.addClass("memory-tool-record-modal");
 
-    contentEl.createEl("h3", { text: "📂 Create Module (memory_tool)" });
+    contentEl.createEl("h3", { text: "모듈 생성" });
 
-    // Module Name
+    // --- Name / description / tags ---
     const nameGroup = contentEl.createDiv({ cls: "memory-tool-form-group" });
-    nameGroup.createEl("label", { text: "Module Name or Path (e.g., projects/website or core-system):" });
+    nameGroup.createEl("label", { text: "모듈 경로" });
     const nameInput = nameGroup.createEl("input", {
       type: "text",
-      placeholder: "e.g. projects/memory-tool/search-system",
+      placeholder: "예: 게임 분석/니케/전투 공식",
     });
     nameInput.focus();
 
-    // Description
     const descGroup = contentEl.createDiv({ cls: "memory-tool-form-group" });
-    descGroup.createEl("label", { text: "Description (Optional):" });
+    descGroup.createEl("label", { text: "목적 (한 문장)" });
     const descInput = descGroup.createEl("input", {
       type: "text",
-      placeholder: "Short description of this module's purpose",
+      placeholder: "두 문장이 넘어가면 모듈을 분리하라는 신호입니다",
     });
 
-    // Tags
     const tagsGroup = contentEl.createDiv({ cls: "memory-tool-form-group" });
-    tagsGroup.createEl("label", { text: "Tags (Comma-separated, Optional):" });
+    tagsGroup.createEl("label", { text: "태그 (쉼표 구분, 선택)" });
     const tagsInput = tagsGroup.createEl("input", {
       type: "text",
-      placeholder: "e.g. search, python, cli",
+      placeholder: "예: search, python, cli",
     });
 
-    const buttonsEl = contentEl.createDiv({ cls: "memory-tool-modal-buttons" });
-    const cancelBtn = buttonsEl.createEl("button", { text: "Cancel" });
-    const submitBtn = buttonsEl.createEl("button", {
-      text: "Create Module",
-      cls: "mod-cta",
+    // --- Kind: the one question that decides the template ---
+    const kindGroup = contentEl.createDiv({ cls: "memory-tool-form-group" });
+    kindGroup.createEl("label", { text: "Kind — 이 문서가 틀렸을 때, 틀린 것은?" });
+    const kindSelect = kindGroup.createEl("select");
+    for (const k of KINDS) {
+      kindSelect.createEl("option", { value: k.id, text: `${k.answer} → ${k.id}` });
+    }
+
+    // --- Nature: knowledge only ---
+    const natureGroup = contentEl.createDiv({ cls: "memory-tool-form-group" });
+    natureGroup.createEl("label", { text: "Nature — 무엇이 이 모듈을 갱신시키는가?" });
+    const natureSelect = natureGroup.createEl("select");
+    for (const n of NATURES) {
+      natureSelect.createEl("option", {
+        value: n.id,
+        text: `${n.trigger} → ${n.label} · ${n.lifetime}`,
+      });
+    }
+    const natureHint = natureGroup.createDiv({ cls: "memory-tool-hint" });
+
+    const syncNatureHint = () => {
+      const chosen = NATURES.find((n) => n.id === natureSelect.value);
+      natureHint.setText(chosen ? `답하는 질문: ${chosen.answers}` : "");
+    };
+    syncNatureHint();
+
+    natureSelect.addEventListener("change", () => {
+      this.nature = natureSelect.value as ModuleNature;
+      syncNatureHint();
     });
+
+    kindSelect.addEventListener("change", () => {
+      this.kind = kindSelect.value as ModuleKind;
+      natureGroup.toggleClass("memory-tool-hidden", this.kind !== "knowledge");
+    });
+
+    // --- Buttons ---
+    const buttonsEl = contentEl.createDiv({ cls: "memory-tool-modal-buttons" });
+    const cancelBtn = buttonsEl.createEl("button", { text: "취소" });
+    const submitBtn = buttonsEl.createEl("button", { text: "생성", cls: "mod-cta" });
 
     cancelBtn.addEventListener("click", () => this.close());
 
-    const submit = async () => {
+    submitBtn.addEventListener("click", async () => {
       const name = nameInput.value.trim();
-      const desc = descInput.value.trim();
-      const tags = tagsInput.value.trim();
-
       if (!name) {
-        new Notice("Module name is required.");
+        new Notice("모듈 경로를 입력하세요.");
         return;
       }
 
+      submitBtn.setAttr("disabled", "true");
       try {
-        await this.cli.createModule(name, desc, tags);
-        new Notice(`Module created: ${name}`);
-
-        // Open the new single-file module, under the configured base folder.
-        // memory_tool wrote it outside Obsidian, so the vault cache may not have
-        // picked it up yet -- retry briefly before giving up.
-        const candidates = moduleCandidatePaths(this.getBasePrefix(), name);
-        const opened = await this.openWhenAvailable(candidates);
-
-        if (!opened) {
-          new Notice(
-            `Module created, but could not open it in this vault. Looked in: ` +
-              `${candidates.join(", ")}. Check the Knowledge Base Folder setting.`,
-            8000
-          );
-        }
-
+        await this.create(name, descInput.value.trim(), tagsInput.value.trim());
         this.close();
       } catch (err: any) {
-        new Notice(`Failed to create module: ${err.message}`);
+        new Notice(`모듈 생성 실패: ${err.message}`);
+        submitBtn.removeAttribute("disabled");
       }
-    };
+    });
+  }
 
-    submitBtn.addEventListener("click", submit);
+  private async create(name: string, description: string, tags: string): Promise<void> {
+    await this.cli.createModule(
+      name,
+      description,
+      tags,
+      this.kind,
+      this.kind === "knowledge" ? this.nature : undefined
+    );
+
+    const basePrefix = this.getBasePrefix();
+    const candidates = moduleCandidatePaths(basePrefix, name);
+    const path = await this.waitForFile(candidates);
+
+    if (!path) {
+      new Notice(
+        `모듈은 생성됐지만 vault에서 열지 못했습니다. 확인한 경로: ${candidates.join(", ")}`,
+        8000
+      );
+      return;
+    }
+
+    await this.openPath(path);
+
+    const label = this.kind === "knowledge" ? `${this.kind} / ${this.nature}` : this.kind;
+    new Notice(`모듈 생성: ${name} (${label})`);
   }
 
   /**
-   * Open the first candidate path that appears in the vault.
+   * Wait for the file memory_tool just wrote to become visible.
    *
-   * Files created by memory_tool arrive from outside Obsidian, so the vault
-   * index can lag by a moment. Polls briefly rather than failing immediately.
+   * It is created outside Obsidian, so both the adapter and the file index can
+   * lag by a moment; polling briefly beats failing on the first miss.
    */
-  private async openWhenAvailable(candidates: string[]): Promise<boolean> {
-    const attempts = 10;
-    const delayMs = 100;
-
-    for (let i = 0; i < attempts; i++) {
+  private async waitForFile(candidates: string[]): Promise<string | null> {
+    for (let i = 0; i < 15; i++) {
       for (const path of candidates) {
-        const file = this.app.vault.getAbstractFileByPath(path);
-        if (file instanceof TFile) {
-          await this.app.workspace.getLeaf(false).openFile(file);
-          return true;
-        }
+        if (await this.app.vault.adapter.exists(path)) return path;
       }
-      await new Promise((resolve) => window.setTimeout(resolve, delayMs));
+      await new Promise((resolve) => window.setTimeout(resolve, 100));
     }
-    return false;
+    return null;
+  }
+
+  private async openPath(path: string): Promise<void> {
+    const file = this.app.vault.getAbstractFileByPath(path);
+    if (file instanceof TFile) {
+      await this.app.workspace.getLeaf(false).openFile(file);
+    }
   }
 
   onClose() {
-    const { contentEl } = this;
-    contentEl.empty();
+    this.contentEl.empty();
   }
 }

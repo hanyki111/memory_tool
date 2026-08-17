@@ -16,7 +16,7 @@ from memory_tool.utils.paths import display_path, get_base_path
 
 @app.command()
 def module(
-    action: str = typer.Argument(..., help="Action: create, list, tree, rename, archive, unarchive, migrate, connections, graph, rebuild-graph, check-links, suggest-links, suggest-ai, ai-organize, auto-tag, graph-history, graph-diff, graph-snapshot, from-text"),
+    action: str = typer.Argument(..., help="Action: create, list, tree, rename, relink, archive, unarchive, migrate, connections, graph, rebuild-graph, check-links, suggest-links, suggest-ai, ai-organize, auto-tag, graph-history, graph-diff, graph-snapshot, from-text"),
     name: str = typer.Argument(None, help="Module name or path (e.g., 'projects/website')"),
     description: str = typer.Option("", "--desc", "-d", help="Module description"),
     reason: str = typer.Option("", "--reason", "-r", help="Reason for archiving"),
@@ -33,6 +33,7 @@ def module(
     text: Optional[str] = typer.Option(None, "--text", help="Input text for from-text action"),
     text_file: Optional[str] = typer.Option(None, "--text-file", help="File path containing input text for from-text action"),
     preview: bool = typer.Option(False, "--preview", "-p", help="Preview generated module without saving (for from-text action)"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would change without writing (for relink action)"),
     lang: Optional[str] = typer.Option(None, "--lang", help="Output language for from-text: 'ko', 'en', 'auto'"),
     structure: Optional[str] = typer.Option(None, "--structure", "-s", help="Module structure type for from-text: 'feature' (software), 'topic' (learning/KB), 'auto'"),
     kind: Optional[str] = typer.Option(None, "--kind", "-k", help="Template kind for create: 'knowledge' or 'implementation'"),
@@ -96,6 +97,53 @@ def module(
                 console.print(f"\n[green]OK[/green] Successfully migrated {len(migrated)} modules:")
                 for m in migrated:
                     console.print(f"  - {m}")
+
+        elif action.lower() == "relink":
+            # Repairs links after a module is moved in Obsidian or a file
+            # manager. Discovery already finds the module at its new location;
+            # what breaks is every [[old/path]] still aimed at the old one, and
+            # a broken wiki link renders as plain text rather than an error.
+            from memory_tool.core.relink import apply_plan, build_plan, format_plan
+
+            console.print("[cyan]Scanning module links...[/cyan]")
+            plan = build_plan(manager)
+
+            if plan.is_empty:
+                console.print("[green]OK[/green] No broken module links found.")
+            else:
+                if plan.proposals:
+                    apply_plan(plan, dry_run=dry_run)
+
+                console.print()
+                # markup=False: the report is full of [[links]], which Rich
+                # would otherwise parse as style tags and swallow.
+                console.print(format_plan(plan, dry_run=dry_run), markup=False)
+
+                if plan.proposals and not dry_run:
+                    # The graph is a cache of the links just rewritten, so it is
+                    # stale the moment they change.
+                    try:
+                        from memory_tool.core.connections import ConnectionGraph
+
+                        count = ConnectionGraph().rebuild_from_modules()
+                        console.print(
+                            f"\n[green]OK[/green] Connection graph rebuilt ({count} links)."
+                        )
+                    except Exception as exc:
+                        console.print(
+                            f"\n[yellow]WARNING[/yellow] Links repaired but the graph "
+                            f"rebuild failed: {exc}\n"
+                            f"[dim]Run 'mmodule rebuild-graph' to retry.[/dim]"
+                        )
+
+                if plan.proposals and dry_run:
+                    console.print("\n[dim]Nothing written. Re-run without --dry-run to apply.[/dim]")
+
+                if plan.unresolved:
+                    console.print(
+                        "\n[dim]Unresolved links are left untouched -- rename the target "
+                        "or fix the link by hand.[/dim]"
+                    )
 
         elif action.lower() == "list":
             modules = manager.list_modules(include_archived=archived)

@@ -1,4 +1,36 @@
-import { exec } from "child_process";
+import { Platform } from "obsidian";
+
+/**
+ * `child_process` is loaded lazily, never at module scope.
+ *
+ * The bundle is CommonJS with Node builtins left external, so a top-level
+ * `import { exec } from "child_process"` becomes a top-level `require` that
+ * throws on mobile — before any of the plugin's own code runs, taking down
+ * timeline capture and the side panel along with the CLI features that actually
+ * need Python. Resolving it on first use keeps the failure local to the callers
+ * that genuinely cannot work without it.
+ */
+type ExecFn = typeof import("child_process").exec;
+
+let execFn: ExecFn | null = null;
+let execResolved = false;
+
+function loadExec(): ExecFn | null {
+  if (execResolved) return execFn;
+  execResolved = true;
+
+  if (Platform.isMobile) {
+    execFn = null;
+    return null;
+  }
+
+  try {
+    execFn = require("child_process").exec as ExecFn;
+  } catch {
+    execFn = null;
+  }
+  return execFn;
+}
 
 /**
  * Escape a value for embedding in a double-quoted shell argument.
@@ -89,8 +121,30 @@ export class MemoryToolCli {
     this.pythonPath = path || "python";
   }
 
+  /**
+   * Whether CLI-backed features can run at all.
+   *
+   * False on mobile, where there is no Python and no process to spawn. Callers
+   * use this to hide features rather than to offer them and fail.
+   */
+  public isAvailable(): boolean {
+    return loadExec() !== null;
+  }
+
   private executeCommand(cmd: string, opts: ExecOptions = {}): Promise<string> {
     return new Promise((resolve, reject) => {
+      const exec = loadExec();
+      if (!exec) {
+        reject(
+          new Error(
+            "This feature needs the memory_tool CLI, which requires Python and " +
+              "is not available on mobile. Timeline capture works offline; run " +
+              "search, context and module commands on desktop."
+          )
+        );
+        return;
+      }
+
       const fullCmd = `${this.pythonPath} -m memory_tool ${cmd}`;
 
       const options: Record<string, unknown> = {
@@ -120,14 +174,34 @@ export class MemoryToolCli {
     return this.executeCommand(`record "${escapedMsg}"`);
   }
 
-  /** Create a new module (mmodule create name --desc desc --tags tags) */
-  public async createModule(name: string, description: string = "", tags: string = ""): Promise<string> {
+  /**
+   * Create a new module (`mmodule create`).
+   *
+   * `kind` and `nature` are passed straight through so memory_tool performs the
+   * template assembly. It already resolves project templates over bundled ones,
+   * splices the Nature outline into the body and substitutes placeholders --
+   * duplicating that here would mean two template sources producing two
+   * different documents for the same choice.
+   */
+  public async createModule(
+    name: string,
+    description: string = "",
+    tags: string = "",
+    kind?: string,
+    nature?: string
+  ): Promise<string> {
     let cmd = `module create "${name}"`;
     if (description) {
-      cmd += ` --desc "${description.replace(/"/g, '\\"')}"`;
+      cmd += ` --desc "${escapeArg(description)}"`;
     }
     if (tags) {
-      cmd += ` --tags "${tags.replace(/"/g, '\\"')}"`;
+      cmd += ` --tags "${escapeArg(tags)}"`;
+    }
+    if (kind) {
+      cmd += ` --kind "${escapeArg(kind)}"`;
+    }
+    if (nature) {
+      cmd += ` --nature "${escapeArg(nature)}"`;
     }
     return this.executeCommand(cmd);
   }
@@ -159,6 +233,18 @@ export class MemoryToolCli {
   /** Check module path health (mcheck) */
   public async checkHealth(): Promise<string> {
     return this.executeCommand("check");
+  }
+
+  /**
+   * Bring the SQLite search index up to date.
+   *
+   * Needed because directly-written timeline entries bypass the indexing step
+   * that `record` performs inline. The bare command indexes incrementally; the
+   * `--force` full rebuild is deliberately not used, as it would make routine
+   * reconciliation cost far more than the writes it is catching up on.
+   */
+  public async syncIndex(): Promise<string> {
+    return this.executeCommand("index", { timeout: 120000 });
   }
 
   /**

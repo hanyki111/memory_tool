@@ -1,65 +1,73 @@
 import { App, Modal, Notice } from "obsidian";
-import { MemoryToolCli } from "../cli/memoryToolCli";
 
+/**
+ * Minimal capture modal.
+ *
+ * Deliberately chrome-free: no title, no buttons. A 0.5s capture has room for an
+ * input and nothing else, and every pixel of framing is a pixel the user has to
+ * look past before typing. Enter records, Esc cancels (Obsidian's own binding).
+ *
+ * The side panel's capture box is the better default -- it needs no opening step
+ * at all -- but the modal stays for hotkey-driven capture from anywhere.
+ */
 export class RecordModal extends Modal {
-  private cli: MemoryToolCli;
+  private record: (message: string) => Promise<{ entry: string }>;
 
-  constructor(app: App, cli: MemoryToolCli) {
+  constructor(app: App, record: (message: string) => Promise<{ entry: string }>) {
     super(app);
-    this.cli = cli;
+    this.record = record;
   }
 
   onOpen() {
-    const { contentEl } = this;
+    const { contentEl, modalEl } = this;
     contentEl.empty();
-    contentEl.addClass("memory-tool-record-modal");
+    modalEl.addClass("memory-tool-quick-modal");
 
-    contentEl.createEl("h3", { text: "⏱️ Quick Timeline Record (memory_tool)" });
-
-    const textArea = contentEl.createEl("textarea", {
-      cls: "memory-tool-input-textarea",
-      placeholder: "Write what you are doing or thinking... (Ctrl+Enter or Enter to submit)",
+    const input = contentEl.createEl("textarea", {
+      cls: "memory-tool-quick-input",
+      attr: {
+        rows: "1",
+        placeholder: "지금 무엇을 하고 있나요?  Enter로 기록",
+      },
     });
 
-    textArea.focus();
+    input.focus();
 
-    const buttonsEl = contentEl.createDiv({ cls: "memory-tool-modal-buttons" });
-    const cancelBtn = buttonsEl.createEl("button", { text: "Cancel" });
-    const submitBtn = buttonsEl.createEl("button", {
-      text: "Record (0.5s)",
-      cls: "mod-cta",
-    });
+    input.addEventListener("keydown", (e: KeyboardEvent) => {
+      // A Korean IME fires keydown for the Enter that commits a composition.
+      // Without this guard that Enter submits the entry mid-syllable and the
+      // last character is silently dropped.
+      if (e.isComposing || e.keyCode === 229) return;
 
-    cancelBtn.addEventListener("click", () => this.close());
-
-    const submit = async () => {
-      const text = textArea.value.trim();
-      if (!text) {
-        new Notice("Please enter a timeline message.");
-        return;
-      }
-
-      try {
-        await this.cli.recordTimeline(text);
-        new Notice(`Recorded to timeline: "${text}"`);
-        this.close();
-      } catch (err: any) {
-        new Notice(`Failed to record timeline: ${err.message}`);
-      }
-    };
-
-    submitBtn.addEventListener("click", submit);
-
-    textArea.addEventListener("keydown", (e: KeyboardEvent) => {
-      if (e.key === "Enter" && (e.ctrlKey || e.metaKey || !e.shiftKey)) {
+      if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
-        submit();
+        this.submit(input.value);
       }
+    });
+  }
+
+  /**
+   * Close first, then write.
+   *
+   * The write is fast enough that waiting would only add a visible pause, and a
+   * failure still surfaces as a notice carrying the original text, so nothing is
+   * lost by not blocking on it.
+   */
+  private submit(raw: string): void {
+    const text = raw.trim();
+    if (!text) {
+      this.close();
+      return;
+    }
+
+    this.close();
+
+    this.record(text).catch((err: any) => {
+      new Notice(`기록 실패: ${err.message}\n${text}`, 10000);
     });
   }
 
   onClose() {
-    const { contentEl } = this;
-    contentEl.empty();
+    this.contentEl.empty();
   }
 }
