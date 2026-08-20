@@ -16,7 +16,7 @@ from memory_tool.utils.paths import display_path, get_base_path
 
 @app.command()
 def module(
-    action: str = typer.Argument(..., help="Action: create, list, tree, rename, relink, archive, unarchive, migrate, connections, graph, rebuild-graph, check-links, suggest-links, suggest-ai, ai-organize, auto-tag, graph-history, graph-diff, graph-snapshot, from-text"),
+    action: str = typer.Argument(..., help="Action: create, list, tree, rename, relink, merge-templates, archive, unarchive, migrate, connections, graph, rebuild-graph, check-links, suggest-links, suggest-ai, ai-organize, auto-tag, graph-history, graph-diff, graph-snapshot, from-text"),
     name: str = typer.Argument(None, help="Module name or path (e.g., 'projects/website')"),
     description: str = typer.Option("", "--desc", "-d", help="Module description"),
     reason: str = typer.Option("", "--reason", "-r", help="Reason for archiving"),
@@ -33,7 +33,8 @@ def module(
     text: Optional[str] = typer.Option(None, "--text", help="Input text for from-text action"),
     text_file: Optional[str] = typer.Option(None, "--text-file", help="File path containing input text for from-text action"),
     preview: bool = typer.Option(False, "--preview", "-p", help="Preview generated module without saving (for from-text action)"),
-    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would change without writing (for relink action)"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would change without writing (for relink/merge-templates)"),
+    remove: bool = typer.Option(False, "--remove", help="Delete the merged-from directories (for merge-templates)"),
     lang: Optional[str] = typer.Option(None, "--lang", help="Output language for from-text: 'ko', 'en', 'auto'"),
     structure: Optional[str] = typer.Option(None, "--structure", "-s", help="Module structure type for from-text: 'feature' (software), 'topic' (learning/KB), 'auto'"),
     kind: Optional[str] = typer.Option(None, "--kind", "-k", help="Template kind for create: 'knowledge' or 'implementation'"),
@@ -144,6 +145,65 @@ def module(
                         "\n[dim]Unresolved links are left untouched -- rename the target "
                         "or fix the link by hand.[/dim]"
                     )
+
+        elif action.lower() == "merge-templates":
+            # `migrate` consolidates a *module*'s files; template sets are a
+            # different shape (they carry a natures menu that is never emitted)
+            # and live outside modules/, so they need their own pass.
+            import shutil
+
+            from memory_tool.core.module_templates import (
+                KINDS,
+                TemplateError as _TemplateError,
+                merge_template_dir,
+                single_file_name,
+            )
+
+            templates_dir = get_base_path() / "templates"
+            merged_any = False
+
+            for kind in KINDS:
+                source = templates_dir / kind
+                if not source.is_dir():
+                    continue
+
+                target = templates_dir / single_file_name(kind)
+
+                try:
+                    merged = merge_template_dir(source)
+                except _TemplateError as exc:
+                    console.print(f"[yellow]SKIP[/yellow] {kind}: {exc}")
+                    continue
+
+                merged_any = True
+                rel = display_path(target)
+
+                if dry_run:
+                    console.print(
+                        f"[cyan]Would merge[/cyan] {display_path(source)}/ "
+                        f"-> {rel} ({len(merged)} bytes)"
+                    )
+                    continue
+
+                target.write_text(merged, encoding="utf-8")
+                console.print(f"[green]OK[/green] Merged {kind} -> {rel}")
+
+                if remove:
+                    shutil.rmtree(source)
+                    console.print(f"[dim]Removed {display_path(source)}/[/dim]")
+
+            if not merged_any:
+                console.print(
+                    "[dim]No template directories found under "
+                    f"{display_path(templates_dir)}. Nothing to merge.[/dim]"
+                )
+            elif dry_run:
+                console.print("\n[dim]Nothing written. Re-run without --dry-run to apply.[/dim]")
+            elif not remove:
+                console.print(
+                    "\n[dim]The single file now takes precedence. Re-run with "
+                    "--remove to delete the directories it was built from.[/dim]"
+                )
 
         elif action.lower() == "list":
             modules = manager.list_modules(include_archived=archived)

@@ -32,7 +32,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 KINDS = ("knowledge", "implementation")
 NATURES = ("concept", "reference", "analysis", "tracker", "method")
@@ -61,6 +61,29 @@ ASSEMBLY_ORDER = ("module", "current", "decisions", "dependencies", "interface")
 REQUIRED_FILES = ("module.md", "current.md")
 
 SECTION_SEPARATOR = "\n\n---\n\n"
+
+
+#: Parts that must be present however the template is stored.
+REQUIRED_PARTS = ("module", "current")
+
+#: Single-file templates keep every part in one document, marked by comments:
+#:
+#:     <!-- part: module -->
+#:     ...
+#:     ---
+#:     <!-- part: current -->
+#:
+#: Markers rather than positional splitting: a "---" inside a section (a table
+#: rule, a nested example) would silently shift every following part by one, and
+#: the result would still look like a valid document.
+PART_MARKER = re.compile(r"^<!--\s*part:\s*([a-z]+)\s*-->[ \t]*$", re.MULTILINE)
+
+#: The natures part is a menu to choose from, never emitted into a module.
+NATURES_PART = "natures"
+
+def single_file_name(kind: str) -> str:
+    """Filename of a single-file template for a kind."""
+    return f"{kind}.md"
 
 
 class TemplateError(Exception):
@@ -138,25 +161,19 @@ def resolve_template_dir(kind: str, memory_path: Optional[Path] = None) -> Path:
     )
 
 
-def _read_natures(template_dir: Path) -> Dict[str, str]:
-    """Parse natures.md into {nature: body outline}.
+def _parse_natures(content: str) -> Dict[str, str]:
+    """Parse the natures menu into {nature: body outline}.
 
     Each nature is documented as a ``## <nature> (...)`` heading followed by a
     fenced block holding the outline to paste into the body section.
 
     Args:
-        template_dir: Directory that may contain natures.md
+        content: The natures markdown, from natures.md or the natures part
 
     Returns:
         Mapping of nature name to its outline markdown (may be empty).
     """
-    natures_file = template_dir / "natures.md"
-    if not natures_file.is_file():
-        return {}
-
-    try:
-        content = natures_file.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
+    if not content:
         return {}
 
     blocks: Dict[str, str] = {}
@@ -336,6 +353,141 @@ def _fill_purpose(text: str, description: str) -> str:
     return filled if count else text
 
 
+def parse_single_file_template(text: str) -> Dict[str, str]:
+    """Split a single-file template into its parts.
+
+    Args:
+        text: Whole template document
+
+    Returns:
+        Mapping of part name to its markdown, in document order. Text before the
+        first marker is ignored, so a file may carry a header comment.
+    """
+    parts: Dict[str, str] = {}
+    matches = list(PART_MARKER.finditer(text))
+
+    for index, match in enumerate(matches):
+        name = match.group(1)
+        start = match.end()
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        body = text[start:end]
+
+        # A "---" immediately before the next marker is the separator between
+        # sections, not content belonging to this one.
+        body = re.sub(r"\n+-{3,}\s*$", "", body.rstrip())
+        parts[name] = body.strip("\n")
+
+    return parts
+
+
+def merge_template_dir(directory: Path) -> str:
+    """Render a directory template set as one single-file template.
+
+    Args:
+        directory: A templates/<kind>/ folder
+
+    Returns:
+        The merged document, ready to write as templates/<kind>.md.
+
+    Raises:
+        TemplateError: If the required parts are missing.
+    """
+    missing = [n for n in REQUIRED_PARTS if not (directory / f"{n}.md").is_file()]
+    if missing:
+        raise TemplateError(
+            f"Cannot merge {directory}: missing "
+            + ", ".join(f"{n}.md" for n in missing)
+        )
+
+    chunks: List[str] = [
+        "<!-- Single-file module template.",
+        "     Each part below becomes one section of the assembled module,",
+        "     joined in this order and separated by a horizontal rule.",
+        f"     Parts: {', '.join(ASSEMBLY_ORDER)}",
+        "     The 'natures' part is a menu: one outline is spliced into the",
+        "     body of 'current' and the rest are never emitted. -->",
+        "",
+    ]
+
+    body: List[str] = []
+
+    for part in ASSEMBLY_ORDER:
+        path = directory / f"{part}.md"
+        if not path.is_file():
+            continue
+        content = path.read_text(encoding="utf-8").strip("\n")
+        body.append(f"<!-- part: {part} -->\n\n{content}")
+
+    natures_path = directory / f"{NATURES_PART}.md"
+    if natures_path.is_file():
+        content = natures_path.read_text(encoding="utf-8").strip("\n")
+        body.append(f"<!-- part: {NATURES_PART} -->\n\n{content}")
+
+    return "\n".join(chunks) + SECTION_SEPARATOR.join(body) + "\n"
+
+
+def load_template_parts(
+    kind: str, memory_path: Optional[Path] = None
+) -> Tuple[Dict[str, str], Path]:
+    """Load a kind's template parts from whichever storage form exists.
+
+    Single-file templates win over directories at the same level, and a
+    project's own templates win over the bundled ones, so a customization is
+    never silently ignored.
+
+    Args:
+        kind: "knowledge" or "implementation"
+        memory_path: The project's base folder, if known
+
+    Returns:
+        (parts, origin path) -- origin is used in error messages.
+
+    Raises:
+        TemplateError: If no usable template exists.
+    """
+    roots: List[Path] = []
+    if memory_path is not None:
+        roots.append(Path(memory_path) / "templates")
+    roots.append(bundled_templates_root())
+
+    tried: List[Path] = []
+
+    for root in roots:
+        single = root / single_file_name(kind)
+        tried.append(single)
+        if single.is_file():
+            try:
+                parts = parse_single_file_template(single.read_text(encoding="utf-8"))
+            except (OSError, UnicodeDecodeError) as e:
+                raise TemplateError(f"Could not read {single}: {e}") from e
+
+            missing = [n for n in REQUIRED_PARTS if n not in parts]
+            if missing:
+                raise TemplateError(
+                    f"{single} is missing required part(s): "
+                    + ", ".join(f"<!-- part: {n} -->" for n in missing)
+                )
+            return parts, single
+
+        directory = root / kind
+        tried.append(directory)
+        if _is_usable(directory):
+            parts = {}
+            for part in (*ASSEMBLY_ORDER, NATURES_PART):
+                path = directory / f"{part}.md"
+                if path.is_file():
+                    try:
+                        parts[part] = path.read_text(encoding="utf-8").strip("\n")
+                    except (OSError, UnicodeDecodeError) as e:
+                        raise TemplateError(f"Could not read {path}: {e}") from e
+            return parts, directory
+
+    raise TemplateError(
+        f"No usable '{kind}' template found. Looked for: "
+        + ", ".join(str(t) for t in tried)
+    )
+
+
 def build_module_document(
     name: str,
     kind: str,
@@ -361,31 +513,26 @@ def build_module_document(
         TemplateError: If the kind/nature is invalid or templates are missing.
     """
     choice = TemplateChoice(kind=kind, nature=nature)
-    template_dir = resolve_template_dir(choice.kind, memory_path)
+    parts, origin = load_template_parts(choice.kind, memory_path)
 
     today = datetime.now().strftime("%Y-%m-%d")
     tags_str = ", ".join(tags) if tags else ""
 
-    natures = _read_natures(template_dir) if choice.nature else {}
+    natures = _parse_natures(parts.get(NATURES_PART, "")) if choice.nature else {}
     if choice.nature and choice.nature not in natures:
         raise TemplateError(
-            f"Nature '{choice.nature}' is not defined in {template_dir / 'natures.md'}."
+            f"Nature '{choice.nature}' is not defined in {origin}."
         )
 
     sections: List[str] = []
 
     for part in ASSEMBLY_ORDER:
-        path = template_dir / f"{part}.md"
-        if not path.is_file():
+        content = parts.get(part)
+        if content is None:
             # decisions/dependencies/interface are optional in a custom set.
-            if part in ("module", "current"):
-                raise TemplateError(f"Required template missing: {path}")
+            if part in REQUIRED_PARTS:
+                raise TemplateError(f"Required template part missing in {origin}: {part}")
             continue
-
-        try:
-            content = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError) as e:
-            raise TemplateError(f"Could not read {path}: {e}") from e
 
         if part == "current" and choice.nature:
             content = _splice_nature(content, natures[choice.nature])

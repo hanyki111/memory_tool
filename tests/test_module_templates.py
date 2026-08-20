@@ -14,7 +14,11 @@ from memory_tool.core.module_templates import (
     TemplateError,
     build_module_document,
     bundled_templates_root,
+    load_template_parts,
+    merge_template_dir,
+    parse_single_file_template,
     resolve_template_dir,
+    single_file_name,
 )
 from memory_tool.utils.paths import ENV_BASE, ENV_ROOT, clear_cache, write_pointer
 
@@ -78,7 +82,8 @@ def test_nature_on_implementation_is_rejected():
 @pytest.mark.parametrize("kind", KINDS)
 def test_bundled_templates_are_present_for_every_kind(kind):
     """Guards against shipping a kind whose templates were never packaged."""
-    assert resolve_template_dir(kind) == bundled_templates_root() / kind
+    _, origin = load_template_parts(kind)
+    assert origin == bundled_templates_root() / single_file_name(kind)
 
 
 def test_project_templates_win_over_bundled(tmp_path):
@@ -99,7 +104,8 @@ def test_incomplete_project_templates_fall_back_to_bundled(tmp_path):
     local.mkdir(parents=True)
     (local / "module.md").write_text("# [모듈명]\n", encoding="utf-8")  # no current.md
 
-    assert resolve_template_dir("knowledge", base) == bundled_templates_root() / "knowledge"
+    _, origin = load_template_parts("knowledge", base)
+    assert origin == bundled_templates_root() / single_file_name("knowledge")
 
 
 # ---------------------------------------------------------------------------
@@ -336,3 +342,198 @@ def test_created_module_is_discoverable(tmp_path):
 
     assert "AI/basics" in names
     assert manager.resolve_module_doc("AI/basics") is not None
+
+
+# ---------------------------------------------------------------------------
+# Single-file templates
+# ---------------------------------------------------------------------------
+
+
+SINGLE = """<!-- header comment, ignored -->
+
+<!-- part: module -->
+
+# [모듈명]
+
+**Kind:** knowledge | **Nature:** concept | reference | analysis | tracker | method
+**Tags:** 
+
+---
+
+<!-- part: current -->
+
+# Current Knowledge State: [주제]
+
+## 2. 본문
+
+<!-- placeholder -->
+
+## 3. Open Questions
+
+---
+
+<!-- part: natures -->
+
+## concept (개념)
+
+```markdown
+## 2. 본문
+
+### 2.1 왜 필요한가
+```
+
+## reference (레퍼런스)
+
+```markdown
+## 2. 본문
+
+### 2.0 요약 조회표
+```
+"""
+
+
+def test_parse_single_file_splits_on_markers():
+    parts = parse_single_file_template(SINGLE)
+
+    assert list(parts) == ["module", "current", "natures"]
+    assert parts["module"].startswith("# [모듈명]")
+    assert parts["current"].startswith("# Current Knowledge State")
+
+
+def test_parse_drops_the_separator_before_the_next_marker():
+    # The "---" between sections belongs to the layout, not to the section that
+    # happens to precede it; keeping it would double the rule on assembly.
+    parts = parse_single_file_template(SINGLE)
+    assert not parts["module"].rstrip().endswith("---")
+    assert not parts["current"].rstrip().endswith("---")
+
+
+def test_text_before_the_first_marker_is_ignored():
+    parts = parse_single_file_template(SINGLE)
+    assert "header comment" not in "".join(parts.values())
+
+
+def test_single_file_project_template_wins_over_bundled(tmp_path):
+    base = make_base(tmp_path)
+    templates = base / "templates"
+    templates.mkdir(parents=True)
+    (templates / single_file_name("knowledge")).write_text(SINGLE, encoding="utf-8")
+
+    parts, origin = load_template_parts("knowledge", base)
+
+    assert origin == templates / "knowledge.md"
+    assert "[모듈명]" in parts["module"]
+
+
+def test_single_file_wins_over_a_directory_at_the_same_level(tmp_path):
+    # Both forms present: the merged file is the current one, so it takes
+    # precedence rather than the leftover directory it was merged from.
+    base = make_base(tmp_path)
+    templates = base / "templates"
+    directory = templates / "knowledge"
+    directory.mkdir(parents=True)
+    (directory / "module.md").write_text("# OLD\n", encoding="utf-8")
+    (directory / "current.md").write_text("# OLD current\n", encoding="utf-8")
+    (templates / single_file_name("knowledge")).write_text(SINGLE, encoding="utf-8")
+
+    _, origin = load_template_parts("knowledge", base)
+
+    assert origin == templates / "knowledge.md"
+
+
+def test_single_file_missing_a_required_part_is_an_error(tmp_path):
+    base = make_base(tmp_path)
+    templates = base / "templates"
+    templates.mkdir(parents=True)
+    (templates / single_file_name("knowledge")).write_text(
+        "<!-- part: module -->\n\n# [모듈명]\n", encoding="utf-8"
+    )
+
+    with pytest.raises(TemplateError) as exc:
+        load_template_parts("knowledge", base)
+
+    assert "current" in str(exc.value)
+
+
+def test_build_from_a_single_file_template(tmp_path):
+    base = make_base(tmp_path)
+    templates = base / "templates"
+    templates.mkdir(parents=True)
+    (templates / single_file_name("knowledge")).write_text(SINGLE, encoding="utf-8")
+
+    doc = build_module_document(
+        name="a/asyncio", kind="knowledge", nature="reference", memory_path=base
+    )
+
+    assert doc.startswith("# asyncio")
+    assert "### 2.0 요약 조회표" in doc      # chosen nature spliced in
+    assert "### 2.1 왜 필요한가" not in doc  # the others never appear
+    assert "part: natures" not in doc        # the menu is not emitted
+
+
+def test_unknown_nature_in_a_single_file_names_the_file(tmp_path):
+    base = make_base(tmp_path)
+    templates = base / "templates"
+    templates.mkdir(parents=True)
+    (templates / single_file_name("knowledge")).write_text(SINGLE, encoding="utf-8")
+
+    with pytest.raises(TemplateError) as exc:
+        build_module_document(
+            name="x", kind="knowledge", nature="tracker", memory_path=base
+        )
+
+    assert "knowledge.md" in str(exc.value)
+
+
+# ---------------------------------------------------------------------------
+# Merging a directory set into one file
+# ---------------------------------------------------------------------------
+
+
+def test_merge_produces_a_parsable_single_file(tmp_path):
+    directory = tmp_path / "knowledge"
+    directory.mkdir()
+    (directory / "module.md").write_text("# [모듈명]\n", encoding="utf-8")
+    (directory / "current.md").write_text("# Current\n", encoding="utf-8")
+    (directory / "natures.md").write_text("## concept\n\n```markdown\nX\n```\n", encoding="utf-8")
+
+    parts = parse_single_file_template(merge_template_dir(directory))
+
+    assert list(parts) == ["module", "current", "natures"]
+
+
+def test_merge_refuses_an_incomplete_set(tmp_path):
+    directory = tmp_path / "knowledge"
+    directory.mkdir()
+    (directory / "module.md").write_text("# [모듈명]\n", encoding="utf-8")
+
+    with pytest.raises(TemplateError) as exc:
+        merge_template_dir(directory)
+
+    assert "current.md" in str(exc.value)
+
+
+def test_merged_template_builds_the_same_document(tmp_path):
+    """The merge must be a pure re-packaging, not a rewrite."""
+    base = make_base(tmp_path)
+    directory = base / "templates" / "knowledge"
+    directory.mkdir(parents=True)
+    (directory / "module.md").write_text(
+        "# [모듈명]\n\n**Kind:** knowledge | **Role:** leaf\n", encoding="utf-8"
+    )
+    (directory / "current.md").write_text(
+        "# Current Knowledge State: [주제]\n\n## 2. 본문\n\n<!-- ph -->\n\n## 3. Next\n",
+        encoding="utf-8",
+    )
+    (directory / "natures.md").write_text(
+        "## concept\n\n```markdown\n## 2. 본문\n\n### 2.1 A\n```\n", encoding="utf-8"
+    )
+
+    from_dir = build_module_document("a/b", "knowledge", "concept", memory_path=base)
+
+    merged = merge_template_dir(directory)
+    (base / "templates" / single_file_name("knowledge")).write_text(merged, encoding="utf-8")
+
+    from_single = build_module_document("a/b", "knowledge", "concept", memory_path=base)
+
+    assert from_dir == from_single
