@@ -31,14 +31,19 @@ def make_base(root, base_name=".memory"):
     return base
 
 
-def write_timeline(base, date, daily=True):
-    """Create a timeline file in either the daily/ or the legacy location."""
+def write_timeline(base, date, daily=True, layout="day"):
+    """Create a timeline file in either the daily/ or the legacy location.
+
+    ``layout`` picks the filename: "day" for 20.md, "date" for 2026-08-20.md.
+    Both exist in the wild, and the context file has to label either correctly.
+    """
     parent = base / "timeline"
     if daily:
         parent = parent / "daily"
     parent = parent / date.strftime("%Y-%m")
     parent.mkdir(parents=True, exist_ok=True)
-    path = parent / f"{date.strftime('%d')}.md"
+    stem = date.strftime("%Y-%m-%d") if layout == "date" else date.strftime("%d")
+    path = parent / f"{stem}.md"
     path.write_text(f"# {date} Timeline\n- 10:00 | entry\n", encoding="utf-8")
     return path
 
@@ -113,6 +118,63 @@ def test_days_window_is_respected(tmp_path):
 def test_no_timeline_returns_empty(tmp_path):
     make_base(tmp_path)
     assert ContextBuilder(tmp_path).get_recent_timeline_paths(days=3) == []
+
+
+# ---------------------------------------------------------------------------
+# The date each timeline file is labelled with
+# ---------------------------------------------------------------------------
+
+
+def timeline_section(tmp_path):
+    """The "Recent Timeline" lines of a freshly built context file."""
+    content = ContextBuilder(tmp_path).build_context_content()
+    body = content.split("## Recent Timeline", 1)[1]
+    return [line for line in body.split("\n") if line.startswith("- **")]
+
+
+def test_dated_filenames_are_labelled_with_their_date(tmp_path):
+    """The regression: the month folder was prepended to a full-date filename.
+
+    "2026-08" + "-" + "2026-08-20" produced "2026-08-2026-08-20", which is not
+    a date in any format and is the first thing an AI session reads.
+    """
+    from datetime import date
+
+    base = make_base(tmp_path)
+    today = date.today()
+    write_timeline(base, today, daily=True, layout="date")
+
+    lines = timeline_section(tmp_path)
+
+    assert len(lines) == 1
+    assert lines[0].startswith(f"- **{today.isoformat()}**:")
+
+
+def test_day_filenames_are_labelled_with_the_full_date(tmp_path):
+    """20.md means nothing without its folder, so the label supplies it."""
+    from datetime import date
+
+    base = make_base(tmp_path)
+    today = date.today()
+    write_timeline(base, today, daily=True, layout="day")
+
+    lines = timeline_section(tmp_path)
+
+    assert len(lines) == 1
+    assert lines[0].startswith(f"- **{today.isoformat()}**:")
+
+
+def test_legacy_location_is_labelled_the_same_way(tmp_path):
+    from datetime import date
+
+    base = make_base(tmp_path)
+    today = date.today()
+    write_timeline(base, today, daily=False, layout="date")
+
+    lines = timeline_section(tmp_path)
+
+    assert len(lines) == 1
+    assert lines[0].startswith(f"- **{today.isoformat()}**:")
 
 
 # ---------------------------------------------------------------------------

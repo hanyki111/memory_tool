@@ -71,6 +71,26 @@ class ContextBuilder:
 
         return paths
 
+    def _timeline_label(self, path: Path) -> str:
+        """Render the date a timeline file covers.
+
+        Joining the month folder with the file stem was how this used to be
+        done, and it produced "2026-08-2026-08-20" as soon as filenames carried
+        the full date -- the folder already holds the month. Parsing the path
+        handles both naming layouts, and an unparseable name falls back to the
+        stem rather than to nonsense.
+
+        Args:
+            path: Path to a timeline markdown file
+
+        Returns:
+            "YYYY-MM-DD", or the file stem when the path is not a dated file.
+        """
+        from memory_tool.core.timeline import date_from_timeline_path
+
+        file_date = date_from_timeline_path(path)
+        return file_date.isoformat() if file_date else path.stem
+
     def _context_path(self, path: Path) -> str:
         """Render a path for the context file.
 
@@ -405,9 +425,7 @@ class ContextBuilder:
             lines.append("## Recent Timeline")
             lines.append("")
             for path in timeline_paths:
-                # Extract date from path
-                date_str = path.parent.name + "-" + path.stem
-                lines.append(f"- **{date_str}**: `{self._context_path(path)}`")
+                lines.append(f"- **{self._timeline_label(path)}**: `{self._context_path(path)}`")
             lines.append("")
         else:
             lines.append("## Recent Timeline")
