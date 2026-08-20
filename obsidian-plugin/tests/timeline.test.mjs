@@ -16,13 +16,18 @@ import {
   DEFAULT_TIMELINE_CONFIG,
   appendEntry,
   candidatePaths,
+  configuredFilenameLayout,
   filenameFor,
   formatEntry,
   headerFor,
+  layoutFromFilenames,
   newFileBody,
   sanitizeMessage,
+  sortMonthDirs,
   timelineConfigFrom,
   timelineDir,
+  timelineMonthDirs,
+  timelineRootDirs,
 } from "../src/timeline/format.ts";
 
 const AUG_17 = new Date(2026, 7, 17, 14, 30); // month is 0-based
@@ -173,4 +178,85 @@ test("an unknown layout value falls back rather than being trusted", () => {
 
 test("tag storage format is read from config", () => {
   assert.equal(timelineConfigFrom({ tag: { storage_format: "hashtag" } }).tagFormat, "hashtag");
+});
+
+// ---------------------------------------------------------------------------
+// Layout inferred from filenames -- the fallback for an unreadable config.yaml
+// ---------------------------------------------------------------------------
+
+test("a folder of ISO-dated files means the date layout", () => {
+  assert.equal(
+    layoutFromFilenames(["2026-08-17.md", "2026-08-18.md", "2026-08-19.md"]),
+    "date"
+  );
+});
+
+test("a folder of day-numbered files means the day layout", () => {
+  assert.equal(layoutFromFilenames(["05.md", "17.md", "9.md"]), "day");
+});
+
+test("non-timeline files in the folder are ignored", () => {
+  // A month folder can hold a summary or an index; neither says anything about
+  // how the timeline files themselves are named.
+  assert.equal(layoutFromFilenames(["README.md", "summary.md", "2026-08-17.md"]), "date");
+  assert.equal(layoutFromFilenames(["README.md", "notes.md"]), null);
+});
+
+test("an empty folder yields no answer rather than a guess", () => {
+  assert.equal(layoutFromFilenames([]), null);
+});
+
+test("the majority wins in a part-migrated folder", () => {
+  assert.equal(layoutFromFilenames(["2026-08-17.md", "2026-08-18.md", "19.md"]), "date");
+  assert.equal(layoutFromFilenames(["17.md", "18.md", "2026-08-19.md"]), "day");
+});
+
+test("a tie resolves to date", () => {
+  // Only a half-finished migration produces a tie, and migrations run toward
+  // "date" -- that is the layout the Calendar plugin needs.
+  assert.equal(layoutFromFilenames(["17.md", "2026-08-18.md"]), "date");
+});
+
+// ---------------------------------------------------------------------------
+// Folders scanned to infer the layout
+// ---------------------------------------------------------------------------
+
+test("both month folder layouts are scanned, most current first", () => {
+  assert.deepEqual(timelineMonthDirs(".memory", AUG_17), [
+    ".memory/timeline/daily/2026-08",
+    ".memory/timeline/2026-08",
+  ]);
+});
+
+test("month folders are searched from both timeline roots", () => {
+  assert.deepEqual(timelineRootDirs(".memory"), [
+    ".memory/timeline/daily",
+    ".memory/timeline",
+  ]);
+});
+
+test("only YYYY-MM folders count, newest first", () => {
+  assert.deepEqual(sortMonthDirs(["2026-07", "archive", "2026-08", "2025-12", ".trash"]), [
+    "2026-08",
+    "2026-07",
+    "2025-12",
+  ]);
+});
+
+// ---------------------------------------------------------------------------
+// "config says nothing" vs "config says day"
+// ---------------------------------------------------------------------------
+
+test("a silent config reports no layout, so the files on disk can decide", () => {
+  // The distinction is the whole point: returning "day" here would look like a
+  // deliberate choice and would out-rank a knowledge base full of dated files.
+  assert.equal(configuredFilenameLayout({}), null);
+  assert.equal(configuredFilenameLayout(null), null);
+  assert.equal(configuredFilenameLayout({ timeline: {} }), null);
+  assert.equal(configuredFilenameLayout({ timeline: { filename: "weekly" } }), null);
+});
+
+test("a stated layout is reported as stated", () => {
+  assert.equal(configuredFilenameLayout({ timeline: { filename: "date" } }), "date");
+  assert.equal(configuredFilenameLayout({ timeline: { filename: "day" } }), "day");
 });

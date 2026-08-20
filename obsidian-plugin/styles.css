@@ -78,6 +78,21 @@
   outline: none;
 }
 
+/* Shown only when an icon name failed to render, so the button is still findable
+   and clickable instead of being a blank strip of ribbon. */
+.memory-tool-ribbon-fallback {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--text-muted);
+}
+
+.memory-tool-quick-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 16px 14px;
+}
+
 /* --- Side panel --- */
 
 .memory-tool-panel {
@@ -97,12 +112,29 @@
   resize: vertical;
 }
 
+/* Status and send button share a row so the button is always in reach of the
+   input, and the status text never pushes it off screen. */
+.memory-tool-capture-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
 .memory-tool-capture-status {
+  flex: 1 1 auto;
+  min-width: 0;
   min-height: 16px;
-  margin-top: 4px;
   font-size: 12px;
   color: var(--text-muted);
   overflow-wrap: anywhere;
+}
+
+/* Comfortable tap target on a phone. */
+.memory-tool-capture-send {
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 0 14px;
 }
 
 .memory-tool-status-error {
@@ -214,6 +246,27 @@
   margin-top: 4px;
   font-size: 12px;
   color: var(--text-faint);
+}
+
+/* --- Panel corners ---
+
+   Obsidian's default input and button radii are tuned for modal-width controls.
+   At sidebar width the same radius reads as a column of pill-shaped boxes, and
+   on mobile, where the theme rounds more heavily still, the curve starts eating
+   into the first and last characters of a line. The panel's own controls set the
+   small radius explicitly, and the docked panel itself stays square: it is a
+   fixed strip of the window, not a floating card. */
+
+.workspace-leaf-content[data-type="memory-tool-panel"],
+.workspace-leaf-content[data-type="memory-tool-panel"] > .view-content {
+  border-radius: 0;
+}
+
+.memory-tool-capture-input,
+.memory-tool-module-filter,
+.memory-tool-capture-send,
+.memory-tool-actions button {
+  border-radius: var(--radius-s);
 }
 
 /* --- Ask (mask) modal --- */

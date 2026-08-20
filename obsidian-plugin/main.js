@@ -255,18 +255,22 @@ var RecordModal = class extends import_obsidian2.Modal {
     const { contentEl, modalEl } = this;
     contentEl.empty();
     modalEl.addClass("memory-tool-quick-modal");
+    const submitOnEnter = !import_obsidian2.Platform.isMobile;
     const input = contentEl.createEl("textarea", {
       cls: "memory-tool-quick-input",
       attr: {
-        rows: "1",
-        placeholder: "\uC9C0\uAE08 \uBB34\uC5C7\uC744 \uD558\uACE0 \uC788\uB098\uC694?  Enter\uB85C \uAE30\uB85D"
+        rows: submitOnEnter ? "1" : "3",
+        placeholder: submitOnEnter ? "\uC9C0\uAE08 \uBB34\uC5C7\uC744 \uD558\uACE0 \uC788\uB098\uC694?  Enter\uB85C \uAE30\uB85D" : "\uC9C0\uAE08 \uBB34\uC5C7\uC744 \uD558\uACE0 \uC788\uB098\uC694?"
       }
     });
     input.focus();
+    const row = contentEl.createDiv({ cls: "memory-tool-quick-actions" });
+    const submitBtn = row.createEl("button", { cls: "mod-cta", text: "\uAE30\uB85D" });
+    submitBtn.addEventListener("click", () => this.submit(input.value));
     input.addEventListener("keydown", (e) => {
       if (e.isComposing || e.keyCode === 229)
         return;
-      if (e.key === "Enter" && !e.shiftKey) {
+      if (submitOnEnter && e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         this.submit(input.value);
       }
@@ -332,9 +336,9 @@ function underBase(basePrefix, ...segments) {
 }
 function moduleCandidatePaths(basePrefix, moduleName) {
   const name = moduleName.replace(/\\/g, "/").replace(/\/{2,}/g, "/").replace(/^\/+|\/+$/g, "");
-  const basename2 = name.split("/").pop() || name;
+  const basename3 = name.split("/").pop() || name;
   return [
-    underBase(basePrefix, "modules", name, `${basename2}.md`),
+    underBase(basePrefix, "modules", name, `${basename3}.md`),
     underBase(basePrefix, "modules", `${name}.md`)
   ];
 }
@@ -753,6 +757,9 @@ var import_obsidian6 = require("obsidian");
 // src/timeline/format.ts
 var DEFAULT_FILENAME_LAYOUT = "day";
 var DEFAULT_TAG_FORMAT = "bracket";
+var DATE_FILE = /^\d{4}-\d{2}-\d{2}\.md$/;
+var DAY_FILE = /^\d{1,2}\.md$/;
+var MONTH_DIR = /^\d{4}-\d{2}$/;
 var DEFAULT_TIMELINE_CONFIG = {
   filenameLayout: DEFAULT_FILENAME_LAYOUT,
   tagFormat: DEFAULT_TAG_FORMAT
@@ -776,13 +783,8 @@ function headerFor(date) {
   return `# ${isoDate(date)} Timeline`;
 }
 function candidatePaths(basePrefix, date) {
-  const ym = yearMonth(date);
-  const dirs = [
-    underBase(basePrefix, "timeline", "daily", ym),
-    underBase(basePrefix, "timeline", ym)
-  ];
   const paths = [];
-  for (const dir of dirs) {
+  for (const dir of timelineMonthDirs(basePrefix, date)) {
     for (const layout of ["date", "day"]) {
       paths.push(`${dir}/${filenameFor(date, layout)}`);
     }
@@ -791,6 +793,32 @@ function candidatePaths(basePrefix, date) {
 }
 function timelineDir(basePrefix, date) {
   return underBase(basePrefix, "timeline", "daily", yearMonth(date));
+}
+function timelineMonthDirs(basePrefix, date) {
+  const ym = yearMonth(date);
+  return [
+    underBase(basePrefix, "timeline", "daily", ym),
+    underBase(basePrefix, "timeline", ym)
+  ];
+}
+function timelineRootDirs(basePrefix) {
+  return [underBase(basePrefix, "timeline", "daily"), underBase(basePrefix, "timeline")];
+}
+function sortMonthDirs(names) {
+  return names.filter((n) => MONTH_DIR.test(n)).sort().reverse();
+}
+function layoutFromFilenames(names) {
+  let date = 0;
+  let day = 0;
+  for (const name of names) {
+    if (DATE_FILE.test(name))
+      date += 1;
+    else if (DAY_FILE.test(name))
+      day += 1;
+  }
+  if (date === 0 && day === 0)
+    return null;
+  return day > date ? "day" : "date";
 }
 function formatEntry(date, message, tags = [], tagFormat = DEFAULT_TAG_FORMAT) {
   const time = hourMinute(date);
@@ -817,12 +845,15 @@ function newFileBody(date, entry) {
 ${entry}
 `;
 }
+function configuredFilenameLayout(parsed) {
+  const layout = (parsed ?? {})?.timeline?.filename;
+  return layout === "date" || layout === "day" ? layout : null;
+}
 function timelineConfigFrom(parsed) {
   const root = parsed ?? {};
-  const layout = root?.timeline?.filename;
   const tagFmt = root?.tag?.storage_format;
   return {
-    filenameLayout: layout === "date" || layout === "day" ? layout : DEFAULT_FILENAME_LAYOUT,
+    filenameLayout: configuredFilenameLayout(parsed) ?? DEFAULT_FILENAME_LAYOUT,
     tagFormat: tagFmt === "hashtag" || tagFmt === "bracket" ? tagFmt : DEFAULT_TAG_FORMAT
   };
 }
@@ -832,7 +863,10 @@ var MEMORY_PANEL_VIEW = "memory-tool-panel";
 var MemoryPanelView = class extends import_obsidian6.ItemView {
   constructor(leaf, host) {
     super(leaf);
-    this.modules = [];
+    /** Module list cache. null until something asks for it. */
+    this.modules = null;
+    /** Guards against a second load while the first is in flight. */
+    this.loadingModules = false;
     this.host = host;
   }
   getViewType() {
@@ -845,6 +879,11 @@ var MemoryPanelView = class extends import_obsidian6.ItemView {
     return "clock";
   }
   async onOpen() {
+    this.addAction("pencil", "\uC785\uB825\uCC3D\uC73C\uB85C \uC774\uB3D9", () => this.focusCapture());
+    this.addAction("refresh-cw", "\uC0C8\uB85C \uACE0\uCE68", () => {
+      void this.refreshToday();
+      void this.reloadModules();
+    });
     const root = this.contentEl;
     root.empty();
     root.addClass("memory-tool-panel");
@@ -853,7 +892,7 @@ var MemoryPanelView = class extends import_obsidian6.ItemView {
     this.buildModules(root);
     this.buildActions(root);
     await this.refreshToday();
-    void this.refreshModules();
+    void this.renderModules();
   }
   async onClose() {
     this.contentEl.empty();
@@ -865,18 +904,25 @@ var MemoryPanelView = class extends import_obsidian6.ItemView {
   // --- Capture -------------------------------------------------------------
   buildCapture(root) {
     const section = root.createDiv({ cls: "memory-tool-capture" });
+    const submitOnEnter = !import_obsidian6.Platform.isMobile;
     this.captureInput = section.createEl("textarea", {
       cls: "memory-tool-capture-input",
       attr: {
-        rows: "2",
-        placeholder: "\uC9C0\uAE08 \uBB34\uC5C7\uC744 \uD558\uACE0 \uC788\uB098\uC694?  Enter\uB85C \uAE30\uB85D, Shift+Enter \uC904\uBC14\uAFC8"
+        rows: submitOnEnter ? "2" : "3",
+        placeholder: submitOnEnter ? "\uC9C0\uAE08 \uBB34\uC5C7\uC744 \uD558\uACE0 \uC788\uB098\uC694?  Enter\uB85C \uAE30\uB85D, Shift+Enter \uC904\uBC14\uAFC8" : "\uC9C0\uAE08 \uBB34\uC5C7\uC744 \uD558\uACE0 \uC788\uB098\uC694?"
       }
     });
-    this.statusEl = section.createDiv({ cls: "memory-tool-capture-status" });
+    const row = section.createDiv({ cls: "memory-tool-capture-row" });
+    this.statusEl = row.createDiv({ cls: "memory-tool-capture-status" });
+    const submitBtn = row.createEl("button", {
+      cls: "mod-cta memory-tool-capture-send",
+      text: "\uAE30\uB85D"
+    });
+    submitBtn.addEventListener("click", () => void this.submitCapture());
     this.captureInput.addEventListener("keydown", (e) => {
       if (e.isComposing || e.keyCode === 229)
         return;
-      if (e.key === "Enter" && !e.shiftKey) {
+      if (submitOnEnter && e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         void this.submitCapture();
       }
@@ -965,39 +1011,86 @@ var MemoryPanelView = class extends import_obsidian6.ItemView {
     }
   }
   // --- Modules -------------------------------------------------------------
+  /**
+   * The module section is a search box, not a listing.
+   *
+   * A full list of every module is dozens of rows of noise in a sidebar this
+   * narrow, and it pushes today's timeline -- the part that changes -- off the
+   * screen. Nothing is drawn until there is a query to answer, which also means
+   * the list is not fetched when the panel merely opens; on desktop that fetch
+   * starts a Python process.
+   */
   buildModules(root) {
     const details = root.createEl("details", { cls: "memory-tool-section" });
     details.setAttr("open", "");
     const summary = details.createEl("summary");
-    summary.createSpan({ text: "\uBAA8\uB4C8" });
+    summary.createSpan({ text: "\uBAA8\uB4C8 \uAC80\uC0C9" });
     const refresh = summary.createSpan({ cls: "memory-tool-section-action" });
     (0, import_obsidian6.setIcon)(refresh, "refresh-cw");
     refresh.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
-      void this.refreshModules();
+      void this.reloadModules();
     });
     this.moduleFilter = details.createEl("input", {
       cls: "memory-tool-module-filter",
-      attr: { type: "text", placeholder: "\uBAA8\uB4C8 \uAC80\uC0C9..." }
+      attr: { type: "text", placeholder: "\uBAA8\uB4C8 \uC774\uB984 \uAC80\uC0C9..." }
     });
-    this.moduleFilter.addEventListener("input", () => this.renderModules());
+    this.moduleFilter.addEventListener("input", () => void this.renderModules());
     this.moduleList = details.createDiv({ cls: "memory-tool-modules" });
   }
-  async refreshModules() {
-    this.moduleList.empty();
-    this.moduleList.createDiv({ cls: "memory-tool-empty", text: "\uBD88\uB7EC\uC624\uB294 \uC911..." });
-    this.modules = await this.host.listModules();
-    this.renderModules();
+  /** Drop the cache and fetch again, then redraw whatever is on screen. */
+  async reloadModules() {
+    this.modules = null;
+    await this.renderModules();
   }
-  renderModules() {
-    this.moduleList.empty();
+  /**
+   * Load the module list once and keep it.
+   *
+   * Returns null while another call is already loading, so a fast typist does
+   * not start several CLI calls for the same list.
+   */
+  async loadModules() {
+    if (this.modules !== null)
+      return this.modules;
+    if (this.loadingModules)
+      return null;
+    this.loadingModules = true;
+    try {
+      this.modules = await this.host.listModules();
+      return this.modules;
+    } finally {
+      this.loadingModules = false;
+    }
+  }
+  async renderModules() {
     const filter = this.moduleFilter.value.trim().toLowerCase();
-    const shown = filter ? this.modules.filter((m) => m.toLowerCase().includes(filter)) : this.modules;
+    if (!filter) {
+      this.moduleList.empty();
+      this.moduleList.createDiv({
+        cls: "memory-tool-empty",
+        text: "\uAC80\uC0C9\uC5B4\uB97C \uC785\uB825\uD558\uBA74 \uBAA8\uB4C8\uC774 \uB098\uD0C0\uB0A9\uB2C8\uB2E4."
+      });
+      return;
+    }
+    if (this.modules === null) {
+      this.moduleList.empty();
+      this.moduleList.createDiv({ cls: "memory-tool-empty", text: "\uBD88\uB7EC\uC624\uB294 \uC911..." });
+      const loaded = await this.loadModules();
+      if (loaded === null)
+        return;
+      if (this.moduleFilter.value.trim().toLowerCase() !== filter) {
+        void this.renderModules();
+        return;
+      }
+    }
+    const all = this.modules ?? [];
+    const shown = all.filter((m) => m.toLowerCase().includes(filter));
+    this.moduleList.empty();
     if (shown.length === 0) {
       this.moduleList.createDiv({
         cls: "memory-tool-empty",
-        text: this.modules.length === 0 ? "\uBAA8\uB4C8\uC774 \uC5C6\uC2B5\uB2C8\uB2E4." : "\uC77C\uCE58\uD558\uB294 \uBAA8\uB4C8\uC774 \uC5C6\uC2B5\uB2C8\uB2E4."
+        text: all.length === 0 ? "\uBAA8\uB4C8\uC774 \uC5C6\uC2B5\uB2C8\uB2E4." : "\uC77C\uCE58\uD558\uB294 \uBAA8\uB4C8\uC774 \uC5C6\uC2B5\uB2C8\uB2E4."
       });
       return;
     }
@@ -1081,21 +1174,72 @@ var MemoryPanelView = class extends import_obsidian6.ItemView {
 
 // src/timeline/directWriter.ts
 var import_obsidian7 = require("obsidian");
-async function readTimelineConfig(adapter, basePrefix) {
+function basename(path) {
+  return path.split("/").filter(Boolean).pop() ?? path;
+}
+async function readParsedConfig(adapter, basePrefix) {
   const path = underBase(basePrefix, "config.yaml");
   try {
     if (!await adapter.exists(path))
-      return { ...DEFAULT_TIMELINE_CONFIG };
-    return timelineConfigFrom((0, import_obsidian7.parseYaml)(await adapter.read(path)));
+      return null;
+    return (0, import_obsidian7.parseYaml)(await adapter.read(path));
   } catch {
-    return { ...DEFAULT_TIMELINE_CONFIG };
+    return null;
   }
 }
-async function recordDirect(adapter, basePrefix, message, tags = [], when = new Date()) {
+async function inferFilenameLayout(adapter, basePrefix, when) {
+  const namesIn = async (dir) => {
+    try {
+      if (!await adapter.exists(dir))
+        return [];
+      return (await adapter.list(dir)).files.map(basename);
+    } catch {
+      return [];
+    }
+  };
+  for (const dir of timelineMonthDirs(basePrefix, when)) {
+    const found = layoutFromFilenames(await namesIn(dir));
+    if (found)
+      return found;
+  }
+  for (const root of timelineRootDirs(basePrefix)) {
+    let folders;
+    try {
+      if (!await adapter.exists(root))
+        continue;
+      folders = (await adapter.list(root)).folders.map(basename);
+    } catch {
+      continue;
+    }
+    for (const month of sortMonthDirs(folders)) {
+      const found = layoutFromFilenames(await namesIn(`${root}/${month}`));
+      if (found)
+        return found;
+    }
+  }
+  return null;
+}
+async function resolveFilenameLayout(adapter, basePrefix, when = new Date(), setting = "auto", parsed) {
+  if (setting === "day" || setting === "date") {
+    return { layout: setting, source: "setting" };
+  }
+  const config = parsed === void 0 ? await readParsedConfig(adapter, basePrefix) : parsed;
+  const stated = configuredFilenameLayout(config);
+  if (stated)
+    return { layout: stated, source: "config" };
+  const inferred = await inferFilenameLayout(adapter, basePrefix, when);
+  if (inferred)
+    return { layout: inferred, source: "files" };
+  return { layout: DEFAULT_FILENAME_LAYOUT, source: "default" };
+}
+async function recordDirect(adapter, basePrefix, message, options = {}) {
+  const { tags = [], when = new Date(), layoutSetting = "auto" } = options;
   const text = sanitizeMessage(message);
   if (!text)
     throw new Error("Cannot record an empty message.");
-  const config = await readTimelineConfig(adapter, basePrefix);
+  const parsed = await readParsedConfig(adapter, basePrefix);
+  const config = parsed === null ? { ...DEFAULT_TIMELINE_CONFIG } : timelineConfigFrom(parsed);
+  const layout = await resolveFilenameLayout(adapter, basePrefix, when, layoutSetting, parsed);
   let path = null;
   for (const candidate of candidatePaths(basePrefix, when)) {
     if (await adapter.exists(candidate)) {
@@ -1106,7 +1250,7 @@ async function recordDirect(adapter, basePrefix, message, tags = [], when = new 
   const created = path === null;
   if (path === null) {
     const dir = timelineDir(basePrefix, when);
-    path = `${dir}/${filenameFor(when, config.filenameLayout)}`;
+    path = `${dir}/${filenameFor(when, layout.layout)}`;
     if (!await adapter.exists(dir)) {
       await adapter.mkdir(dir);
     }
@@ -1114,7 +1258,7 @@ async function recordDirect(adapter, basePrefix, message, tags = [], when = new 
   const entry = formatEntry(when, text, tags, config.tagFormat);
   const body = created ? newFileBody(when, entry) : appendEntry(await adapter.read(path), entry);
   await adapter.write(path, body);
-  return { path, entry, created };
+  return { path, entry, created, layout };
 }
 
 // src/vaultScan.ts
@@ -1137,7 +1281,7 @@ async function probeBasePrefix(adapter, candidates = BASE_CANDIDATES) {
   }
   return null;
 }
-function basename(path) {
+function basename2(path) {
   return path.split("/").filter(Boolean).pop() ?? path;
 }
 function stem(name) {
@@ -1164,7 +1308,7 @@ async function listModules(adapter, basePrefix) {
       return;
     }
     for (const filePath of listing.files) {
-      const name = basename(filePath);
+      const name = basename2(filePath);
       if (!name.endsWith(".md") || isIgnoredFile(name))
         continue;
       if (LEGACY_FILES.has(name)) {
@@ -1172,7 +1316,7 @@ async function listModules(adapter, basePrefix) {
           found.add(relative);
         continue;
       }
-      if (relative && stem(name) === basename(relative)) {
+      if (relative && stem(name) === basename2(relative)) {
         found.add(relative);
         continue;
       }
@@ -1180,7 +1324,7 @@ async function listModules(adapter, basePrefix) {
       found.add(flat);
     }
     for (const folderPath of listing.folders) {
-      const name = basename(folderPath);
+      const name = basename2(folderPath);
       if (name === "archive" || name.startsWith("."))
         continue;
       await walk(folderPath, relative ? `${relative}/${name}` : name);
@@ -1201,6 +1345,7 @@ var DEFAULT_SETTINGS = {
   pythonPath: "python",
   baseFolder: "",
   directCapture: true,
+  filenameLayout: "auto",
   indexSyncThreshold: 10,
   pendingIndex: 0
 };
@@ -1226,7 +1371,10 @@ var MemoryToolPlugin = class extends import_obsidian8.Plugin {
     this.cli.setPythonPath(this.settings.pythonPath);
     await this.resolveBaseFolder();
     this.registerView(MEMORY_PANEL_VIEW, (leaf) => new MemoryPanelView(leaf, this));
-    this.addRibbonIcon("clock", "Memory Tool \uD328\uB110 \uC5F4\uAE30", () => {
+    this.ribbonButton("pencil", "\uD0C0\uC784\uB77C\uC778 \uAE30\uB85D (m)", () => {
+      new RecordModal(this.app, (msg) => this.recordEntry(msg)).open();
+    });
+    this.ribbonButton("clock", "Memory Tool \uD328\uB110 \uC5F4\uAE30", () => {
       void this.activatePanel();
     });
     this.addCommand({
@@ -1255,6 +1403,29 @@ var MemoryToolPlugin = class extends import_obsidian8.Plugin {
           () => this.listModules(),
           () => this.basePrefix
         ).open();
+      }
+    });
+    this.addCommand({
+      id: "show-filename-layout",
+      name: "\uD0C0\uC784\uB77C\uC778 \uD30C\uC77C\uBA85 \uADDC\uCE59 \uD655\uC778",
+      callback: async () => {
+        const resolved = await resolveFilenameLayout(
+          this.app.vault.adapter,
+          this.basePrefix,
+          new Date(),
+          this.settings.filenameLayout
+        );
+        const sources = {
+          setting: "\uD50C\uB7EC\uADF8\uC778 \uC124\uC815",
+          config: "config.yaml",
+          files: "\uAE30\uC874 \uD0C0\uC784\uB77C\uC778 \uD30C\uC77C\uBA85",
+          default: "\uAE30\uBCF8\uAC12"
+        };
+        new import_obsidian8.Notice(
+          `\uC624\uB298 \uC0C8 \uD30C\uC77C\uC744 \uB9CC\uB4E4\uBA74: ${filenameFor(new Date(), resolved.layout)}
+\uADFC\uAC70: ${sources[resolved.source]} \xB7 Base: ${describePrefix(this.basePrefix)}`,
+          1e4
+        );
       }
     });
     this.addCommand({
@@ -1331,20 +1502,54 @@ var MemoryToolPlugin = class extends import_obsidian8.Plugin {
   }
   onunload() {
   }
+  /**
+   * Add a ribbon button that cannot fail silently.
+   *
+   * Two failure modes are covered, both of which look identical to the user --
+   * "the button does nothing":
+   *
+   *   1. An icon name Obsidian does not know renders no SVG, leaving a blank
+   *      strip of ribbon that is easy to miss and easy to mis-click. If nothing
+   *      was drawn, a visible label is written into the button instead.
+   *   2. An exception thrown inside the callback is swallowed by the event
+   *      dispatcher, so the click appears to do nothing at all. Reporting it as
+   *      a notice is the difference between a bug and a mystery.
+   */
+  ribbonButton(icon, title, action) {
+    const el = this.addRibbonIcon(icon, title, () => {
+      try {
+        action();
+      } catch (err) {
+        console.error("[memory_tool] ribbon action failed", err);
+        new import_obsidian8.Notice(`${title} \uC2E4\uD328: ${err?.message ?? err}`, 1e4);
+      }
+    });
+    if (!el.querySelector("svg")) {
+      el.addClass("memory-tool-ribbon-fallback");
+      el.setText(title.slice(0, 2));
+    }
+  }
   /** Reveal the side panel, creating it in the right sidebar if needed. */
   async activatePanel() {
     const { workspace } = this.app;
-    let leaf = workspace.getLeavesOfType(MEMORY_PANEL_VIEW)[0] ?? null;
-    if (!leaf) {
-      leaf = workspace.getRightLeaf(false);
-      if (!leaf)
-        return;
-      await leaf.setViewState({ type: MEMORY_PANEL_VIEW, active: true });
+    try {
+      let leaf = workspace.getLeavesOfType(MEMORY_PANEL_VIEW)[0] ?? null;
+      if (!leaf) {
+        leaf = workspace.getRightLeaf(false) ?? workspace.getLeaf(true);
+        if (!leaf) {
+          new import_obsidian8.Notice("\uD328\uB110\uC744 \uC5F4 \uC790\uB9AC\uB97C \uCC3E\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.");
+          return;
+        }
+        await leaf.setViewState({ type: MEMORY_PANEL_VIEW, active: true });
+      }
+      await workspace.revealLeaf(leaf);
+      const view = leaf.view;
+      if (view instanceof MemoryPanelView)
+        view.focusCapture();
+    } catch (err) {
+      console.error("[memory_tool] failed to open the panel", err);
+      new import_obsidian8.Notice(`\uD328\uB110 \uC5F4\uAE30 \uC2E4\uD328: ${err?.message ?? err}`, 1e4);
     }
-    await workspace.revealLeaf(leaf);
-    const view = leaf.view;
-    if (view instanceof MemoryPanelView)
-      view.focusCapture();
   }
   // --- PanelHost -----------------------------------------------------------
   /**
@@ -1361,7 +1566,9 @@ var MemoryToolPlugin = class extends import_obsidian8.Plugin {
       return { path: "", entry: message };
     }
     try {
-      const result = await recordDirect(this.app.vault.adapter, this.basePrefix, message);
+      const result = await recordDirect(this.app.vault.adapter, this.basePrefix, message, {
+        layoutSetting: this.settings.filenameLayout
+      });
       this.settings.pendingIndex += 1;
       await this.saveData(this.settings);
       const threshold = this.settings.indexSyncThreshold;
@@ -1439,11 +1646,7 @@ var MemoryToolPlugin = class extends import_obsidian8.Plugin {
       return;
     }
     if (!this.cli.isAvailable()) {
-      const probed = await probeBasePrefix(asScanAdapter(this.app.vault.adapter));
-      if (probed !== null) {
-        this.basePrefix = probed;
-      } else {
-        this.basePrefix = DEFAULT_BASE;
+      if (!await this.useProbedBase()) {
         new import_obsidian8.Notice(
           "memory_tool: \uC774 vault \uC548\uC5D0\uC11C \uC9C0\uC2DD \uBCA0\uC774\uC2A4\uB97C \uCC3E\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4 (timeline/ \uACFC modules/ \uB97C \uAC00\uC9C4 \uD3F4\uB354). \uC124\uC815\uC5D0\uC11C \uC9C1\uC811 \uC9C0\uC815\uD558\uC138\uC694.",
           1e4
@@ -1455,17 +1658,18 @@ var MemoryToolPlugin = class extends import_obsidian8.Plugin {
     try {
       info = await this.cli.getBaseInfo();
     } catch {
-      this.basePrefix = DEFAULT_BASE;
-      new import_obsidian8.Notice(
-        `memory_tool: could not detect the knowledge base folder, assuming ${DEFAULT_BASE}/. Set it manually in the plugin settings if that is wrong.`
-      );
+      if (!await this.useProbedBase()) {
+        new import_obsidian8.Notice(
+          `memory_tool: could not detect the knowledge base folder, assuming ${DEFAULT_BASE}/. Set it manually in the plugin settings if that is wrong.`
+        );
+      }
       return;
     }
     const prefix = vaultRelativeBase(this.vaultRoot, info.base);
     if (prefix === null) {
-      this.basePrefix = DEFAULT_BASE;
+      const probed = await this.useProbedBase();
       new import_obsidian8.Notice(
-        `memory_tool: the knowledge base (${info.base}) is outside this vault, so its files cannot be opened here. Open that folder as the vault, or set the folder manually in the plugin settings.`,
+        `memory_tool: the knowledge base (${info.base}) is outside this vault. ` + (probed ? `Using ${describePrefix(this.basePrefix)} in this vault instead.` : "Its files cannot be opened here. Open that folder as the vault, or set the folder manually in the plugin settings."),
         1e4
       );
       return;
@@ -1477,6 +1681,18 @@ var MemoryToolPlugin = class extends import_obsidian8.Plugin {
         1e4
       );
     }
+  }
+  /**
+   * Fall back to searching the vault for the knowledge base.
+   *
+   * Sets `basePrefix` to the historical default when nothing is found, so the
+   * caller only has to decide what to say. Returns whether a base was actually
+   * located.
+   */
+  async useProbedBase() {
+    const probed = await probeBasePrefix(asScanAdapter(this.app.vault.adapter));
+    this.basePrefix = probed ?? DEFAULT_BASE;
+    return probed !== null;
   }
   async loadSettings() {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
@@ -1518,6 +1734,31 @@ var MemoryToolSettingTab = class extends import_obsidian8.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
+    const layoutSetting = new import_obsidian8.Setting(containerEl).setName("\uD0C0\uC784\uB77C\uC778 \uD30C\uC77C\uBA85").setDesc("\uD655\uC778 \uC911...").addDropdown(
+      (drop) => drop.addOption("auto", "\uC790\uB3D9 (config.yaml \u2192 \uAE30\uC874 \uD30C\uC77C\uBA85)").addOption("date", "2026-08-20.md (date)").addOption("day", "20.md (day)").setValue(this.plugin.settings.filenameLayout).onChange(async (value) => {
+        this.plugin.settings.filenameLayout = value;
+        await this.plugin.saveSettings();
+        void describeLayout();
+      })
+    );
+    const describeLayout = async () => {
+      const resolved = await resolveFilenameLayout(
+        this.app.vault.adapter,
+        this.plugin.basePrefix,
+        new Date(),
+        this.plugin.settings.filenameLayout
+      );
+      const sources = {
+        setting: "\uC774 \uC124\uC815",
+        config: "config.yaml",
+        files: "\uAE30\uC874 \uD0C0\uC784\uB77C\uC778 \uD30C\uC77C\uBA85",
+        default: "\uAE30\uBCF8\uAC12"
+      };
+      layoutSetting.setDesc(
+        `\uC0C8 \uD30C\uC77C\uC744 \uB9CC\uB4E4 \uB54C \uC4F0\uB294 \uC774\uB984\uC785\uB2C8\uB2E4. \uC9C0\uAE08 \uAE30\uC900\uC73C\uB85C\uB294 ${filenameFor(new Date(), resolved.layout)} \uB85C \uB9CC\uB4E4\uC5B4\uC9C0\uBA70, \uADFC\uAC70\uB294 ${sources[resolved.source]} \uC785\uB2C8\uB2E4.`
+      );
+    };
+    void describeLayout();
     new import_obsidian8.Setting(containerEl).setName("\uC778\uB371\uC2A4 \uC790\uB3D9 \uB3D9\uAE30\uD654 \uAE30\uC900").setDesc(
       `\uC9C1\uC811 \uAE30\uB85D\uC774 \uC774 \uAC1C\uC218\uB9CC\uD07C \uC313\uC774\uBA74 \uAC80\uC0C9 \uC778\uB371\uC2A4\uB97C \uC790\uB3D9\uC73C\uB85C \uAC31\uC2E0\uD569\uB2C8\uB2E4. 0\uC774\uBA74 \uC218\uB3D9\uC73C\uB85C\uB9CC \uAC31\uC2E0\uD569\uB2C8\uB2E4. \uD604\uC7AC \uBBF8\uBC18\uC601: ${this.plugin.settings.pendingIndex}\uAC74.`
     ).addText(

@@ -5,7 +5,12 @@ import { CreateModuleModal } from "./modals/CreateModuleModal";
 import { ModuleSuggestModal } from "./modals/ModuleSuggestModal";
 import { AskModal } from "./modals/AskModal";
 import { MEMORY_PANEL_VIEW, MemoryPanelView, PanelHost } from "./views/MemoryPanelView";
-import { recordDirect } from "./timeline/directWriter";
+import {
+  FilenameLayoutSetting,
+  filenameFor,
+  recordDirect,
+  resolveFilenameLayout,
+} from "./timeline/directWriter";
 import { asScanAdapter, listModules, probeBasePrefix } from "./vaultScan";
 import {
   DEFAULT_BASE,
@@ -23,6 +28,11 @@ interface MemoryToolSettings {
    * On by default: the CLI path costs ~1.6s of interpreter start per entry.
    */
   directCapture: boolean;
+  /**
+   * Timeline filename layout for files this plugin creates.
+   * "auto" follows config.yaml, then the names already in use.
+   */
+  filenameLayout: FilenameLayoutSetting;
   /** Auto-run the indexer once this many direct writes are unindexed. 0 = never. */
   indexSyncThreshold: number;
   /** Direct writes not yet reflected in the SQLite search index. */
@@ -33,6 +43,7 @@ const DEFAULT_SETTINGS: MemoryToolSettings = {
   pythonPath: "python",
   baseFolder: "",
   directCapture: true,
+  filenameLayout: "auto",
   indexSyncThreshold: 10,
   pendingIndex: 0,
 };
@@ -65,8 +76,13 @@ export default class MemoryToolPlugin extends Plugin implements PanelHost {
 
     this.registerView(MEMORY_PANEL_VIEW, (leaf) => new MemoryPanelView(leaf, this));
 
-    // Ribbon: one entry point now that the panel holds everything.
-    this.addRibbonIcon("clock", "Memory Tool 패널 열기", () => {
+    // Two ribbon entry points, both reachable by tap alone. On a phone there is
+    // no modifier key to press, so every action must have a button somewhere.
+    this.ribbonButton("pencil", "타임라인 기록 (m)", () => {
+      new RecordModal(this.app, (msg) => this.recordEntry(msg)).open();
+    });
+
+    this.ribbonButton("clock", "Memory Tool 패널 열기", () => {
       void this.activatePanel();
     });
 
@@ -103,6 +119,30 @@ export default class MemoryToolPlugin extends Plugin implements PanelHost {
           () => this.listModules(),
           () => this.basePrefix
         ).open();
+      },
+    });
+
+    this.addCommand({
+      id: "show-filename-layout",
+      name: "타임라인 파일명 규칙 확인",
+      callback: async () => {
+        const resolved = await resolveFilenameLayout(
+          this.app.vault.adapter,
+          this.basePrefix,
+          new Date(),
+          this.settings.filenameLayout
+        );
+        const sources: Record<string, string> = {
+          setting: "플러그인 설정",
+          config: "config.yaml",
+          files: "기존 타임라인 파일명",
+          default: "기본값",
+        };
+        new Notice(
+          `오늘 새 파일을 만들면: ${filenameFor(new Date(), resolved.layout)}\n` +
+            `근거: ${sources[resolved.source]} · Base: ${describePrefix(this.basePrefix)}`,
+          10000
+        );
       },
     });
 
@@ -193,22 +233,62 @@ export default class MemoryToolPlugin extends Plugin implements PanelHost {
 
   onunload() {}
 
+  /**
+   * Add a ribbon button that cannot fail silently.
+   *
+   * Two failure modes are covered, both of which look identical to the user --
+   * "the button does nothing":
+   *
+   *   1. An icon name Obsidian does not know renders no SVG, leaving a blank
+   *      strip of ribbon that is easy to miss and easy to mis-click. If nothing
+   *      was drawn, a visible label is written into the button instead.
+   *   2. An exception thrown inside the callback is swallowed by the event
+   *      dispatcher, so the click appears to do nothing at all. Reporting it as
+   *      a notice is the difference between a bug and a mystery.
+   */
+  private ribbonButton(icon: string, title: string, action: () => void): void {
+    const el = this.addRibbonIcon(icon, title, () => {
+      try {
+        action();
+      } catch (err: any) {
+        console.error("[memory_tool] ribbon action failed", err);
+        new Notice(`${title} 실패: ${err?.message ?? err}`, 10000);
+      }
+    });
+
+    if (!el.querySelector("svg")) {
+      el.addClass("memory-tool-ribbon-fallback");
+      el.setText(title.slice(0, 2));
+    }
+  }
+
   /** Reveal the side panel, creating it in the right sidebar if needed. */
   async activatePanel(): Promise<void> {
     const { workspace } = this.app;
 
-    let leaf: WorkspaceLeaf | null = workspace.getLeavesOfType(MEMORY_PANEL_VIEW)[0] ?? null;
+    try {
+      let leaf: WorkspaceLeaf | null = workspace.getLeavesOfType(MEMORY_PANEL_VIEW)[0] ?? null;
 
-    if (!leaf) {
-      leaf = workspace.getRightLeaf(false);
-      if (!leaf) return;
-      await leaf.setViewState({ type: MEMORY_PANEL_VIEW, active: true });
+      if (!leaf) {
+        // Falling back to a new leaf matters on mobile, where the right sidebar
+        // may not exist as a separate dock; returning early here used to make the
+        // button do nothing at all, with no way to tell why.
+        leaf = workspace.getRightLeaf(false) ?? workspace.getLeaf(true);
+        if (!leaf) {
+          new Notice("패널을 열 자리를 찾지 못했습니다.");
+          return;
+        }
+        await leaf.setViewState({ type: MEMORY_PANEL_VIEW, active: true });
+      }
+
+      await workspace.revealLeaf(leaf);
+
+      const view = leaf.view;
+      if (view instanceof MemoryPanelView) view.focusCapture();
+    } catch (err: any) {
+      console.error("[memory_tool] failed to open the panel", err);
+      new Notice(`패널 열기 실패: ${err?.message ?? err}`, 10000);
     }
-
-    await workspace.revealLeaf(leaf);
-
-    const view = leaf.view;
-    if (view instanceof MemoryPanelView) view.focusCapture();
   }
 
   // --- PanelHost -----------------------------------------------------------
@@ -228,7 +308,9 @@ export default class MemoryToolPlugin extends Plugin implements PanelHost {
     }
 
     try {
-      const result = await recordDirect(this.app.vault.adapter, this.basePrefix, message);
+      const result = await recordDirect(this.app.vault.adapter, this.basePrefix, message, {
+        layoutSetting: this.settings.filenameLayout,
+      });
 
       this.settings.pendingIndex += 1;
       await this.saveData(this.settings);
@@ -319,11 +401,7 @@ export default class MemoryToolPlugin extends Plugin implements PanelHost {
     // Without the CLI (mobile), find the base by looking for its marker folders
     // instead of asking memory_tool where it put them.
     if (!this.cli.isAvailable()) {
-      const probed = await probeBasePrefix(asScanAdapter(this.app.vault.adapter));
-      if (probed !== null) {
-        this.basePrefix = probed;
-      } else {
-        this.basePrefix = DEFAULT_BASE;
+      if (!(await this.useProbedBase())) {
         new Notice(
           "memory_tool: 이 vault 안에서 지식 베이스를 찾지 못했습니다 " +
             "(timeline/ 과 modules/ 를 가진 폴더). 설정에서 직접 지정하세요.",
@@ -337,11 +415,15 @@ export default class MemoryToolPlugin extends Plugin implements PanelHost {
     try {
       info = await this.cli.getBaseInfo();
     } catch {
-      this.basePrefix = DEFAULT_BASE;
-      new Notice(
-        "memory_tool: could not detect the knowledge base folder, assuming " +
-          `${DEFAULT_BASE}/. Set it manually in the plugin settings if that is wrong.`
-      );
+      // The CLI is the definition of where the base is, but a failed call is no
+      // reason to guess: the vault can still be searched for the marker folders,
+      // and guessing wrong sends capture into a folder no command ever reads.
+      if (!(await this.useProbedBase())) {
+        new Notice(
+          "memory_tool: could not detect the knowledge base folder, assuming " +
+            `${DEFAULT_BASE}/. Set it manually in the plugin settings if that is wrong.`
+        );
+      }
       return;
     }
 
@@ -349,12 +431,16 @@ export default class MemoryToolPlugin extends Plugin implements PanelHost {
 
     if (prefix === null) {
       // The base folder is not inside this vault, so Obsidian cannot open its
-      // files at all. Say so plainly rather than silently failing later.
-      this.basePrefix = DEFAULT_BASE;
+      // files at all -- which happens routinely when a project's config points
+      // its knowledge base at another project. A knowledge base that *is* in
+      // this vault is the more useful answer, so look for one before giving up.
+      const probed = await this.useProbedBase();
       new Notice(
-        `memory_tool: the knowledge base (${info.base}) is outside this vault, ` +
-          "so its files cannot be opened here. Open that folder as the vault, or " +
-          "set the folder manually in the plugin settings.",
+        `memory_tool: the knowledge base (${info.base}) is outside this vault. ` +
+          (probed
+            ? `Using ${describePrefix(this.basePrefix)} in this vault instead.`
+            : "Its files cannot be opened here. Open that folder as the vault, or " +
+              "set the folder manually in the plugin settings."),
         10000
       );
       return;
@@ -370,6 +456,19 @@ export default class MemoryToolPlugin extends Plugin implements PanelHost {
         10000
       );
     }
+  }
+
+  /**
+   * Fall back to searching the vault for the knowledge base.
+   *
+   * Sets `basePrefix` to the historical default when nothing is found, so the
+   * caller only has to decide what to say. Returns whether a base was actually
+   * located.
+   */
+  private async useProbedBase(): Promise<boolean> {
+    const probed = await probeBasePrefix(asScanAdapter(this.app.vault.adapter));
+    this.basePrefix = probed ?? DEFAULT_BASE;
+    return probed !== null;
   }
 
   async loadSettings() {
@@ -441,6 +540,48 @@ class MemoryToolSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         })
       );
+
+    // The layout matters beyond taste: Obsidian's Calendar and Periodic Notes
+    // plugins find a daily note by its basename alone, so "20.md" is invisible
+    // to them. The resolved value is shown because the interesting case is a
+    // knowledge base whose config.yaml the plugin could not read.
+    const layoutSetting = new Setting(containerEl)
+      .setName("타임라인 파일명")
+      .setDesc("확인 중...")
+      .addDropdown((drop) =>
+        drop
+          .addOption("auto", "자동 (config.yaml → 기존 파일명)")
+          .addOption("date", "2026-08-20.md (date)")
+          .addOption("day", "20.md (day)")
+          .setValue(this.plugin.settings.filenameLayout)
+          .onChange(async (value) => {
+            this.plugin.settings.filenameLayout = value as FilenameLayoutSetting;
+            await this.plugin.saveSettings();
+            void describeLayout();
+          })
+      );
+
+    const describeLayout = async (): Promise<void> => {
+      const resolved = await resolveFilenameLayout(
+        this.app.vault.adapter,
+        this.plugin.basePrefix,
+        new Date(),
+        this.plugin.settings.filenameLayout
+      );
+      const sources: Record<string, string> = {
+        setting: "이 설정",
+        config: "config.yaml",
+        files: "기존 타임라인 파일명",
+        default: "기본값",
+      };
+      layoutSetting.setDesc(
+        `새 파일을 만들 때 쓰는 이름입니다. 지금 기준으로는 ` +
+          `${filenameFor(new Date(), resolved.layout)} 로 만들어지며, ` +
+          `근거는 ${sources[resolved.source]} 입니다.`
+      );
+    };
+
+    void describeLayout();
 
     new Setting(containerEl)
       .setName("인덱스 자동 동기화 기준")

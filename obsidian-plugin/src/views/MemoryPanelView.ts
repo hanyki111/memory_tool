@@ -5,13 +5,17 @@
  * whole point is seeing capture, today's entries and module navigation at the
  * same time, and separate views would each claim their own tab and defeat that.
  *
+ * "Module navigation" means a search box: the panel is narrow, and a standing
+ * list of every module would be the tallest thing in it while being the part
+ * that changes least.
+ *
  * The capture box being permanently on screen is what makes the panel worth
  * having. A modal -- however fast -- costs a deliberate "open the thing" step
  * before any typing happens, and that step is the actual friction in a 0.5s
  * capture promise.
  */
 
-import { ItemView, Notice, TFile, WorkspaceLeaf, setIcon } from "obsidian";
+import { ItemView, Notice, Platform, TFile, WorkspaceLeaf, setIcon } from "obsidian";
 import { MemoryToolCli } from "../cli/memoryToolCli";
 import { candidatePaths } from "../timeline/format";
 import { moduleCandidatePaths, describePrefix } from "../paths";
@@ -43,7 +47,10 @@ export class MemoryPanelView extends ItemView {
   private moduleFilter!: HTMLInputElement;
   private statusEl!: HTMLElement;
 
-  private modules: string[] = [];
+  /** Module list cache. null until something asks for it. */
+  private modules: string[] | null = null;
+  /** Guards against a second load while the first is in flight. */
+  private loadingModules = false;
 
   constructor(leaf: WorkspaceLeaf, host: PanelHost) {
     super(leaf);
@@ -63,6 +70,14 @@ export class MemoryPanelView extends ItemView {
   }
 
   async onOpen(): Promise<void> {
+    // Header actions sit at the panel's top-right and are tappable, which is the
+    // only kind of control that exists on a phone.
+    this.addAction("pencil", "입력창으로 이동", () => this.focusCapture());
+    this.addAction("refresh-cw", "새로 고침", () => {
+      void this.refreshToday();
+      void this.reloadModules();
+    });
+
     const root = this.contentEl;
     root.empty();
     root.addClass("memory-tool-panel");
@@ -73,7 +88,8 @@ export class MemoryPanelView extends ItemView {
     this.buildActions(root);
 
     await this.refreshToday();
-    void this.refreshModules();
+    // Draws the "type to search" hint; with an empty box it fetches nothing.
+    void this.renderModules();
   }
 
   async onClose(): Promise<void> {
@@ -90,15 +106,30 @@ export class MemoryPanelView extends ItemView {
   private buildCapture(root: HTMLElement): void {
     const section = root.createDiv({ cls: "memory-tool-capture" });
 
+    // On a phone, Enter is the newline key and there is no Shift to hold, so
+    // Enter-to-submit would make multi-line capture impossible and single-line
+    // capture surprising. The button is the primary control there; on desktop it
+    // sits alongside the Enter shortcut.
+    const submitOnEnter = !Platform.isMobile;
+
     this.captureInput = section.createEl("textarea", {
       cls: "memory-tool-capture-input",
       attr: {
-        rows: "2",
-        placeholder: "지금 무엇을 하고 있나요?  Enter로 기록, Shift+Enter 줄바꿈",
+        rows: submitOnEnter ? "2" : "3",
+        placeholder: submitOnEnter
+          ? "지금 무엇을 하고 있나요?  Enter로 기록, Shift+Enter 줄바꿈"
+          : "지금 무엇을 하고 있나요?",
       },
     });
 
-    this.statusEl = section.createDiv({ cls: "memory-tool-capture-status" });
+    const row = section.createDiv({ cls: "memory-tool-capture-row" });
+    this.statusEl = row.createDiv({ cls: "memory-tool-capture-status" });
+
+    const submitBtn = row.createEl("button", {
+      cls: "mod-cta memory-tool-capture-send",
+      text: "기록",
+    });
+    submitBtn.addEventListener("click", () => void this.submitCapture());
 
     this.captureInput.addEventListener("keydown", (e: KeyboardEvent) => {
       // isComposing is essential, not defensive: with a Korean IME the Enter that
@@ -106,7 +137,7 @@ export class MemoryPanelView extends ItemView {
       // is submitted mid-syllable and the last character is lost.
       if (e.isComposing || e.keyCode === 229) return;
 
-      if (e.key === "Enter" && !e.shiftKey) {
+      if (submitOnEnter && e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         void this.submitCapture();
       }
@@ -219,50 +250,99 @@ export class MemoryPanelView extends ItemView {
 
   // --- Modules -------------------------------------------------------------
 
+  /**
+   * The module section is a search box, not a listing.
+   *
+   * A full list of every module is dozens of rows of noise in a sidebar this
+   * narrow, and it pushes today's timeline -- the part that changes -- off the
+   * screen. Nothing is drawn until there is a query to answer, which also means
+   * the list is not fetched when the panel merely opens; on desktop that fetch
+   * starts a Python process.
+   */
   private buildModules(root: HTMLElement): void {
     const details = root.createEl("details", { cls: "memory-tool-section" });
     details.setAttr("open", "");
 
     const summary = details.createEl("summary");
-    summary.createSpan({ text: "모듈" });
+    summary.createSpan({ text: "모듈 검색" });
 
     const refresh = summary.createSpan({ cls: "memory-tool-section-action" });
     setIcon(refresh, "refresh-cw");
     refresh.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
-      void this.refreshModules();
+      void this.reloadModules();
     });
 
     this.moduleFilter = details.createEl("input", {
       cls: "memory-tool-module-filter",
-      attr: { type: "text", placeholder: "모듈 검색..." },
+      attr: { type: "text", placeholder: "모듈 이름 검색..." },
     });
-    this.moduleFilter.addEventListener("input", () => this.renderModules());
+    this.moduleFilter.addEventListener("input", () => void this.renderModules());
 
     this.moduleList = details.createDiv({ cls: "memory-tool-modules" });
   }
 
-  private async refreshModules(): Promise<void> {
-    this.moduleList.empty();
-    this.moduleList.createDiv({ cls: "memory-tool-empty", text: "불러오는 중..." });
-
-    this.modules = await this.host.listModules();
-    this.renderModules();
+  /** Drop the cache and fetch again, then redraw whatever is on screen. */
+  private async reloadModules(): Promise<void> {
+    this.modules = null;
+    await this.renderModules();
   }
 
-  private renderModules(): void {
-    this.moduleList.empty();
+  /**
+   * Load the module list once and keep it.
+   *
+   * Returns null while another call is already loading, so a fast typist does
+   * not start several CLI calls for the same list.
+   */
+  private async loadModules(): Promise<string[] | null> {
+    if (this.modules !== null) return this.modules;
+    if (this.loadingModules) return null;
 
+    this.loadingModules = true;
+    try {
+      this.modules = await this.host.listModules();
+      return this.modules;
+    } finally {
+      this.loadingModules = false;
+    }
+  }
+
+  private async renderModules(): Promise<void> {
     const filter = this.moduleFilter.value.trim().toLowerCase();
-    const shown = filter
-      ? this.modules.filter((m) => m.toLowerCase().includes(filter))
-      : this.modules;
+
+    if (!filter) {
+      this.moduleList.empty();
+      this.moduleList.createDiv({
+        cls: "memory-tool-empty",
+        text: "검색어를 입력하면 모듈이 나타납니다.",
+      });
+      return;
+    }
+
+    if (this.modules === null) {
+      this.moduleList.empty();
+      this.moduleList.createDiv({ cls: "memory-tool-empty", text: "불러오는 중..." });
+
+      const loaded = await this.loadModules();
+      // Another call is loading, or the query changed while we waited; that
+      // call's own render will draw the result.
+      if (loaded === null) return;
+      if (this.moduleFilter.value.trim().toLowerCase() !== filter) {
+        void this.renderModules();
+        return;
+      }
+    }
+
+    const all = this.modules ?? [];
+    const shown = all.filter((m) => m.toLowerCase().includes(filter));
+
+    this.moduleList.empty();
 
     if (shown.length === 0) {
       this.moduleList.createDiv({
         cls: "memory-tool-empty",
-        text: this.modules.length === 0 ? "모듈이 없습니다." : "일치하는 모듈이 없습니다.",
+        text: all.length === 0 ? "모듈이 없습니다." : "일치하는 모듈이 없습니다.",
       });
       return;
     }
