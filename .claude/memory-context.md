@@ -1,11 +1,12 @@
 # Memory Context
 
-**Generated:** 2026-08-20 21:44
+**Generated:** 2026-08-22 17:45
 
 ---
 
 ## Recent Timeline
 
+- **2026-08-22**: `.memory/timeline/daily/2026-08/2026-08-22.md`
 - **2026-08-20**: `.memory/timeline/daily/2026-08/2026-08-20.md`
 
 ---
@@ -57,7 +58,11 @@
 - **archive/memory-system/current.md**: 234 lines - Consider reviewing
 - **memory-tool/llm-integration/llm-integration.md**: 831 lines - Consider reviewing
 - **memory-tool/module-system/module-system.md**: 746 lines - Consider reviewing
+- **memory-tool/core-system/PLAN-phase3-plan-system/PLAN-phase3-plan-system.md**: 757 lines - Consider reviewing
 - **memory-tool/knowledge-graph-system/discussion/discussion.md**: 608 lines - Consider reviewing
+- **memory-tool/project-management/PLAN-document-consolidation/PLAN-document-consolidation.md**: 879 lines - Consider reviewing
+- **memory-tool/project-management/PLAN-external-release/PLAN-external-release.md**: 785 lines - Consider reviewing
+- **memory-tool/project-management/PLAN-phase5a-document-management/PLAN-phase5a-document-management.md**: 824 lines - Consider reviewing
 
 ### ✅ Quick Actions
 

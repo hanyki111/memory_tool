@@ -8,9 +8,11 @@ import pytest
 
 from memory_tool.core.module import ModuleError, ModuleManager
 from memory_tool.core.module_templates import (
+    KIND_NATURES,
     KINDS,
     NATURES,
     TemplateChoice,
+    kind_for_nature,
     TemplateError,
     build_module_document,
     bundled_templates_root,
@@ -48,14 +50,36 @@ def make_base(root, base_name="memory"):
 # ---------------------------------------------------------------------------
 
 
+#: Every (kind, nature) pair the templates offer, for parametrized tests.
+NATURE_PAIRS = [
+    (kind, nature)
+    for kind, natures in KIND_NATURES.items()
+    for nature in natures
+]
+
+
 @pytest.mark.parametrize("kind", KINDS)
 def test_every_kind_is_accepted(kind):
     assert TemplateChoice(kind=kind).kind == kind
 
 
-@pytest.mark.parametrize("nature", NATURES)
-def test_every_nature_is_accepted_for_knowledge(nature):
-    assert TemplateChoice(kind="knowledge", nature=nature).nature == nature
+@pytest.mark.parametrize("kind,nature", NATURE_PAIRS)
+def test_every_nature_is_accepted_by_its_kind(kind, nature):
+    assert TemplateChoice(kind=kind, nature=nature).nature == nature
+
+
+def test_nature_names_are_unique_across_kinds():
+    """A bare --nature infers its kind, which only works if names don't repeat."""
+    assert len(NATURES) == len(set(NATURES))
+
+
+@pytest.mark.parametrize("kind,nature", NATURE_PAIRS)
+def test_kind_for_nature_round_trips(kind, nature):
+    assert kind_for_nature(nature) == kind
+
+
+def test_kind_for_an_unknown_nature_is_none():
+    assert kind_for_nature("nonsense") is None
 
 
 def test_unknown_kind_is_rejected():
@@ -68,8 +92,14 @@ def test_unknown_nature_is_rejected():
         TemplateChoice(kind="knowledge", nature="nonsense")
 
 
+def test_nature_belonging_to_another_kind_is_rejected():
+    """'plan' is an intent outline; asking for it on knowledge is a mistake."""
+    with pytest.raises(TemplateError, match="belongs to 'intent'"):
+        TemplateChoice(kind="knowledge", nature="plan")
+
+
 def test_nature_on_implementation_is_rejected():
-    """Only knowledge modules carry a Nature."""
+    """Only knowledge and intent modules carry a Nature."""
     with pytest.raises(TemplateError, match="applies only to"):
         TemplateChoice(kind="implementation", nature="concept")
 
@@ -151,9 +181,9 @@ def test_implementation_has_no_nature_field():
     assert "**Nature:**" not in doc
 
 
-@pytest.mark.parametrize("nature", NATURES)
-def test_each_nature_fills_the_body_section(nature):
-    doc = build_module_document(name="m", kind="knowledge", nature=nature)
+@pytest.mark.parametrize("kind,nature", NATURE_PAIRS)
+def test_each_nature_fills_the_body_section(kind, nature):
+    doc = build_module_document(name="m", kind=kind, nature=nature)
 
     assert "## 2. 본문" in doc
     # the instruction comment listing the natures must be gone
@@ -171,8 +201,8 @@ def test_body_heading_appears_exactly_once():
 
 def test_body_heading_has_no_stray_suffix():
     """One authored outline carries a typo'd heading that must not leak."""
-    for nature in NATURES:
-        doc = build_module_document(name="m", kind="knowledge", nature=nature)
+    for kind, nature in NATURE_PAIRS:
+        doc = build_module_document(name="m", kind=kind, nature=nature)
         assert "본문TT" not in doc
 
 
@@ -197,6 +227,60 @@ def test_knowledge_without_nature_keeps_the_body_placeholder():
 
     assert "## 2. 본문" in doc
     assert "### 2.1" not in doc
+
+
+@pytest.mark.parametrize("kind", KINDS)
+def test_wiki_link_examples_survive_substitution(kind):
+    """[[모듈명]] is a link example, not a field to fill.
+
+    The placeholders and wiki links share the bracket, so a plain replace
+    rewrote [[모듈명]] to [name] -- neither a link nor a visible placeholder.
+    """
+    doc = build_module_document(name="asyncio", kind=kind)
+
+    assert "[[모듈명]]" in doc
+    assert "[asyncio]" not in doc
+
+
+def test_intent_outlines_differ():
+    idea = build_module_document(name="m", kind="intent", nature="idea")
+    plan = build_module_document(name="m", kind="intent", nature="plan")
+
+    assert "씨앗" in idea
+    assert "씨앗" not in plan
+    assert "Definition of Done" in plan
+
+
+def test_intent_header_carries_stage_and_decision_state():
+    """Intent fails by drifting, so its header must show where it stands."""
+    doc = build_module_document(name="m", kind="intent", nature="inquiry")
+
+    assert "**Stage:**" in doc
+    assert "**결정 상태:**" in doc
+
+
+def test_intent_review_date_is_not_filled_in():
+    """The review date is a future date the author picks, not the created date.
+
+    It is authored as ____-__-__ precisely so the YYYY-MM-DD substitution leaves
+    it alone -- a review date silently set to today would read as already due.
+    """
+    doc = build_module_document(name="m", kind="intent", nature="plan")
+
+    assert "**다음 판정일:** ____-__-__" in doc
+
+
+def test_intent_document_has_an_exit_section():
+    """An intent module has to name how it stops being one."""
+    doc = build_module_document(name="m", kind="intent", nature="idea")
+
+    assert "## 7. 종결 처리 (Exit)" in doc
+
+
+def test_intent_interface_exposes_only_settled_conclusions():
+    doc = build_module_document(name="m", kind="intent", nature="inquiry")
+
+    assert "## 확정 결론 (인용 가능)" in doc
 
 
 # ---------------------------------------------------------------------------
@@ -297,6 +381,16 @@ def test_bare_nature_implies_knowledge(tmp_path):
     path = manager.create("m", nature="analysis")
 
     assert "**Kind:** knowledge | **Nature:** analysis" in path.read_text(encoding="utf-8")
+
+
+def test_bare_nature_implies_intent_when_the_name_is_an_intent_one(tmp_path):
+    """Nature names name their own kind, so --nature plan needs no --kind."""
+    make_base(tmp_path)
+    manager = ModuleManager(tmp_path)
+
+    path = manager.create("PLAN-release", nature="plan")
+
+    assert "**Kind:** intent | **Nature:** plan" in path.read_text(encoding="utf-8")
 
 
 def test_default_kind_from_config_is_applied(tmp_path):

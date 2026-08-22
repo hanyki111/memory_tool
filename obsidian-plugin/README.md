@@ -149,10 +149,14 @@ Obsidian 내에서 `memory_tool` CLI 기능을 사용할 수 있는 커뮤니티
 
 `Ctrl+P` → **모듈 생성** 은 MOP 의 판별 절차를 그대로 물어봅니다.
 
-1. **Kind** — "이 문서가 틀렸을 때, 틀린 것은 *지식*인가 *문서*인가?"
-   → `knowledge` / `implementation`
-2. **Nature** (`knowledge` 일 때만) — "무엇이 이 모듈을 갱신시키는가?"
-   → `concept` / `reference` / `analysis` / `tracker` / `method`
+1. **Kind** — "이 문서가 서술하는 대상이 이미 존재하는가? 존재한다면 틀렸을 때
+   틀린 것은 *지식*인가 *문서*인가?"
+   → `intent` / `knowledge` / `implementation`
+2. **Nature** (`implementation` 에는 없음) — "무엇이 이 모듈을 갱신시키는가?"
+   → `knowledge` 는 `concept` / `reference` / `analysis` / `tracker` / `method`
+   → `intent` 는 `idea` / `inquiry` / `plan`
+
+Kind 를 바꾸면 Nature 목록도 그 Kind 의 것으로 다시 채워집니다.
 
 선택한 답은 `mmodule create --kind --nature` 로 그대로 넘어갑니다. **조립은 memory_tool 이
 합니다** — 플러그인은 두 질문을 모듈 생성 시점에 반드시 묻게 만드는 역할만 합니다.

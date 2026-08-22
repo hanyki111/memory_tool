@@ -9,24 +9,35 @@
  * same choice.
  */
 
-export type ModuleKind = "knowledge" | "implementation";
+export type ModuleKind = "knowledge" | "implementation" | "intent";
 
-export type ModuleNature = "concept" | "reference" | "analysis" | "tracker" | "method";
+export type ModuleNature =
+  | "concept"
+  | "reference"
+  | "analysis"
+  | "tracker"
+  | "method"
+  | "idea"
+  | "inquiry"
+  | "plan";
 
-/** "When this document is wrong, is the *knowledge* wrong or just the *document*?" */
+/** "Does the subject of this document exist yet, and what is its source of truth?" */
 export const KINDS: { id: ModuleKind; answer: string }[] = [
-  { id: "knowledge", answer: "지식이 틀린 것" },
-  { id: "implementation", answer: "코드는 맞는데 문서만 낡은 것" },
+  { id: "intent", answer: "아직 없다. 앞으로 하려는 것" },
+  { id: "knowledge", answer: "있다. 지식이 틀린 것" },
+  { id: "implementation", answer: "있다. 코드는 맞는데 문서만 낡은 것" },
 ];
 
-/** "What makes this module need updating?" — knowledge modules only. */
-export const NATURES: {
+type NatureOption = {
   id: ModuleNature;
   label: string;
   trigger: string;
   answers: string;
   lifetime: string;
-}[] = [
+};
+
+/** "What makes this module need updating?" — knowledge modules. */
+export const KNOWLEDGE_NATURES: NatureOption[] = [
   {
     id: "concept",
     label: "concept (개념)",
@@ -63,3 +74,35 @@ export const NATURES: {
     lifetime: "반영구",
   },
 ];
+
+/** "What makes this module need updating?" — intent modules. */
+export const INTENT_NATURES: NatureOption[] = [
+  {
+    id: "idea",
+    label: "idea (착상)",
+    trigger: "새 자극이 붙을 때",
+    answers: "이거 뭔가 될까?",
+    lifetime: "넓히기",
+  },
+  {
+    id: "inquiry",
+    label: "inquiry (논의)",
+    trigger: "논의가 한 바퀴 돌 때",
+    answers: "무엇을 골라야 하나?",
+    lifetime: "고르기",
+  },
+  {
+    id: "plan",
+    label: "plan (실행 계획)",
+    trigger: "현실이 계획을 어길 때",
+    answers: "무엇을 언제 하는가?",
+    lifetime: "옮기기",
+  },
+];
+
+/** Natures a kind offers. implementation modules carry none. */
+export const NATURES_BY_KIND: Record<ModuleKind, NatureOption[]> = {
+  knowledge: KNOWLEDGE_NATURES,
+  implementation: [],
+  intent: INTENT_NATURES,
+};

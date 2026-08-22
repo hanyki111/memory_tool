@@ -1,7 +1,12 @@
 import { App, Modal, Notice, TFile } from "obsidian";
 import { MemoryToolCli } from "../cli/memoryToolCli";
 import { DEFAULT_BASE, moduleCandidatePaths } from "../paths";
-import { KINDS, ModuleKind, ModuleNature, NATURES } from "../moduleKinds";
+import {
+  KINDS,
+  ModuleKind,
+  ModuleNature,
+  NATURES_BY_KIND,
+} from "../moduleKinds";
 
 /**
  * Create a module, asking the two MOP decision questions first.
@@ -17,7 +22,7 @@ export class CreateModuleModal extends Modal {
   private getBasePrefix: () => string;
 
   private kind: ModuleKind = "knowledge";
-  private nature: ModuleNature = "concept";
+  private nature: ModuleNature | undefined = "concept";
 
   constructor(app: App, cli: MemoryToolCli, getBasePrefix?: () => string) {
     super(app);
@@ -57,29 +62,50 @@ export class CreateModuleModal extends Modal {
 
     // --- Kind: the one question that decides the template ---
     const kindGroup = contentEl.createDiv({ cls: "memory-tool-form-group" });
-    kindGroup.createEl("label", { text: "Kind — 이 문서가 틀렸을 때, 틀린 것은?" });
+    kindGroup.createEl("label", {
+      text: "Kind — 이 문서가 서술하는 대상이 이미 존재하는가?",
+    });
     const kindSelect = kindGroup.createEl("select");
     for (const k of KINDS) {
       kindSelect.createEl("option", { value: k.id, text: `${k.answer} → ${k.id}` });
     }
+    kindSelect.value = this.kind;
 
-    // --- Nature: knowledge only ---
+    // --- Nature: knowledge and intent, each with its own set ---
     const natureGroup = contentEl.createDiv({ cls: "memory-tool-form-group" });
     natureGroup.createEl("label", { text: "Nature — 무엇이 이 모듈을 갱신시키는가?" });
     const natureSelect = natureGroup.createEl("select");
-    for (const n of NATURES) {
-      natureSelect.createEl("option", {
-        value: n.id,
-        text: `${n.trigger} → ${n.label} · ${n.lifetime}`,
-      });
-    }
     const natureHint = natureGroup.createDiv({ cls: "memory-tool-hint" });
 
     const syncNatureHint = () => {
-      const chosen = NATURES.find((n) => n.id === natureSelect.value);
+      const chosen = NATURES_BY_KIND[this.kind].find(
+        (n) => n.id === natureSelect.value
+      );
       natureHint.setText(chosen ? `답하는 질문: ${chosen.answers}` : "");
     };
-    syncNatureHint();
+
+    // The two sets share no names, so the options are rebuilt on every Kind
+    // change rather than filtered -- a leftover selection from the other set
+    // would be rejected by `mmodule create`.
+    const syncNatureOptions = () => {
+      const options = NATURES_BY_KIND[this.kind];
+      natureSelect.empty();
+      natureGroup.toggleClass("memory-tool-hidden", options.length === 0);
+
+      for (const n of options) {
+        natureSelect.createEl("option", {
+          value: n.id,
+          text: `${n.trigger} → ${n.label} · ${n.lifetime}`,
+        });
+      }
+
+      this.nature = options.length ? options[0].id : undefined;
+      if (options.length) {
+        natureSelect.value = options[0].id;
+      }
+      syncNatureHint();
+    };
+    syncNatureOptions();
 
     natureSelect.addEventListener("change", () => {
       this.nature = natureSelect.value as ModuleNature;
@@ -88,7 +114,7 @@ export class CreateModuleModal extends Modal {
 
     kindSelect.addEventListener("change", () => {
       this.kind = kindSelect.value as ModuleKind;
-      natureGroup.toggleClass("memory-tool-hidden", this.kind !== "knowledge");
+      syncNatureOptions();
     });
 
     // --- Buttons ---
@@ -117,13 +143,7 @@ export class CreateModuleModal extends Modal {
   }
 
   private async create(name: string, description: string, tags: string): Promise<void> {
-    await this.cli.createModule(
-      name,
-      description,
-      tags,
-      this.kind,
-      this.kind === "knowledge" ? this.nature : undefined
-    );
+    await this.cli.createModule(name, description, tags, this.kind, this.nature);
 
     const basePrefix = this.getBasePrefix();
     const candidates = moduleCandidatePaths(basePrefix, name);
@@ -139,7 +159,7 @@ export class CreateModuleModal extends Modal {
 
     await this.openPath(path);
 
-    const label = this.kind === "knowledge" ? `${this.kind} / ${this.nature}` : this.kind;
+    const label = this.nature ? `${this.kind} / ${this.nature}` : this.kind;
     new Notice(`모듈 생성: ${name} (${label})`);
   }
 

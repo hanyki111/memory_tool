@@ -8,18 +8,28 @@ document instead of a skeleton the user has to overwrite by hand.
 
 Two classifications drive the result:
 
-**Kind** answers "when this document is wrong, is the *knowledge* wrong or just
-the *document*?"
-  - ``knowledge``       -- the knowledge itself is the artifact
-  - ``implementation``  -- code is the source of truth, this is its summary
+**Kind** answers "does the subject of this document already exist, and if so
+what is its source of truth?"
+  - ``knowledge``       -- it exists; the knowledge itself is the artifact
+  - ``implementation``  -- it exists as code, and this is its summary
+  - ``intent``          -- it does not exist yet; this is what I mean to do
 
-**Nature** (``knowledge`` only) answers "what makes this module need updating?"
-and selects the body outline:
-  - ``concept``    understanding deepens      -> narrative
-  - ``reference``  the subject is patched     -> lookup tables
-  - ``analysis``   new evidence appears       -> argument + red team
-  - ``tracker``    time passes                -> snapshots + prediction log
-  - ``method``     application feedback       -> procedure + failure modes
+Each Kind has one failure mode of its own, and the header fields exist to make
+that failure visible: knowledge goes *wrong*, implementation goes *stale*, and
+intent *drifts* -- it is neither decided nor dropped, and a provisional line
+reads as settled a month later.
+
+**Nature** answers "what makes this module need updating?" and selects the body
+outline. ``knowledge`` and ``intent`` each have their own set;
+``implementation`` has none.
+  - knowledge/``concept``    understanding deepens    -> narrative
+  - knowledge/``reference``  the subject is patched   -> lookup tables
+  - knowledge/``analysis``   new evidence appears     -> argument + red team
+  - knowledge/``tracker``    time passes              -> snapshots + prediction log
+  - knowledge/``method``     application feedback     -> procedure + failure modes
+  - intent/``idea``          a new association lands  -> divergent
+  - intent/``inquiry``       a round of debate ends   -> convergent
+  - intent/``plan``          reality contradicts it   -> executable
 
 Templates are resolved project-first: a project that keeps its own copies under
 ``<base>/templates/<kind>/`` uses those, so local edits are never overwritten by
@@ -34,16 +44,31 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-KINDS = ("knowledge", "implementation")
-NATURES = ("concept", "reference", "analysis", "tracker", "method")
+KINDS = ("knowledge", "implementation", "intent")
 
-#: Only knowledge modules carry a Nature; implementation modules do not.
+#: Natures per kind. A nature name belongs to exactly one kind, so a bare
+#: --nature is enough to infer the kind (see `kind_for_nature`).
+KIND_NATURES: Dict[str, Tuple[str, ...]] = {
+    "knowledge": ("concept", "reference", "analysis", "tracker", "method"),
+    "implementation": (),
+    "intent": ("idea", "inquiry", "plan"),
+}
+
+#: Every nature, in kind order. Used where the owning kind is not yet known --
+#: parsing a natures menu, for instance.
+NATURES = tuple(n for natures in KIND_NATURES.values() for n in natures)
+
+#: Kinds that carry a Nature at all.
+NATURE_KINDS = tuple(k for k, natures in KIND_NATURES.items() if natures)
+
+#: Kept for callers that predate `intent`: the kind a bare --nature used to mean.
 NATURE_KIND = "knowledge"
 
 #: One-line descriptions, used in CLI help and error messages.
 KIND_SUMMARY = {
     "knowledge": "the knowledge itself is the artifact (concepts, references, analysis)",
     "implementation": "code is the source of truth and this module summarizes it",
+    "intent": "it does not exist yet -- ideas, open questions, and plans",
 }
 
 NATURE_SUMMARY = {
@@ -52,7 +77,27 @@ NATURE_SUMMARY = {
     "analysis": "new evidence appears -- facts, interpretation, red team, impact",
     "tracker": "time passes -- snapshots, scenarios, calendar, prediction log",
     "method": "application feedback -- premises, procedure, checklist, failure modes",
+    "idea": "a new association lands -- diverge: seed, stimulus, value hypothesis",
+    "inquiry": "a round of debate ends -- converge: criteria first, then options",
+    "plan": "reality contradicts the plan -- done-definition, phases, rollback",
 }
+
+
+def natures_for(kind: str) -> Tuple[str, ...]:
+    """Natures available for a kind, empty if it carries none."""
+    return KIND_NATURES.get(kind, ())
+
+
+def kind_for_nature(nature: str) -> Optional[str]:
+    """The kind a nature belongs to, or None if the name is unknown.
+
+    Nature names do not overlap across kinds, so `--nature plan` alone is an
+    unambiguous request for an intent module.
+    """
+    for kind, natures in KIND_NATURES.items():
+        if nature in natures:
+            return kind
+    return None
 
 #: Order in which template documents are concatenated into the single file.
 ASSEMBLY_ORDER = ("module", "current", "decisions", "dependencies", "interface")
@@ -105,15 +150,22 @@ class TemplateChoice:
             )
 
         if self.nature is not None:
-            if self.kind != NATURE_KIND:
+            allowed = natures_for(self.kind)
+            if not allowed:
                 raise TemplateError(
-                    f"--nature applies only to '{NATURE_KIND}' modules, "
-                    f"not '{self.kind}'."
+                    f"--nature applies only to "
+                    f"{' and '.join(NATURE_KINDS)} modules, not '{self.kind}'."
                 )
-            if self.nature not in NATURES:
+            if self.nature not in allowed:
+                owner = kind_for_nature(self.nature)
+                hint = (
+                    f" ('{self.nature}' belongs to '{owner}'.)"
+                    if owner
+                    else ""
+                )
                 raise TemplateError(
-                    f"Unknown nature: '{self.nature}'. "
-                    f"Choose one of: {', '.join(NATURES)}"
+                    f"Unknown nature for '{self.kind}': '{self.nature}'. "
+                    f"Choose one of: {', '.join(allowed)}.{hint}"
                 )
 
 
@@ -161,7 +213,9 @@ def resolve_template_dir(kind: str, memory_path: Optional[Path] = None) -> Path:
     )
 
 
-def _parse_natures(content: str) -> Dict[str, str]:
+def _parse_natures(
+    content: str, natures: Optional[Tuple[str, ...]] = None
+) -> Dict[str, str]:
     """Parse the natures menu into {nature: body outline}.
 
     Each nature is documented as a ``## <nature> (...)`` heading followed by a
@@ -169,6 +223,9 @@ def _parse_natures(content: str) -> Dict[str, str]:
 
     Args:
         content: The natures markdown, from natures.md or the natures part
+        natures: Names to look for; defaults to every known nature. Passing the
+            kind's own set keeps a heading that happens to share a nature name
+            from being picked up as a menu entry.
 
     Returns:
         Mapping of nature name to its outline markdown (may be empty).
@@ -176,10 +233,11 @@ def _parse_natures(content: str) -> Dict[str, str]:
     if not content:
         return {}
 
+    names = natures if natures else NATURES
     blocks: Dict[str, str] = {}
 
     # "## concept (개념) — 서사형" ... then the first fenced block after it.
-    heading = re.compile(r"^##\s+(" + "|".join(NATURES) + r")\b", re.MULTILINE)
+    heading = re.compile(r"^##\s+(" + "|".join(names) + r")\b", re.MULTILINE)
     matches = list(heading.finditer(content))
 
     for index, match in enumerate(matches):
@@ -240,6 +298,26 @@ def _splice_nature(current_md: str, nature_body: str) -> str:
     return current_md.rstrip("\n") + "\n\n## 2. 본문\n\n" + nature_body + "\n"
 
 
+def _fill_field(text: str, token: str, value: str) -> str:
+    """Replace a ``[placeholder]`` without touching ``[[wiki links]]``.
+
+    The placeholders and the wiki-link syntax share the bracket, so a plain
+    replace turns the ``[[모듈명]]`` in a Dependencies example into ``[name]`` --
+    no longer a link, and no longer visibly a placeholder either. The doubled
+    brackets are what tells the two apart.
+
+    Args:
+        text: Template text
+        token: The placeholder, brackets included
+        value: What to put in its place
+
+    Returns:
+        Text with single-bracket occurrences filled in.
+    """
+    pattern = re.compile(r"(?<!\[)" + re.escape(token) + r"(?!\])")
+    return pattern.sub(lambda _: value, text)
+
+
 def _apply_placeholders(
     text: str,
     name: str,
@@ -268,10 +346,10 @@ def _apply_placeholders(
 
     # Titles. The path form is used by implementation templates, the plain name
     # by knowledge ones.
-    text = text.replace("[경로]", name)
-    text = text.replace("[모듈명]", basename)
-    text = text.replace("[주제]", basename)
-    text = text.replace("[모듈]", basename)
+    text = _fill_field(text, "[경로]", name)
+    text = _fill_field(text, "[모듈명]", basename)
+    text = _fill_field(text, "[주제]", basename)
+    text = _fill_field(text, "[모듈]", basename)
 
     # Collapse the Kind/Nature option lists down to the actual selection.
     text = _set_kind_field(text, choice)
@@ -518,7 +596,11 @@ def build_module_document(
     today = datetime.now().strftime("%Y-%m-%d")
     tags_str = ", ".join(tags) if tags else ""
 
-    natures = _parse_natures(parts.get(NATURES_PART, "")) if choice.nature else {}
+    natures = (
+        _parse_natures(parts.get(NATURES_PART, ""), natures_for(choice.kind))
+        if choice.nature
+        else {}
+    )
     if choice.nature and choice.nature not in natures:
         raise TemplateError(
             f"Nature '{choice.nature}' is not defined in {origin}."
@@ -556,8 +638,11 @@ def describe_choices() -> str:
     lines = ["Kinds:"]
     for kind in KINDS:
         lines.append(f"  {kind:<16} {KIND_SUMMARY[kind]}")
-    lines.append("")
-    lines.append(f"Natures ({NATURE_KIND} only):")
-    for nature in NATURES:
-        lines.append(f"  {nature:<16} {NATURE_SUMMARY[nature]}")
+
+    for kind in NATURE_KINDS:
+        lines.append("")
+        lines.append(f"Natures ({kind}):")
+        for nature in natures_for(kind):
+            lines.append(f"  {nature:<16} {NATURE_SUMMARY[nature]}")
+
     return "\n".join(lines)

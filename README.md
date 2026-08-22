@@ -170,18 +170,22 @@ MEMORY_TOOL_BASE=memory              # 기반 폴더 이름 또는 절대 경로
 
 ### Kind — 문서 골격
 
-> **판별 질문:** 이 문서가 틀렸을 때, 틀린 것은 *지식*인가 *문서*인가?
+> **판별 질문:** 이 문서가 서술하는 대상이 **이미 존재하는가?**
+> 존재한다면, 틀렸을 때 틀린 것은 *지식*인가 *문서*인가?
 
 | Kind | 의미 | 고유 실패 모드 |
 |---|---|---|
 | `knowledge` | 지식 자체가 산출물 | 틀림 (언제 기준으로 맞았는지 모름) |
-| `implementation` | 코드가 정본, 이 모듈은 요약 | 낡음 |
+| `implementation` | 코드가 정본, 이 모듈은 요약 | 낡음 (기준 커밋이 없음) |
+| `intent` | 아직 없는 것. 착상·논의·계획 | 표류 (결정도 폐기도 하지 않은 채 방치) |
 
 주제가 소프트웨어인지로 판별하지 않습니다. 대응 코드베이스가 없으면 `knowledge` 입니다.
 
-### Nature — 본문 목차 (`knowledge` 전용)
+### Nature — 본문 목차 (`implementation` 에는 없음)
 
 > **판별 질문:** 무엇이 이 모듈을 갱신시키는가?
+
+**`knowledge` 의 Nature**
 
 | Nature | 갱신 트리거 | 본문 형태 | 유효기간 |
 |---|---|---|---|
@@ -191,9 +195,22 @@ MEMORY_TOOL_BASE=memory              # 기반 폴더 이름 또는 절대 경로
 | `tracker` | 시간이 흐를 때 | 운영형 (스냅샷→예측 로그) | 수일~수주 |
 | `method` | 적용 피드백이 올 때 | 절차형 (전제→절차→실패 모드) | 반영구 |
 
+**`intent` 의 Nature**
+
+| Nature | 갱신 트리거 | 본문 형태 | 하는 일 |
+|---|---|---|---|
+| `idea` | 새 자극이 붙을 때 | 발산형 (씨앗→자극→확장→가치 가설) | 넓히기 |
+| `inquiry` | 논의가 한 바퀴 돌 때 | 수렴형 (판단 기준→선택지→대조→반론) | 고르기 |
+| `plan` | 현실이 계획을 어길 때 | 실행형 (완료의 정의→단계→위험→롤백) | 옮기기 |
+
 `analysis` ↔ `tracker` 가 헷갈리면 **"이 문서에 유효기간이 있는가?"** 하나로 가릅니다.
-애매하면 `analysis` 로 두고 넘어가세요 — 본문만 나중에 갈아끼우면 됩니다.
+`intent` 의 세 가지는 **"지금 넓히는 중인가, 고르는 중인가, 옮기는 중인가?"** 로 가릅니다.
+애매하면 아무거나 두고 넘어가세요 — 본문만 나중에 갈아끼우면 됩니다.
 분류를 고민하다 기록을 미루는 것이 가장 나쁩니다.
+
+`intent` 모듈은 세 가지 방법으로만 끝납니다. 구현 모듈로 **승계**되거나, 지식 모듈로
+**승격**되거나, 폐기 사유를 남기고 **아카이브**됩니다. 그래서 헤더의 `다음 판정일`이
+의무이고, 그 날짜가 비어 있으면 그 모듈은 이미 표류하는 중입니다.
 
 ### 사용
 
@@ -201,13 +218,18 @@ MEMORY_TOOL_BASE=memory              # 기반 폴더 이름 또는 절대 경로
 mmodule create "asyncio" --kind knowledge --nature concept
 mmodule create "게임 분석/니케/전투 공식" --kind knowledge --nature reference
 mmodule create "api-server" --kind implementation --desc "REST 엔드포인트"
+mmodule create "PLAN-v2-release" --kind intent --nature plan
+
+# Nature 이름은 겹치지 않으므로 --kind 를 생략해도 됩니다
+mmodule create "검색 UX 개선안" --nature idea      # → intent / idea
 
 # 프로젝트 기본값 설정 (매번 --kind 안 쓰기)
 mconfig set modules.default_kind knowledge
 ```
 
 `--kind` 를 생략하면 기존 범용 템플릿이 생성됩니다 (동작 변경 없음).
-`--nature` 만 주면 `knowledge` 로 간주합니다.
+`--nature` 만 주면 그 이름이 속한 Kind 로 간주합니다 (`concept` → `knowledge`,
+`plan` → `intent`). Nature 이름은 Kind 사이에서 겹치지 않습니다.
 
 ### 프로젝트별 템플릿 재정의
 
@@ -222,8 +244,10 @@ mconfig set modules.default_kind knowledge
 │   ├── decisions.md
 │   ├── dependencies.md
 │   └── interface.md
-└── implementation/
-    └── ...
+├── implementation/
+│   └── ...
+└── intent/
+    └── ...             natures.md 는 3종 (idea / inquiry / plan)
 ```
 
 `module.md` 와 `current.md` 가 모두 있어야 유효한 템플릿 세트로 인식되며,
@@ -231,6 +255,8 @@ mconfig set modules.default_kind knowledge
 
 **치환되는 placeholder:** `[모듈명]`, `[경로]`, `[주제]`, `[모듈]`, `YYYY-MM-DD`,
 `**Kind:**`, `**Nature:**`, `**Tags:**`, 그리고 `## 목적과 목표` 아래의 설명.
+`[[모듈명]]` 처럼 대괄호가 겹친 위키 링크는 예시로 보고 치환하지 않습니다.
+`____-__-__` 는 직접 채우라는 표시이며 치환되지 않습니다 (`intent` 의 판정일).
 
 ---
 

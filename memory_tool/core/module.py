@@ -130,11 +130,12 @@ class ModuleManager:
             name: Module name or path (e.g. 'memory-tool' or 'memory-tool/core-system')
             description: Module description
             tags: Module tags
-            kind: Template kind -- "knowledge" or "implementation". When omitted,
-                the value of ``modules.default_kind`` in config is used; if that
-                is unset too, the original generic template is produced.
-            nature: Body outline for knowledge modules (concept, reference,
-                analysis, tracker, method)
+            kind: Template kind -- "knowledge", "implementation" or "intent".
+                When omitted, the value of ``modules.default_kind`` in config is
+                used; if that is unset too, the original generic template is
+                produced.
+            nature: Body outline. knowledge takes concept, reference, analysis,
+                tracker or method; intent takes idea, inquiry or plan.
 
         Returns:
             Path to created single markdown file
@@ -241,8 +242,8 @@ TODO: Document key data structures
 
         Explicit ``kind`` wins. Otherwise ``modules.default_kind`` from config
         applies, which lets a knowledge-oriented project opt in once instead of
-        passing --kind on every create. A bare ``nature`` implies knowledge,
-        since only knowledge modules have one.
+        passing --kind on every create. A bare ``nature`` names its own kind,
+        since no nature name is shared between kinds.
 
         Returns:
             The kind name, or None to use the original generic template.
@@ -250,9 +251,14 @@ TODO: Document key data structures
         if kind:
             return kind
         if nature:
-            from memory_tool.core.module_templates import NATURE_KIND
+            from memory_tool.core.module_templates import (
+                NATURE_KIND,
+                kind_for_nature,
+            )
 
-            return NATURE_KIND
+            # An unknown name still resolves to a kind so that the template
+            # layer reports it, rather than silently producing a bare module.
+            return kind_for_nature(nature) or NATURE_KIND
 
         try:
             from memory_tool.utils.config import Config

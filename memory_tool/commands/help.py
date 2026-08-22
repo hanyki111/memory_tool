@@ -888,23 +888,39 @@ current state, decisions, dependencies and interface.
 
 Templates (--kind / --nature)
 -----------------------------
---kind selects a document skeleton. It answers: when this document is wrong,
-is the *knowledge* wrong, or just the *document*?
+--kind selects a document skeleton. First ask whether the subject exists yet:
 
-  knowledge        the knowledge itself is the artifact
-  implementation   code is the source of truth and this module summarizes it
+  intent           not yet -- this is what I mean to do   (fails by drifting)
+  knowledge        it exists, and the knowledge is the artifact  (fails by
+                   being wrong)
+  implementation   it exists as code, and this summarizes it  (fails by going
+                   stale)
 
---nature applies to knowledge modules only, and selects the body outline.
-It answers: what makes this module need updating?
+--nature selects the body outline. It answers: what makes this module need
+updating? implementation modules have no nature.
 
-  concept     understanding deepens    -> problem, analogy, principle, example
-  reference   the subject is patched   -> lookup tables, formulas, sources
-  analysis    new evidence appears     -> facts, interpretation, red team
-  tracker     time passes              -> snapshots, scenarios, prediction log
-  method      application feedback     -> premises, procedure, failure modes
+  knowledge:
+    concept     understanding deepens    -> problem, analogy, principle, example
+    reference   the subject is patched   -> lookup tables, formulas, sources
+    analysis    new evidence appears     -> facts, interpretation, red team
+    tracker     time passes              -> snapshots, scenarios, prediction log
+    method      application feedback     -> premises, procedure, failure modes
 
-If unsure between analysis and tracker, ask whether the document has an expiry
-date. If still unsure, choose analysis -- the outline can be swapped later.
+  intent:
+    idea        a new association lands  -> seed, stimulus, value hypothesis
+    inquiry     a round of debate ends   -> criteria first, then options, then
+                                            the counter-argument
+    plan        reality contradicts it   -> done-definition, phases, rollback
+
+For intent, ask what you are doing right now: widening (idea), choosing
+(inquiry) or moving (plan). If unsure between analysis and tracker, ask whether
+the document has an expiry date. If still unsure, pick either -- the outline can
+be swapped later.
+
+An intent module ends in exactly one of three ways: carried over to an
+implementation module, promoted to a knowledge module, or dropped with its
+reason kept. Its header therefore requires a review date; without one the module
+is already drifting.
 
 Omitting --kind produces the original generic template. Set a project-wide
 default with: mconfig set modules.default_kind knowledge
@@ -918,6 +934,7 @@ bundled ones, so local edits are preserved.
                 "mmodule create newproject  # Create new module",
                 "mmodule create asyncio --kind knowledge --nature concept",
                 "mmodule create api --kind implementation --desc \"REST endpoints\"",
+                "mmodule create PLAN-v2-release --kind intent --nature plan",
                 "mmodule graph              # Visualize connections",
             ],
             "options": [
@@ -939,26 +956,38 @@ bundled ones, so local edits are preserved.
 
 템플릿 (--kind / --nature)
 --------------------------
---kind 는 문서 골격을 고릅니다. 판별 질문 하나:
-  "이 문서가 틀렸을 때, 틀린 것은 *지식*인가 *문서*인가?"
+--kind 는 문서 골격을 고릅니다. 먼저 물을 것은 대상이 이미 있느냐입니다:
+  "이 문서가 서술하는 대상이 이미 존재하는가?"
 
-  knowledge        지식 자체가 산출물 (지식이 틀린 것)
-  implementation   코드가 정본이고 이 모듈은 그 요약 (문서만 낡은 것)
+  intent           아직 없다. 앞으로 하려는 것  (고유 실패: 표류)
+  knowledge        있다. 지식 자체가 산출물     (고유 실패: 틀림)
+  implementation   있다. 코드가 정본이고 이 문서는 요약  (고유 실패: 낡음)
 
 주제가 소프트웨어인지로 판별하지 않습니다. 대응 코드베이스가 없다면 knowledge 입니다.
 
---nature 는 knowledge 모듈에만 적용되며 본문 목차를 고릅니다. 판별 질문:
-  "무엇이 이 모듈을 갱신시키는가?"
+--nature 는 본문 목차를 고릅니다. 판별 질문은 "무엇이 이 모듈을 갱신시키는가?"
+implementation 에는 nature 가 없습니다.
 
-  concept     내 이해가 깊어질 때   -> 문제, 비유, 원리, 예제, 한계, 오해
-  reference   대상이 패치될 때      -> 조회표, 변수, 공식, 출처, 버전 이력
-  analysis    새 증거가 나올 때     -> 사실, 해석, Red Team, Impact
-  tracker     시간이 흐를 때        -> 스냅샷, 시나리오, 예측 로그
-  method      적용 피드백이 올 때   -> 전제, 절차, 체크리스트, 실패 모드
+  knowledge:
+    concept     내 이해가 깊어질 때   -> 문제, 비유, 원리, 예제, 한계, 오해
+    reference   대상이 패치될 때      -> 조회표, 변수, 공식, 출처, 버전 이력
+    analysis    새 증거가 나올 때     -> 사실, 해석, Red Team, Impact
+    tracker     시간이 흐를 때        -> 스냅샷, 시나리오, 예측 로그
+    method      적용 피드백이 올 때   -> 전제, 절차, 체크리스트, 실패 모드
 
-analysis 와 tracker 가 헷갈리면 "이 문서에 유효기간이 있는가?" 하나로 가릅니다.
-그래도 애매하면 analysis 로 두고 넘어갑니다 — 본문만 나중에 갈아끼우면 됩니다.
+  intent:
+    idea        새 자극이 붙을 때     -> 씨앗, 자극, 확장, 가치 가설
+    inquiry     논의가 한 바퀴 돌 때  -> 판단 기준 먼저, 그다음 선택지, 반론
+    plan        현실이 계획을 어길 때 -> 완료의 정의, 단계, 위험, 롤백
+
+intent 는 지금 하려는 일이 넓히기(idea)인지, 고르기(inquiry)인지, 옮기기(plan)인지로
+가릅니다. analysis 와 tracker 가 헷갈리면 "이 문서에 유효기간이 있는가?" 하나로
+가릅니다. 그래도 애매하면 아무거나 두고 넘어갑니다 — 본문만 나중에 갈아끼우면 됩니다.
 분류를 고민하다 기록을 미루는 것이 가장 나쁩니다 (Time First 원칙).
+
+intent 모듈은 세 가지 방법으로만 끝납니다: 구현 모듈로 승계되거나, 지식 모듈로
+승격되거나, 폐기 사유를 남기고 아카이브됩니다. 그래서 헤더에 '다음 판정일'이
+의무이며, 그 날짜가 비어 있으면 그 모듈은 이미 표류 중입니다.
 
 --kind 를 생략하면 기존 범용 템플릿이 생성됩니다. 프로젝트 기본값 설정:
   mconfig set modules.default_kind knowledge
@@ -971,6 +1000,7 @@ analysis 와 tracker 가 헷갈리면 "이 문서에 유효기간이 있는가?"
                 "mmodule create newproject  # 새 모듈 생성",
                 "mmodule create asyncio --kind knowledge --nature concept",
                 "mmodule create api --kind implementation --desc \"REST 엔드포인트\"",
+                "mmodule create PLAN-v2-release --kind intent --nature plan",
                 "mmodule graph              # 연결 시각화",
             ],
             "options": [

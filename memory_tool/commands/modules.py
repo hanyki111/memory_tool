@@ -37,8 +37,8 @@ def module(
     remove: bool = typer.Option(False, "--remove", help="Delete the merged-from directories (for merge-templates)"),
     lang: Optional[str] = typer.Option(None, "--lang", help="Output language for from-text: 'ko', 'en', 'auto'"),
     structure: Optional[str] = typer.Option(None, "--structure", "-s", help="Module structure type for from-text: 'feature' (software), 'topic' (learning/KB), 'auto'"),
-    kind: Optional[str] = typer.Option(None, "--kind", "-k", help="Template kind for create: 'knowledge' or 'implementation'"),
-    nature: Optional[str] = typer.Option(None, "--nature", help="Body outline for knowledge modules: concept, reference, analysis, tracker, method"),
+    kind: Optional[str] = typer.Option(None, "--kind", "-k", help="Template kind for create: 'knowledge', 'implementation' or 'intent'"),
+    nature: Optional[str] = typer.Option(None, "--nature", help="Body outline. knowledge: concept, reference, analysis, tracker, method | intent: idea, inquiry, plan"),
 ):
     """Manage modules (supports single-file modules, hierarchical paths, wiki-style [[connections]], and AI suggestions)."""
     action = arg_str(action)
@@ -69,14 +69,18 @@ def module(
             console.print(f"[dim]File location: {rel_path}[/dim]")
 
             if kind_opt or nature_opt:
-                label = kind_opt or "knowledge"
+                from memory_tool.core.module_templates import kind_for_nature
+
+                # A bare --nature names its own kind, so report the kind that
+                # was actually used rather than assuming knowledge.
+                label = kind_opt or kind_for_nature(nature_opt) or "knowledge"
                 if nature_opt:
                     label += f" / {nature_opt}"
                 console.print(f"[dim]Template: {label}[/dim]")
             else:
                 console.print(
-                    "[dim]Tip: --kind knowledge|implementation applies the MOP "
-                    "templates. See 'mhelp module'.[/dim]"
+                    "[dim]Tip: --kind knowledge|implementation|intent applies "
+                    "the MOP templates. See 'mhelp module'.[/dim]"
                 )
 
             try:
