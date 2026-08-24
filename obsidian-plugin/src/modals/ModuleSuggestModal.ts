@@ -12,15 +12,22 @@ export class ModuleSuggestModal extends FuzzySuggestModal<string> {
   private modules: string[] = [];
   /** Returns the vault-relative base prefix ("" = the vault root). */
   private getBasePrefix: () => string;
+  /**
+   * What to do with the chosen module. Defaults to opening it, which is what
+   * "모듈로 이동" wants; other callers act on the name instead.
+   */
+  private onChoose: ((name: string) => void) | null;
 
   constructor(
     app: App,
     lister: () => Promise<string[]>,
-    getBasePrefix?: () => string
+    getBasePrefix?: () => string,
+    onChoose?: (name: string) => void
   ) {
     super(app);
     this.lister = lister;
     this.getBasePrefix = getBasePrefix ?? (() => DEFAULT_BASE);
+    this.onChoose = onChoose ?? null;
     this.setPlaceholder("Type to search active memory_tool modules...");
   }
 
@@ -38,6 +45,11 @@ export class ModuleSuggestModal extends FuzzySuggestModal<string> {
   }
 
   onChooseItem(item: string, evt: MouseEvent | KeyboardEvent): void {
+    if (this.onChoose) {
+      this.onChoose(item);
+      return;
+    }
+
     // Follows [Folder]/[Folder].md convention, under the configured base folder
     const possiblePaths = moduleCandidatePaths(this.getBasePrefix(), item);
 

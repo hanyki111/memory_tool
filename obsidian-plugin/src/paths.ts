@@ -98,6 +98,79 @@ export function moduleCandidatePaths(basePrefix: string, moduleName: string): st
   ];
 }
 
+/**
+ * The part of a vault path that sits under `<base>/modules`, or null.
+ *
+ * Shared by the two inverse lookups below: both need to know whether a path is
+ * inside the modules tree at all, and neither should treat the archive as one.
+ */
+function underModules(basePrefix: string, vaultPath: string): string | null {
+  const path = normalize(vaultPath).replace(/^\/+/, "");
+  const root = underBase(basePrefix, "modules");
+
+  if (path.toLowerCase() === root.toLowerCase()) return "";
+
+  const withSep = root + "/";
+  if (!path.toLowerCase().startsWith(withSep.toLowerCase())) return null;
+
+  const rest = path.slice(withSep.length);
+  // Archived modules are not editable in place; `mmodule unarchive` moves them
+  // back first, so offering to create or grow one here would mislead.
+  if (rest.toLowerCase() === "archive" || rest.toLowerCase().startsWith("archive/")) {
+    return null;
+  }
+
+  return rest;
+}
+
+/**
+ * Module name for a document, or null when the file is not a module.
+ *
+ * The inverse of {@link moduleCandidatePaths}, and it has to undo both layouts:
+ *
+ *   modules/A/B/B.md  ->  "A/B"   (encapsulated: stem repeats its folder)
+ *   modules/A/B.md    ->  "A/B"   (flat)
+ *
+ * @param basePrefix Vault-relative base prefix ("" = the vault root)
+ * @param filePath Vault-relative path of the document
+ */
+export function moduleNameFromPath(
+  basePrefix: string,
+  filePath: string
+): string | null {
+  const rest = underModules(basePrefix, filePath);
+  if (!rest || !rest.toLowerCase().endsWith(".md")) return null;
+
+  const segments = rest.slice(0, -3).split("/").filter((s) => s.length > 0);
+  if (segments.length === 0) return null;
+
+  const stem = segments[segments.length - 1];
+  const parent = segments.length > 1 ? segments[segments.length - 2] : null;
+
+  // "A/B/B.md" names the module "A/B"; the repeated leaf is the file, not a level.
+  if (parent !== null && parent === stem) {
+    return segments.slice(0, -1).join("/");
+  }
+
+  return segments.join("/");
+}
+
+/**
+ * Module-name prefix for a folder, for pre-filling the create dialog.
+ *
+ * @param basePrefix Vault-relative base prefix ("" = the vault root)
+ * @param folderPath Vault-relative path of the folder
+ * @returns "" for the modules folder itself, "A/B" for a folder inside it, or
+ *          null when the folder is outside the modules tree. Modules only ever
+ *          live under `<base>/modules`, so anywhere else has no answer.
+ */
+export function modulePrefixFromFolder(
+  basePrefix: string,
+  folderPath: string
+): string | null {
+  return underModules(basePrefix, folderPath);
+}
+
 /** Human-readable description of a prefix, for notices and settings. */
 export function describePrefix(basePrefix: string): string {
   return basePrefix === "" ? "the vault root" : `${basePrefix}/`;

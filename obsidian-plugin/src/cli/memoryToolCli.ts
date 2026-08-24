@@ -210,6 +210,17 @@ export class MemoryToolCli {
     return this.executeCommand(cmd);
   }
 
+  /**
+   * Append the skeleton sections a module does not have yet.
+   *
+   * The other half of `--draft`: a seed grows into the full document without
+   * the author copying sections out of the template. memory_tool reads the kind
+   * and nature from the module's own header, so neither is passed here.
+   */
+  public async growModule(name: string): Promise<string> {
+    return this.executeCommand(`module grow "${escapeArg(name)}"`);
+  }
+
   /** Get list of active modules */
   public async listModules(): Promise<string[]> {
     try {

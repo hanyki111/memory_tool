@@ -17,6 +17,8 @@ import {
   DEFAULT_BASE,
   describePrefix,
   moduleCandidatePaths,
+  moduleNameFromPath,
+  modulePrefixFromFolder,
   normalizePrefix,
   underBase,
   vaultRelativeBase,
@@ -185,4 +187,79 @@ test("describePrefix is human readable", () => {
 
 test("DEFAULT_BASE is the historical default", () => {
   assert.equal(DEFAULT_BASE, ".memory");
+});
+
+// ---------------------------------------------------------------------------
+// moduleNameFromPath -- the inverse of moduleCandidatePaths
+// ---------------------------------------------------------------------------
+
+test("encapsulated layout drops the repeated leaf", () => {
+  assert.equal(
+    moduleNameFromPath(".memory", ".memory/modules/A/B/B.md"),
+    "A/B"
+  );
+});
+
+test("flat layout keeps every segment", () => {
+  assert.equal(moduleNameFromPath(".memory", ".memory/modules/A/B.md"), "A/B");
+});
+
+test("top-level encapsulated module names itself", () => {
+  assert.equal(moduleNameFromPath(".memory", ".memory/modules/A/A.md"), "A");
+});
+
+test("a vault rooted at the base folder needs no prefix", () => {
+  assert.equal(moduleNameFromPath("", "modules/A/A.md"), "A");
+});
+
+test("a file outside modules is not a module", () => {
+  assert.equal(moduleNameFromPath(".memory", ".memory/timeline/daily.md"), null);
+  assert.equal(moduleNameFromPath(".memory", "notes/scratch.md"), null);
+});
+
+test("archived modules are not offered", () => {
+  assert.equal(
+    moduleNameFromPath(".memory", ".memory/modules/archive/A/A.md"),
+    null
+  );
+});
+
+test("a non-markdown file is not a module", () => {
+  assert.equal(moduleNameFromPath(".memory", ".memory/modules/A/img.png"), null);
+});
+
+test("backslashes from the host separator are accepted", () => {
+  assert.equal(
+    moduleNameFromPath(".memory", `.memory${SEP}modules${SEP}A${SEP}A.md`),
+    "A"
+  );
+});
+
+// ---------------------------------------------------------------------------
+// modulePrefixFromFolder -- pre-filling the create dialog
+// ---------------------------------------------------------------------------
+
+test("the modules folder itself prefills nothing", () => {
+  assert.equal(modulePrefixFromFolder(".memory", ".memory/modules"), "");
+});
+
+test("a nested folder prefills its own path", () => {
+  assert.equal(modulePrefixFromFolder(".memory", ".memory/modules/A/B"), "A/B");
+});
+
+test("a folder outside modules gets no menu entry", () => {
+  assert.equal(modulePrefixFromFolder(".memory", ".memory/timeline"), null);
+  assert.equal(modulePrefixFromFolder(".memory", "attachments"), null);
+});
+
+test("the archive gets no menu entry", () => {
+  assert.equal(modulePrefixFromFolder(".memory", ".memory/modules/archive"), null);
+  assert.equal(
+    modulePrefixFromFolder(".memory", ".memory/modules/archive/old"),
+    null
+  );
+});
+
+test("a folder merely starting with the same letters is not inside", () => {
+  assert.equal(modulePrefixFromFolder(".memory", ".memory/modules-old/A"), null);
 });

@@ -21,14 +21,23 @@ export class CreateModuleModal extends Modal {
   private cli: MemoryToolCli;
   private getBasePrefix: () => string;
 
+  /** Pre-filled module path, from a right-clicked folder. */
+  private initialPath: string;
+
   private kind: ModuleKind = "knowledge";
   private nature: ModuleNature | undefined = "concept";
   private draft = false;
 
-  constructor(app: App, cli: MemoryToolCli, getBasePrefix?: () => string) {
+  constructor(
+    app: App,
+    cli: MemoryToolCli,
+    getBasePrefix?: () => string,
+    initialPath = ""
+  ) {
     super(app);
     this.cli = cli;
     this.getBasePrefix = getBasePrefix ?? (() => DEFAULT_BASE);
+    this.initialPath = initialPath;
   }
 
   onOpen() {
@@ -45,7 +54,18 @@ export class CreateModuleModal extends Modal {
       type: "text",
       placeholder: "예: 게임 분석/니케/전투 공식",
     });
+
+    // Opened from a folder: the parent path is already known, so only the leaf
+    // name is left to type and the caret starts after the trailing slash.
+    if (this.initialPath) {
+      nameInput.value = `${this.initialPath}/`;
+      nameGroup.createDiv({
+        cls: "memory-tool-hint",
+        text: `${this.initialPath}/ 아래에 만듭니다.`,
+      });
+    }
     nameInput.focus();
+    nameInput.setSelectionRange(nameInput.value.length, nameInput.value.length);
 
     const descGroup = contentEl.createDiv({ cls: "memory-tool-form-group" });
     descGroup.createEl("label", { text: "목적 (한 문장)" });

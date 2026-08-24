@@ -129,7 +129,7 @@ var MemoryToolCli = class {
    * duplicating that here would mean two template sources producing two
    * different documents for the same choice.
    */
-  async createModule(name, description = "", tags = "", kind, nature) {
+  async createModule(name, description = "", tags = "", kind, nature, draft) {
     let cmd = `module create "${name}"`;
     if (description) {
       cmd += ` --desc "${escapeArg(description)}"`;
@@ -143,7 +143,20 @@ var MemoryToolCli = class {
     if (nature) {
       cmd += ` --nature "${escapeArg(nature)}"`;
     }
+    if (draft) {
+      cmd += " --draft";
+    }
     return this.executeCommand(cmd);
+  }
+  /**
+   * Append the skeleton sections a module does not have yet.
+   *
+   * The other half of `--draft`: a seed grows into the full document without
+   * the author copying sections out of the template. memory_tool reads the kind
+   * and nature from the module's own header, so neither is passed here.
+   */
+  async growModule(name) {
+    return this.executeCommand(`module grow "${escapeArg(name)}"`);
   }
   /** Get list of active modules */
   async listModules() {
@@ -342,16 +355,48 @@ function moduleCandidatePaths(basePrefix, moduleName) {
     underBase(basePrefix, "modules", `${name}.md`)
   ];
 }
+function underModules(basePrefix, vaultPath) {
+  const path = normalize(vaultPath).replace(/^\/+/, "");
+  const root = underBase(basePrefix, "modules");
+  if (path.toLowerCase() === root.toLowerCase())
+    return "";
+  const withSep = root + "/";
+  if (!path.toLowerCase().startsWith(withSep.toLowerCase()))
+    return null;
+  const rest = path.slice(withSep.length);
+  if (rest.toLowerCase() === "archive" || rest.toLowerCase().startsWith("archive/")) {
+    return null;
+  }
+  return rest;
+}
+function moduleNameFromPath(basePrefix, filePath) {
+  const rest = underModules(basePrefix, filePath);
+  if (!rest || !rest.toLowerCase().endsWith(".md"))
+    return null;
+  const segments = rest.slice(0, -3).split("/").filter((s) => s.length > 0);
+  if (segments.length === 0)
+    return null;
+  const stem2 = segments[segments.length - 1];
+  const parent = segments.length > 1 ? segments[segments.length - 2] : null;
+  if (parent !== null && parent === stem2) {
+    return segments.slice(0, -1).join("/");
+  }
+  return segments.join("/");
+}
+function modulePrefixFromFolder(basePrefix, folderPath) {
+  return underModules(basePrefix, folderPath);
+}
 function describePrefix(basePrefix) {
   return basePrefix === "" ? "the vault root" : `${basePrefix}/`;
 }
 
 // src/moduleKinds.ts
 var KINDS = [
-  { id: "knowledge", answer: "\uC9C0\uC2DD\uC774 \uD2C0\uB9B0 \uAC83" },
-  { id: "implementation", answer: "\uCF54\uB4DC\uB294 \uB9DE\uB294\uB370 \uBB38\uC11C\uB9CC \uB0A1\uC740 \uAC83" }
+  { id: "intent", answer: "\uC544\uC9C1 \uC5C6\uB2E4. \uC55E\uC73C\uB85C \uD558\uB824\uB294 \uAC83" },
+  { id: "knowledge", answer: "\uC788\uB2E4. \uC9C0\uC2DD\uC774 \uD2C0\uB9B0 \uAC83" },
+  { id: "implementation", answer: "\uC788\uB2E4. \uCF54\uB4DC\uB294 \uB9DE\uB294\uB370 \uBB38\uC11C\uB9CC \uB0A1\uC740 \uAC83" }
 ];
-var NATURES = [
+var KNOWLEDGE_NATURES = [
   {
     id: "concept",
     label: "concept (\uAC1C\uB150)",
@@ -388,15 +433,45 @@ var NATURES = [
     lifetime: "\uBC18\uC601\uAD6C"
   }
 ];
+var INTENT_NATURES = [
+  {
+    id: "idea",
+    label: "idea (\uCC29\uC0C1)",
+    trigger: "\uC0C8 \uC790\uADF9\uC774 \uBD99\uC744 \uB54C",
+    answers: "\uC774\uAC70 \uBB54\uAC00 \uB420\uAE4C?",
+    lifetime: "\uB113\uD788\uAE30"
+  },
+  {
+    id: "inquiry",
+    label: "inquiry (\uB17C\uC758)",
+    trigger: "\uB17C\uC758\uAC00 \uD55C \uBC14\uD034 \uB3CC \uB54C",
+    answers: "\uBB34\uC5C7\uC744 \uACE8\uB77C\uC57C \uD558\uB098?",
+    lifetime: "\uACE0\uB974\uAE30"
+  },
+  {
+    id: "plan",
+    label: "plan (\uC2E4\uD589 \uACC4\uD68D)",
+    trigger: "\uD604\uC2E4\uC774 \uACC4\uD68D\uC744 \uC5B4\uAE38 \uB54C",
+    answers: "\uBB34\uC5C7\uC744 \uC5B8\uC81C \uD558\uB294\uAC00?",
+    lifetime: "\uC62E\uAE30\uAE30"
+  }
+];
+var NATURES_BY_KIND = {
+  knowledge: KNOWLEDGE_NATURES,
+  implementation: [],
+  intent: INTENT_NATURES
+};
 
 // src/modals/CreateModuleModal.ts
 var CreateModuleModal = class extends import_obsidian3.Modal {
-  constructor(app, cli, getBasePrefix) {
+  constructor(app, cli, getBasePrefix, initialPath = "") {
     super(app);
     this.kind = "knowledge";
     this.nature = "concept";
+    this.draft = false;
     this.cli = cli;
     this.getBasePrefix = getBasePrefix ?? (() => DEFAULT_BASE);
+    this.initialPath = initialPath;
   }
   onOpen() {
     const { contentEl } = this;
@@ -409,7 +484,15 @@ var CreateModuleModal = class extends import_obsidian3.Modal {
       type: "text",
       placeholder: "\uC608: \uAC8C\uC784 \uBD84\uC11D/\uB2C8\uCF00/\uC804\uD22C \uACF5\uC2DD"
     });
+    if (this.initialPath) {
+      nameInput.value = `${this.initialPath}/`;
+      nameGroup.createDiv({
+        cls: "memory-tool-hint",
+        text: `${this.initialPath}/ \uC544\uB798\uC5D0 \uB9CC\uB4ED\uB2C8\uB2E4.`
+      });
+    }
     nameInput.focus();
+    nameInput.setSelectionRange(nameInput.value.length, nameInput.value.length);
     const descGroup = contentEl.createDiv({ cls: "memory-tool-form-group" });
     descGroup.createEl("label", { text: "\uBAA9\uC801 (\uD55C \uBB38\uC7A5)" });
     const descInput = descGroup.createEl("input", {
@@ -423,33 +506,59 @@ var CreateModuleModal = class extends import_obsidian3.Modal {
       placeholder: "\uC608: search, python, cli"
     });
     const kindGroup = contentEl.createDiv({ cls: "memory-tool-form-group" });
-    kindGroup.createEl("label", { text: "Kind \u2014 \uC774 \uBB38\uC11C\uAC00 \uD2C0\uB838\uC744 \uB54C, \uD2C0\uB9B0 \uAC83\uC740?" });
+    kindGroup.createEl("label", {
+      text: "Kind \u2014 \uC774 \uBB38\uC11C\uAC00 \uC11C\uC220\uD558\uB294 \uB300\uC0C1\uC774 \uC774\uBBF8 \uC874\uC7AC\uD558\uB294\uAC00?"
+    });
     const kindSelect = kindGroup.createEl("select");
     for (const k of KINDS) {
       kindSelect.createEl("option", { value: k.id, text: `${k.answer} \u2192 ${k.id}` });
     }
+    kindSelect.value = this.kind;
     const natureGroup = contentEl.createDiv({ cls: "memory-tool-form-group" });
     natureGroup.createEl("label", { text: "Nature \u2014 \uBB34\uC5C7\uC774 \uC774 \uBAA8\uB4C8\uC744 \uAC31\uC2E0\uC2DC\uD0A4\uB294\uAC00?" });
     const natureSelect = natureGroup.createEl("select");
-    for (const n of NATURES) {
-      natureSelect.createEl("option", {
-        value: n.id,
-        text: `${n.trigger} \u2192 ${n.label} \xB7 ${n.lifetime}`
-      });
-    }
     const natureHint = natureGroup.createDiv({ cls: "memory-tool-hint" });
     const syncNatureHint = () => {
-      const chosen = NATURES.find((n) => n.id === natureSelect.value);
+      const chosen = NATURES_BY_KIND[this.kind].find(
+        (n) => n.id === natureSelect.value
+      );
       natureHint.setText(chosen ? `\uB2F5\uD558\uB294 \uC9C8\uBB38: ${chosen.answers}` : "");
     };
-    syncNatureHint();
+    const syncNatureOptions = () => {
+      const options = NATURES_BY_KIND[this.kind];
+      natureSelect.empty();
+      natureGroup.toggleClass("memory-tool-hidden", options.length === 0);
+      for (const n of options) {
+        natureSelect.createEl("option", {
+          value: n.id,
+          text: `${n.trigger} \u2192 ${n.label} \xB7 ${n.lifetime}`
+        });
+      }
+      this.nature = options.length ? options[0].id : void 0;
+      if (options.length) {
+        natureSelect.value = options[0].id;
+      }
+      syncNatureHint();
+    };
+    syncNatureOptions();
     natureSelect.addEventListener("change", () => {
       this.nature = natureSelect.value;
       syncNatureHint();
     });
     kindSelect.addEventListener("change", () => {
       this.kind = kindSelect.value;
-      natureGroup.toggleClass("memory-tool-hidden", this.kind !== "knowledge");
+      syncNatureOptions();
+    });
+    const draftGroup = contentEl.createDiv({ cls: "memory-tool-form-group" });
+    const draftLabel = draftGroup.createEl("label");
+    const draftToggle = draftLabel.createEl("input", { type: "checkbox" });
+    draftLabel.appendText(" \uCD08\uC548\uC73C\uB85C \uC2DC\uC791 (--draft)");
+    draftGroup.createDiv({
+      cls: "memory-tool-hint",
+      text: "\uC804\uCCB4 \uACE8\uACA9 \uB300\uC2E0 40\uC904\uC9DC\uB9AC \uC528\uC557 \uBB38\uC11C\uB97C \uB9CC\uB4ED\uB2C8\uB2E4. \uD544\uC694\uD574\uC9C0\uBA74 'mmodule grow' \uB85C \uB098\uBA38\uC9C0 \uC808\uC744 \uBD99\uC785\uB2C8\uB2E4."
+    });
+    draftToggle.addEventListener("change", () => {
+      this.draft = draftToggle.checked;
     });
     const buttonsEl = contentEl.createDiv({ cls: "memory-tool-modal-buttons" });
     const cancelBtn = buttonsEl.createEl("button", { text: "\uCDE8\uC18C" });
@@ -477,7 +586,8 @@ var CreateModuleModal = class extends import_obsidian3.Modal {
       description,
       tags,
       this.kind,
-      this.kind === "knowledge" ? this.nature : void 0
+      this.nature,
+      this.draft
     );
     const basePrefix = this.getBasePrefix();
     const candidates = moduleCandidatePaths(basePrefix, name);
@@ -490,7 +600,8 @@ var CreateModuleModal = class extends import_obsidian3.Modal {
       return;
     }
     await this.openPath(path);
-    const label = this.kind === "knowledge" ? `${this.kind} / ${this.nature}` : this.kind;
+    const base = this.nature ? `${this.kind} / ${this.nature}` : this.kind;
+    const label = this.draft ? `${base} (draft)` : base;
     new import_obsidian3.Notice(`\uBAA8\uB4C8 \uC0DD\uC131: ${name} (${label})`);
   }
   /**
@@ -523,11 +634,12 @@ var CreateModuleModal = class extends import_obsidian3.Modal {
 // src/modals/ModuleSuggestModal.ts
 var import_obsidian4 = require("obsidian");
 var ModuleSuggestModal = class extends import_obsidian4.FuzzySuggestModal {
-  constructor(app, lister, getBasePrefix) {
+  constructor(app, lister, getBasePrefix, onChoose) {
     super(app);
     this.modules = [];
     this.lister = lister;
     this.getBasePrefix = getBasePrefix ?? (() => DEFAULT_BASE);
+    this.onChoose = onChoose ?? null;
     this.setPlaceholder("Type to search active memory_tool modules...");
   }
   async onOpen() {
@@ -541,6 +653,10 @@ var ModuleSuggestModal = class extends import_obsidian4.FuzzySuggestModal {
     return item;
   }
   onChooseItem(item, evt) {
+    if (this.onChoose) {
+      this.onChoose(item);
+      return;
+    }
     const possiblePaths = moduleCandidatePaths(this.getBasePrefix(), item);
     let foundFile = null;
     for (const p of possiblePaths) {
@@ -1438,12 +1554,42 @@ var MemoryToolPlugin = class extends import_obsidian8.Plugin {
     });
     if (this.cli.isAvailable()) {
       this.registerCliCommands();
+      this.registerFolderMenu();
     }
     this.addSettingTab(new MemoryToolSettingTab(this.app, this));
     if (this.settings.pendingIndex > 0 && this.cli.isAvailable()) {
       this.app.workspace.onLayoutReady(() => void this.syncIndex().catch(() => {
       }));
     }
+  }
+  /**
+   * "여기에 모듈 생성" on a folder inside the modules tree.
+   *
+   * Typing the parent path by hand is the part of module creation that is both
+   * tedious and easy to get wrong, and the file explorer already knows it.
+   * Folders outside `<base>/modules` get no entry: modules cannot live there,
+   * so offering it would only produce an error later.
+   */
+  registerFolderMenu() {
+    this.registerEvent(
+      this.app.workspace.on("file-menu", (menu, file) => {
+        if (!("children" in file))
+          return;
+        const prefix = modulePrefixFromFolder(this.basePrefix, file.path);
+        if (prefix === null)
+          return;
+        menu.addItem((item) => {
+          item.setTitle("\uC5EC\uAE30\uC5D0 \uBAA8\uB4C8 \uC0DD\uC131").setIcon("folder-plus").onClick(() => {
+            new CreateModuleModal(
+              this.app,
+              this.cli,
+              () => this.basePrefix,
+              prefix
+            ).open();
+          });
+        });
+      })
+    );
   }
   /** Commands that require the Python CLI; desktop only. */
   registerCliCommands() {
@@ -1452,6 +1598,25 @@ var MemoryToolPlugin = class extends import_obsidian8.Plugin {
       name: "\uBAA8\uB4C8 \uC0DD\uC131",
       callback: () => {
         new CreateModuleModal(this.app, this.cli, () => this.basePrefix).open();
+      }
+    });
+    this.addCommand({
+      id: "grow-module",
+      name: "\uBAA8\uB4C8 \uC804\uCCB4 \uACE8\uACA9 \uBD99\uC774\uAE30 (mmodule grow)",
+      callback: () => {
+        const open = this.app.workspace.getActiveFile();
+        const name = open ? moduleNameFromPath(this.basePrefix, open.path) : null;
+        if (name) {
+          void this.growModule(name);
+          return;
+        }
+        new import_obsidian8.Notice("\uC5F4\uB9B0 \uBB38\uC11C\uAC00 \uBAA8\uB4C8\uC774 \uC544\uB2D9\uB2C8\uB2E4. \uBAA9\uB85D\uC5D0\uC11C \uACE0\uB974\uC138\uC694.");
+        new ModuleSuggestModal(
+          this.app,
+          () => this.listModules(),
+          () => this.basePrefix,
+          (chosen) => void this.growModule(chosen)
+        ).open();
       }
     });
     this.addCommand({
@@ -1597,6 +1762,27 @@ var MemoryToolPlugin = class extends import_obsidian8.Plugin {
    * without Python. It is the fallback rather than the default because the CLI
    * remains the definition of what counts as a module.
    */
+  /**
+   * Append the skeleton sections a module does not have yet.
+   *
+   * Reports the section names rather than a bare success: the point of the
+   * command is that something was added, and "nothing to add" is a real and
+   * unremarkable outcome that should not read as a failure.
+   */
+  async growModule(name) {
+    new import_obsidian8.Notice(`'${name}' \uACE8\uACA9 \uD655\uC7A5 \uC911...`);
+    try {
+      const output = await this.cli.growModule(name);
+      const added = /Added (\d+) section\(s\): (.+)/.exec(output);
+      if (added) {
+        new import_obsidian8.Notice(`${name}: ${added[2]} \uC808\uC744 \uBD99\uC600\uC2B5\uB2C8\uB2E4.`, 6e3);
+      } else {
+        new import_obsidian8.Notice(`${name}: \uC774\uBBF8 \uBAA8\uB4E0 \uC808\uC774 \uC788\uC2B5\uB2C8\uB2E4. \uBC14\uB010 \uAC83\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.`, 6e3);
+      }
+    } catch (err) {
+      new import_obsidian8.Notice(`\uACE8\uACA9 \uD655\uC7A5 \uC2E4\uD328: ${err.message}`, 8e3);
+    }
+  }
   async listModules() {
     if (this.cli.isAvailable()) {
       const fromCli = await this.cli.listModules();

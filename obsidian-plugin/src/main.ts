@@ -15,6 +15,8 @@ import { asScanAdapter, listModules, probeBasePrefix } from "./vaultScan";
 import {
   DEFAULT_BASE,
   describePrefix,
+  moduleNameFromPath,
+  modulePrefixFromFolder,
   normalizePrefix,
   vaultRelativeBase,
 } from "./paths";
@@ -160,6 +162,7 @@ export default class MemoryToolPlugin extends Plugin implements PanelHost {
     // than its absence.
     if (this.cli.isAvailable()) {
       this.registerCliCommands();
+      this.registerFolderMenu();
     }
 
     this.addSettingTab(new MemoryToolSettingTab(this.app, this));
@@ -170,6 +173,41 @@ export default class MemoryToolPlugin extends Plugin implements PanelHost {
     }
   }
 
+  /**
+   * "여기에 모듈 생성" on a folder inside the modules tree.
+   *
+   * Typing the parent path by hand is the part of module creation that is both
+   * tedious and easy to get wrong, and the file explorer already knows it.
+   * Folders outside `<base>/modules` get no entry: modules cannot live there,
+   * so offering it would only produce an error later.
+   */
+  private registerFolderMenu(): void {
+    this.registerEvent(
+      this.app.workspace.on("file-menu", (menu, file) => {
+        // A folder has children; a note does not. Checking for the property
+        // avoids importing TFolder just for an instanceof.
+        if (!("children" in file)) return;
+
+        const prefix = modulePrefixFromFolder(this.basePrefix, file.path);
+        if (prefix === null) return;
+
+        menu.addItem((item) => {
+          item
+            .setTitle("여기에 모듈 생성")
+            .setIcon("folder-plus")
+            .onClick(() => {
+              new CreateModuleModal(
+                this.app,
+                this.cli,
+                () => this.basePrefix,
+                prefix
+              ).open();
+            });
+        });
+      })
+    );
+  }
+
   /** Commands that require the Python CLI; desktop only. */
   private registerCliCommands(): void {
     this.addCommand({
@@ -177,6 +215,33 @@ export default class MemoryToolPlugin extends Plugin implements PanelHost {
       name: "모듈 생성",
       callback: () => {
         new CreateModuleModal(this.app, this.cli, () => this.basePrefix).open();
+      },
+    });
+
+    this.addCommand({
+      id: "grow-module",
+      name: "모듈 전체 골격 붙이기 (mmodule grow)",
+      callback: () => {
+        // The moment a seed feels too small is the moment you are looking at
+        // it, so the open document is the default target and picking from a
+        // list is only the fallback.
+        const open = this.app.workspace.getActiveFile();
+        const name = open
+          ? moduleNameFromPath(this.basePrefix, open.path)
+          : null;
+
+        if (name) {
+          void this.growModule(name);
+          return;
+        }
+
+        new Notice("열린 문서가 모듈이 아닙니다. 목록에서 고르세요.");
+        new ModuleSuggestModal(
+          this.app,
+          () => this.listModules(),
+          () => this.basePrefix,
+          (chosen) => void this.growModule(chosen)
+        ).open();
       },
     });
 
@@ -349,6 +414,29 @@ export default class MemoryToolPlugin extends Plugin implements PanelHost {
    * without Python. It is the fallback rather than the default because the CLI
    * remains the definition of what counts as a module.
    */
+  /**
+   * Append the skeleton sections a module does not have yet.
+   *
+   * Reports the section names rather than a bare success: the point of the
+   * command is that something was added, and "nothing to add" is a real and
+   * unremarkable outcome that should not read as a failure.
+   */
+  async growModule(name: string): Promise<void> {
+    new Notice(`'${name}' 골격 확장 중...`);
+    try {
+      const output = await this.cli.growModule(name);
+      const added = /Added (\d+) section\(s\): (.+)/.exec(output);
+
+      if (added) {
+        new Notice(`${name}: ${added[2]} 절을 붙였습니다.`, 6000);
+      } else {
+        new Notice(`${name}: 이미 모든 절이 있습니다. 바뀐 것이 없습니다.`, 6000);
+      }
+    } catch (err: any) {
+      new Notice(`골격 확장 실패: ${err.message}`, 8000);
+    }
+  }
+
   async listModules(): Promise<string[]> {
     if (this.cli.isAvailable()) {
       const fromCli = await this.cli.listModules();
