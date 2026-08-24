@@ -123,6 +123,7 @@ class ModuleManager:
         tags: Optional[List[str]] = None,
         kind: Optional[str] = None,
         nature: Optional[str] = None,
+        draft: bool = False,
     ) -> Path:
         """Create new single-file module structure at [Folder]/[Folder].md.
 
@@ -136,6 +137,9 @@ class ModuleManager:
                 produced.
             nature: Body outline. knowledge takes concept, reference, analysis,
                 tracker or method; intent takes idea, inquiry or plan.
+            draft: Write the seed document instead of the full skeleton. Grow it
+                later with ``grow()``. Requires a kind, since the seed is
+                kind-specific.
 
         Returns:
             Path to created single markdown file
@@ -158,6 +162,14 @@ class ModuleManager:
         file_path.parent.mkdir(parents=True, exist_ok=True)
 
         resolved_kind = self._resolve_kind(kind, nature)
+
+        if draft and resolved_kind is None:
+            raise ModuleError(
+                "--draft needs a kind, because the seed document differs per "
+                "kind. Pass --kind knowledge|implementation|intent, or set "
+                "modules.default_kind."
+            )
+
         if resolved_kind is not None:
             return self._create_from_template(
                 file_path=file_path,
@@ -166,6 +178,7 @@ class ModuleManager:
                 nature=nature,
                 description=description,
                 tags=tags,
+                draft=draft,
             )
 
         timestamp = datetime.now().strftime("%Y-%m-%d")
@@ -269,6 +282,110 @@ TODO: Document key data structures
 
         return configured or None
 
+    #: The classification line a templated module carries, e.g.
+    #: "**Kind:** intent | **Nature:** plan | **Stage:** 착상 | ..."
+    _KIND_LINE = re.compile(r"^\*\*Kind:\*\*.*$", re.MULTILINE)
+    _KIND_VALUE = re.compile(r"\*\*Kind:\*\*\s*([a-z]+)")
+    _NATURE_VALUE = re.compile(r"\*\*Nature:\*\*\s*([a-z]+)\s*(?:\||$)")
+
+    def read_classification(self, name: str) -> Dict[str, Optional[str]]:
+        """Read a module's Kind and Nature from its own header.
+
+        Growing a draft needs the same classification the draft was created
+        with; asking for it again would invite a different answer, and a module
+        whose header says one thing and whose body outline says another is worse
+        than either.
+
+        Args:
+            name: Module name or path
+
+        Returns:
+            {"kind": str or None, "nature": str or None}. Both are None for a
+            module made from the generic template, which carries no Kind line.
+        """
+        doc = self.resolve_module_doc(name)
+        if doc is None:
+            raise ModuleError(f"Module not found: {name}")
+
+        text = doc.read_text(encoding="utf-8")
+        line_match = self._KIND_LINE.search(text)
+        if line_match is None:
+            return {"kind": None, "nature": None}
+
+        line = line_match.group(0)
+        kind = self._KIND_VALUE.search(line)
+        nature = self._NATURE_VALUE.search(line)
+
+        return {
+            "kind": kind.group(1) if kind else None,
+            "nature": nature.group(1) if nature else None,
+        }
+
+    def grow(
+        self,
+        name: str,
+        kind: Optional[str] = None,
+        nature: Optional[str] = None,
+    ) -> tuple:
+        """Append the skeleton sections a module does not have yet.
+
+        The second half of the draft workflow: a seed grows into the full
+        document without the author copying sections out of the template. What
+        is already written is left exactly as it is.
+
+        Args:
+            name: Module name or path
+            kind: Override the kind in the module's header
+            nature: Override the nature in the module's header
+
+        Returns:
+            (path, list of part names appended). The list is empty when the
+            module already has every section.
+
+        Raises:
+            ModuleError: If the module is missing, carries no kind, or the
+                templates cannot be loaded.
+        """
+        from memory_tool.core.module_templates import (
+            TemplateError,
+            grow_module_document,
+        )
+
+        doc = self.resolve_module_doc(name)
+        if doc is None:
+            raise ModuleError(f"Module not found: {name}")
+
+        found = self.read_classification(name)
+        resolved_kind = kind or found["kind"]
+        resolved_nature = nature or found["nature"]
+
+        if resolved_kind is None:
+            raise ModuleError(
+                f"'{name}' has no '**Kind:**' line, so there is no skeleton to "
+                f"grow into. Pass --kind knowledge|implementation|intent."
+            )
+
+        existing = doc.read_text(encoding="utf-8")
+
+        try:
+            grown, added = grow_module_document(
+                existing,
+                name=name,
+                kind=resolved_kind,
+                nature=resolved_nature,
+                memory_path=self.memory_path,
+            )
+        except TemplateError as e:
+            raise ModuleError(str(e)) from e
+
+        if added:
+            try:
+                doc.write_text(grown, encoding="utf-8")
+            except Exception as e:
+                raise ModuleError(f"Failed to write module file: {e}")
+
+        return doc, added
+
     def _create_from_template(
         self,
         file_path: Path,
@@ -277,6 +394,7 @@ TODO: Document key data structures
         nature: Optional[str],
         description: str,
         tags: Optional[List[str]],
+        draft: bool = False,
     ) -> Path:
         """Write a module assembled from the MOP templates."""
         from memory_tool.core.module_templates import (
@@ -292,6 +410,7 @@ TODO: Document key data structures
                 description=description,
                 tags=tags,
                 memory_path=self.memory_path,
+                draft=draft,
             )
         except TemplateError as e:
             raise ModuleError(str(e)) from e
@@ -353,19 +472,25 @@ TODO: Document key data structures
         return result
 
     def find_module_by_name(self, name: str, exact: bool = False) -> List[str]:
-        """Find module(s) by name, searching all module paths."""
-        all_modules = self.discover_all_modules()
+        """Find module(s) by name, searching all module paths.
+
+        Comparison is on the forward-slash form. Everything else in the system
+        writes module paths that way -- ``mmodule create "a/b"``, ``[[a/b]]``
+        wiki links, the docs -- but discovery yields ``Path`` objects, whose
+        ``str()`` uses a backslash on Windows. A nested module therefore never
+        matched the name its own creation command was given.
+        """
+        wanted = Path(name).as_posix()
         matches = []
 
-        for module_path in all_modules:
-            module_str = str(module_path)
-            module_parts = module_path.parts
+        for module_path in self.discover_all_modules():
+            module_str = module_path.as_posix()
 
             if exact:
-                if module_str == name:
+                if module_str == wanted:
                     matches.append(module_str)
             else:
-                if module_str == name or module_parts[-1] == name:
+                if module_str == wanted or module_path.parts[-1] == wanted:
                     matches.append(module_str)
 
         return matches
@@ -377,8 +502,9 @@ TODO: Document key data structures
         if not self.modules_path.exists():
             return result
 
+        # Forward slashes, matching what users type and what wiki links use.
         discovered = self.discover_all_modules()
-        result["active"] = [str(p) for p in discovered]
+        result["active"] = [p.as_posix() for p in discovered]
 
         if include_archived and self.archive_path.exists():
             archived = []

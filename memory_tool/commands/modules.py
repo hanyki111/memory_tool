@@ -16,7 +16,7 @@ from memory_tool.utils.paths import display_path, get_base_path
 
 @app.command()
 def module(
-    action: str = typer.Argument(..., help="Action: create, list, tree, rename, relink, merge-templates, archive, unarchive, migrate, connections, graph, rebuild-graph, check-links, suggest-links, suggest-ai, ai-organize, auto-tag, graph-history, graph-diff, graph-snapshot, from-text"),
+    action: str = typer.Argument(..., help="Action: create, grow, list, tree, rename, relink, merge-templates, archive, unarchive, migrate, connections, graph, rebuild-graph, check-links, suggest-links, suggest-ai, ai-organize, auto-tag, graph-history, graph-diff, graph-snapshot, from-text"),
     name: str = typer.Argument(None, help="Module name or path (e.g., 'projects/website')"),
     description: str = typer.Option("", "--desc", "-d", help="Module description"),
     reason: str = typer.Option("", "--reason", "-r", help="Reason for archiving"),
@@ -39,6 +39,7 @@ def module(
     structure: Optional[str] = typer.Option(None, "--structure", "-s", help="Module structure type for from-text: 'feature' (software), 'topic' (learning/KB), 'auto'"),
     kind: Optional[str] = typer.Option(None, "--kind", "-k", help="Template kind for create: 'knowledge', 'implementation' or 'intent'"),
     nature: Optional[str] = typer.Option(None, "--nature", help="Body outline. knowledge: concept, reference, analysis, tracker, method | intent: idea, inquiry, plan"),
+    draft: bool = typer.Option(False, "--draft", help="Create a seed document instead of the full skeleton; grow it later with 'mmodule grow'"),
 ):
     """Manage modules (supports single-file modules, hierarchical paths, wiki-style [[connections]], and AI suggestions)."""
     action = arg_str(action)
@@ -61,7 +62,8 @@ def module(
 
             console.print(f"[cyan]Creating module '{name}'...[/cyan]")
             module_path = manager.create(
-                name, description, tag_list, kind=kind_opt, nature=nature_opt
+                name, description, tag_list,
+                kind=kind_opt, nature=nature_opt, draft=draft,
             )
 
             rel_path = display_path(module_path)
@@ -76,7 +78,15 @@ def module(
                 label = kind_opt or kind_for_nature(nature_opt) or "knowledge"
                 if nature_opt:
                     label += f" / {nature_opt}"
+                if draft:
+                    label += " (draft)"
                 console.print(f"[dim]Template: {label}[/dim]")
+
+            if draft:
+                console.print(
+                    "[dim]Seed document written. Fill the ladder at the bottom, "
+                    f"then run 'mmodule grow \"{name}\"' for the rest.[/dim]"
+                )
             else:
                 console.print(
                     "[dim]Tip: --kind knowledge|implementation|intent applies "
@@ -89,6 +99,37 @@ def module(
                 check_and_suggest_after_command(memory_dir, "module", force=False)
             except Exception:
                 pass
+
+        elif action.lower() == "grow":
+            if not name:
+                console.print("[red]ERROR[/red] Module name is required for grow")
+                console.print("[dim]Usage: module grow <name>[/dim]")
+                sys.exit(1)
+
+            resolved_name = resolve_module_name(name)
+            kind_opt = opt_str(kind)
+            nature_opt = opt_str(nature)
+
+            console.print(f"[cyan]Growing module '{resolved_name}'...[/cyan]")
+            module_path, added = manager.grow(
+                resolved_name, kind=kind_opt, nature=nature_opt
+            )
+
+            if not added:
+                console.print(
+                    f"[green]OK[/green] '{resolved_name}' already has every "
+                    f"section. Nothing was written."
+                )
+            else:
+                console.print(
+                    f"\n[green]OK[/green] Added {len(added)} section(s): "
+                    + ", ".join(added)
+                )
+                console.print(f"[dim]File location: {display_path(module_path)}[/dim]")
+                console.print(
+                    "[dim]What you already wrote was left untouched; the new "
+                    "sections are appended at the end.[/dim]"
+                )
 
         elif action.lower() == "migrate":
             if name:

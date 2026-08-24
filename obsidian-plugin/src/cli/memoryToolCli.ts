@@ -188,7 +188,8 @@ export class MemoryToolCli {
     description: string = "",
     tags: string = "",
     kind?: string,
-    nature?: string
+    nature?: string,
+    draft?: boolean
   ): Promise<string> {
     let cmd = `module create "${name}"`;
     if (description) {
@@ -202,6 +203,9 @@ export class MemoryToolCli {
     }
     if (nature) {
       cmd += ` --nature "${escapeArg(nature)}"`;
+    }
+    if (draft) {
+      cmd += " --draft";
     }
     return this.executeCommand(cmd);
   }

@@ -100,7 +100,20 @@ def kind_for_nature(nature: str) -> Optional[str]:
     return None
 
 #: Order in which template documents are concatenated into the single file.
-ASSEMBLY_ORDER = ("module", "current", "decisions", "dependencies", "interface")
+#:
+#: "module" is deliberately thin -- a title, the classification fields and a
+#: one-line purpose -- and "scope" carries the rest of the metadata at the end.
+#: With everything in one block up top, the first line of actual content landed
+#: on line 48 or later, so the part of the document that is read most often was
+#: the part you had to scroll past boundary declarations to reach.
+ASSEMBLY_ORDER = (
+    "module",
+    "current",
+    "decisions",
+    "dependencies",
+    "interface",
+    "scope",
+)
 
 #: Files required for a directory to count as a usable template set.
 REQUIRED_FILES = ("module.md", "current.md")
@@ -125,6 +138,18 @@ PART_MARKER = re.compile(r"^<!--\s*part:\s*([a-z]+)\s*-->[ \t]*$", re.MULTILINE)
 
 #: The natures part is a menu to choose from, never emitted into a module.
 NATURES_PART = "natures"
+
+#: The draft part is a whole seed document, emitted instead of the assembly.
+#:
+#: A module is not born finished. The full skeleton asks for a confidence
+#: rating, a scope boundary and a citable conclusion before a single line of
+#: content exists, which is a lot to answer about something you have just
+#: started thinking about. The draft is what you can honestly fill in on day
+#: one, and it ends with the ladder of what to add next.
+DRAFT_PART = "draft"
+
+#: Every part a template file may define.
+ALL_PARTS = (*ASSEMBLY_ORDER, NATURES_PART, DRAFT_PART)
 
 def single_file_name(kind: str) -> str:
     """Filename of a single-file template for a kind."""
@@ -420,15 +445,36 @@ def _fill_purpose(text: str, description: str) -> str:
 
     The heading is followed by an instructional comment; the description goes
     after it so the guidance stays visible for later editing.
+
+    A draft has no "목적과 목표" heading -- it opens straight into "지금 아는
+    것" or "하려는 것" -- so the first section stands in for it. Without that
+    fallback a --desc passed alongside --draft was accepted and then silently
+    dropped, which is worse than refusing it.
     """
-    pattern = re.compile(r"(^##\s*목적과 목표\s*\n)(.*?)(?=^##\s|\Z)", re.MULTILINE | re.DOTALL)
+    # The heading group is [^\n]*, not .* -- DOTALL applies to the whole pattern,
+    # so a dot there runs past the heading and swallows the document down to its
+    # last newline, putting the description at the very end of the file.
+    patterns = (
+        re.compile(
+            r"(^##[ \t]*목적과 목표[ \t]*\n)(.*?)(?=^##\s|\Z)",
+            re.MULTILINE | re.DOTALL,
+        ),
+        re.compile(
+            r"(^##[ \t]+\S[^\n]*\n)(.*?)(?=^##\s|\Z)",
+            re.MULTILINE | re.DOTALL,
+        ),
+    )
 
     def repl(match: re.Match) -> str:
         head, body = match.group(1), match.group(2)
         return f"{head}{body.rstrip()}\n\n{description}\n\n"
 
-    filled, count = pattern.subn(repl, text, count=1)
-    return filled if count else text
+    for pattern in patterns:
+        filled, count = pattern.subn(repl, text, count=1)
+        if count:
+            return filled
+
+    return text
 
 
 def parse_single_file_template(text: str) -> Dict[str, str]:
@@ -483,23 +529,19 @@ def merge_template_dir(directory: Path) -> str:
         "     joined in this order and separated by a horizontal rule.",
         f"     Parts: {', '.join(ASSEMBLY_ORDER)}",
         "     The 'natures' part is a menu: one outline is spliced into the",
-        "     body of 'current' and the rest are never emitted. -->",
+        "     body of 'current' and the rest are never emitted.",
+        "     The 'draft' part is the seed document emitted by --draft, on its own. -->",
         "",
     ]
 
     body: List[str] = []
 
-    for part in ASSEMBLY_ORDER:
+    for part in ALL_PARTS:
         path = directory / f"{part}.md"
         if not path.is_file():
             continue
         content = path.read_text(encoding="utf-8").strip("\n")
         body.append(f"<!-- part: {part} -->\n\n{content}")
-
-    natures_path = directory / f"{NATURES_PART}.md"
-    if natures_path.is_file():
-        content = natures_path.read_text(encoding="utf-8").strip("\n")
-        body.append(f"<!-- part: {NATURES_PART} -->\n\n{content}")
 
     return "\n".join(chunks) + SECTION_SEPARATOR.join(body) + "\n"
 
@@ -551,7 +593,7 @@ def load_template_parts(
         tried.append(directory)
         if _is_usable(directory):
             parts = {}
-            for part in (*ASSEMBLY_ORDER, NATURES_PART):
+            for part in ALL_PARTS:
                 path = directory / f"{part}.md"
                 if path.is_file():
                     try:
@@ -573,16 +615,21 @@ def build_module_document(
     description: str = "",
     tags: Optional[List[str]] = None,
     memory_path: Optional[Path] = None,
+    draft: bool = False,
 ) -> str:
     """Assemble a single-file module document from templates.
 
     Args:
         name: Module name or path (e.g. "AI/basics")
-        kind: "knowledge" or "implementation"
-        nature: Body outline for knowledge modules
+        kind: "knowledge", "implementation" or "intent"
+        nature: Body outline for knowledge and intent modules
         description: Purpose text
         tags: Module tags
         memory_path: Base folder, so project templates take precedence
+        draft: Emit the seed document instead of the full skeleton. The
+            classification still applies -- a draft is the same kind of module
+            at an earlier point, not a different kind -- so the header carries
+            the chosen Kind and Nature either way.
 
     Returns:
         The complete markdown document.
@@ -595,6 +642,25 @@ def build_module_document(
 
     today = datetime.now().strftime("%Y-%m-%d")
     tags_str = ", ".join(tags) if tags else ""
+
+    if draft:
+        seed = parts.get(DRAFT_PART)
+        if seed is None:
+            raise TemplateError(
+                f"{origin} has no '<!-- part: {DRAFT_PART} -->' section, so "
+                f"--draft has nothing to emit for '{choice.kind}'."
+            )
+        return (
+            _apply_placeholders(
+                seed,
+                name=name,
+                choice=choice,
+                description=description,
+                tags=tags_str,
+                today=today,
+            ).strip("\n")
+            + "\n"
+        )
 
     natures = (
         _parse_natures(parts.get(NATURES_PART, ""), natures_for(choice.kind))
@@ -631,6 +697,113 @@ def build_module_document(
         sections.append(content.strip("\n"))
 
     return SECTION_SEPARATOR.join(sections) + "\n"
+
+
+#: Top-level headings, which is how a part is recognized as already present.
+_H1 = re.compile(r"^#\s+(\S.*?)\s*$")
+
+
+def _h1_titles(text: str) -> List[str]:
+    """Top-level headings of a document, ignoring fenced blocks.
+
+    A template's own examples quote whole markdown files, headings included, so
+    a naive scan would report sections the document does not actually have.
+    """
+    titles: List[str] = []
+    in_fence = False
+
+    for line in text.split("\n"):
+        if line.lstrip().startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        match = _H1.match(line)
+        if match:
+            titles.append(match.group(1))
+
+    return titles
+
+
+def grow_module_document(
+    existing: str,
+    name: str,
+    kind: str,
+    nature: Optional[str] = None,
+    memory_path: Optional[Path] = None,
+) -> Tuple[str, List[str]]:
+    """Append the skeleton sections a document does not have yet.
+
+    This is the second half of the draft workflow. The seed holds what you can
+    honestly write on day one; when a module outgrows it, the remaining sections
+    are appended rather than the author copying them out of the template by
+    hand. What is already written is never touched: a section counts as present
+    when its top-level heading is, so nothing is duplicated and nothing is
+    overwritten.
+
+    Args:
+        existing: The current document
+        name: Module name or path, for placeholder substitution
+        kind: The module's kind
+        nature: Body outline, if the kind takes one
+        memory_path: Base folder, so project templates take precedence
+
+    Returns:
+        (grown document, names of the parts appended). The parts list is empty
+        when the document already has every section, and the document comes
+        back unchanged in that case.
+
+    Raises:
+        TemplateError: If the kind/nature is invalid or templates are missing.
+    """
+    choice = TemplateChoice(kind=kind, nature=nature)
+    parts, origin = load_template_parts(choice.kind, memory_path)
+
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    natures = (
+        _parse_natures(parts.get(NATURES_PART, ""), natures_for(choice.kind))
+        if choice.nature
+        else {}
+    )
+    if choice.nature and choice.nature not in natures:
+        raise TemplateError(f"Nature '{choice.nature}' is not defined in {origin}.")
+
+    present = set(_h1_titles(existing))
+    sections: List[str] = []
+    added: List[str] = []
+
+    for part in ASSEMBLY_ORDER:
+        content = parts.get(part)
+        if content is None:
+            continue
+
+        if part == "current" and choice.nature:
+            content = _splice_nature(content, natures[choice.nature])
+
+        # Tags and description are left alone: the draft already carries them,
+        # and this call must not overwrite what the author wrote.
+        content = _apply_placeholders(
+            content,
+            name=name,
+            choice=choice,
+            description="",
+            tags="",
+            today=today,
+        )
+
+        titles = _h1_titles(content)
+        if titles and titles[0] in present:
+            continue
+
+        sections.append(content.strip("\n"))
+        added.append(part)
+
+    if not sections:
+        return existing, []
+
+    grown = existing.rstrip("\n") + SECTION_SEPARATOR + SECTION_SEPARATOR.join(sections)
+    return grown + "\n", added
 
 
 def describe_choices() -> str:

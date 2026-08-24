@@ -23,6 +23,7 @@ export class CreateModuleModal extends Modal {
 
   private kind: ModuleKind = "knowledge";
   private nature: ModuleNature | undefined = "concept";
+  private draft = false;
 
   constructor(app: App, cli: MemoryToolCli, getBasePrefix?: () => string) {
     super(app);
@@ -117,6 +118,22 @@ export class CreateModuleModal extends Modal {
       syncNatureOptions();
     });
 
+    // --- Draft: the seed document, for a module being started from nothing ---
+    const draftGroup = contentEl.createDiv({ cls: "memory-tool-form-group" });
+    const draftLabel = draftGroup.createEl("label");
+    const draftToggle = draftLabel.createEl("input", { type: "checkbox" });
+    draftLabel.appendText(" 초안으로 시작 (--draft)");
+    draftGroup.createDiv({
+      cls: "memory-tool-hint",
+      text:
+        "전체 골격 대신 40줄짜리 씨앗 문서를 만듭니다. " +
+        "필요해지면 'mmodule grow' 로 나머지 절을 붙입니다.",
+    });
+
+    draftToggle.addEventListener("change", () => {
+      this.draft = draftToggle.checked;
+    });
+
     // --- Buttons ---
     const buttonsEl = contentEl.createDiv({ cls: "memory-tool-modal-buttons" });
     const cancelBtn = buttonsEl.createEl("button", { text: "취소" });
@@ -143,7 +160,14 @@ export class CreateModuleModal extends Modal {
   }
 
   private async create(name: string, description: string, tags: string): Promise<void> {
-    await this.cli.createModule(name, description, tags, this.kind, this.nature);
+    await this.cli.createModule(
+      name,
+      description,
+      tags,
+      this.kind,
+      this.nature,
+      this.draft
+    );
 
     const basePrefix = this.getBasePrefix();
     const candidates = moduleCandidatePaths(basePrefix, name);
@@ -159,7 +183,8 @@ export class CreateModuleModal extends Modal {
 
     await this.openPath(path);
 
-    const label = this.nature ? `${this.kind} / ${this.nature}` : this.kind;
+    const base = this.nature ? `${this.kind} / ${this.nature}` : this.kind;
+    const label = this.draft ? `${base} (draft)` : base;
     new Notice(`모듈 생성: ${name} (${label})`);
   }
 

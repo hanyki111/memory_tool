@@ -1,47 +1,25 @@
 <!-- Single-file module template.
      Each part below becomes one section of the assembled module,
      joined in this order and separated by a horizontal rule.
-     Parts: module, current, decisions, dependencies, interface
-     The 'natures' part is a menu: one outline is spliced into the
-     body of 'current' and the rest are never emitted. -->
+     Parts: module, current, decisions, dependencies, interface, scope
+     The 'draft' part is the seed document emitted by --draft, on its own. -->
 <!-- part: module -->
 
 # Module: [경로]
 
-**Created:** YYYY-MM-DD | **Updated:** YYYY-MM-DD
 **Kind:** implementation | **Role:** leaf | root
 **Status:** planning | dev | stable | frozen
-**Tags:** 
+**Created:** YYYY-MM-DD | **Updated:** YYYY-MM-DD
+**Tags:**
+
+> ⚠️ **코드가 정본이고 이 문서는 그 요약이다. 충돌하면 코드가 이긴다.**
 
 ## 목적과 목표
 
 <!-- 이 모듈이 구현하는 기능은 무엇인가. 한 문장. -->
 
-## 책임과 범위 (Single Responsibility Principle 적용)
-
-- **책임:** <!-- 하나의 명확한 책임 -->
-- **범위:**
-  - **포함** — 
-  - **제외** — <!-- 어느 모듈로 위임하는지 명시 -->
-
-## Architecture
-
-<!-- 구성요소와 데이터 흐름. 코드를 읽으면 알 수 있는 것은 쓰지 않는다.
-     여기 담을 것은 코드에 '없는 것' — 왜 이렇게 만들었고 무엇을 시도했다 버렸는가. -->
-
-## Source of Truth
-
-> ⚠️ **코드가 정본이고 이 모듈은 그 요약이다. 충돌하면 코드가 이긴다.**
-
-- **저장소:** 
-- **주요 경로:** 
-- **기준 커밋:** 
-
-## 관련 모듈
-
-- 상위: 
-- 형제: 
-- 의존: 
+<!-- 책임과 범위, Source of Truth 상세는 문서 끝의 '범위와 전제'에 있다.
+     읽는 사람이 먼저 찾는 것은 현재 상태와 코드 경로이므로 그쪽을 위로 올렸다. -->
 
 ---
 
@@ -60,7 +38,8 @@
 
 ## 2. Architecture
 
-<!-- 구조와 데이터 흐름. 코드 복제 금지 — 쓰지 않은 것은 썩지 않는다. -->
+<!-- 구조와 데이터 흐름. 코드 복제 금지 — 쓰지 않은 것은 썩지 않는다.
+     여기 담을 것은 코드에 '없는 것'이다. 왜 이렇게 만들었고 무엇을 시도했다 버렸는가. -->
 
 ## 3. 📂 Related Files
 
@@ -223,3 +202,86 @@
 <!-- 선택. 변경 시 깨지는 것이 무엇인지 -->
 
 - 
+
+---
+
+<!-- part: scope -->
+
+# 범위와 전제
+
+<!-- 문서 끝에 두는 이유: 읽는 쪽은 이 모듈을 고칠지 판단할 때 확인하고,
+     쓰는 쪽은 구현을 정리한 뒤 다듬는 항목이기 때문이다.
+     본문보다 먼저 요구하면 작성이 그 자리에서 막힌다. -->
+
+## 책임과 범위 (Single Responsibility Principle 적용)
+
+- **책임:** <!-- 하나의 명확한 책임. 둘이 되면 모듈을 나눈다 -->
+- **범위:**
+  - **포함** — 
+  - **제외** — <!-- 어느 모듈로 위임하는지 명시 -->
+
+## Source of Truth
+
+<!-- Current 헤더의 기준 커밋이 어느 저장소의 어느 경로를 가리키는지 -->
+
+- **저장소:** 
+- **주요 경로:** 
+- **기준 커밋:** 
+
+## 운영 전제
+
+<!-- 이 구현이 성립하지 않는 조건. 환경, 규모, 동시성 등 -->
+
+- 
+
+## 갱신 이력
+
+<!-- 선택. 구조가 크게 바뀐 시점만 남긴다 -->
+
+| 날짜 | 무엇이 바뀌었나 |
+| :--- | :--- |
+
+---
+
+<!-- part: draft -->
+
+# Module: [경로]
+
+**Kind:** implementation | **Role:** leaf | root
+**Stage:** 초안 | **Status:** planning | dev
+**Created:** YYYY-MM-DD | **Updated:** YYYY-MM-DD
+**Tags:**
+
+> **기준:** YYYY-MM-DD | **커밋:** —
+> ⚠️ **코드가 정본이고 이 문서는 그 요약이다. 충돌하면 코드가 이긴다.**
+
+## 무엇을 하는가
+
+<!-- 세 줄. 코드를 읽으면 바로 아는 것은 쓰지 않는다.
+     여기 담을 것은 코드에 없는 것, 즉 왜 이렇게 만들었는가다. -->
+
+## 📂 Related Files
+
+<!-- 초안 단계에서도 이것만은 채운다. 코드로 가는 유일한 다리이기 때문이다.
+     경로가 없으면 이 문서는 코드와 끊어진 채 낡는다. mcheck의 검증 대상이다. -->
+
+| 경로 | 역할 |
+| :--- | :--- |
+| `src/...` | |
+
+## 다음 할 일
+
+- [ ] 
+
+---
+
+<!-- ▼ 다음에 채울 것. 위에서부터 하나씩, 필요해진 것만 더한다.
+     전체 골격이 필요해지면: mmodule grow "[경로]"
+
+     1. 검증 한 줄     — 테스트 명령이나 수동 재현 절차.
+                         없으면 "동작하는가"라는 이 Kind의 질문에 답할 수 없다
+     2. 버린 선택지    — 무엇을 시도했다 버렸는가. 코드에 남지 않는 유일한 정보다
+     3. 기술 부채      — 알면서 남긴 것. 모르고 생긴 것과 구분해 적는다
+     4. 다루지 않는 것 — 어느 모듈로 위임하는가
+     5. 전체 골격      — mmodule grow 로 나머지 절을 붙인다
+-->

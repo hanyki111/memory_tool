@@ -1,47 +1,24 @@
 <!-- Single-file module template.
      Each part below becomes one section of the assembled module,
      joined in this order and separated by a horizontal rule.
-     Parts: module, current, decisions, dependencies, interface
+     Parts: module, current, decisions, dependencies, interface, scope
      The 'natures' part is a menu: one outline is spliced into the
-     body of 'current' and the rest are never emitted. -->
+     body of 'current' and the rest are never emitted.
+     The 'draft' part is the seed document emitted by --draft, on its own. -->
 <!-- part: module -->
 
 # [모듈명]
 
-**Created:** YYYY-MM-DD | **Updated:** YYYY-MM-DD
 **Kind:** knowledge | **Nature:** concept | reference | analysis | tracker | method
-**Role:** leaf | root
-**Tags:** 
+**Role:** leaf | root | **Created:** YYYY-MM-DD | **Updated:** YYYY-MM-DD
+**Tags:**
 
 ## 목적과 목표
 
 <!-- 한 문장. 두 문장이 넘어가면 모듈을 분리하라는 신호다. -->
 
-## 책임과 범위 (Single Responsibility Principle 적용)
-
-- **책임:** 
-- **범위:**
-  - **포함** — 
-  - **제외** — <!-- 어느 모듈로 위임하는지 반드시 명시. 제외 항목 없이 범위는 정의되지 않는다. -->
-
-## 적용 전제 / 유효 범위
-
-<!-- 이 지식이 성립하지 않는 조건.
-     전제가 없는 지식은 전제가 없는 것이 아니라 전제가 숨겨진 것이다. -->
-
-## 신뢰도
-
-- **검증 상태:** 검증됨 | 부분 검증 | 이론(미검증)
-- **기준 시점:** YYYY-MM-DD
-- **대상 버전:** <!-- reference 성격은 필수 -->
-- **주 출처:** 
-
-## 관련 모듈
-
-- 상위: 
-- 형제: 
-- 적용: <!-- method 성격이라면 이 방법론을 적용하는 모듈 -->
-- 참조: 
+<!-- 책임과 범위, 적용 전제, 신뢰도 근거는 문서 끝의 '범위와 전제'에 있다.
+     읽는 사람이 먼저 찾는 것은 본문이므로 본문을 위로 올렸다. -->
 
 ---
 
@@ -100,12 +77,6 @@
 | 1 | | | |
 
 **권장 다음 스텝:** 
-
-## 🔗 Related Modules
-
-- 상위: 
-- 형제: 
-- 참조: 
 
 ---
 
@@ -209,11 +180,93 @@
 
 ---
 
+<!-- part: scope -->
+
+# 범위와 전제
+
+<!-- 문서 끝에 두는 이유: 읽는 쪽은 인용 직전에 확인하고, 쓰는 쪽은 본문을 채운 뒤
+     정리하는 항목이기 때문이다. 본문보다 먼저 요구하면 작성이 그 자리에서 막힌다. -->
+
+## 책임과 범위 (Single Responsibility Principle 적용)
+
+- **책임:** <!-- 하나의 명확한 책임. 둘이 되면 모듈을 나눈다 -->
+- **범위:**
+  - **포함** — 
+  - **제외** — <!-- 어느 모듈로 위임하는지 반드시 명시. 제외 항목 없이 범위는 정의되지 않는다. -->
+
+## 적용 전제 / 유효 범위
+
+<!-- 이 지식이 성립하지 않는 조건.
+     전제가 없는 지식은 전제가 없는 것이 아니라 전제가 숨겨진 것이다. -->
+
+## 신뢰도 근거
+
+<!-- Current 헤더의 신뢰도 한 줄이 어디서 나왔는지를 여기 적는다 -->
+
+- **검증 상태:** 검증됨 | 부분 검증 | 이론(미검증)
+- **기준 시점:** YYYY-MM-DD
+- **대상 버전:** <!-- reference 성격은 필수 -->
+- **주 출처:** 
+
+## 갱신 이력
+
+<!-- 선택. Nature가 바뀌었거나 신뢰도가 오르내린 시점만 남긴다.
+     학습 초기에 concept으로 시작해 나중에 reference로 굳는 전이가 흔하다. -->
+
+| 날짜 | 무엇이 바뀌었나 |
+| :--- | :--- |
+
+---
+
+<!-- part: draft -->
+
+# [모듈명]
+
+**Kind:** knowledge | **Nature:** concept | reference | analysis | tracker | method
+**Stage:** 초안 | **Created:** YYYY-MM-DD | **Updated:** YYYY-MM-DD
+**Tags:**
+
+> **기준:** YYYY-MM-DD | **신뢰도:** 미검증
+> <!-- 초안은 미검증에서 시작한다. 이 문서는 아직 인용 대상이 아니다. -->
+
+## 지금 아는 것
+
+<!-- 세 줄이면 충분하다. 틀려도 된다.
+     정확하게 쓰려다 아예 쓰지 않는 것이 가장 큰 손실이다. -->
+
+## 모르는 것
+
+<!-- 아는 것보다 먼저 쓴다. 학습 모듈의 주 자산은 답이 아니라 질문이다.
+     해소되어도 지우지 않고 ~~취소선~~ → **[해소]** 결론 으로 남긴다. -->
+
+1. 
+
+## 출처
+
+<!-- 어디서 봤는가. 링크 한 줄이면 된다. 나중에 같은 우물로 돌아갈 수 있게 한다. -->
+
+- 
+
+---
+
+<!-- ▼ 다음에 채울 것. 위에서부터 하나씩, 필요해진 것만 더한다.
+     전부 채울 의무는 없다. 전체 골격이 필요해지면: mmodule grow "[경로]"
+
+     1. 예제 하나       — 따라 할 수 있는 최소 예제. 막히는 지점이 곧 모르는 지점이다
+     2. 핵심 비유       — 실생활에 빗댄 하나. 복붙이 원리적으로 불가능해 이해를 강제한다
+     3. 자주 하는 오해  — 내가 처음에 잘못 알았던 것. 재학습 비용을 가장 크게 줄인다
+     4. 인용 결론 한 줄 — "~이다"로 끝나야 한다. 여기를 못 쓰면 아직 배운 것이 아니다
+     5. 다루지 않는 것  — 경계. 이때 쓰면 모듈을 나눌 시점 판단이 쉬워진다
+     6. 전체 골격       — mmodule grow 로 나머지 절을 붙인다
+-->
+
+---
+
 <!-- part: natures -->
 
 # 성격별 §2 본문 목차 (5종)
 
-`current.md`의 `## 2. 본문` 자리에 붙여 넣는다. 각 블록의 **필수 요소**는 생략하지 않는다.
+`current`의 `## 2. 본문` 자리에 붙여 넣는다. 각 블록의 **필수 요소**는 생략하지 않는다.
 
 `mmodule create --kind knowledge --nature <성격>` 은 이 파일에서 해당 블록을 읽어
 자동으로 채운다.

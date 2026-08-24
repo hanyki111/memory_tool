@@ -922,6 +922,26 @@ implementation module, promoted to a knowledge module, or dropped with its
 reason kept. Its header therefore requires a review date; without one the module
 is already drifting.
 
+Starting from nothing (--draft / grow)
+--------------------------------------
+The full skeleton assumes a finished document: it asks for a confidence rating,
+a scope boundary and a citable conclusion before any content exists. --draft
+writes the ~40-line seed instead -- what you can honestly fill in on day one --
+and ends with the ladder of what to add next. The classification still applies:
+a draft is the same kind of module earlier, not a different kind.
+
+  mmodule create asyncio --kind knowledge --nature concept --draft
+  mmodule grow asyncio        # append the rest when the seed outgrows itself
+
+grow appends only the sections the document does not have, matched by top-level
+heading, and leaves everything already written untouched. It reads the kind and
+nature from the module's own header.
+
+Section order is content first: title and one-line purpose, then the body, then
+decisions, dependencies and interface, with the scope and premises last. Those
+boundary fields are what a reader checks just before citing and what an author
+tidies after writing, so neither one needs them at the top.
+
 Omitting --kind produces the original generic template. Set a project-wide
 default with: mconfig set modules.default_kind knowledge
 
@@ -935,12 +955,15 @@ bundled ones, so local edits are preserved.
                 "mmodule create asyncio --kind knowledge --nature concept",
                 "mmodule create api --kind implementation --desc \"REST endpoints\"",
                 "mmodule create PLAN-v2-release --kind intent --nature plan",
+                "mmodule create asyncio --kind knowledge --draft   # seed document",
+                "mmodule grow asyncio       # append the remaining sections",
                 "mmodule graph              # Visualize connections",
             ],
             "options": [
                 ("list", "List all modules"),
                 ("tree", "Tree view of modules"),
                 ("create", "Create new module"),
+                ("grow", "Append the sections a draft does not have yet"),
                 ("graph", "Visualize connections"),
             ],
         },
@@ -989,6 +1012,23 @@ intent 모듈은 세 가지 방법으로만 끝납니다: 구현 모듈로 승�
 승격되거나, 폐기 사유를 남기고 아카이브됩니다. 그래서 헤더에 '다음 판정일'이
 의무이며, 그 날짜가 비어 있으면 그 모듈은 이미 표류 중입니다.
 
+처음부터 쓰기 시작할 때 (--draft / grow)
+-----------------------------------------
+전체 골격은 완성된 문서를 전제로 합니다. 내용이 하나도 없는 시점에 신뢰도와 경계와
+인용 결론부터 요구합니다. --draft 는 대신 40줄짜리 씨앗 문서를 씁니다. 그날 정직하게
+채울 수 있는 것만 담고, 문서 끝에 다음 채울 항목을 순서대로 적어 둡니다.
+분류는 그대로 유지됩니다. 초안은 다른 종류의 문서가 아니라 같은 문서의 이른 시점입니다.
+
+  mmodule create asyncio --kind knowledge --nature concept --draft
+  mmodule grow asyncio        # 씨앗이 좁아지면 나머지 절을 붙인다
+
+grow 는 문서에 없는 절만 덧붙이며, 판단 기준은 최상위 표제의 존재 여부입니다.
+이미 쓴 내용은 건드리지 않습니다. Kind 와 Nature 는 모듈 헤더에서 읽습니다.
+
+절 순서는 본문이 먼저입니다. 제목과 한 문장 목적, 그다음 본문, 그다음 결정과 의존성과
+인터페이스, 범위와 전제가 맨 끝입니다. 경계 항목은 읽는 쪽이 인용 직전에 확인하고
+쓰는 쪽이 작성 후에 정리하는 것이라, 어느 쪽에서도 맨 앞에 있을 이유가 없습니다.
+
 --kind 를 생략하면 기존 범용 템플릿이 생성됩니다. 프로젝트 기본값 설정:
   mconfig set modules.default_kind knowledge
 
@@ -1001,12 +1041,15 @@ intent 모듈은 세 가지 방법으로만 끝납니다: 구현 모듈로 승�
                 "mmodule create asyncio --kind knowledge --nature concept",
                 "mmodule create api --kind implementation --desc \"REST 엔드포인트\"",
                 "mmodule create PLAN-v2-release --kind intent --nature plan",
+                "mmodule create asyncio --kind knowledge --draft   # 씨앗 문서",
+                "mmodule grow asyncio       # 나머지 절 붙이기",
                 "mmodule graph              # 연결 시각화",
             ],
             "options": [
                 ("list", "모든 모듈 나열"),
                 ("tree", "모듈 트리 보기"),
                 ("create", "새 모듈 생성"),
+                ("grow", "초안에 없는 절을 덧붙이기"),
                 ("graph", "연결 시각화"),
             ],
         },

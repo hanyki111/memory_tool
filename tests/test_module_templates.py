@@ -16,6 +16,7 @@ from memory_tool.core.module_templates import (
     TemplateError,
     build_module_document,
     bundled_templates_root,
+    grow_module_document,
     load_template_parts,
     merge_template_dir,
     parse_single_file_template,
@@ -631,3 +632,226 @@ def test_merged_template_builds_the_same_document(tmp_path):
     from_single = build_module_document("a/b", "knowledge", "concept", memory_path=base)
 
     assert from_dir == from_single
+
+
+# ---------------------------------------------------------------------------
+# Ordering: content before boundary metadata
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("kind", KINDS)
+def test_content_comes_before_the_scope_section(kind):
+    """The body is read far more often than the boundary declarations.
+
+    Everything used to sit in one block above the body, which put the first
+    line of actual content past line 47 in every kind.
+    """
+    doc = build_module_document(name="m", kind=kind)
+    lines = doc.split("\n")
+
+    first_body = next(i for i, line in enumerate(lines) if line.startswith("## 1."))
+    scope = next(i for i, line in enumerate(lines) if line == "# 범위와 전제")
+
+    assert first_body < scope
+    assert first_body < 30, f"body starts on line {first_body + 1}"
+
+
+@pytest.mark.parametrize("kind", KINDS)
+def test_scope_section_carries_the_boundary_fields(kind):
+    doc = build_module_document(name="m", kind=kind)
+
+    assert "# 범위와 전제" in doc
+    assert "## 책임과 범위 (Single Responsibility Principle 적용)" in doc
+
+
+def test_scope_is_the_last_section():
+    doc = build_module_document(name="m", kind="knowledge", nature="concept")
+    headings = [line for line in doc.split("\n") if line.startswith("# ")]
+
+    assert headings[-1] == "# 범위와 전제"
+
+
+# ---------------------------------------------------------------------------
+# Draft seeds
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("kind", KINDS)
+def test_every_kind_has_a_draft_seed(kind):
+    doc = build_module_document(name="m", kind=kind, draft=True)
+
+    assert "**Kind:**" in doc
+    assert "mmodule grow" in doc, "the seed must say how to grow"
+
+
+@pytest.mark.parametrize("kind", KINDS)
+def test_draft_is_far_shorter_than_the_skeleton(kind):
+    draft = build_module_document(name="m", kind=kind, draft=True)
+    full = build_module_document(name="m", kind=kind)
+
+    assert len(draft.split("\n")) < len(full.split("\n")) / 3
+
+
+@pytest.mark.parametrize("kind", KINDS)
+def test_draft_keeps_the_classification(kind):
+    """A draft is the same kind of module earlier, not a different kind."""
+    doc = build_module_document(name="m", kind=kind, draft=True)
+
+    assert f"**Kind:** {kind}" in doc
+
+
+def test_draft_collapses_the_nature_options():
+    doc = build_module_document(name="m", kind="intent", nature="idea", draft=True)
+
+    assert "**Kind:** intent | **Nature:** idea" in doc
+    assert "inquiry | plan" not in doc
+
+
+def test_draft_has_no_body_outline():
+    """Drafts precede the Nature outline; that arrives with grow.
+
+    The ladder names "핵심 비유" as a rung to write later, so the outline is
+    recognized by its numbered headings rather than by that phrase.
+    """
+    doc = build_module_document(name="m", kind="knowledge", nature="concept", draft=True)
+
+    assert "### 2." not in doc
+
+
+@pytest.mark.parametrize("kind", KINDS)
+def test_description_reaches_the_draft(kind):
+    """--desc alongside --draft used to be accepted and silently dropped."""
+    doc = build_module_document(name="m", kind=kind, description="설명 문장", draft=True)
+    lines = doc.split("\n")
+
+    assert "설명 문장" in doc
+    # under the first section, not appended at the end of the file
+    assert lines.index("설명 문장") < len(lines) / 2
+
+
+def test_draft_from_a_template_without_one_is_an_error(tmp_path):
+    base = make_base(tmp_path)
+    templates = base / "templates"
+    templates.mkdir(parents=True, exist_ok=True)
+    (templates / "knowledge.md").write_text(
+        "<!-- part: module -->\n\n# T\n\n<!-- part: current -->\n\n# C\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(TemplateError, match="--draft has nothing to emit"):
+        build_module_document(name="m", kind="knowledge", draft=True, memory_path=base)
+
+
+# ---------------------------------------------------------------------------
+# Growing a draft into the skeleton
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("kind", KINDS)
+def test_grow_appends_the_missing_sections(kind):
+    draft = build_module_document(name="m", kind=kind, draft=True)
+    grown, added = grow_module_document(draft, name="m", kind=kind)
+
+    assert "current" in added
+    assert "scope" in added
+    assert len(grown) > len(draft)
+
+
+def test_grow_preserves_what_was_written():
+    draft = build_module_document(name="m", kind="knowledge", draft=True)
+    written = draft.rstrip("\n") + "\n\n손으로 쓴 내용\n"
+
+    grown, _ = grow_module_document(written, name="m", kind="knowledge")
+
+    assert "손으로 쓴 내용" in grown
+    assert grown.startswith(draft.split("\n")[0])
+
+
+def test_grow_skips_the_header_the_draft_already_has():
+    """The seed and the module part share a title, so it is not duplicated."""
+    draft = build_module_document(name="m", kind="knowledge", draft=True)
+    grown, added = grow_module_document(draft, name="m", kind="knowledge")
+
+    assert "module" not in added
+    assert len([line for line in grown.split("\n") if line == "# m"]) == 1
+
+
+def test_grow_splices_the_nature_outline():
+    draft = build_module_document(name="m", kind="knowledge", nature="concept", draft=True)
+    grown, _ = grow_module_document(draft, name="m", kind="knowledge", nature="concept")
+
+    assert "핵심 비유" in grown
+
+
+def test_grow_is_idempotent():
+    full = build_module_document(name="m", kind="intent", nature="plan")
+    grown, added = grow_module_document(full, name="m", kind="intent", nature="plan")
+
+    assert added == []
+    assert grown == full
+
+
+def test_grow_ignores_headings_inside_fenced_blocks():
+    """A quoted markdown example must not count as a section the doc has."""
+    draft = build_module_document(name="m", kind="implementation", draft=True)
+    faked = draft + "\n```markdown\n# Interface\n```\n"
+
+    _, added = grow_module_document(faked, name="m", kind="implementation")
+
+    assert "interface" in added
+
+
+# ---------------------------------------------------------------------------
+# ModuleManager: draft and grow
+# ---------------------------------------------------------------------------
+
+
+def test_create_draft_writes_the_seed(tmp_path):
+    make_base(tmp_path)
+    manager = ModuleManager(tmp_path)
+
+    path = manager.create("asyncio", kind="knowledge", nature="concept", draft=True)
+    content = path.read_text(encoding="utf-8")
+
+    assert "**Stage:** 초안" in content
+    assert "### 2." not in content
+
+
+def test_create_draft_without_a_kind_is_refused(tmp_path):
+    make_base(tmp_path)
+    manager = ModuleManager(tmp_path)
+
+    with pytest.raises(ModuleError, match="--draft needs a kind"):
+        manager.create("m", draft=True)
+
+
+def test_grow_reads_the_kind_from_the_module_header(tmp_path):
+    make_base(tmp_path)
+    manager = ModuleManager(tmp_path)
+    manager.create("asyncio", kind="knowledge", nature="concept", draft=True)
+
+    path, added = manager.grow("asyncio")
+
+    assert added
+    assert "핵심 비유" in path.read_text(encoding="utf-8")
+
+
+def test_grow_on_a_module_without_a_kind_is_refused(tmp_path):
+    make_base(tmp_path)
+    manager = ModuleManager(tmp_path)
+    manager.create("legacy")
+
+    with pytest.raises(ModuleError, match="has no"):
+        manager.grow("legacy")
+
+
+def test_nested_module_resolves_with_forward_slashes(tmp_path):
+    """Discovery yields Path objects; str() on Windows uses a backslash."""
+    make_base(tmp_path)
+    manager = ModuleManager(tmp_path)
+    manager.create("게임 분석/전투 공식", kind="knowledge")
+
+    assert manager.find_module_by_name("게임 분석/전투 공식", exact=True) == [
+        "게임 분석/전투 공식"
+    ]
+    assert manager.list_modules()["active"] == ["게임 분석/전투 공식"]

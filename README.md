@@ -212,6 +212,48 @@ MEMORY_TOOL_BASE=memory              # 기반 폴더 이름 또는 절대 경로
 **승격**되거나, 폐기 사유를 남기고 **아카이브**됩니다. 그래서 헤더의 `다음 판정일`이
 의무이고, 그 날짜가 비어 있으면 그 모듈은 이미 표류하는 중입니다.
 
+### 문서 순서
+
+세 Kind 모두 같은 순서를 씁니다. **본문이 먼저이고 경계 선언이 나중입니다.**
+
+```
+헤더        제목, Kind/Nature, 한 문장 목적          ← 10줄 남짓
+Current     핵심 → 본문 → 열린 질문 → 종합           ← 실제 내용
+Decisions   왜 그렇게 했는가
+Dependencies 무엇과 연결되는가
+Interface   다른 모듈이 인용할 수 있는 것
+범위와 전제  책임, 포함·제외, 적용 전제, 신뢰도 근거   ← 문서 끝
+```
+
+`범위와 전제`를 끝에 두는 이유는, 읽는 쪽은 인용 직전에 확인하고 쓰는 쪽은 본문을 채운
+뒤에 정리하는 항목이기 때문입니다. 본문보다 먼저 요구하면 작성이 그 자리에서 막힙니다.
+
+### 초안 모드 (`--draft`)
+
+전체 골격은 완성된 문서를 전제로 합니다. 처음 쓰는 시점에는 신뢰도도 경계도 인용 결론도
+아직 없으므로, `--draft` 는 **그날 정직하게 채울 수 있는 것만** 담은 씨앗 문서를 만듭니다.
+
+| | 전체 골격 | 초안 |
+|---|---|---|
+| 분량 | 210~260줄 | 38~41줄 |
+| knowledge | 핵심·본문·열린 질문·종합·인용 결론 | 지금 아는 것 · 모르는 것 · 출처 |
+| intent | 요약·본문·확정 경계·Red Team·종결 | 하려는 것 · 왜 · 정해야 할 것 |
+| implementation | 개요·구조·부채·검증·API | 무엇을 하는가 · Related Files · 다음 할 일 |
+
+초안은 Kind 와 Nature 를 그대로 가집니다. **초안은 다른 종류의 문서가 아니라 같은 문서의
+이른 시점**이기 때문입니다. 문서 끝에는 다음에 채울 항목이 순서대로 적혀 있습니다.
+
+### 초안을 키우기 (`mmodule grow`)
+
+```bash
+mmodule grow "게임 분석/전투 공식"
+# OK Added 5 section(s): current, decisions, dependencies, interface, scope
+```
+
+이미 쓴 내용은 건드리지 않습니다. 문서에 없는 절만 뒤에 덧붙이며, 판단 기준은 최상위
+표제(`# ...`)의 존재 여부입니다. 전체 골격을 이미 갖춘 문서에 실행하면 아무것도 쓰지
+않습니다. Kind 와 Nature 는 문서 헤더에서 읽으므로 다시 지정할 필요가 없습니다.
+
 ### 사용
 
 ```bash
@@ -219,6 +261,10 @@ mmodule create "asyncio" --kind knowledge --nature concept
 mmodule create "게임 분석/니케/전투 공식" --kind knowledge --nature reference
 mmodule create "api-server" --kind implementation --desc "REST 엔드포인트"
 mmodule create "PLAN-v2-release" --kind intent --nature plan
+
+# 처음부터 쓰기 시작할 때는 초안으로
+mmodule create "asyncio" --kind knowledge --nature concept --draft
+mmodule grow "asyncio"                             # 나중에 전체 골격으로
 
 # Nature 이름은 겹치지 않으므로 --kind 를 생략해도 됩니다
 mmodule create "검색 UX 개선안" --nature idea      # → intent / idea
@@ -238,14 +284,16 @@ mconfig set modules.default_kind knowledge
 ```
 <기반폴더>/templates/
 ├── knowledge/
-│   ├── module.md       (필수)
-│   ├── current.md      (필수)
-│   ├── natures.md      성격별 §2 본문 5종
+│   ├── module.md       (필수) 제목과 분류, 한 문장 목적
+│   ├── current.md      (필수) 본문
 │   ├── decisions.md
 │   ├── dependencies.md
-│   └── interface.md
+│   ├── interface.md
+│   ├── scope.md        범위와 전제 (문서 끝)
+│   ├── natures.md      성격별 §2 본문 5종 (메뉴, 그대로 출력되지 않음)
+│   └── draft.md        --draft 가 내보내는 씨앗 문서
 ├── implementation/
-│   └── ...
+│   └── ...             natures.md 없음
 └── intent/
     └── ...             natures.md 는 3종 (idea / inquiry / plan)
 ```
