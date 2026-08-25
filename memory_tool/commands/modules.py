@@ -858,6 +858,12 @@ def module(
             console.print("  graph-history, graph-diff, from-text")
             sys.exit(1)
 
+    # typer.Exit is how a helper reports a handled failure it has already
+    # explained. Letting it fall through to the catch-all appended a bare
+    # "Unexpected error: 1" right after that explanation.
+    except typer.Exit:
+        raise
+
     except ModuleError as e:
         console.print(f"[red]ERROR[/red] {e}")
         sys.exit(1)

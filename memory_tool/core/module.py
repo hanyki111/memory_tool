@@ -353,7 +353,11 @@ TODO: Document key data structures
 
         doc = self.resolve_module_doc(name)
         if doc is None:
-            raise ModuleError(f"Module not found: {name}")
+            hint = self.diagnose_missing(name)
+            message = f"Module not found: {name}"
+            if hint:
+                message += "\n" + hint
+            raise ModuleError(message)
 
         found = self.read_classification(name)
         resolved_kind = kind or found["kind"]
@@ -494,6 +498,51 @@ TODO: Document key data structures
                     matches.append(module_str)
 
         return matches
+
+    def diagnose_missing(self, name: str) -> Optional[str]:
+        """Explain a failed lookup when the reason is guessable, else None.
+
+        One mistake accounts for most of them, and it is invisible from the
+        error alone: a module document must be named after its own folder.
+        `modules/asyncio/초안.md` is not the module "asyncio" -- discovery reads
+        it as a separate module called "asyncio/초안" -- so the name the author
+        meant reports as missing while the file sits right there.
+
+        This matters most for documents written by hand, which is the only way
+        to start a module on mobile: the CLI cannot run there, so the file is
+        created from a template and named by whoever typed it.
+
+        Args:
+            name: The module name that did not resolve
+
+        Returns:
+            A sentence naming the likely cause and its fix, or None when there
+            is nothing specific to say.
+        """
+        # Only failed lookups get a diagnosis. Without this the message fires on
+        # a perfectly good module and reports its own document as missing.
+        if self.resolve_module_doc(name) is not None:
+            return None
+
+        folder = self.modules_path / name
+        if not folder.is_dir():
+            return None
+
+        expected = f"{Path(name).name}.md"
+        docs = sorted(p.name for p in folder.glob("*.md"))
+
+        if not docs:
+            return (
+                f"The folder for '{name}' exists but holds no markdown document. "
+                f"A module's document is named after its folder: {expected}."
+            )
+
+        return (
+            f"The folder for '{name}' exists but has no {expected} in it. "
+            f"A module's document is named after its folder, so what is there "
+            f"({', '.join(docs)}) reads as separate modules under '{name}/'. "
+            f"Renaming one of them to {expected} makes '{name}' resolve."
+        )
 
     def list_modules(self, include_archived: bool = False) -> Dict[str, List[str]]:
         """List all modules."""

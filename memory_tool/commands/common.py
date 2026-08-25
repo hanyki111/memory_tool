@@ -347,6 +347,13 @@ def resolve_module_name(module_name: str) -> str:
 
     if len(matches) == 0:
         console.print(f"[red]ERROR[/red] Module not found: {module_name}")
+
+        # The usual cause is a document not named after its folder, which the
+        # bare "not found" hides completely: the file is right there.
+        hint = manager.diagnose_missing(module_name)
+        if hint:
+            console.print(f"[yellow]{hint}[/yellow]")
+
         console.print("[dim]Use 'python -m memory_tool module list' to see all modules[/dim]")
         raise typer.Exit(1)
     elif len(matches) == 1:

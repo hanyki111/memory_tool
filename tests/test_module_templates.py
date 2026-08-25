@@ -855,3 +855,111 @@ def test_nested_module_resolves_with_forward_slashes(tmp_path):
         "게임 분석/전투 공식"
     ]
     assert manager.list_modules()["active"] == ["게임 분석/전투 공식"]
+
+
+# ---------------------------------------------------------------------------
+# Diagnosing a failed lookup
+# ---------------------------------------------------------------------------
+
+
+def write_by_hand(base, folder, filename, body="# x\n\n**Kind:** knowledge\n"):
+    """Create a module document the way a template on a phone would.
+
+    The CLI cannot run on mobile, so a module started there is a file someone
+    typed a name for -- which is exactly where the naming rule gets broken.
+    """
+    target = base / "modules" / folder
+    target.mkdir(parents=True, exist_ok=True)
+    (target / filename).write_text(body, encoding="utf-8")
+    return target / filename
+
+
+def test_a_document_not_named_after_its_folder_is_diagnosed(tmp_path):
+    base = make_base(tmp_path)
+    write_by_hand(base, "asyncio", "초안.md")
+    manager = ModuleManager(tmp_path)
+
+    hint = manager.diagnose_missing("asyncio")
+
+    assert hint is not None
+    assert "asyncio.md" in hint
+    assert "초안.md" in hint
+
+
+def test_an_empty_folder_is_diagnosed(tmp_path):
+    base = make_base(tmp_path)
+    (base / "modules" / "asyncio").mkdir(parents=True)
+    manager = ModuleManager(tmp_path)
+
+    hint = manager.diagnose_missing("asyncio")
+
+    assert hint is not None
+    assert "no markdown document" in hint
+
+
+def test_a_name_with_no_folder_has_no_diagnosis(tmp_path):
+    """Nothing specific to say, so say nothing rather than guess."""
+    make_base(tmp_path)
+    manager = ModuleManager(tmp_path)
+
+    assert manager.diagnose_missing("nonexistent") is None
+
+
+def test_a_module_that_resolves_is_not_diagnosed(tmp_path):
+    make_base(tmp_path)
+    manager = ModuleManager(tmp_path)
+    manager.create("asyncio", kind="knowledge")
+
+    assert manager.diagnose_missing("asyncio") is None
+
+
+def test_grow_carries_the_diagnosis_into_its_error(tmp_path):
+    base = make_base(tmp_path)
+    write_by_hand(base, "asyncio", "초안.md")
+    manager = ModuleManager(tmp_path)
+
+    with pytest.raises(ModuleError, match="named after its folder"):
+        manager.grow("asyncio")
+
+
+def test_a_hand_written_draft_grows(tmp_path):
+    """The mobile route: write the seed by hand, grow it on the desktop."""
+    base = make_base(tmp_path)
+    seed = (
+        "# asyncio\n\n"
+        "**Kind:** knowledge | **Nature:** concept\n"
+        "**Stage:** 초안\n\n"
+        "## 지금 아는 것\n\n"
+        "이벤트 루프 하나가 코루틴을 번갈아 돌린다.\n"
+    )
+    write_by_hand(base, "asyncio", "asyncio.md", seed)
+    manager = ModuleManager(tmp_path)
+
+    path, added = manager.grow("asyncio")
+    grown = path.read_text(encoding="utf-8")
+
+    assert "current" in added and "scope" in added
+    # the nature came from the header, so the outline is spliced in
+    assert "핵심 비유" in grown
+    # and nothing hand-written was touched
+    assert "이벤트 루프 하나가" in grown
+    # the title matched the module part, so there is exactly one
+    assert len([l for l in grown.split("\n") if l == "# asyncio"]) == 1
+
+
+def test_an_unfilled_title_placeholder_leaves_two_titles(tmp_path):
+    """Known wart, pinned so it does not change silently.
+
+    A seed whose [모듈명] was never replaced still grows and keeps its content,
+    but the module part no longer matches by heading and gets appended too.
+    """
+    base = make_base(tmp_path)
+    write_by_hand(base, "asyncio", "asyncio.md", "# [모듈명]\n\n**Kind:** knowledge\n\n내용\n")
+    manager = ModuleManager(tmp_path)
+
+    path, added = manager.grow("asyncio")
+    grown = path.read_text(encoding="utf-8")
+
+    assert "module" in added
+    assert "내용" in grown
+    assert "# [모듈명]" in grown and "# asyncio" in grown
