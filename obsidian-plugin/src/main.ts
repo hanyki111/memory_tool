@@ -162,7 +162,7 @@ export default class MemoryToolPlugin extends Plugin implements PanelHost {
     // than its absence.
     if (this.cli.isAvailable()) {
       this.registerCliCommands();
-      this.registerFolderMenu();
+      this.registerContextMenu();
     }
 
     this.addSettingTab(new MemoryToolSettingTab(this.app, this));
@@ -174,35 +174,50 @@ export default class MemoryToolPlugin extends Plugin implements PanelHost {
   }
 
   /**
-   * "여기에 모듈 생성" on a folder inside the modules tree.
+   * Context-menu entries in the file explorer.
    *
-   * Typing the parent path by hand is the part of module creation that is both
-   * tedious and easy to get wrong, and the file explorer already knows it.
-   * Folders outside `<base>/modules` get no entry: modules cannot live there,
-   * so offering it would only produce an error later.
+   * A folder inside the modules tree offers "여기에 모듈 생성": typing the
+   * parent path by hand is the tedious, error-prone half of module creation,
+   * and the explorer already knows that path. A module document offers to grow
+   * itself, which is the same action the command runs, reachable without
+   * opening the note first.
+   *
+   * Anything outside `<base>/modules` gets no entry at all -- modules cannot
+   * live there, so offering one would only produce an error later.
    */
-  private registerFolderMenu(): void {
+  private registerContextMenu(): void {
     this.registerEvent(
       this.app.workspace.on("file-menu", (menu, file) => {
         // A folder has children; a note does not. Checking for the property
         // avoids importing TFolder just for an instanceof.
-        if (!("children" in file)) return;
+        if ("children" in file) {
+          const prefix = modulePrefixFromFolder(this.basePrefix, file.path);
+          if (prefix === null) return;
 
-        const prefix = modulePrefixFromFolder(this.basePrefix, file.path);
-        if (prefix === null) return;
+          menu.addItem((item) => {
+            item
+              .setTitle("여기에 모듈 생성")
+              .setIcon("folder-plus")
+              .onClick(() => {
+                new CreateModuleModal(
+                  this.app,
+                  this.cli,
+                  () => this.basePrefix,
+                  prefix
+                ).open();
+              });
+          });
+          return;
+        }
+
+        const name = moduleNameFromPath(this.basePrefix, file.path);
+        if (name === null) return;
 
         menu.addItem((item) => {
           item
-            .setTitle("여기에 모듈 생성")
-            .setIcon("folder-plus")
-            .onClick(() => {
-              new CreateModuleModal(
-                this.app,
-                this.cli,
-                () => this.basePrefix,
-                prefix
-              ).open();
-            });
+            .setTitle("모듈 한 단계 키우기")
+            .setIcon("sprout")
+            .onClick(() => void this.growModule(name));
         });
       })
     );
@@ -221,28 +236,7 @@ export default class MemoryToolPlugin extends Plugin implements PanelHost {
     this.addCommand({
       id: "grow-module",
       name: "모듈 한 단계 키우기 (mmodule grow)",
-      callback: () => {
-        // The moment a seed feels too small is the moment you are looking at
-        // it, so the open document is the default target and picking from a
-        // list is only the fallback.
-        const open = this.app.workspace.getActiveFile();
-        const name = open
-          ? moduleNameFromPath(this.basePrefix, open.path)
-          : null;
-
-        if (name) {
-          void this.growModule(name);
-          return;
-        }
-
-        new Notice("열린 문서가 모듈이 아닙니다. 목록에서 고르세요.");
-        new ModuleSuggestModal(
-          this.app,
-          () => this.listModules(),
-          () => this.basePrefix,
-          (chosen) => void this.growModule(chosen)
-        ).open();
-      },
+      callback: () => this.growFromContext(),
     });
 
     this.addCommand({
@@ -414,6 +408,32 @@ export default class MemoryToolPlugin extends Plugin implements PanelHost {
    * without Python. It is the fallback rather than the default because the CLI
    * remains the definition of what counts as a module.
    */
+  /**
+   * Grow whichever module the user is looking at.
+   *
+   * The moment a seed feels too small is the moment you are looking at it, so
+   * the open document is the default target and the picker is only the
+   * fallback. Shared by the command palette, the panel button and the file
+   * menu, so all three behave the same way.
+   */
+  growFromContext(): void {
+    const open = this.app.workspace.getActiveFile();
+    const name = open ? moduleNameFromPath(this.basePrefix, open.path) : null;
+
+    if (name) {
+      void this.growModule(name);
+      return;
+    }
+
+    new Notice("열린 문서가 모듈이 아닙니다. 목록에서 고르세요.");
+    new ModuleSuggestModal(
+      this.app,
+      () => this.listModules(),
+      () => this.basePrefix,
+      (chosen) => void this.growModule(chosen)
+    ).open();
+  }
+
   /**
    * Append the skeleton sections a module does not have yet.
    *

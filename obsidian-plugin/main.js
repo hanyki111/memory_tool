@@ -1263,6 +1263,9 @@ var MemoryPanelView = class extends import_obsidian6.ItemView {
       const res = await this.host.cli.checkHealth();
       new import_obsidian6.Notice(res || "\uC810\uAC80 \uC644\uB8CC.");
     });
+    this.actionButton(body, "\uBAA8\uB4C8 \uD55C \uB2E8\uACC4 \uD0A4\uC6B0\uAE30 (mmodule grow)", async () => {
+      this.host.growFromContext();
+    });
     this.actionButton(body, "\uAC80\uC0C9 \uC778\uB371\uC2A4 \uB3D9\uAE30\uD654", async () => {
       const pending = this.host.pendingIndexCount();
       await this.host.syncIndex();
@@ -1554,7 +1557,7 @@ var MemoryToolPlugin = class extends import_obsidian8.Plugin {
     });
     if (this.cli.isAvailable()) {
       this.registerCliCommands();
-      this.registerFolderMenu();
+      this.registerContextMenu();
     }
     this.addSettingTab(new MemoryToolSettingTab(this.app, this));
     if (this.settings.pendingIndex > 0 && this.cli.isAvailable()) {
@@ -1563,30 +1566,41 @@ var MemoryToolPlugin = class extends import_obsidian8.Plugin {
     }
   }
   /**
-   * "여기에 모듈 생성" on a folder inside the modules tree.
+   * Context-menu entries in the file explorer.
    *
-   * Typing the parent path by hand is the part of module creation that is both
-   * tedious and easy to get wrong, and the file explorer already knows it.
-   * Folders outside `<base>/modules` get no entry: modules cannot live there,
-   * so offering it would only produce an error later.
+   * A folder inside the modules tree offers "여기에 모듈 생성": typing the
+   * parent path by hand is the tedious, error-prone half of module creation,
+   * and the explorer already knows that path. A module document offers to grow
+   * itself, which is the same action the command runs, reachable without
+   * opening the note first.
+   *
+   * Anything outside `<base>/modules` gets no entry at all -- modules cannot
+   * live there, so offering one would only produce an error later.
    */
-  registerFolderMenu() {
+  registerContextMenu() {
     this.registerEvent(
       this.app.workspace.on("file-menu", (menu, file) => {
-        if (!("children" in file))
+        if ("children" in file) {
+          const prefix = modulePrefixFromFolder(this.basePrefix, file.path);
+          if (prefix === null)
+            return;
+          menu.addItem((item) => {
+            item.setTitle("\uC5EC\uAE30\uC5D0 \uBAA8\uB4C8 \uC0DD\uC131").setIcon("folder-plus").onClick(() => {
+              new CreateModuleModal(
+                this.app,
+                this.cli,
+                () => this.basePrefix,
+                prefix
+              ).open();
+            });
+          });
           return;
-        const prefix = modulePrefixFromFolder(this.basePrefix, file.path);
-        if (prefix === null)
+        }
+        const name = moduleNameFromPath(this.basePrefix, file.path);
+        if (name === null)
           return;
         menu.addItem((item) => {
-          item.setTitle("\uC5EC\uAE30\uC5D0 \uBAA8\uB4C8 \uC0DD\uC131").setIcon("folder-plus").onClick(() => {
-            new CreateModuleModal(
-              this.app,
-              this.cli,
-              () => this.basePrefix,
-              prefix
-            ).open();
-          });
+          item.setTitle("\uBAA8\uB4C8 \uD55C \uB2E8\uACC4 \uD0A4\uC6B0\uAE30").setIcon("sprout").onClick(() => void this.growModule(name));
         });
       })
     );
@@ -1603,21 +1617,7 @@ var MemoryToolPlugin = class extends import_obsidian8.Plugin {
     this.addCommand({
       id: "grow-module",
       name: "\uBAA8\uB4C8 \uD55C \uB2E8\uACC4 \uD0A4\uC6B0\uAE30 (mmodule grow)",
-      callback: () => {
-        const open = this.app.workspace.getActiveFile();
-        const name = open ? moduleNameFromPath(this.basePrefix, open.path) : null;
-        if (name) {
-          void this.growModule(name);
-          return;
-        }
-        new import_obsidian8.Notice("\uC5F4\uB9B0 \uBB38\uC11C\uAC00 \uBAA8\uB4C8\uC774 \uC544\uB2D9\uB2C8\uB2E4. \uBAA9\uB85D\uC5D0\uC11C \uACE0\uB974\uC138\uC694.");
-        new ModuleSuggestModal(
-          this.app,
-          () => this.listModules(),
-          () => this.basePrefix,
-          (chosen) => void this.growModule(chosen)
-        ).open();
-      }
+      callback: () => this.growFromContext()
     });
     this.addCommand({
       id: "build-context",
@@ -1762,6 +1762,29 @@ var MemoryToolPlugin = class extends import_obsidian8.Plugin {
    * without Python. It is the fallback rather than the default because the CLI
    * remains the definition of what counts as a module.
    */
+  /**
+   * Grow whichever module the user is looking at.
+   *
+   * The moment a seed feels too small is the moment you are looking at it, so
+   * the open document is the default target and the picker is only the
+   * fallback. Shared by the command palette, the panel button and the file
+   * menu, so all three behave the same way.
+   */
+  growFromContext() {
+    const open = this.app.workspace.getActiveFile();
+    const name = open ? moduleNameFromPath(this.basePrefix, open.path) : null;
+    if (name) {
+      void this.growModule(name);
+      return;
+    }
+    new import_obsidian8.Notice("\uC5F4\uB9B0 \uBB38\uC11C\uAC00 \uBAA8\uB4C8\uC774 \uC544\uB2D9\uB2C8\uB2E4. \uBAA9\uB85D\uC5D0\uC11C \uACE0\uB974\uC138\uC694.");
+    new ModuleSuggestModal(
+      this.app,
+      () => this.listModules(),
+      () => this.basePrefix,
+      (chosen) => void this.growModule(chosen)
+    ).open();
+  }
   /**
    * Append the skeleton sections a module does not have yet.
    *

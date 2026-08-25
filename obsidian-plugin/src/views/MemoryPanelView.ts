@@ -36,6 +36,11 @@ export interface PanelHost {
   pendingIndexCount(): number;
   /** Reconcile the search index with directly-written entries. */
   syncIndex(): Promise<void>;
+  /**
+   * Advance the module the user is looking at by one growth level, falling
+   * back to a picker when the open document is not a module.
+   */
+  growFromContext(): void;
 }
 
 export class MemoryPanelView extends ItemView {
@@ -414,6 +419,13 @@ export class MemoryPanelView extends ItemView {
       new Notice("경로 점검 중...");
       const res = await this.host.cli.checkHealth();
       new Notice(res || "점검 완료.");
+    });
+
+    // Placed with the tools rather than beside each search result: growing is
+    // something you do to the note in front of you, not something you pick a
+    // target for. The host falls back to a picker when nothing suitable is open.
+    this.actionButton(body, "모듈 한 단계 키우기 (mmodule grow)", async () => {
+      this.host.growFromContext();
     });
 
     this.actionButton(body, "검색 인덱스 동기화", async () => {
