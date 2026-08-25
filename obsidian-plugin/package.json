@@ -1,6 +1,6 @@
 {
   "name": "obsidian-memory-tool",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Obsidian integration plugin for memory_tool (Timeline Capture, Single-file Modules, AI Context Builder)",
   "main": "main.js",
   "scripts": {
