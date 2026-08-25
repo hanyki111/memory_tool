@@ -8,7 +8,7 @@
 # Module: [경로]
 
 **Kind:** implementation | **Role:** leaf | root
-**Status:** planning | dev | stable | frozen
+**Status:** planning | dev | stable | frozen | **Level:** 5/5 (완성)
 **Created:** YYYY-MM-DD | **Updated:** YYYY-MM-DD
 **Tags:**
 
@@ -248,7 +248,7 @@
 # Module: [경로]
 
 **Kind:** implementation | **Role:** leaf | root
-**Stage:** 초안 | **Status:** planning | dev
+**Level:** 1/5 (씨앗) | **Status:** planning | dev
 **Created:** YYYY-MM-DD | **Updated:** YYYY-MM-DD
 **Tags:**
 
@@ -260,28 +260,22 @@
 <!-- 세 줄. 코드를 읽으면 바로 아는 것은 쓰지 않는다.
      여기 담을 것은 코드에 없는 것, 즉 왜 이렇게 만들었는가다. -->
 
-## 📂 Related Files
-
-<!-- 초안 단계에서도 이것만은 채운다. 코드로 가는 유일한 다리이기 때문이다.
-     경로가 없으면 이 문서는 코드와 끊어진 채 낡는다. mcheck의 검증 대상이다. -->
-
-| 경로 | 역할 |
-| :--- | :--- |
-| `src/...` | |
-
 ## 다음 할 일
 
 - [ ] 
 
 ---
 
-<!-- ▼ 다음에 채울 것. 위에서부터 하나씩, 필요해진 것만 더한다.
-     전체 골격이 필요해지면: mmodule grow "[경로]"
+<!-- ▼ 이 문서는 지금 1단계다. 한 단계씩 자란다:  mmodule grow "[경로]"
 
-     1. 검증 한 줄     — 테스트 명령이나 수동 재현 절차.
-                         없으면 "동작하는가"라는 이 Kind의 질문에 답할 수 없다
-     2. 버린 선택지    — 무엇을 시도했다 버렸는가. 코드에 남지 않는 유일한 정보다
-     3. 기술 부채      — 알면서 남긴 것. 모르고 생긴 것과 구분해 적는다
-     4. 다루지 않는 것 — 어느 모듈로 위임하는가
-     5. 전체 골격      — mmodule grow 로 나머지 절을 붙인다
--->
+     2 정체  기준 커밋 + 개요 3줄
+             → 이게 무엇이고 언제를 기준으로 한 요약인가
+     3 뼈대  구조 + Related Files (코드로 가는 다리)
+             → 어느 코드를 보면 되는가
+     4 결론  상태 · 할 일 · 기술 부채 · 검증 절차
+             → 지금 어디까지 됐고 무엇으로 확인하는가
+     5 완성  결정 · 의존성 · Public API · 범위와 전제
+             → 다른 모듈이 가져다 쓸 수 있다
+
+     한 번에 끝까지 가려면 mmodule grow "[경로]" --all
+     지금 단계에서 멈춰도 된다. 필요해질 때 다음 칸을 부른다. -->

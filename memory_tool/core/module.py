@@ -326,25 +326,28 @@ TODO: Document key data structures
         name: str,
         kind: Optional[str] = None,
         nature: Optional[str] = None,
+        to_level: Optional[int] = None,
     ) -> tuple:
-        """Append the skeleton sections a module does not have yet.
+        """Advance a module one rung up the growth ladder.
 
-        The second half of the draft workflow: a seed grows into the full
-        document without the author copying sections out of the template. What
-        is already written is left exactly as it is.
+        The second half of the draft workflow: a seed thickens toward the full
+        document one step at a time, at the pace the thinking does. What is
+        already written is left exactly as it is.
 
         Args:
             name: Module name or path
             kind: Override the kind in the module's header
             nature: Override the nature in the module's header
+            to_level: Stop at this rung instead of the next one. Pass MAX_LEVEL
+                for the whole skeleton in one call.
 
         Returns:
-            (path, list of part names appended). The list is empty when the
-            module already has every section.
+            (path, parts appended, level before, level after). The parts list is
+            empty when there was nothing to add.
 
         Raises:
-            ModuleError: If the module is missing, carries no kind, or the
-                templates cannot be loaded.
+            ModuleError: If the module is missing, carries no kind, the level is
+                out of range, or the templates cannot be loaded.
         """
         from memory_tool.core.module_templates import (
             TemplateError,
@@ -372,12 +375,13 @@ TODO: Document key data structures
         existing = doc.read_text(encoding="utf-8")
 
         try:
-            grown, added = grow_module_document(
+            grown, added, before, after = grow_module_document(
                 existing,
                 name=name,
                 kind=resolved_kind,
                 nature=resolved_nature,
                 memory_path=self.memory_path,
+                to_level=to_level,
             )
         except TemplateError as e:
             raise ModuleError(str(e)) from e
@@ -388,7 +392,7 @@ TODO: Document key data structures
             except Exception as e:
                 raise ModuleError(f"Failed to write module file: {e}")
 
-        return doc, added
+        return doc, added, before, after
 
     def _create_from_template(
         self,

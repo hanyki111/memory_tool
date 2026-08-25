@@ -151,6 +151,116 @@ DRAFT_PART = "draft"
 #: Every part a template file may define.
 ALL_PARTS = (*ASSEMBLY_ORDER, NATURES_PART, DRAFT_PART)
 
+
+@dataclass(frozen=True)
+class GrowthLevel:
+    """One rung of the ladder from seed to finished document."""
+
+    number: int
+    key: str
+    #: Korean label, used in the header field and in command output.
+    label: str
+    #: What the document can answer once this rung exists.
+    answers: str
+    #: Whole parts this rung adds. Naming "current" here adds its header only;
+    #: its numbered sections are spread across rungs by CURRENT_SECTIONS.
+    parts: Tuple[str, ...] = ()
+
+
+#: The ladder. A module is not written in one sitting, so `grow` advances one
+#: rung at a time rather than emitting the whole skeleton at once: a document
+#: that jumps straight to 250 lines of empty headings is the same problem the
+#: draft mode was added to solve, just deferred by a step.
+#:
+#: Four of the five rungs move inside `module` and `current`, because that is
+#: where a module's substance lives; decisions, dependencies, interface and
+#: scope are reference scaffolding and arrive together at the end. An earlier
+#: cut spent two rungs on that scaffolding and squeezed the body into one,
+#: which had the priorities backwards.
+#:
+#: The steps are close together early and coarse late on purpose. A document is
+#: abandoned near the beginning, so the second rung has to be cheap; by the
+#: fourth there is something worth finishing, and the scaffolding arriving all
+#: at once reads as tidying rather than as a wall.
+GROWTH_LEVELS: Tuple[GrowthLevel, ...] = (
+    GrowthLevel(1, "seed", "씨앗", "지금 아는 것과 모르는 것"),
+    GrowthLevel(
+        2,
+        "identity",
+        "정체",
+        "이게 무엇이고 지금 얼마나 믿을 만한가",
+        ("module", "current"),
+    ),
+    GrowthLevel(3, "outline", "뼈대", "무엇을 어디에 채울지"),
+    GrowthLevel(4, "conclusion", "결론", "무엇이 남았고 지금 결론은 무엇인가"),
+    GrowthLevel(
+        5,
+        "complete",
+        "완성",
+        "남이 인용하고 이어 쓸 수 있게",
+        ("decisions", "dependencies", "interface", "scope"),
+    ),
+)
+
+MAX_LEVEL = GROWTH_LEVELS[-1].number
+
+#: Which numbered sections of `current` arrive at which rung, per kind.
+#:
+#: Kinds do not have the same sections -- knowledge has five, implementation
+#: eight, intent seven -- so the split cannot be a single rule. Section numbers
+#: absent from a template are skipped rather than treated as an error, so a
+#: project that trims its own template gets a thinner rung instead of a break.
+CURRENT_SECTIONS: Dict[str, Dict[int, Tuple[int, ...]]] = {
+    # 1 핵심 개념 / 2 본문 / 3 열린 질문 / 4 종합 / 5 재개 가이드
+    "knowledge": {2: (1,), 3: (2,), 4: (3, 4, 5)},
+    # 1 개요 / 2 구조 / 3 Related Files / 4 상태 / 5 할 일 / 6 부채 / 7 검증 / 8 다음
+    "implementation": {2: (1,), 3: (2, 3), 4: (4, 5, 6, 7, 8)},
+    # 1 현재 요약 / 2 본문 / 3 확정·잠정 / 4 열린 질문 / 5 Red Team / 6 다음 행동 / 7 종결
+    "intent": {2: (1,), 3: (2, 3), 4: (4, 5, 6, 7)},
+}
+
+#: The header field naming a document's rung, e.g. "**Level:** 2/5 (정체)".
+#:
+#: Matched as a field rather than as a whole line: intent puts it beside Stage
+#: on a shared, pipe-separated line, and an anchored pattern missed it there and
+#: inserted a second copy instead of updating the first.
+LEVEL_FIELD = re.compile(r"\*\*Level:\*\*\s*\d+\s*/\s*\d+\s*\([^)\n]*\)")
+
+#: A numbered section heading inside `current`, e.g. "## 3. Open Questions".
+CURRENT_SECTION_HEADING = re.compile(r"^##\s+(\d+)\.", re.MULTILINE)
+
+
+def sections_for_level(kind: str, level: int) -> Tuple[int, ...]:
+    """Numbered `current` sections a rung adds for this kind."""
+    return CURRENT_SECTIONS.get(kind, {}).get(level, ())
+
+
+def level_by_number(number: int) -> GrowthLevel:
+    """The rung with this number."""
+    for level in GROWTH_LEVELS:
+        if level.number == number:
+            return level
+    raise TemplateError(
+        f"Unknown growth level: {number}. Levels run 1..{MAX_LEVEL}."
+    )
+
+
+def format_level(number: int) -> str:
+    """The header field value for a rung."""
+    level = level_by_number(number)
+    suffix = "완성" if number == MAX_LEVEL else level.label
+    return f"**Level:** {number}/{MAX_LEVEL} ({suffix})"
+
+
+def describe_levels() -> str:
+    """Render the ladder for CLI help."""
+    lines = [f"Growth levels (mmodule grow advances one at a time):"]
+    for level in GROWTH_LEVELS:
+        parts = ", ".join(level.parts) if level.parts else "the seed itself"
+        lines.append(f"  {level.number}. {level.key:<12} {level.answers}")
+        lines.append(f"     {'':<15}adds: {parts}")
+    return "\n".join(lines)
+
 def single_file_name(kind: str) -> str:
     """Filename of a single-file template for a kind."""
     return f"{kind}.md"
@@ -725,21 +835,133 @@ def _h1_titles(text: str) -> List[str]:
     return titles
 
 
+def _render_parts(
+    parts: Dict[str, str],
+    name: str,
+    choice: TemplateChoice,
+    natures: Dict[str, str],
+    today: str,
+) -> Dict[str, str]:
+    """Fill in every assembly part, ready to compare against a document."""
+    rendered: Dict[str, str] = {}
+
+    for part in ASSEMBLY_ORDER:
+        content = parts.get(part)
+        if content is None:
+            continue
+
+        if part == "current" and choice.nature:
+            content = _splice_nature(content, natures[choice.nature])
+
+        # Tags and description are left alone: the document already carries
+        # them, and growing must not overwrite what the author wrote.
+        rendered[part] = _apply_placeholders(
+            content,
+            name=name,
+            choice=choice,
+            description="",
+            tags="",
+            today=today,
+        ).strip("\n")
+
+    return rendered
+
+
+def _split_current(text: str) -> Tuple[str, Dict[int, str]]:
+    """Cut `current` into its header and its numbered sections.
+
+    The body is where a module's substance goes, so the ladder walks through it
+    rather than dropping it in one piece: adding all of `current` at once put
+    fifty lines of empty headings in front of someone who had just written three.
+
+    Fences are skipped -- the implementation body quotes a shell block, and a
+    heading inside a quoted example is content, not structure.
+
+    Args:
+        text: The rendered `current` part
+
+    Returns:
+        (everything before the first numbered section, {number: block}).
+    """
+    lines = text.split("\n")
+    starts: List[Tuple[int, int]] = []  # (line index, section number)
+    in_fence = False
+
+    for index, line in enumerate(lines):
+        if line.lstrip().startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        match = CURRENT_SECTION_HEADING.match(line)
+        if match:
+            starts.append((index, int(match.group(1))))
+
+    if not starts:
+        return text, {}
+
+    header = "\n".join(lines[: starts[0][0]]).rstrip("\n")
+    sections: Dict[int, str] = {}
+
+    for position, (line_index, number) in enumerate(starts):
+        stop = starts[position + 1][0] if position + 1 < len(starts) else len(lines)
+        sections[number] = "\n".join(lines[line_index:stop]).strip("\n")
+
+    return header, sections
+
+
+def _set_level_field(text: str, number: int) -> str:
+    """Write the rung into the header, adding the field if it is absent.
+
+    A hand-written document has no Level line, so it is inserted next to the
+    Kind line rather than left out: the field is how a reader sees how far the
+    document has come, without counting sections.
+    """
+    value = format_level(number)
+
+    updated, count = LEVEL_FIELD.subn(lambda _: value, text, count=1)
+    if count:
+        return updated
+
+    kind_line = re.compile(r"^\*\*Kind:\*\*[^\n]*$", re.MULTILINE)
+    match = kind_line.search(text)
+    if not match:
+        return text
+
+    return text[: match.end()] + "\n" + value + text[match.end() :]
+
+
+def _headings_present(text: str) -> set:
+    """Every heading line in a document, ignoring fenced examples."""
+    found = set()
+    in_fence = False
+
+    for line in text.split("\n"):
+        if line.lstrip().startswith("```"):
+            in_fence = not in_fence
+            continue
+        if not in_fence and line.startswith("#"):
+            found.add(line.strip())
+
+    return found
+
+
 def grow_module_document(
     existing: str,
     name: str,
     kind: str,
     nature: Optional[str] = None,
     memory_path: Optional[Path] = None,
-) -> Tuple[str, List[str]]:
-    """Append the skeleton sections a document does not have yet.
+    to_level: Optional[int] = None,
+) -> Tuple[str, List[str], int, int]:
+    """Advance a document one rung up the growth ladder.
 
-    This is the second half of the draft workflow. The seed holds what you can
-    honestly write on day one; when a module outgrows it, the remaining sections
-    are appended rather than the author copying them out of the template by
-    hand. What is already written is never touched: a section counts as present
-    when its top-level heading is, so nothing is duplicated and nothing is
-    overwritten.
+    The second half of the draft workflow. The seed holds what you can honestly
+    write on day one; each call adds the next group of sections, so the document
+    thickens at the pace the thinking does.
+
+    What is already written is never touched. A section counts as present when
+    its heading line is, so nothing is duplicated and nothing is overwritten.
 
     Args:
         existing: The current document
@@ -747,14 +969,18 @@ def grow_module_document(
         kind: The module's kind
         nature: Body outline, if the kind takes one
         memory_path: Base folder, so project templates take precedence
+        to_level: Stop at this rung instead of the next one. Pass MAX_LEVEL for
+            the whole skeleton in one call. A rung at or below the current one
+            adds nothing.
 
     Returns:
-        (grown document, names of the parts appended). The parts list is empty
-        when the document already has every section, and the document comes
-        back unchanged in that case.
+        (grown document, labels of what was appended, level before, level after).
+        The label list is empty when there was nothing to add, and the document
+        comes back unchanged in that case.
 
     Raises:
-        TemplateError: If the kind/nature is invalid or templates are missing.
+        TemplateError: If the kind/nature is invalid, the templates are missing,
+            or the requested level is out of range.
     """
     choice = TemplateChoice(kind=kind, nature=nature)
     parts, origin = load_template_parts(choice.kind, memory_path)
@@ -769,41 +995,108 @@ def grow_module_document(
     if choice.nature and choice.nature not in natures:
         raise TemplateError(f"Nature '{choice.nature}' is not defined in {origin}.")
 
-    present = set(_h1_titles(existing))
-    sections: List[str] = []
-    added: List[str] = []
+    rendered = _render_parts(parts, name, choice, natures, today)
+    current_header, current_sections = _split_current(rendered.get("current", ""))
 
-    for part in ASSEMBLY_ORDER:
-        content = parts.get(part)
-        if content is None:
-            continue
+    headings = _headings_present(existing)
 
-        if part == "current" and choice.nature:
-            content = _splice_nature(content, natures[choice.nature])
-
-        # Tags and description are left alone: the draft already carries them,
-        # and this call must not overwrite what the author wrote.
-        content = _apply_placeholders(
-            content,
-            name=name,
-            choice=choice,
-            description="",
-            tags="",
-            today=today,
+    def has(block: str) -> bool:
+        """True when this block's own first heading is already in the document."""
+        first = next(
+            (l.strip() for l in block.split("\n") if l.startswith("#")), None
         )
+        return first is not None and first in headings
 
-        titles = _h1_titles(content)
-        if titles and titles[0] in present:
+    before = _reached_level(choice.kind, rendered, current_header, current_sections, has)
+
+    if to_level is None:
+        target = min(before + 1, MAX_LEVEL)
+    else:
+        level_by_number(to_level)  # validates the range
+        target = to_level
+
+    additions: List[str] = []
+    labels: List[str] = []
+
+    for level in GROWTH_LEVELS:
+        if not (before < level.number <= target):
             continue
 
-        sections.append(content.strip("\n"))
-        added.append(part)
+        for part in level.parts:
+            if part not in rendered:
+                continue
+            # "current" contributes its header here; the numbered sections are
+            # spread across rungs and handled below.
+            block = current_header if part == "current" else rendered[part]
+            if not block or has(block):
+                continue
+            additions.append(block)
+            labels.append(part)
 
-    if not sections:
-        return existing, []
+        for number in sections_for_level(choice.kind, level.number):
+            block = current_sections.get(number)
+            if not block or has(block):
+                continue
+            additions.append(block)
+            labels.append(f"current §{number}")
 
-    grown = existing.rstrip("\n") + SECTION_SEPARATOR + SECTION_SEPARATOR.join(sections)
-    return grown + "\n", added
+    if not additions:
+        return existing, [], before, before
+
+    after = max(before, target)
+    grown = _set_level_field(existing, after).rstrip("\n")
+
+    # Sections of `current` join the body directly; whole parts are their own
+    # top-level documents and keep the horizontal rule between them.
+    for block in additions:
+        separator = SECTION_SEPARATOR if block.startswith("# ") else "\n\n"
+        grown += separator + block
+
+    return grown + "\n", labels, before, after
+
+
+def _reached_level(
+    kind: str,
+    rendered: Dict[str, str],
+    current_header: str,
+    current_sections: Dict[int, str],
+    has,
+) -> int:
+    """The highest rung whose parts and sections are all in the document.
+
+    Read from the content rather than from the header field, so a document
+    someone edited by hand -- or one written on a phone, where the CLI cannot
+    run -- still reports honestly.
+    """
+    reached = 1
+
+    for level in GROWTH_LEVELS:
+        if level.number == 1:
+            continue
+
+        complete = True
+
+        for part in level.parts:
+            if part not in rendered:
+                continue
+            block = current_header if part == "current" else rendered[part]
+            if block and not has(block):
+                complete = False
+                break
+
+        if complete:
+            for number in sections_for_level(kind, level.number):
+                block = current_sections.get(number)
+                if block and not has(block):
+                    complete = False
+                    break
+
+        if not complete:
+            break
+
+        reached = level.number
+
+    return reached
 
 
 def describe_choices() -> str:

@@ -931,11 +931,29 @@ and ends with the ladder of what to add next. The classification still applies:
 a draft is the same kind of module earlier, not a different kind.
 
   mmodule create asyncio --kind knowledge --nature concept --draft
-  mmodule grow asyncio        # append the rest when the seed outgrows itself
+  mmodule grow asyncio        # one rung up the ladder
 
-grow appends only the sections the document does not have, matched by top-level
-heading, and leaves everything already written untouched. It reads the kind and
-nature from the module's own header.
+grow advances one level at a time. Jumping from seed to full skeleton would put
+the wall of empty headings one step later rather than removing it.
+
+  1 seed        the draft itself
+  2 identity    reference/confidence header + first body section
+  3 outline     the body and its nature-specific detail
+  4 conclusion  the remaining body sections
+  5 complete    decisions, dependencies, interface, scope
+
+Four rungs move inside `module` and `current`, where a module's substance lives;
+the other four parts are reference scaffolding and arrive together at the end.
+Steps are close together early and coarse late: a document is abandoned near the
+beginning, so the second rung has to be cheap.
+
+  --level N     stop at level N instead of taking one step
+  --all         go straight to the full skeleton
+
+grow appends only what the document does not have, matched by heading, and
+leaves everything already written untouched. The **Level:** header field says
+where it is, and is recounted from the file so hand edits cannot desync it. Kind
+and nature come from the module's own header.
 
 Section order is content first: title and one-line purpose, then the body, then
 decisions, dependencies and interface, with the scope and premises last. Those
@@ -956,14 +974,14 @@ bundled ones, so local edits are preserved.
                 "mmodule create api --kind implementation --desc \"REST endpoints\"",
                 "mmodule create PLAN-v2-release --kind intent --nature plan",
                 "mmodule create asyncio --kind knowledge --draft   # seed document",
-                "mmodule grow asyncio       # append the remaining sections",
+                "mmodule grow asyncio       # one rung up (--all for the top)",
                 "mmodule graph              # Visualize connections",
             ],
             "options": [
                 ("list", "List all modules"),
                 ("tree", "Tree view of modules"),
                 ("create", "Create new module"),
-                ("grow", "Append the sections a draft does not have yet"),
+                ("grow", "Advance one level up the five-step ladder"),
                 ("graph", "Visualize connections"),
             ],
         },
@@ -1020,10 +1038,27 @@ intent 모듈은 세 가지 방법으로만 끝납니다: 구현 모듈로 승�
 분류는 그대로 유지됩니다. 초안은 다른 종류의 문서가 아니라 같은 문서의 이른 시점입니다.
 
   mmodule create asyncio --kind knowledge --nature concept --draft
-  mmodule grow asyncio        # 씨앗이 좁아지면 나머지 절을 붙인다
+  mmodule grow asyncio        # 사다리를 한 칸 올린다
 
-grow 는 문서에 없는 절만 덧붙이며, 판단 기준은 최상위 표제의 존재 여부입니다.
-이미 쓴 내용은 건드리지 않습니다. Kind 와 Nature 는 모듈 헤더에서 읽습니다.
+grow 는 한 번에 한 칸씩 올라갑니다. 씨앗에서 완전판으로 한 번에 뛰면 빈 표제의 벽을
+없애는 것이 아니라 한 단계 뒤로 미루는 것이 됩니다.
+
+  1 씨앗   초안 그대로
+  2 정체   기준·신뢰도 헤더 + 본문 첫 절
+  3 뼈대   본문과 성격별 세부 목차
+  4 결론   남은 본문 절
+  5 완성   결정 · 의존성 · 인터페이스 · 범위와 전제
+
+네 칸이 module 과 current 안에서 움직입니다. 모듈의 본체가 거기 있기 때문입니다.
+나머지 네 파트는 참조용 뼈대라서 마지막 한 칸에 함께 붙습니다. 앞은 촘촘하고 뒤는
+성깁니다. 문서를 포기하는 지점이 앞쪽이라서 두 번째 칸이 싸야 합니다.
+
+  --level N     한 칸이 아니라 N단계까지
+  --all         한 번에 완전판까지
+
+grow 는 문서에 없는 절만 덧붙이며, 판단 기준은 표제의 존재 여부입니다. 이미 쓴 내용은
+건드리지 않습니다. 지금 몇 단계인지는 헤더의 **Level:** 필드가 알려 주고, 그 값은 파일
+내용에서 다시 세므로 손으로 고쳐도 어긋나지 않습니다.
 
 절 순서는 본문이 먼저입니다. 제목과 한 문장 목적, 그다음 본문, 그다음 결정과 의존성과
 인터페이스, 범위와 전제가 맨 끝입니다. 경계 항목은 읽는 쪽이 인용 직전에 확인하고
@@ -1042,14 +1077,14 @@ grow 는 문서에 없는 절만 덧붙이며, 판단 기준은 최상위 표제
                 "mmodule create api --kind implementation --desc \"REST 엔드포인트\"",
                 "mmodule create PLAN-v2-release --kind intent --nature plan",
                 "mmodule create asyncio --kind knowledge --draft   # 씨앗 문서",
-                "mmodule grow asyncio       # 나머지 절 붙이기",
+                "mmodule grow asyncio       # 한 칸 올리기 (--all 이면 끝까지)",
                 "mmodule graph              # 연결 시각화",
             ],
             "options": [
                 ("list", "모든 모듈 나열"),
                 ("tree", "모듈 트리 보기"),
                 ("create", "새 모듈 생성"),
-                ("grow", "초안에 없는 절을 덧붙이기"),
+                ("grow", "다섯 단계 사다리를 한 칸 올리기"),
                 ("graph", "연결 시각화"),
             ],
         },

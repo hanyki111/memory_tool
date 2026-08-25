@@ -40,6 +40,8 @@ def module(
     kind: Optional[str] = typer.Option(None, "--kind", "-k", help="Template kind for create: 'knowledge', 'implementation' or 'intent'"),
     nature: Optional[str] = typer.Option(None, "--nature", help="Body outline. knowledge: concept, reference, analysis, tracker, method | intent: idea, inquiry, plan"),
     draft: bool = typer.Option(False, "--draft", help="Create a seed document instead of the full skeleton; grow it later with 'mmodule grow'"),
+    to_level: Optional[int] = typer.Option(None, "--level", help="For grow: stop at this level (1-5) instead of taking one step"),
+    all_levels: bool = typer.Option(False, "--all", help="For grow: go straight to the full skeleton"),
 ):
     """Manage modules (supports single-file modules, hierarchical paths, wiki-style [[connections]], and AI suggestions)."""
     action = arg_str(action)
@@ -106,26 +108,49 @@ def module(
                 console.print("[dim]Usage: module grow <name>[/dim]")
                 sys.exit(1)
 
+            from memory_tool.core.module_templates import (
+                MAX_LEVEL,
+                level_by_number,
+            )
+
             resolved_name = resolve_module_name(name)
             kind_opt = opt_str(kind)
             nature_opt = opt_str(nature)
+            target = MAX_LEVEL if all_levels else to_level
 
             console.print(f"[cyan]Growing module '{resolved_name}'...[/cyan]")
-            module_path, added = manager.grow(
-                resolved_name, kind=kind_opt, nature=nature_opt
+            module_path, added, before, after = manager.grow(
+                resolved_name, kind=kind_opt, nature=nature_opt, to_level=target
             )
 
             if not added:
+                reached = level_by_number(before)
                 console.print(
-                    f"[green]OK[/green] '{resolved_name}' already has every "
-                    f"section. Nothing was written."
+                    f"[green]OK[/green] '{resolved_name}' is already at level "
+                    f"{before}/{MAX_LEVEL} ({reached.label}). Nothing was written."
                 )
+                if target is not None and before < MAX_LEVEL:
+                    console.print(
+                        f"[dim]Level {target} is at or below where it already "
+                        f"is. Omit --to to take the next step.[/dim]"
+                    )
             else:
+                start = level_by_number(before)
+                end = level_by_number(after)
                 console.print(
-                    f"\n[green]OK[/green] Added {len(added)} section(s): "
-                    + ", ".join(added)
+                    f"\n[green]OK[/green] {before}/{MAX_LEVEL} ({start.label}) "
+                    f"-> {after}/{MAX_LEVEL} ({end.label})"
                 )
+                console.print(f"[dim]Added: {', '.join(added)}[/dim]")
+                console.print(f"[dim]이제 답할 수 있는 것: {end.answers}[/dim]")
                 console.print(f"[dim]File location: {display_path(module_path)}[/dim]")
+
+                if after < MAX_LEVEL:
+                    nxt = level_by_number(after + 1)
+                    console.print(
+                        f"[dim]다음 단계 {after + 1}/{MAX_LEVEL} ({nxt.label}): "
+                        f"{nxt.answers} — 'mmodule grow' 를 다시 실행하세요.[/dim]"
+                    )
                 console.print(
                     "[dim]What you already wrote was left untouched; the new "
                     "sections are appended at the end.[/dim]"

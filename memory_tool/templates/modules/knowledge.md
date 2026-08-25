@@ -10,7 +10,8 @@
 # [모듈명]
 
 **Kind:** knowledge | **Nature:** concept | reference | analysis | tracker | method
-**Role:** leaf | root | **Created:** YYYY-MM-DD | **Updated:** YYYY-MM-DD
+**Role:** leaf | root | **Level:** 5/5 (완성)
+**Created:** YYYY-MM-DD | **Updated:** YYYY-MM-DD
 **Tags:**
 
 ## 목적과 목표
@@ -223,7 +224,7 @@
 # [모듈명]
 
 **Kind:** knowledge | **Nature:** concept | reference | analysis | tracker | method
-**Stage:** 초안 | **Created:** YYYY-MM-DD | **Updated:** YYYY-MM-DD
+**Level:** 1/5 (씨앗) | **Created:** YYYY-MM-DD | **Updated:** YYYY-MM-DD
 **Tags:**
 
 > **기준:** YYYY-MM-DD | **신뢰도:** 미검증
@@ -249,16 +250,19 @@
 
 ---
 
-<!-- ▼ 다음에 채울 것. 위에서부터 하나씩, 필요해진 것만 더한다.
-     전부 채울 의무는 없다. 전체 골격이 필요해지면: mmodule grow "[경로]"
+<!-- ▼ 이 문서는 지금 1단계다. 한 단계씩 자란다:  mmodule grow "[경로]"
 
-     1. 예제 하나       — 따라 할 수 있는 최소 예제. 막히는 지점이 곧 모르는 지점이다
-     2. 핵심 비유       — 실생활에 빗댄 하나. 복붙이 원리적으로 불가능해 이해를 강제한다
-     3. 자주 하는 오해  — 내가 처음에 잘못 알았던 것. 재학습 비용을 가장 크게 줄인다
-     4. 인용 결론 한 줄 — "~이다"로 끝나야 한다. 여기를 못 쓰면 아직 배운 것이 아니다
-     5. 다루지 않는 것  — 경계. 이때 쓰면 모듈을 나눌 시점 판단이 쉬워진다
-     6. 전체 골격       — mmodule grow 로 나머지 절을 붙인다
--->
+     2 정체  기준·대상 버전·신뢰도 + 핵심 개념 3~6줄
+             → 이게 무엇이고 지금 얼마나 믿을 만한가
+     3 뼈대  본문과 성격별 세부 목차
+             → 무엇을 어디에 채울지가 보인다
+     4 결론  열린 질문 · 종합 의견 · 재개 가이드
+             → 무엇이 남았고 지금 결론은 무엇인가
+     5 완성  결정 · 의존성 · 인용 인터페이스 · 범위와 전제
+             → 다른 모듈이 가져다 쓸 수 있다
+
+     한 번에 끝까지 가려면 mmodule grow "[경로]" --all
+     지금 단계에서 멈춰도 된다. 필요해질 때 다음 칸을 부른다. -->
 
 ---
 

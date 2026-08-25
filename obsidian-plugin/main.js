@@ -1602,7 +1602,7 @@ var MemoryToolPlugin = class extends import_obsidian8.Plugin {
     });
     this.addCommand({
       id: "grow-module",
-      name: "\uBAA8\uB4C8 \uC804\uCCB4 \uACE8\uACA9 \uBD99\uC774\uAE30 (mmodule grow)",
+      name: "\uBAA8\uB4C8 \uD55C \uB2E8\uACC4 \uD0A4\uC6B0\uAE30 (mmodule grow)",
       callback: () => {
         const open = this.app.workspace.getActiveFile();
         const name = open ? moduleNameFromPath(this.basePrefix, open.path) : null;
@@ -1770,14 +1770,23 @@ var MemoryToolPlugin = class extends import_obsidian8.Plugin {
    * unremarkable outcome that should not read as a failure.
    */
   async growModule(name) {
-    new import_obsidian8.Notice(`'${name}' \uACE8\uACA9 \uD655\uC7A5 \uC911...`);
+    new import_obsidian8.Notice(`'${name}' \uB2E4\uC74C \uB2E8\uACC4\uB85C...`);
     try {
       const output = await this.cli.growModule(name);
-      const added = /Added (\d+) section\(s\): (.+)/.exec(output);
-      if (added) {
-        new import_obsidian8.Notice(`${name}: ${added[2]} \uC808\uC744 \uBD99\uC600\uC2B5\uB2C8\uB2E4.`, 6e3);
+      const step = /(\d)\/(\d) \(([^)]+)\) -> (\d)\/\d \(([^)]+)\)/.exec(output);
+      const already = /already at level (\d)\/(\d) \(([^)]+)\)/.exec(output);
+      if (step) {
+        new import_obsidian8.Notice(
+          `${name}: ${step[1]}\uB2E8\uACC4 ${step[3]} \u2192 ${step[4]}\uB2E8\uACC4 ${step[5]}`,
+          6e3
+        );
+      } else if (already) {
+        new import_obsidian8.Notice(
+          `${name}: \uC774\uBBF8 ${already[1]}/${already[2]}\uB2E8\uACC4 (${already[3]}). \uBC14\uB010 \uAC83\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.`,
+          6e3
+        );
       } else {
-        new import_obsidian8.Notice(`${name}: \uC774\uBBF8 \uBAA8\uB4E0 \uC808\uC774 \uC788\uC2B5\uB2C8\uB2E4. \uBC14\uB010 \uAC83\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.`, 6e3);
+        new import_obsidian8.Notice(`${name}: \uACE8\uACA9\uC744 \uD655\uC7A5\uD588\uC2B5\uB2C8\uB2E4.`, 6e3);
       }
     } catch (err) {
       new import_obsidian8.Notice(`\uACE8\uACA9 \uD655\uC7A5 \uC2E4\uD328: ${err.message}`, 8e3);

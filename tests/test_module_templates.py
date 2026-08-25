@@ -17,6 +17,8 @@ from memory_tool.core.module_templates import (
     build_module_document,
     bundled_templates_root,
     grow_module_document,
+    MAX_LEVEL,
+    level_by_number,
     load_template_parts,
     merge_template_dir,
     parse_single_file_template,
@@ -748,20 +750,116 @@ def test_draft_from_a_template_without_one_is_an_error(tmp_path):
 
 
 @pytest.mark.parametrize("kind", KINDS)
-def test_grow_appends_the_missing_sections(kind):
+def test_grow_takes_one_step(kind):
+    """The seed thickens at the pace the thinking does, not in one jump."""
     draft = build_module_document(name="m", kind=kind, draft=True)
-    grown, added = grow_module_document(draft, name="m", kind=kind)
+    grown, added, before, after = grow_module_document(draft, name="m", kind=kind)
 
-    assert "current" in added
-    assert "scope" in added
+    assert (before, after) == (1, 2)
+    assert added
     assert len(grown) > len(draft)
+    # the reference scaffolding belongs to the last rung, not this one
+    assert "scope" not in added
+    assert "decisions" not in added
+
+
+@pytest.mark.parametrize("kind", KINDS)
+def test_four_steps_reach_the_full_skeleton(kind):
+    doc = build_module_document(name="m", kind=kind, draft=True)
+
+    for expected in (2, 3, 4, 5):
+        doc, added, _, after = grow_module_document(doc, name="m", kind=kind)
+        assert added, f"nothing added on the way to level {expected}"
+        assert after == expected
+
+    _, added, before, after = grow_module_document(doc, name="m", kind=kind)
+    assert added == [] and before == after == MAX_LEVEL
+
+
+@pytest.mark.parametrize("kind", KINDS)
+def test_each_step_is_smaller_than_the_whole(kind):
+    """The point of the ladder: no rung is the wall the draft was avoiding."""
+    draft = build_module_document(name="m", kind=kind, draft=True)
+    full = build_module_document(name="m", kind=kind)
+
+    step, _, _, _ = grow_module_document(draft, name="m", kind=kind)
+    grown_by = len(step.split("\n")) - len(draft.split("\n"))
+
+    assert grown_by < len(full.split("\n")) / 4
+
+
+@pytest.mark.parametrize("kind", KINDS)
+def test_the_body_is_spread_across_rungs(kind):
+    """current is the biggest part, so it must not arrive in one piece."""
+    doc = build_module_document(name="m", kind=kind, draft=True)
+
+    carrying_body = 0
+    for _ in range(4):
+        doc, added, _, _ = grow_module_document(doc, name="m", kind=kind)
+        if any(label.startswith("current §") for label in added):
+            carrying_body += 1
+
+    assert carrying_body >= 3
+
+
+def test_all_reaches_the_top_in_one_call():
+    draft = build_module_document(name="m", kind="knowledge", draft=True)
+    grown, added, before, after = grow_module_document(
+        draft, name="m", kind="knowledge", to_level=MAX_LEVEL
+    )
+
+    assert (before, after) == (1, MAX_LEVEL)
+    assert "scope" in added
+
+
+def test_a_level_already_passed_adds_nothing():
+    doc = build_module_document(name="m", kind="knowledge", draft=True)
+    doc, _, _, _ = grow_module_document(doc, name="m", kind="knowledge", to_level=4)
+
+    same, added, before, after = grow_module_document(
+        doc, name="m", kind="knowledge", to_level=2
+    )
+
+    assert added == []
+    assert same == doc
+    assert before == after == 4
+
+
+def test_an_out_of_range_level_is_rejected():
+    draft = build_module_document(name="m", kind="knowledge", draft=True)
+
+    with pytest.raises(TemplateError, match="Unknown growth level"):
+        grow_module_document(draft, name="m", kind="knowledge", to_level=9)
+
+
+@pytest.mark.parametrize("kind", KINDS)
+def test_the_level_field_tracks_the_rung(kind):
+    doc = build_module_document(name="m", kind=kind, draft=True)
+    assert "**Level:** 1/5 (씨앗)" in doc
+
+    doc, _, _, after = grow_module_document(doc, name="m", kind=kind)
+    label = level_by_number(after).label
+    assert f"**Level:** {after}/{MAX_LEVEL} ({label})" in doc
+    # exactly one, never a second line appended alongside the first
+    assert doc.count("**Level:**") == 1
+
+
+def test_a_document_created_whole_starts_at_the_top():
+    full = build_module_document(name="m", kind="knowledge", nature="concept")
+
+    _, added, before, after = grow_module_document(
+        full, name="m", kind="knowledge", nature="concept"
+    )
+
+    assert added == []
+    assert before == after == MAX_LEVEL
 
 
 def test_grow_preserves_what_was_written():
     draft = build_module_document(name="m", kind="knowledge", draft=True)
     written = draft.rstrip("\n") + "\n\n손으로 쓴 내용\n"
 
-    grown, _ = grow_module_document(written, name="m", kind="knowledge")
+    grown, _, _, _ = grow_module_document(written, name="m", kind="knowledge")
 
     assert "손으로 쓴 내용" in grown
     assert grown.startswith(draft.split("\n")[0])
@@ -770,22 +868,29 @@ def test_grow_preserves_what_was_written():
 def test_grow_skips_the_header_the_draft_already_has():
     """The seed and the module part share a title, so it is not duplicated."""
     draft = build_module_document(name="m", kind="knowledge", draft=True)
-    grown, added = grow_module_document(draft, name="m", kind="knowledge")
+    grown, added, _, _ = grow_module_document(draft, name="m", kind="knowledge")
 
     assert "module" not in added
     assert len([line for line in grown.split("\n") if line == "# m"]) == 1
 
 
 def test_grow_splices_the_nature_outline():
-    draft = build_module_document(name="m", kind="knowledge", nature="concept", draft=True)
-    grown, _ = grow_module_document(draft, name="m", kind="knowledge", nature="concept")
+    """The outline is the "세부 목차" rung, so it arrives at level 3."""
+    doc = build_module_document(name="m", kind="knowledge", nature="concept", draft=True)
 
-    assert "핵심 비유" in grown
+    doc, _, _, _ = grow_module_document(doc, name="m", kind="knowledge", nature="concept")
+    assert "### 2.2 핵심 비유" not in doc
+
+    doc, _, _, after = grow_module_document(
+        doc, name="m", kind="knowledge", nature="concept"
+    )
+    assert after == 3
+    assert "### 2.2 핵심 비유" in doc
 
 
 def test_grow_is_idempotent():
     full = build_module_document(name="m", kind="intent", nature="plan")
-    grown, added = grow_module_document(full, name="m", kind="intent", nature="plan")
+    grown, added, _, _ = grow_module_document(full, name="m", kind="intent", nature="plan")
 
     assert added == []
     assert grown == full
@@ -793,10 +898,11 @@ def test_grow_is_idempotent():
 
 def test_grow_ignores_headings_inside_fenced_blocks():
     """A quoted markdown example must not count as a section the doc has."""
-    draft = build_module_document(name="m", kind="implementation", draft=True)
-    faked = draft + "\n```markdown\n# Interface\n```\n"
+    doc = build_module_document(name="m", kind="implementation", draft=True)
+    doc = doc + "\n```markdown\n# Interface\n```\n"
 
-    _, added = grow_module_document(faked, name="m", kind="implementation")
+    for _ in range(4):
+        doc, added, _, _ = grow_module_document(doc, name="m", kind="implementation")
 
     assert "interface" in added
 
@@ -813,7 +919,7 @@ def test_create_draft_writes_the_seed(tmp_path):
     path = manager.create("asyncio", kind="knowledge", nature="concept", draft=True)
     content = path.read_text(encoding="utf-8")
 
-    assert "**Stage:** 초안" in content
+    assert "**Level:** 1/5 (씨앗)" in content
     assert "### 2." not in content
 
 
@@ -830,9 +936,10 @@ def test_grow_reads_the_kind_from_the_module_header(tmp_path):
     manager = ModuleManager(tmp_path)
     manager.create("asyncio", kind="knowledge", nature="concept", draft=True)
 
-    path, added = manager.grow("asyncio")
+    path, added, before, after = manager.grow("asyncio", to_level=MAX_LEVEL)
 
     assert added
+    assert (before, after) == (1, MAX_LEVEL)
     assert "핵심 비유" in path.read_text(encoding="utf-8")
 
 
@@ -935,7 +1042,7 @@ def test_a_hand_written_draft_grows(tmp_path):
     write_by_hand(base, "asyncio", "asyncio.md", seed)
     manager = ModuleManager(tmp_path)
 
-    path, added = manager.grow("asyncio")
+    path, added, _, _ = manager.grow("asyncio", to_level=MAX_LEVEL)
     grown = path.read_text(encoding="utf-8")
 
     assert "current" in added and "scope" in added
@@ -957,7 +1064,7 @@ def test_an_unfilled_title_placeholder_leaves_two_titles(tmp_path):
     write_by_hand(base, "asyncio", "asyncio.md", "# [모듈명]\n\n**Kind:** knowledge\n\n내용\n")
     manager = ModuleManager(tmp_path)
 
-    path, added = manager.grow("asyncio")
+    path, added, _, _ = manager.grow("asyncio", to_level=MAX_LEVEL)
     grown = path.read_text(encoding="utf-8")
 
     assert "module" in added

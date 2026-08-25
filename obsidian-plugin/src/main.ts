@@ -220,7 +220,7 @@ export default class MemoryToolPlugin extends Plugin implements PanelHost {
 
     this.addCommand({
       id: "grow-module",
-      name: "모듈 전체 골격 붙이기 (mmodule grow)",
+      name: "모듈 한 단계 키우기 (mmodule grow)",
       callback: () => {
         // The moment a seed feels too small is the moment you are looking at
         // it, so the open document is the default target and picking from a
@@ -422,15 +422,27 @@ export default class MemoryToolPlugin extends Plugin implements PanelHost {
    * unremarkable outcome that should not read as a failure.
    */
   async growModule(name: string): Promise<void> {
-    new Notice(`'${name}' 골격 확장 중...`);
+    new Notice(`'${name}' 다음 단계로...`);
     try {
       const output = await this.cli.growModule(name);
-      const added = /Added (\d+) section\(s\): (.+)/.exec(output);
 
-      if (added) {
-        new Notice(`${name}: ${added[2]} 절을 붙였습니다.`, 6000);
+      // grow reports the rung it moved between; that transition is the whole
+      // point of the command, so it is what the notice shows.
+      const step = /(\d)\/(\d) \(([^)]+)\) -> (\d)\/\d \(([^)]+)\)/.exec(output);
+      const already = /already at level (\d)\/(\d) \(([^)]+)\)/.exec(output);
+
+      if (step) {
+        new Notice(
+          `${name}: ${step[1]}단계 ${step[3]} → ${step[4]}단계 ${step[5]}`,
+          6000
+        );
+      } else if (already) {
+        new Notice(
+          `${name}: 이미 ${already[1]}/${already[2]}단계 (${already[3]}). 바뀐 것이 없습니다.`,
+          6000
+        );
       } else {
-        new Notice(`${name}: 이미 모든 절이 있습니다. 바뀐 것이 없습니다.`, 6000);
+        new Notice(`${name}: 골격을 확장했습니다.`, 6000);
       }
     } catch (err: any) {
       new Notice(`골격 확장 실패: ${err.message}`, 8000);
