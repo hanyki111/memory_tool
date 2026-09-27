@@ -4,6 +4,8 @@ Templates are authored as separate documents but modules are stored as a single
 file, so the assembly step and its placeholder substitution are what these cover.
 """
 
+import re
+
 import pytest
 
 from memory_tool.core.module import ModuleError, ModuleManager
@@ -18,6 +20,8 @@ from memory_tool.core.module_templates import (
     bundled_templates_root,
     grow_module_document,
     MAX_LEVEL,
+    attachable_parts,
+    growth_levels,
     level_by_number,
     load_template_parts,
     merge_template_dir,
@@ -809,7 +813,9 @@ def test_all_reaches_the_top_in_one_call():
     )
 
     assert (before, after) == (1, MAX_LEVEL)
-    assert "scope" in added
+    assert "interface" in added
+    # the top of the ladder is not the whole skeleton any more
+    assert "scope" not in added
 
 
 def test_a_level_already_passed_adds_nothing():
@@ -838,7 +844,7 @@ def test_the_level_field_tracks_the_rung(kind):
     assert "**Level:** 1/5 (씨앗)" in doc
 
     doc, _, _, after = grow_module_document(doc, name="m", kind=kind)
-    label = level_by_number(after).label
+    label = level_by_number(after, kind).label
     assert f"**Level:** {after}/{MAX_LEVEL} ({label})" in doc
     # exactly one, never a second line appended alongside the first
     assert doc.count("**Level:**") == 1
@@ -908,6 +914,172 @@ def test_grow_ignores_headings_inside_fenced_blocks():
 
 
 # ---------------------------------------------------------------------------
+# The last rung per kind, and parts attached on demand
+# ---------------------------------------------------------------------------
+
+
+def climb(kind, steps=4, doc=None):
+    """Grow a document (a fresh seed by default) `steps` times.
+
+    Returns the document and the labels each step added.
+    """
+    if doc is None:
+        doc = build_module_document(name="m", kind=kind, draft=True)
+    added_per_step = []
+    for _ in range(steps):
+        doc, added, _, _ = grow_module_document(doc, name="m", kind=kind)
+        added_per_step.append(added)
+    return doc, added_per_step
+
+
+def h1_order(doc):
+    """Top-level headings in document order, fenced examples skipped."""
+    out, fence = [], False
+    for line in doc.split("\n"):
+        if line.lstrip().startswith("```"):
+            fence = not fence
+        elif not fence and line.startswith("# "):
+            out.append(line)
+    return out
+
+
+@pytest.mark.parametrize(
+    "kind, expected",
+    [
+        ("knowledge", ["interface"]),
+        ("intent", ["current §7", "interface"]),
+        ("implementation", ["interface", "dependencies"]),
+    ],
+)
+def test_the_last_rung_is_what_the_kind_exists_to_produce(kind, expected):
+    _, steps = climb(kind)
+    assert sorted(steps[-1]) == sorted(expected)
+
+
+def test_the_last_rung_is_named_per_kind():
+    labels = [growth_levels(k)[-1].label for k in ("knowledge", "intent", "implementation")]
+    assert labels == ["인용", "종결", "연결"]
+
+
+@pytest.mark.parametrize("kind", KINDS)
+def test_no_document_claims_to_be_complete(kind):
+    """5/5 is a structural rung, not a verdict on the content."""
+    full = build_module_document(name="m", kind=kind)
+    grown, _ = climb(kind)
+    assert "(완성)" not in full
+    assert "(완성)" not in grown
+
+
+@pytest.mark.parametrize("kind", KINDS)
+def test_scaffolding_is_not_on_the_ladder(kind):
+    _, steps = climb(kind)
+    added = {label for step in steps for label in step}
+    for part in attachable_parts(kind):
+        assert part not in added
+
+
+def test_attachable_parts_per_kind():
+    assert attachable_parts("knowledge") == ("decisions", "dependencies", "scope")
+    assert attachable_parts("intent") == ("decisions", "dependencies", "scope")
+    # implementation takes dependencies on its last rung instead
+    assert attachable_parts("implementation") == ("decisions", "scope")
+
+
+def test_intent_exit_waits_for_the_last_rung():
+    doc, _ = climb("intent", steps=3)
+    assert "## 7. 종결 처리" not in doc
+    doc, _ = climb("intent", steps=1, doc=doc)
+    assert "## 7. 종결 처리" in doc
+
+
+@pytest.mark.parametrize("kind", KINDS)
+def test_a_part_attaches_without_climbing(kind):
+    seed = build_module_document(name="m", kind=kind, draft=True)
+    grown, added, before, after = grow_module_document(
+        seed, name="m", kind=kind, parts=["decisions"]
+    )
+
+    assert added == ["decisions"]
+    assert before == after == 1
+    assert grown.startswith(seed.rstrip("\n"))
+
+
+def test_an_attached_part_already_present_adds_nothing():
+    seed = build_module_document(name="m", kind="knowledge", draft=True)
+    once, _, _, _ = grow_module_document(seed, name="m", kind="knowledge", parts=["scope"])
+    twice, added, _, _ = grow_module_document(once, name="m", kind="knowledge", parts=["scope"])
+
+    assert added == []
+    assert twice == once
+
+
+def test_the_level_does_not_count_attached_parts():
+    seed = build_module_document(name="m", kind="knowledge", draft=True)
+    doc, _, _, _ = grow_module_document(
+        seed, name="m", kind="knowledge", parts=list(attachable_parts("knowledge"))
+    )
+    _, _, before, after = grow_module_document(doc, name="m", kind="knowledge")
+    assert (before, after) == (1, 2)
+
+
+@pytest.mark.parametrize("kind", KINDS)
+def test_parts_attached_early_keep_the_assembly_order(kind):
+    """Attach everything on day one, then climb: the body still comes first."""
+    seed = build_module_document(name="m", kind=kind, draft=True)
+    doc, _, _, _ = grow_module_document(
+        seed, name="m", kind=kind, parts=list(reversed(attachable_parts(kind)))
+    )
+    doc, _ = climb(kind, doc=doc)
+
+    # Same parts in the same order as a document created whole. The seed title
+    # is the module title, so the first heading lines up too.
+    assert h1_order(doc) == h1_order(build_module_document(name="m", kind=kind))
+
+
+@pytest.mark.parametrize("kind", KINDS)
+def test_body_sections_stay_inside_current(kind):
+    doc, _ = climb(kind, steps=1)
+    doc, _, _, _ = grow_module_document(doc, name="m", kind=kind, parts=["decisions"])
+    doc, _ = climb(kind, steps=3, doc=doc)
+
+    lines = doc.split("\n")
+    decisions_at = next(
+        i for i, line in enumerate(lines) if line.startswith("# ") and "Decisions" in line
+    )
+    last_section_at = max(
+        i for i, line in enumerate(lines) if re.match(r"^## \d+\.", line)
+    )
+    assert last_section_at < decisions_at
+
+
+def test_the_rule_stays_in_front_of_the_part_it_separates():
+    doc, _ = climb("knowledge", steps=1)
+    doc, _, _, _ = grow_module_document(doc, name="m", kind="knowledge", parts=["scope"])
+    doc, _ = climb("knowledge", steps=1, doc=doc)
+
+    assert "\n\n---\n\n# 범위와 전제" in doc
+    assert "---\n\n## 2." not in doc
+
+
+def test_a_part_the_ladder_adds_cannot_be_attached():
+    seed = build_module_document(name="m", kind="knowledge", draft=True)
+    with pytest.raises(TemplateError, match="level 5"):
+        grow_module_document(seed, name="m", kind="knowledge", parts=["interface"])
+
+
+def test_dependencies_is_on_the_ladder_for_implementation():
+    seed = build_module_document(name="m", kind="implementation", draft=True)
+    with pytest.raises(TemplateError, match=r"level 5 \(연결\)"):
+        grow_module_document(seed, name="m", kind="implementation", parts=["dependencies"])
+
+
+def test_an_unknown_part_is_rejected():
+    seed = build_module_document(name="m", kind="knowledge", draft=True)
+    with pytest.raises(TemplateError, match="Unknown part"):
+        grow_module_document(seed, name="m", kind="knowledge", parts=["appendix"])
+
+
+# ---------------------------------------------------------------------------
 # ModuleManager: draft and grow
 # ---------------------------------------------------------------------------
 
@@ -941,6 +1113,37 @@ def test_grow_reads_the_kind_from_the_module_header(tmp_path):
     assert added
     assert (before, after) == (1, MAX_LEVEL)
     assert "핵심 비유" in path.read_text(encoding="utf-8")
+
+
+def test_complete_brings_every_part(tmp_path):
+    make_base(tmp_path)
+    manager = ModuleManager(tmp_path)
+    manager.create("asyncio", kind="knowledge", nature="concept", draft=True)
+
+    _, added, before, after = manager.grow("asyncio", complete=True)
+
+    assert (before, after) == (1, MAX_LEVEL)
+    for part in ("interface", "decisions", "dependencies", "scope"):
+        assert part in added
+
+
+def test_manager_attaches_a_part(tmp_path):
+    make_base(tmp_path)
+    manager = ModuleManager(tmp_path)
+    manager.create("asyncio", kind="knowledge", draft=True)
+
+    _, added, before, after = manager.grow("asyncio", parts=["decisions"])
+
+    assert added == ["decisions"] and before == after == 1
+
+
+def test_manager_reports_a_bad_part_as_a_module_error(tmp_path):
+    make_base(tmp_path)
+    manager = ModuleManager(tmp_path)
+    manager.create("asyncio", kind="knowledge", draft=True)
+
+    with pytest.raises(ModuleError, match="level 5"):
+        manager.grow("asyncio", parts=["interface"])
 
 
 def test_grow_on_a_module_without_a_kind_is_refused(tmp_path):
@@ -1042,7 +1245,7 @@ def test_a_hand_written_draft_grows(tmp_path):
     write_by_hand(base, "asyncio", "asyncio.md", seed)
     manager = ModuleManager(tmp_path)
 
-    path, added, _, _ = manager.grow("asyncio", to_level=MAX_LEVEL)
+    path, added, _, _ = manager.grow("asyncio", complete=True)
     grown = path.read_text(encoding="utf-8")
 
     assert "current" in added and "scope" in added

@@ -2,7 +2,7 @@
 
 import re
 from pathlib import Path
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Sequence
 from datetime import datetime
 from memory_tool.utils.paths import base_dir_for_root, get_project_root
 
@@ -327,8 +327,10 @@ TODO: Document key data structures
         kind: Optional[str] = None,
         nature: Optional[str] = None,
         to_level: Optional[int] = None,
+        parts: Sequence[str] = (),
+        complete: bool = False,
     ) -> tuple:
-        """Advance a module one rung up the growth ladder.
+        """Advance a module one rung up the growth ladder, or attach parts.
 
         The second half of the draft workflow: a seed thickens toward the full
         document one step at a time, at the pace the thinking does. What is
@@ -339,18 +341,23 @@ TODO: Document key data structures
             kind: Override the kind in the module's header
             nature: Override the nature in the module's header
             to_level: Stop at this rung instead of the next one. Pass MAX_LEVEL
-                for the whole skeleton in one call.
+                for the whole ladder in one call.
+            parts: Parts to attach whatever the rung (decisions, scope, ...).
+                Given alone, the module does not climb.
+            complete: The whole skeleton: every rung and every attachable part.
 
         Returns:
-            (path, parts appended, level before, level after). The parts list is
+            (path, parts added, level before, level after). The parts list is
             empty when there was nothing to add.
 
         Raises:
-            ModuleError: If the module is missing, carries no kind, the level is
-                out of range, or the templates cannot be loaded.
+            ModuleError: If the module is missing, carries no kind, the level or
+                a part is not valid, or the templates cannot be loaded.
         """
         from memory_tool.core.module_templates import (
+            MAX_LEVEL,
             TemplateError,
+            attachable_parts,
             grow_module_document,
         )
 
@@ -375,6 +382,10 @@ TODO: Document key data structures
         existing = doc.read_text(encoding="utf-8")
 
         try:
+            if complete:
+                to_level = MAX_LEVEL
+                parts = attachable_parts(resolved_kind)
+
             grown, added, before, after = grow_module_document(
                 existing,
                 name=name,
@@ -382,6 +393,7 @@ TODO: Document key data structures
                 nature=resolved_nature,
                 memory_path=self.memory_path,
                 to_level=to_level,
+                parts=parts,
             )
         except TemplateError as e:
             raise ModuleError(str(e)) from e

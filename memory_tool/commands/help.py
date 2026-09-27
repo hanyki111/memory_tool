@@ -940,18 +940,28 @@ the wall of empty headings one step later rather than removing it.
   2 identity    reference/confidence header + first body section
   3 outline     the body and its nature-specific detail
   4 conclusion  the remaining body sections
-  5 complete    decisions, dependencies, interface, scope
+  5 (per kind)  what that kind exists to produce:
+                  knowledge       citable   -- interface (citable conclusions)
+                  intent          exit      -- 7. exit + interface (settled only)
+                  implementation  connected -- interface (public API) + dependencies
 
-Four rungs move inside `module` and `current`, where a module's substance lives;
-the other four parts are reference scaffolding and arrive together at the end.
-Steps are close together early and coarse late: a document is abandoned near the
-beginning, so the second rung has to be cheap.
+The first four rungs are shared and move inside `module` and `current`, where a
+module's substance lives. Level 5/5 means the structure is filled in, not that
+the content is verified -- the confidence field says that -- so the last rung is
+no longer called "complete".
+
+Decisions, dependencies and scope are not stages a document passes through; they
+record things that happen. A decision can be made on day one, who cites a module
+is up to other modules, and scope matters just before someone quotes it. Attach
+them when that happens. Attaching does not climb a level.
 
   --level N     stop at level N instead of taking one step
-  --all         go straight to the full skeleton
+  --part NAME   attach decisions, dependencies or scope (repeatable)
+  --all         every level and every part in one go
 
-grow appends only what the document does not have, matched by heading, and
-leaves everything already written untouched. The **Level:** header field says
+grow adds only what the document does not have, matched by heading, and leaves
+everything already written untouched. Each new section goes where its part
+belongs, so a Decisions part attached early stays below the body. The **Level:** header field says
 where it is, and is recounted from the file so hand edits cannot desync it. Kind
 and nature come from the module's own header.
 
@@ -974,14 +984,15 @@ bundled ones, so local edits are preserved.
                 "mmodule create api --kind implementation --desc \"REST endpoints\"",
                 "mmodule create PLAN-v2-release --kind intent --nature plan",
                 "mmodule create asyncio --kind knowledge --draft   # seed document",
-                "mmodule grow asyncio       # one rung up (--all for the top)",
+                "mmodule grow asyncio       # one rung up (--all for everything)",
+                "mmodule grow asyncio --part decisions   # attach when you decide",
                 "mmodule graph              # Visualize connections",
             ],
             "options": [
                 ("list", "List all modules"),
                 ("tree", "Tree view of modules"),
                 ("create", "Create new module"),
-                ("grow", "Advance one level up the five-step ladder"),
+                ("grow", "Advance one level up the five-step ladder, or attach a part"),
                 ("graph", "Visualize connections"),
             ],
         },
@@ -1047,17 +1058,28 @@ grow 는 한 번에 한 칸씩 올라갑니다. 씨앗에서 완전판으로 한
   2 정체   기준·신뢰도 헤더 + 본문 첫 절
   3 뼈대   본문과 성격별 세부 목차
   4 결론   남은 본문 절
-  5 완성   결정 · 의존성 · 인터페이스 · 범위와 전제
+  5 (Kind별) 그 Kind 가 만들어 내야 하는 산출물
+             knowledge       인용  인터페이스 (인용 가능한 결론)
+             intent          종결  §7 종결 처리 + 인터페이스 (확정 결론만)
+             implementation  연결  인터페이스 (Public API) + 의존성
 
-네 칸이 module 과 current 안에서 움직입니다. 모듈의 본체가 거기 있기 때문입니다.
-나머지 네 파트는 참조용 뼈대라서 마지막 한 칸에 함께 붙습니다. 앞은 촘촘하고 뒤는
-성깁니다. 문서를 포기하는 지점이 앞쪽이라서 두 번째 칸이 싸야 합니다.
+1~4단계는 모든 Kind 에 공통이며 module 과 current 안에서 움직입니다. 모듈의 본체가
+거기 있기 때문입니다. 5/5 는 구조가 다 채워졌다는 뜻이지 내용이 검증되었다는 뜻이
+아닙니다. 그것은 신뢰도 필드가 알려 줍니다. 그래서 마지막 칸을 "완성"이라고 부르지
+않습니다.
+
+결정, 의존성, 범위와 전제는 문서가 거쳐 가는 단계가 아니라 그 일이 생겼을 때 남기는
+기록입니다. 결정은 첫날에도 내릴 수 있고, 누가 이 모듈을 인용하는지는 다른 모듈이
+정하며, 범위는 남이 인용하기 직전에야 중요해집니다. 그 일이 생겼을 때 붙이면 되고,
+붙여도 단계는 오르지 않습니다.
 
   --level N     한 칸이 아니라 N단계까지
-  --all         한 번에 완전판까지
+  --part 이름   decisions, dependencies, scope 중 하나를 붙인다 (반복 가능)
+  --all         모든 단계와 모든 파트를 한 번에
 
-grow 는 문서에 없는 절만 덧붙이며, 판단 기준은 표제의 존재 여부입니다. 이미 쓴 내용은
-건드리지 않습니다. 지금 몇 단계인지는 헤더의 **Level:** 필드가 알려 주고, 그 값은 파일
+grow 는 문서에 없는 절만 붙이며, 판단 기준은 표제의 존재 여부입니다. 이미 쓴 내용은
+건드리지 않습니다. 새 절은 파트 순서에 맞는 자리에 들어가므로, 결정 파트를 먼저
+붙여도 본문은 그 위에 채워집니다. 지금 몇 단계인지는 헤더의 **Level:** 필드가 알려 주고, 그 값은 파일
 내용에서 다시 세므로 손으로 고쳐도 어긋나지 않습니다.
 
 절 순서는 본문이 먼저입니다. 제목과 한 문장 목적, 그다음 본문, 그다음 결정과 의존성과
@@ -1077,14 +1099,15 @@ grow 는 문서에 없는 절만 덧붙이며, 판단 기준은 표제의 존재
                 "mmodule create api --kind implementation --desc \"REST 엔드포인트\"",
                 "mmodule create PLAN-v2-release --kind intent --nature plan",
                 "mmodule create asyncio --kind knowledge --draft   # 씨앗 문서",
-                "mmodule grow asyncio       # 한 칸 올리기 (--all 이면 끝까지)",
+                "mmodule grow asyncio       # 한 칸 올리기 (--all 이면 전부)",
+                "mmodule grow asyncio --part decisions   # 결정을 내렸을 때 붙이기",
                 "mmodule graph              # 연결 시각화",
             ],
             "options": [
                 ("list", "모든 모듈 나열"),
                 ("tree", "모듈 트리 보기"),
                 ("create", "새 모듈 생성"),
-                ("grow", "다섯 단계 사다리를 한 칸 올리기"),
+                ("grow", "다섯 단계 사다리를 한 칸 올리거나 파트 붙이기"),
                 ("graph", "연결 시각화"),
             ],
         },

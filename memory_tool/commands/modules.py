@@ -2,7 +2,7 @@
 
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 import typer
 
@@ -41,7 +41,8 @@ def module(
     nature: Optional[str] = typer.Option(None, "--nature", help="Body outline. knowledge: concept, reference, analysis, tracker, method | intent: idea, inquiry, plan"),
     draft: bool = typer.Option(False, "--draft", help="Create a seed document instead of the full skeleton; grow it later with 'mmodule grow'"),
     to_level: Optional[int] = typer.Option(None, "--level", help="For grow: stop at this level (1-5) instead of taking one step"),
-    all_levels: bool = typer.Option(False, "--all", help="For grow: go straight to the full skeleton"),
+    all_levels: bool = typer.Option(False, "--all", help="For grow: go straight to the full skeleton, on-demand parts included"),
+    parts: Optional[List[str]] = typer.Option(None, "--part", help="For grow: attach a part no level adds (decisions, dependencies, scope). Repeatable. On its own it does not climb a level"),
 ):
     """Manage modules (supports single-file modules, hierarchical paths, wiki-style [[connections]], and AI suggestions)."""
     action = arg_str(action)
@@ -110,50 +111,71 @@ def module(
 
             from memory_tool.core.module_templates import (
                 MAX_LEVEL,
+                attachable_parts,
                 level_by_number,
             )
 
             resolved_name = resolve_module_name(name)
             kind_opt = opt_str(kind)
             nature_opt = opt_str(nature)
-            target = MAX_LEVEL if all_levels else to_level
+            part_opts = [p for p in (parts or []) if p]
 
             console.print(f"[cyan]Growing module '{resolved_name}'...[/cyan]")
             module_path, added, before, after = manager.grow(
-                resolved_name, kind=kind_opt, nature=nature_opt, to_level=target
+                resolved_name,
+                kind=kind_opt,
+                nature=nature_opt,
+                to_level=to_level,
+                parts=part_opts,
+                complete=all_levels,
             )
+            # grow succeeded, so the kind came from the option or the header
+            resolved_kind = kind_opt or manager.read_classification(resolved_name)["kind"]
+
+            def label(number: int) -> str:
+                rung = level_by_number(number, resolved_kind)
+                return f"{number}/{MAX_LEVEL} ({rung.label})"
 
             if not added:
-                reached = level_by_number(before)
                 console.print(
                     f"[green]OK[/green] '{resolved_name}' is already at level "
-                    f"{before}/{MAX_LEVEL} ({reached.label}). Nothing was written."
+                    f"{label(before)}. Nothing was written."
                 )
-                if target is not None and before < MAX_LEVEL:
+                if part_opts:
                     console.print(
-                        f"[dim]Level {target} is at or below where it already "
-                        f"is. Omit --to to take the next step.[/dim]"
+                        f"[dim]Already in the document: {', '.join(part_opts)}[/dim]"
+                    )
+                elif to_level is not None and before < MAX_LEVEL:
+                    console.print(
+                        f"[dim]Level {to_level} is at or below where it already "
+                        f"is. Omit --level to take the next step.[/dim]"
                     )
             else:
-                start = level_by_number(before)
-                end = level_by_number(after)
-                console.print(
-                    f"\n[green]OK[/green] {before}/{MAX_LEVEL} ({start.label}) "
-                    f"-> {after}/{MAX_LEVEL} ({end.label})"
-                )
+                if after > before:
+                    # Obsidian parses this "a/5 (x) -> b/5 (y)" line for its notice.
+                    console.print(f"\n[green]OK[/green] {label(before)} -> {label(after)}")
+                    end = level_by_number(after, resolved_kind)
+                    console.print(f"[dim]이제 답할 수 있는 것: {end.answers}[/dim]")
+                else:
+                    console.print(f"\n[green]OK[/green] Attached at level {label(after)}")
                 console.print(f"[dim]Added: {', '.join(added)}[/dim]")
-                console.print(f"[dim]이제 답할 수 있는 것: {end.answers}[/dim]")
                 console.print(f"[dim]File location: {display_path(module_path)}[/dim]")
 
                 if after < MAX_LEVEL:
-                    nxt = level_by_number(after + 1)
+                    nxt = level_by_number(after + 1, resolved_kind)
                     console.print(
-                        f"[dim]다음 단계 {after + 1}/{MAX_LEVEL} ({nxt.label}): "
+                        f"[dim]다음 단계 {label(after + 1)}: "
                         f"{nxt.answers} — 'mmodule grow' 를 다시 실행하세요.[/dim]"
                     )
+                if not all_levels:
+                    console.print(
+                        f"[dim]단계와 무관하게 필요할 때 붙이는 파트: "
+                        f"{', '.join(attachable_parts(resolved_kind))} "
+                        f"(--part <이름>)[/dim]"
+                    )
                 console.print(
-                    "[dim]What you already wrote was left untouched; the new "
-                    "sections are appended at the end.[/dim]"
+                    "[dim]What you already wrote was left untouched; each new "
+                    "section went where its part belongs.[/dim]"
                 )
 
         elif action.lower() == "migrate":

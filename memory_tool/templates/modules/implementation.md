@@ -8,7 +8,7 @@
 # Module: [경로]
 
 **Kind:** implementation | **Role:** leaf | root
-**Status:** planning | dev | stable | frozen | **Level:** 5/5 (완성)
+**Status:** planning | dev | stable | frozen | **Level:** 5/5 (연결)
 **Created:** YYYY-MM-DD | **Updated:** YYYY-MM-DD
 **Tags:**
 
@@ -274,8 +274,12 @@
              → 어느 코드를 보면 되는가
      4 결론  상태 · 할 일 · 기술 부채 · 검증 절차
              → 지금 어디까지 됐고 무엇으로 확인하는가
-     5 완성  결정 · 의존성 · Public API · 범위와 전제
-             → 다른 모듈이 가져다 쓸 수 있다
+     5 연결  Public API · 의존성
+             → 다른 코드가 이것을 어떻게 쓰고 무엇에 기대는가
 
-     한 번에 끝까지 가려면 mmodule grow "[경로]" --all
+     단계와 무관하게, 그 일이 생겼을 때 붙이는 파트:
+       기술 결정을 내렸을 때   mmodule grow "[경로]" --part decisions
+       경계를 정해야 할 때     mmodule grow "[경로]" --part scope
+
+     한 번에 전부 붙이려면 mmodule grow "[경로]" --all
      지금 단계에서 멈춰도 된다. 필요해질 때 다음 칸을 부른다. -->

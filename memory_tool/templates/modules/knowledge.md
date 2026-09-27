@@ -10,7 +10,7 @@
 # [모듈명]
 
 **Kind:** knowledge | **Nature:** concept | reference | analysis | tracker | method
-**Role:** leaf | root | **Level:** 5/5 (완성)
+**Role:** leaf | root | **Level:** 5/5 (인용)
 **Created:** YYYY-MM-DD | **Updated:** YYYY-MM-DD
 **Tags:**
 
@@ -258,10 +258,15 @@
              → 무엇을 어디에 채울지가 보인다
      4 결론  열린 질문 · 종합 의견 · 재개 가이드
              → 무엇이 남았고 지금 결론은 무엇인가
-     5 완성  결정 · 의존성 · 인용 인터페이스 · 범위와 전제
-             → 다른 모듈이 가져다 쓸 수 있다
+     5 인용  핵심 용어 · 인용 가능한 결론 · 인용 시 주의
+             → 다른 모듈이 인용할 수 있는 한 줄 결론은 무엇인가
 
-     한 번에 끝까지 가려면 mmodule grow "[경로]" --all
+     단계와 무관하게, 그 일이 생겼을 때 붙이는 파트:
+       결정을 내렸을 때        mmodule grow "[경로]" --part decisions
+       근거·피참조가 생겼을 때  mmodule grow "[경로]" --part dependencies
+       남이 인용하기 직전      mmodule grow "[경로]" --part scope
+
+     한 번에 전부 붙이려면 mmodule grow "[경로]" --all
      지금 단계에서 멈춰도 된다. 필요해질 때 다음 칸을 부른다. -->
 
 ---
