@@ -1,4 +1,4 @@
-"""Parser for Related Files section in module current.md files."""
+"""Parser for the Related Files section of a module document."""
 
 import re
 from dataclasses import dataclass, field
@@ -81,7 +81,7 @@ class RelatedFiles:
 
 
 class RelatedFilesParser:
-    """Parse Related Files section from module current.md files.
+    """Parse Related Files sections from a module document.
 
     Supports two formats:
     1. Standard format (new):
@@ -156,125 +156,142 @@ class RelatedFilesParser:
         """Parse standard Related Files format."""
         result = RelatedFiles()
 
-        # Find the Related Files section
-        section_content, section_start_line = self._extract_section(
+        # Every matching section, not only the first. Consolidating a module
+        # into a single document concatenates the sections its former files
+        # each carried, so stopping at the first one drops most of the paths.
+        for section_content, section_start_line in self._extract_sections(
             content, self.STANDARD_HEADERS
-        )
-        if not section_content:
-            return result
+        ):
+            # Parse each line
+            for line_offset, line in enumerate(section_content.split("\n")):
+                match = self.CATEGORY_LINE_PATTERN.match(line)
+                if match:
+                    category = match.group(1).strip().lower()
+                    path = match.group(2).strip()
 
-        # Parse each line
-        for line_offset, line in enumerate(section_content.split("\n")):
-            match = self.CATEGORY_LINE_PATTERN.match(line)
-            if match:
-                category = match.group(1).strip().lower()
-                path = match.group(2).strip()
+                    # Clean up path (remove trailing backticks, etc.)
+                    path = path.rstrip("`").strip()
 
-                # Clean up path (remove trailing backticks, etc.)
-                path = path.rstrip("`").strip()
+                    if not path:
+                        continue
 
-                if not path:
-                    continue
+                    # Calculate actual line number (1-based)
+                    actual_line = section_start_line + line_offset
 
-                # Calculate actual line number (1-based)
-                actual_line = section_start_line + line_offset
+                    # Categorize
+                    categorized = False
+                    for std_cat, aliases in self.STANDARD_CATEGORIES.items():
+                        if category in aliases:
+                            self._add_path(result, std_cat, path, actual_line)
+                            categorized = True
+                            break
 
-                # Categorize
-                categorized = False
-                for std_cat, aliases in self.STANDARD_CATEGORIES.items():
-                    if category in aliases:
-                        getattr(result, std_cat).append(path)
-                        result.line_numbers[path] = actual_line
-                        categorized = True
-                        break
-
-                if not categorized:
-                    # Put in "other" category
-                    result.other.append(path)
-                    result.line_numbers[path] = actual_line
-                    # Also store in raw with original category name
-                    if category not in result.raw:
-                        result.raw[category] = []
-                    result.raw[category].append(path)
+                    if not categorized:
+                        # Put in "other" category
+                        if self._add_path(result, "other", path, actual_line):
+                            # Also store in raw with original category name
+                            if category not in result.raw:
+                                result.raw[category] = []
+                            result.raw[category].append(path)
 
         return result
+
+    @staticmethod
+    def _add_path(
+        result: RelatedFiles,
+        category: str,
+        path: str,
+        line_number: int,
+    ) -> bool:
+        """Record a path once, keeping the line number of its first mention.
+
+        Returns:
+            True if the path was new, False if it had already been recorded.
+        """
+        if path in result.line_numbers:
+            return False
+
+        getattr(result, category).append(path)
+        result.line_numbers[path] = line_number
+        return True
 
     def _parse_legacy(self, content: str) -> RelatedFiles:
         """Parse legacy Key Files format."""
         result = RelatedFiles()
 
-        # Find the Key Files section
-        section_content, section_start_line = self._extract_section(
+        # A consolidated document keeps one Key Files block per feature it
+        # absorbed, so every block has to be read.
+        for section_content, section_start_line in self._extract_sections(
             content, self.LEGACY_PATTERNS
-        )
-        if not section_content:
-            return result
-
-        # Parse each line for paths
-        for line_offset, line in enumerate(section_content.split("\n")):
-            match = self.PATH_LINE_PATTERN.match(line)
-            if match:
-                # Get path from either group
-                path = match.group(1) or match.group(2)
-                if path:
-                    path = path.strip()
-                    # Calculate actual line number (1-based)
-                    actual_line = section_start_line + line_offset
-                    # Legacy format goes to "source" by default
-                    result.source.append(path)
-                    result.line_numbers[path] = actual_line
+        ):
+            # Parse each line for paths
+            for line_offset, line in enumerate(section_content.split("\n")):
+                match = self.PATH_LINE_PATTERN.match(line)
+                if match:
+                    # Get path from either group
+                    path = match.group(1) or match.group(2)
+                    if path:
+                        path = path.strip()
+                        # Calculate actual line number (1-based)
+                        actual_line = section_start_line + line_offset
+                        # Legacy format goes to "source" by default
+                        self._add_path(result, "source", path, actual_line)
 
         return result
 
-    def _extract_section(
+    def _extract_sections(
         self,
         content: str,
         header_patterns: List[str]
-    ) -> Tuple[Optional[str], int]:
-        """Extract a section from content based on header patterns.
+    ) -> List[Tuple[str, int]]:
+        """Extract every section whose header matches one of the patterns.
 
         Args:
             content: Full content
             header_patterns: Regex patterns to match section header
 
         Returns:
-            Tuple of (section content excluding header, start line number)
-            Line numbers are 1-based for editor compatibility.
+            List of (section content excluding header, start line number)
+            tuples, in document order. Line numbers are 1-based for editor
+            compatibility.
         """
         lines = content.split("\n")
+        sections = []
 
-        # Find section start
-        start_idx = None
         for i, line in enumerate(lines):
-            for pattern in header_patterns:
-                if re.match(pattern, line, re.IGNORECASE):
-                    start_idx = i + 1
+            if not self._matches_header(line, header_patterns):
+                continue
+
+            start_idx = i + 1
+
+            # Find section end (next ## header or ---)
+            end_idx = len(lines)
+            for j in range(start_idx, len(lines)):
+                stripped = lines[j].strip()
+                # Stop at next major section
+                if stripped.startswith("##") or stripped == "---":
+                    end_idx = j
                     break
-            if start_idx is not None:
-                break
 
-        if start_idx is None:
-            return None, 0
+            # Extract section content
+            section_lines = lines[start_idx:end_idx]
+            # Store a 1-based line number for the start of content
+            sections.append(("\n".join(section_lines), start_idx + 1))
 
-        # Find section end (next ## header or ---)
-        end_idx = len(lines)
-        for i in range(start_idx, len(lines)):
-            line = lines[i].strip()
-            # Stop at next major section
-            if line.startswith("##") or line == "---":
-                end_idx = i
-                break
+        return sections
 
-        # Extract section content
-        section_lines = lines[start_idx:end_idx]
-        # Return 1-based line number for the start of content
-        return "\n".join(section_lines), start_idx + 1
+    @staticmethod
+    def _matches_header(line: str, header_patterns: List[str]) -> bool:
+        """Check whether a line opens one of the wanted sections."""
+        return any(
+            re.match(pattern, line, re.IGNORECASE) for pattern in header_patterns
+        )
 
     def parse_file(self, file_path: Path) -> RelatedFiles:
         """Parse Related Files from a file.
 
         Args:
-            file_path: Path to current.md file
+            file_path: Path to the module document
 
         Returns:
             RelatedFiles object
@@ -286,23 +303,76 @@ class RelatedFilesParser:
             return RelatedFiles(format_type="none")
 
 
-def get_module_related_files(
-    module_path: Path,
-    current_file: str = "current.md"
-) -> RelatedFiles:
-    """Convenience function to get Related Files from a module directory.
+#: Names a module document can take inside its own folder, in the order they
+#: should be preferred. ``<folder>.md`` is the current single-file layout and is
+#: resolved separately, because it is named after the folder rather than fixed.
+MODULE_DOC_NAMES = ("current.md", "module.md")
+
+
+def resolve_module_document(module_path: Path) -> Optional[Path]:
+    """Find the markdown document that holds a module's Related Files.
+
+    Three layouts are in use and all remain readable:
+      1. ``<folder>/<folder>.md`` -- current single-file layout
+      2. ``<folder>.md``          -- flat single file
+      3. ``<folder>/current.md``  -- legacy multi-file layout
 
     Args:
-        module_path: Path to module directory
-        current_file: Name of the current status file
+        module_path: Either the module's folder or its document itself
+
+    Returns:
+        Path to the module document, or None when the module has none.
+    """
+    if module_path.is_file():
+        return module_path
+
+    if module_path.is_dir():
+        encapsulated = module_path / f"{module_path.name}.md"
+        if encapsulated.is_file():
+            return encapsulated
+
+        for doc_name in MODULE_DOC_NAMES:
+            legacy = module_path / doc_name
+            if legacy.is_file():
+                return legacy
+
+    # Appended rather than substituted: with_suffix would read a dot in the
+    # module's own name as an extension and truncate it.
+    flat = module_path.parent / f"{module_path.name}.md"
+    if flat.is_file():
+        return flat
+
+    return None
+
+
+def get_module_related_files(
+    module_path: Path,
+    current_file: Optional[str] = None
+) -> RelatedFiles:
+    """Convenience function to get Related Files from a module.
+
+    Consolidating a module into one document leaves nothing named
+    ``current.md`` behind, so the document is resolved by layout rather than by
+    a fixed filename. Callers that pass the document itself are handled too.
+
+    Args:
+        module_path: Module folder, or the module document itself
+        current_file: Explicit document name inside the folder, when the caller
+            knows it. Defaults to resolving the layout.
 
     Returns:
         RelatedFiles object
     """
     parser = RelatedFilesParser()
-    current_path = module_path / current_file
 
-    if current_path.exists():
-        return parser.parse_file(current_path)
+    if current_file is not None:
+        named_path = module_path / current_file
+        if named_path.is_file():
+            return parser.parse_file(named_path)
+        return RelatedFiles(format_type="none")
+
+    doc_path = resolve_module_document(module_path)
+    if doc_path is not None:
+        return parser.parse_file(doc_path)
 
     return RelatedFiles(format_type="none")

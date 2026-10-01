@@ -526,10 +526,14 @@ def check(
                 else:
                     for path_result in result.path_results:
                         if not path_result.exists:
-                            console.print(f"[red]{path_result.format_error()}[/red]")
+                            console.print(f"[red]{path_result.format_error()}[/red]", emoji=False, highlight=False)
                     if not result.has_related_files:
-                        source_file = f".memory/modules/{module_name}/current.md"
-                        console.print(f"[yellow]{source_file}:1: warning: No Related Files section found[/yellow]")
+                        source_file = result.source_file or module_name
+                        console.print(
+                            f"[yellow]{source_file}:1: warning: No Related Files section found[/yellow]",
+                            emoji=False,
+                            highlight=False,
+                        )
                     console.print(f"\n[dim]Checked: {result.valid_count} valid, {result.missing_count} missing[/dim]")
 
             if result.has_issues:
@@ -545,7 +549,9 @@ def check(
                     verbose=verbose,
                     standard_format=not legacy,
                 )
-                console.print(output_text)
+                # Plain text carrying "file:line:" positions: rich must not
+                # read those as markup or emoji codes.
+                console.print(output_text, markup=False, emoji=False, highlight=False)
 
             if summary_result.has_issues:
                 sys.exit(1)

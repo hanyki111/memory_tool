@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+from memory_tool.context.related_files import resolve_module_document
+
 
 @dataclass
 class HealthIssue:
@@ -62,7 +64,7 @@ class DocumentHealthChecker:
             if module_file.name in ["module.md", "current.md", "decisions.md", "dependencies.md", "interface.md"]:
                 continue
 
-            module_name = str(module_file.relative_to(self.modules_dir).with_suffix("")).replace("\\", "/")
+            module_name = self._module_name_for(module_file)
             issue = self._check_file(module_name, "module", module_file)
             if issue:
                 issues.append(issue)
@@ -82,6 +84,20 @@ class DocumentHealthChecker:
 
         return issues
 
+    def _module_name_for(self, module_file: Path) -> str:
+        """Name a module after its folder when the document is named for it.
+
+        ``a/b/b.md`` is the module ``a/b``, not ``a/b/b``: repeating the folder
+        name produced a module name that no other command could resolve.
+        """
+        if module_file.stem == module_file.parent.name:
+            try:
+                return module_file.parent.relative_to(self.modules_dir).as_posix()
+            except ValueError:
+                pass
+
+        return module_file.relative_to(self.modules_dir).with_suffix("").as_posix()
+
     def check_module(self, module_name: str) -> list[HealthIssue]:
         """Check health of a specific module.
 
@@ -92,8 +108,15 @@ class DocumentHealthChecker:
             List of health issues found
         """
         module_dir = self.modules_dir / module_name
-        if not module_dir.exists():
-            return []
+
+        # A consolidated module is one document, so there is no decisions.md or
+        # current.md beside it to measure -- the document itself is the subject.
+        if not module_dir.is_dir():
+            doc_path = resolve_module_document(module_dir)
+            if doc_path is None:
+                return []
+            issue = self._check_file(module_name, "module", doc_path)
+            return [issue] if issue else []
 
         issues = []
 
@@ -108,6 +131,16 @@ class DocumentHealthChecker:
         current_path = module_dir / "current.md"
         if current_path.exists():
             issue = self._check_file(module_name, "current", current_path)
+            if issue:
+                issues.append(issue)
+
+        if issues:
+            return issues
+
+        # Folder present but holding a single consolidated document.
+        doc_path = resolve_module_document(module_dir)
+        if doc_path is not None:
+            issue = self._check_file(module_name, "module", doc_path)
             if issue:
                 issues.append(issue)
 

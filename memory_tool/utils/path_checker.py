@@ -11,6 +11,7 @@ from memory_tool.context.related_files import (
     RelatedFilesParser,
     get_module_related_files,
 )
+from memory_tool.core.module import ModuleManager
 from memory_tool.utils.paths import base_dir_for_root, get_project_root
 
 
@@ -52,6 +53,10 @@ class ModuleCheckResult:
     module_path: Path
     related_files: RelatedFiles
     path_results: List[PathCheckResult] = field(default_factory=list)
+    # The document the Related Files were read from, and its display form.
+    # A consolidated module has no current.md, so neither can be assumed.
+    doc_path: Optional[Path] = None
+    source_file: str = ""
 
     @property
     def valid_count(self) -> int:
@@ -173,6 +178,9 @@ class PathChecker:
         self.modules_path = self.memory_path / "modules"
         self.cache_path = self.memory_path / self.CACHE_FILE
         self.parser = RelatedFilesParser()
+        # Module discovery and document resolution both understand all three
+        # layouts, so the checker defers to them instead of guessing filenames.
+        self.module_manager = ModuleManager(self.base_path)
 
     def check_path(
         self,
@@ -263,31 +271,52 @@ class PathChecker:
         Returns:
             ModuleCheckResult with all path checks
         """
-        file_path = self.modules_path / f"{module_name}.md"
-        legacy_dir = self.modules_path / module_name
-        
-        target_path = file_path if file_path.exists() else legacy_dir
-        related_files = get_module_related_files(target_path)
+        doc_path = self.module_manager.resolve_module_doc(module_name)
 
-        source_file = str((file_path if file_path.exists() else legacy_dir / "current.md").relative_to(self.base_path))
+        if doc_path is None:
+            # Nothing to read: report the folder the module would live in.
+            module_dir = self.modules_path / module_name
+            return ModuleCheckResult(
+                module_name=module_name,
+                module_path=module_dir,
+                related_files=RelatedFiles(format_type="none"),
+                doc_path=None,
+                source_file=self._display_path(module_dir),
+            )
+
+        related_files = get_module_related_files(doc_path)
+        # Relative paths in the document are resolved against the folder the
+        # document sits in, which is the module's own folder in every layout
+        # except the flat one.
+        module_dir = doc_path.parent
+        source_file = self._display_path(doc_path)
 
         result = ModuleCheckResult(
             module_name=module_name,
-            module_path=target_path,
+            module_path=module_dir,
             related_files=related_files,
+            doc_path=doc_path,
+            source_file=source_file,
         )
 
         for path_str in related_files.all_paths():
             line_number = related_files.get_line_number(path_str)
             path_result = self.check_path(
                 path_str,
-                module_path=target_path,
+                module_path=module_dir,
                 source_file=source_file,
                 line_number=line_number,
             )
             result.path_results.append(path_result)
 
         return result
+
+    def _display_path(self, path: Path) -> str:
+        """Format a path for an error message, relative to the project root."""
+        try:
+            return str(path.relative_to(self.base_path)).replace("\\", "/")
+        except ValueError:
+            return str(path)
 
     def check_all_modules(self, include_archived: bool = False) -> CheckSummary:
         """Check all modules in the project."""
@@ -296,22 +325,17 @@ class PathChecker:
         if not self.modules_path.exists():
             return summary
 
-        # Find all modules (.md files and legacy current.md)
-        modules = set()
-        for md_file in self.modules_path.rglob("*.md"):
-            if "archive" in md_file.parts or md_file.name.startswith("_") or md_file.name.isupper() or md_file.name == "MIGRATION-SUMMARY.md":
-                continue
-            if md_file.name in ["module.md", "current.md", "decisions.md", "dependencies.md", "interface.md"]:
-                legacy_dir = md_file.parent
-                modules.add(str(legacy_dir.relative_to(self.modules_path)).replace("\\", "/"))
-            else:
-                modules.add(str(md_file.relative_to(self.modules_path).with_suffix("")).replace("\\", "/"))
+        # Discovery already knows the three module layouts. The checker used to
+        # repeat that logic and got the encapsulated one wrong, naming
+        # "a/b/b.md" as the module "a/b/b" instead of "a/b".
+        modules = [
+            module_rel.as_posix()
+            for module_rel in self.module_manager.discover_all_modules(
+                include_archived=include_archived
+            )
+        ]
 
-        for module_name in sorted(list(modules)):
-            if not include_archived:
-                if module_name.startswith("archive/") or "/archive/" in module_name:
-                    continue
-
+        for module_name in sorted(modules):
             result = self.check_module(module_name)
             summary.results.append(result)
 
@@ -410,8 +434,10 @@ def format_check_result(
                     if not path_result.exists:
                         lines.append(path_result.format_error())
             else:
-                # No Related Files section - also report as error
-                source_file = f".memory/modules/{result.module_name}/current.md"
+                # No Related Files section - also report as warning. The path
+                # comes from the document that was actually read; a consolidated
+                # module has no current.md to point at.
+                source_file = result.source_file or result.module_name
                 lines.append(f"{source_file}:1: warning: No Related Files section found")
 
         # Summary at the end

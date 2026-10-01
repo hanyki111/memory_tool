@@ -354,12 +354,10 @@ class ContextBuilder:
             return mappings
 
         for module_name, current_file in self.get_module_docs().items():
-            # For a flat single-file module the document sits beside its
-            # siblings, so the module "directory" is the file's own folder.
-            module_dir = current_file.parent
-
-            # Parse Related Files
-            related_files = get_module_related_files(module_dir)
+            # Parse Related Files straight from the resolved document. Passing
+            # the folder made a consolidated module look empty, because the
+            # lookup there used to assume a current.md.
+            related_files = get_module_related_files(current_file)
 
             # Extract description from the module doc (first > blockquote)
             description = ""

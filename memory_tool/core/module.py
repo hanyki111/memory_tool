@@ -442,8 +442,12 @@ TODO: Document key data structures
 
         return file_path
 
-    def discover_all_modules(self) -> List[Path]:
+    def discover_all_modules(self, include_archived: bool = False) -> List[Path]:
         """Discover all modules recursively by finding module markdown files.
+
+        Args:
+            include_archived: Also return modules that live under an archive
+                folder. They are excluded by default.
 
         Returns:
             List of module relative paths (without .md extension) sorted by path.
@@ -455,7 +459,7 @@ TODO: Document key data structures
 
         for md_file in self.modules_path.rglob("*.md"):
             # Skip archive directory
-            if "archive" in md_file.parts:
+            if not include_archived and "archive" in md_file.parts:
                 continue
             # Skip uppercase meta summary files or index files starting with _ or special files
             if md_file.name.startswith("_") or md_file.name.isupper() or md_file.name in ["MIGRATION-SUMMARY.md"]:
