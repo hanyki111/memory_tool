@@ -1,11 +1,25 @@
-"""Archiver for module documentation (decisions, current, plans)."""
+"""Archiver for module documentation (decisions, current, plans).
 
+Two module layouts are handled. The legacy one splits a module into
+decisions.md, current.md and PLAN-*.md files, and archiving moves whole files
+or rebuilds decisions.md. A consolidated module is one document, and archiving
+edits only its decisions or current section, leaving the rest untouched.
+"""
+
+import os
 import re
 import shutil
 from pathlib import Path
-from typing import Optional, List, Dict, Tuple
+from typing import Callable, Optional, List, Dict, Tuple
 from datetime import datetime, timedelta
 from dateutil import parser as date_parser
+from memory_tool.core.doc_sections import (
+    CurrentSection,
+    DecisionsSection,
+    SectionError,
+    read_document,
+    write_document,
+)
 from memory_tool.utils.paths import base_dir_for_root, get_project_root
 
 
@@ -39,6 +53,160 @@ class Archiver:
         self.module_path = self.memory_path / "modules" / module_name
         self.archive_path = self.module_path / "archive"
 
+        #: The module's single document, or None for the legacy multi-file
+        #: layout, where decisions.md and current.md are files of their own.
+        self.module_doc: Optional[Path] = None
+        #: The file copied aside before the last write, for the caller to report.
+        self.last_backup: Optional[Path] = None
+
+        from memory_tool.core.module import ModuleManager
+
+        doc = ModuleManager(self.base_path).resolve_module_doc(module_name)
+        if doc is not None and doc.name != "current.md":
+            self.module_doc = doc
+            self.module_path = doc.parent
+            if doc.stem == doc.parent.name or doc.name == "module.md":
+                self.archive_path = doc.parent / "archive"
+            else:
+                # A flat module shares its folder with its siblings, so its
+                # archive gets a folder named after it instead.
+                self.archive_path = doc.parent / doc.stem / "archive"
+
+    @property
+    def decisions_label(self) -> str:
+        """What to call the decisions source in messages."""
+        if self.module_doc is not None:
+            return f"{self.module_doc.name} (decisions section)"
+        return "decisions.md"
+
+    def _link_to(self, archive_file: Path) -> str:
+        """A markdown link from the module document to an archive file."""
+        rel = Path(os.path.relpath(archive_file, self.module_path)).as_posix()
+        return f"[{rel}](./{rel})"
+
+    def _check_free(self, archive_file: Path) -> None:
+        """Refuse to replace an archive written by an earlier run."""
+        if archive_file.exists():
+            raise ArchiverError(
+                f"Archive file already exists: {archive_file}. "
+                f"Move or rename it, then run again."
+            )
+
+    def _backup(self, source: Path) -> None:
+        backup_file = source.with_suffix(".md.bak")
+        shutil.copy2(source, backup_file)
+        self.last_backup = backup_file
+
+    def _load_decisions(self) -> List[Dict]:
+        """Parse the module's decisions from whichever layout it uses.
+
+        Raises:
+            ArchiverError: If there is no decisions source or no decision in it
+        """
+        if self.module_doc is None:
+            decisions_file = self.module_path / "decisions.md"
+
+            if not decisions_file.exists():
+                raise ArchiverError(f"decisions.md not found at {decisions_file}")
+
+            content = decisions_file.read_text(encoding="utf-8")
+            decisions = self._parse_decisions(content)
+
+            if not decisions:
+                raise ArchiverError("No decisions found in decisions.md")
+
+            self._decisions_total_lines = len(content.split("\n"))
+            return decisions
+
+        lines, newline = read_document(self.module_doc)
+        try:
+            section = DecisionsSection.parse(lines)
+        except SectionError as e:
+            raise ArchiverError(f"{e} in {self.module_doc}") from e
+
+        if not section.entries:
+            raise ArchiverError(
+                f"No numbered decisions found in the decisions section of "
+                f"{self.module_doc}. Entries need a heading such as "
+                f"'## Decision 3: Title (2026-01-31)' or '### #3: Title'."
+            )
+
+        self._section = (section, newline)
+        self._decisions_total_lines = section.end - section.start
+        return [
+            {
+                "number": entry.number,
+                "suffix": entry.suffix,
+                "date": entry.date,
+                "title": entry.title,
+                "header": entry.header,
+                "content": entry.content,
+                "entry": entry,
+            }
+            for entry in section.entries
+        ]
+
+    def _commit_decisions(
+        self,
+        archive_file: Path,
+        archive_content: str,
+        to_archive: List[Dict],
+        to_keep: List[Dict],
+        update_legacy: Callable[[Path], None],
+    ) -> None:
+        """Write the archive file, then remove its decisions from the source.
+
+        Args:
+            update_legacy: Rewrites decisions.md and its index. Only called for
+                the legacy layout; a single document has its section edited.
+        """
+        self.archive_path.mkdir(parents=True, exist_ok=True)
+
+        source = self.module_doc or self.module_path / "decisions.md"
+        self._backup(source)
+
+        archive_file.write_text(archive_content, encoding="utf-8")
+
+        if self.module_doc is None:
+            update_legacy(source)
+            return
+
+        section, newline = self._section
+        ordered = sorted(to_archive, key=self._order)
+        first, last = (d["entry"].label for d in (ordered[0], ordered[-1]))
+        note = f"> For decisions #{first}-#{last}, see {self._link_to(archive_file)}"
+        lines = section.rewrite([d["entry"] for d in to_keep], note)
+        write_document(self.module_doc, lines, newline)
+
+    @staticmethod
+    def _order(decision: Dict) -> Tuple[int, str]:
+        """Oldest first: by number, then by letter ("#35a" before "#35b")."""
+        return (decision["number"], decision.get("suffix", ""))
+
+    def _commit_by_number(
+        self,
+        archive_file: Path,
+        to_archive: List[Dict],
+        to_keep: List[Dict],
+        min_num: int,
+        max_num: int,
+    ) -> None:
+        """Commit an archive whose file is named by decision numbers or dates."""
+        archive_filename = archive_file.name
+
+        def update_legacy(decisions_file: Path) -> None:
+            new_content = self._build_updated_decisions_by_number(to_keep, archive_filename, min_num, max_num)
+            decisions_file.write_text(new_content, encoding="utf-8")
+            self._update_decisions_index_by_number(archive_filename, min_num, max_num)
+
+        self._commit_decisions(
+            archive_file,
+            self._build_archive_content_by_number(to_archive, min_num, max_num),
+            to_archive,
+            to_keep,
+            update_legacy,
+        )
+
     def archive_decisions(
         self,
         phase: int,
@@ -57,19 +225,7 @@ class Archiver:
         Raises:
             ArchiverError: If archiving fails
         """
-        decisions_file = self.module_path / "decisions.md"
-
-        if not decisions_file.exists():
-            raise ArchiverError(f"decisions.md not found at {decisions_file}")
-
-        # Read current decisions
-        content = decisions_file.read_text(encoding="utf-8")
-
-        # Parse decisions
-        decisions = self._parse_decisions(content)
-
-        if not decisions:
-            raise ArchiverError("No decisions found in decisions.md")
+        decisions = self._load_decisions()
 
         # Filter by phase
         to_archive = [d for d in decisions if self._get_decision_phase(d['number']) <= phase]
@@ -92,27 +248,23 @@ class Archiver:
             archive_filename = f"decisions-phase{min_phase}-{max_phase}.md"
 
         archive_file = self.archive_path / archive_filename
+        self._check_free(archive_file)
 
         if dry_run:
             return (archive_file, len(to_archive))
 
-        # Ensure archive directory exists
-        self.archive_path.mkdir(parents=True, exist_ok=True)
+        def update_legacy(decisions_file: Path) -> None:
+            new_content = self._build_updated_decisions(to_keep, archive_filename, min_num, max_num)
+            decisions_file.write_text(new_content, encoding="utf-8")
+            self._update_decisions_index(archive_filename, min_num, max_num, min_phase, max_phase)
 
-        # Create backup
-        backup_file = decisions_file.with_suffix(".md.bak")
-        shutil.copy2(decisions_file, backup_file)
-
-        # Create archive file
-        archive_content = self._build_archive_content(to_archive, min_phase, max_phase)
-        archive_file.write_text(archive_content, encoding="utf-8")
-
-        # Update decisions.md (keep recent only)
-        new_content = self._build_updated_decisions(to_keep, archive_filename, min_num, max_num)
-        decisions_file.write_text(new_content, encoding="utf-8")
-
-        # Update decisions-index.md
-        self._update_decisions_index(archive_filename, min_num, max_num, min_phase, max_phase)
+        self._commit_decisions(
+            archive_file,
+            self._build_archive_content(to_archive, min_phase, max_phase),
+            to_archive,
+            to_keep,
+            update_legacy,
+        )
 
         return (archive_file, len(to_archive))
 
@@ -134,19 +286,7 @@ class Archiver:
         Raises:
             ArchiverError: If archiving fails
         """
-        decisions_file = self.module_path / "decisions.md"
-
-        if not decisions_file.exists():
-            raise ArchiverError(f"decisions.md not found at {decisions_file}")
-
-        # Read current decisions
-        content = decisions_file.read_text(encoding="utf-8")
-
-        # Parse decisions
-        decisions = self._parse_decisions(content)
-
-        if not decisions:
-            raise ArchiverError("No decisions found in decisions.md")
+        decisions = self._load_decisions()
 
         # Filter by decision number
         to_archive = [d for d in decisions if d['number'] <= up_to]
@@ -161,27 +301,12 @@ class Archiver:
         archive_filename = f"decisions-{min_num}-{max_num}.md"
 
         archive_file = self.archive_path / archive_filename
+        self._check_free(archive_file)
 
         if dry_run:
             return (archive_file, len(to_archive))
 
-        # Ensure archive directory exists
-        self.archive_path.mkdir(parents=True, exist_ok=True)
-
-        # Create backup
-        backup_file = decisions_file.with_suffix(".md.bak")
-        shutil.copy2(decisions_file, backup_file)
-
-        # Create archive file (without phase info)
-        archive_content = self._build_archive_content_by_number(to_archive, min_num, max_num)
-        archive_file.write_text(archive_content, encoding="utf-8")
-
-        # Update decisions.md (keep recent only)
-        new_content = self._build_updated_decisions_by_number(to_keep, archive_filename, min_num, max_num)
-        decisions_file.write_text(new_content, encoding="utf-8")
-
-        # Update decisions-index.md (without phase)
-        self._update_decisions_index_by_number(archive_filename, min_num, max_num)
+        self._commit_by_number(archive_file, to_archive, to_keep, min_num, max_num)
 
         return (archive_file, len(to_archive))
 
@@ -203,19 +328,7 @@ class Archiver:
         Raises:
             ArchiverError: If archiving fails
         """
-        decisions_file = self.module_path / "decisions.md"
-
-        if not decisions_file.exists():
-            raise ArchiverError(f"decisions.md not found at {decisions_file}")
-
-        # Read current decisions
-        content = decisions_file.read_text(encoding="utf-8")
-
-        # Parse decisions
-        decisions = self._parse_decisions(content)
-
-        if not decisions:
-            raise ArchiverError("No decisions found in decisions.md")
+        decisions = self._load_decisions()
 
         total_count = len(decisions)
 
@@ -223,7 +336,7 @@ class Archiver:
             raise ArchiverError(f"Only {total_count} decisions exist, cannot archive (keeping {keep_recent})")
 
         # Sort by decision number (ascending)
-        sorted_decisions = sorted(decisions, key=lambda d: d['number'])
+        sorted_decisions = sorted(decisions, key=self._order)
 
         # Archive oldest, keep most recent
         num_to_archive = total_count - keep_recent
@@ -236,27 +349,12 @@ class Archiver:
         archive_filename = f"decisions-{min_num}-{max_num}.md"
 
         archive_file = self.archive_path / archive_filename
+        self._check_free(archive_file)
 
         if dry_run:
             return (archive_file, len(to_archive))
 
-        # Ensure archive directory exists
-        self.archive_path.mkdir(parents=True, exist_ok=True)
-
-        # Create backup
-        backup_file = decisions_file.with_suffix(".md.bak")
-        shutil.copy2(decisions_file, backup_file)
-
-        # Create archive file
-        archive_content = self._build_archive_content_by_number(to_archive, min_num, max_num)
-        archive_file.write_text(archive_content, encoding="utf-8")
-
-        # Update decisions.md (keep recent only)
-        new_content = self._build_updated_decisions_by_number(to_keep, archive_filename, min_num, max_num)
-        decisions_file.write_text(new_content, encoding="utf-8")
-
-        # Update decisions-index.md
-        self._update_decisions_index_by_number(archive_filename, min_num, max_num)
+        self._commit_by_number(archive_file, to_archive, to_keep, min_num, max_num)
 
         return (archive_file, len(to_archive))
 
@@ -278,13 +376,16 @@ class Archiver:
         Raises:
             ArchiverError: If archiving fails
         """
+        archive_filename = f"current-phase{phase}.md"
+        archive_file = self.archive_path / archive_filename
+
+        if self.module_doc is not None:
+            return self._archive_current_section(phase, archive_file, dry_run)
+
         current_file = self.module_path / "current.md"
 
         if not current_file.exists():
             raise ArchiverError(f"current.md not found at {current_file}")
-
-        archive_filename = f"current-phase{phase}.md"
-        archive_file = self.archive_path / archive_filename
 
         if dry_run:
             return archive_file
@@ -324,6 +425,59 @@ For Phase {phase} status, see [archive/current-phase{phase}.md](./archive/curren
 
         return archive_file
 
+    def _archive_current_section(self, phase: int, archive_file: Path, dry_run: bool) -> Path:
+        """Copy a document's current-status section aside and reset it.
+
+        The section title and its Related Files block stay; the rest becomes an
+        empty In Progress / Next Steps outline pointing at the archive.
+        """
+        lines, newline = read_document(self.module_doc)
+        try:
+            section = CurrentSection.parse(lines)
+        except SectionError as e:
+            raise ArchiverError(f"{e} in {self.module_doc}") from e
+
+        self._check_free(archive_file)
+
+        if dry_run:
+            return archive_file
+
+        self.archive_path.mkdir(parents=True, exist_ok=True)
+        self._backup(self.module_doc)
+
+        archive_file.write_text("\n".join(section.body) + "\n", encoding="utf-8")
+        write_document(
+            self.module_doc,
+            section.rewrite(phase, self._link_to(archive_file)),
+            newline,
+        )
+
+        return archive_file
+
+    def plan_modules(self) -> List[str]:
+        """Modules that hold a plan as a document of their own.
+
+        In the single-document layout a plan is not a PLAN-*.md file beside a
+        module but a module in its own right, which `mmodule archive` moves.
+        """
+        from memory_tool.core.module import ModuleManager
+
+        manager = ModuleManager(self.base_path)
+        found = []
+
+        for path in manager.discover_all_modules():
+            name = path.as_posix()
+            if Path(name).name.startswith("PLAN-"):
+                found.append(name)
+                continue
+            try:
+                if manager.read_classification(name).get("nature") == "plan":
+                    found.append(name)
+            except Exception:
+                continue
+
+        return found
+
     def archive_plans(
         self,
         dry_run: bool = False,
@@ -340,6 +494,11 @@ For Phase {phase} status, see [archive/current-phase{phase}.md](./archive/curren
         Raises:
             ArchiverError: If archiving fails
         """
+        # A flat module has no folder of its own: PLAN files beside it belong
+        # to its siblings as much as to it.
+        if self.archive_path.parent != self.module_path:
+            return []
+
         # Find PLAN-*.md files
         plan_files = list(self.module_path.glob("PLAN-*.md"))
 
@@ -351,6 +510,10 @@ For Phase {phase} status, see [archive/current-phase{phase}.md](./archive/curren
 
         # Ensure archive/plans directory exists
         plans_archive = self.archive_path / "plans"
+
+        for plan_file in plan_files:
+            self._check_free(plans_archive / plan_file.name)
+
         plans_archive.mkdir(parents=True, exist_ok=True)
 
         archived = []
@@ -464,7 +627,7 @@ For Phase {phase} status, see [archive/current-phase{phase}.md](./archive/curren
         lines.append("")
 
         # Decisions
-        for decision in sorted(decisions, key=lambda d: d['number']):
+        for decision in sorted(decisions, key=self._order):
             lines.append(decision['header'])
             lines.append(decision['content'])
             lines.append("")
@@ -567,7 +730,7 @@ For Phase {phase} status, see [archive/current-phase{phase}.md](./archive/curren
         lines.append("")
 
         # Decisions
-        for decision in sorted(decisions, key=lambda d: d['number']):
+        for decision in sorted(decisions, key=self._order):
             lines.append(decision['header'])
             lines.append(decision['content'])
             lines.append("")
@@ -727,23 +890,11 @@ For Phase {phase} status, see [archive/current-phase{phase}.md](./archive/curren
         Raises:
             ArchiverError: If archiving fails
         """
-        decisions_file = self.module_path / "decisions.md"
-
-        if not decisions_file.exists():
-            raise ArchiverError(f"decisions.md not found at {decisions_file}")
-
         # Parse duration
         duration = self._parse_duration(older_than)
         cutoff_date = datetime.now() - duration
 
-        # Read current decisions
-        content = decisions_file.read_text(encoding="utf-8")
-
-        # Parse decisions
-        decisions = self._parse_decisions(content)
-
-        if not decisions:
-            raise ArchiverError("No decisions found in decisions.md")
+        decisions = self._load_decisions()
 
         # Filter by date
         to_archive = []
@@ -777,29 +928,14 @@ For Phase {phase} status, see [archive/current-phase{phase}.md](./archive/curren
             archive_filename = f"decisions-{min_num}-{max_num}.md"
 
         archive_file = self.archive_path / archive_filename
+        self._check_free(archive_file)
 
         if dry_run:
             return (archive_file, len(to_archive))
 
-        # Ensure archive directory exists
-        self.archive_path.mkdir(parents=True, exist_ok=True)
-
-        # Create backup
-        backup_file = decisions_file.with_suffix(".md.bak")
-        shutil.copy2(decisions_file, backup_file)
-
-        # Create archive file
         min_num = min(d['number'] for d in to_archive)
         max_num = max(d['number'] for d in to_archive)
-        archive_content = self._build_archive_content_by_number(to_archive, min_num, max_num)
-        archive_file.write_text(archive_content, encoding="utf-8")
-
-        # Update decisions.md (keep recent only)
-        new_content = self._build_updated_decisions_by_number(to_keep, archive_filename, min_num, max_num)
-        decisions_file.write_text(new_content, encoding="utf-8")
-
-        # Update decisions-index.md
-        self._update_decisions_index_by_number(archive_filename, min_num, max_num)
+        self._commit_by_number(archive_file, to_archive, to_keep, min_num, max_num)
 
         return (archive_file, len(to_archive))
 
@@ -819,27 +955,15 @@ For Phase {phase} status, see [archive/current-phase{phase}.md](./archive/curren
         Raises:
             ArchiverError: If analysis fails
         """
-        decisions_file = self.module_path / "decisions.md"
-
-        if not decisions_file.exists():
-            raise ArchiverError(f"decisions.md not found at {decisions_file}")
-
         # Calculate cutoff date
         cutoff_date = datetime.now() - timedelta(days=age_threshold_months * 30)
 
-        # Read current decisions
-        content = decisions_file.read_text(encoding="utf-8")
-
-        # Parse decisions
-        decisions = self._parse_decisions(content)
-
-        if not decisions:
-            raise ArchiverError("No decisions found in decisions.md")
+        decisions = self._load_decisions()
 
         # Analyze decisions
         to_archive = []
         to_keep = []
-        total_lines = len(content.split("\n"))
+        total_lines = self._decisions_total_lines
 
         for decision in decisions:
             decision_date = self._parse_decision_date(decision["date"])
@@ -858,7 +982,7 @@ For Phase {phase} status, see [archive/current-phase{phase}.md](./archive/curren
 
         # Build summary
         summary_lines = []
-        summary_lines.append(f"Archive Suggestion for {self.module_name}/decisions.md")
+        summary_lines.append(f"Archive Suggestion for {self.module_name}: {self.decisions_label}")
         summary_lines.append("=" * 60)
         summary_lines.append(f"Cutoff date: {cutoff_date.strftime('%Y-%m-%d')} ({age_threshold_months} months ago)")
         summary_lines.append("")
@@ -937,12 +1061,7 @@ For Phase {phase} status, see [archive/current-phase{phase}.md](./archive/curren
 
         # Display decisions with selection indices
         for idx, decision in enumerate(suggestions["to_archive"], 1):
-            # Extract title from content (first line after "## Decision #X:")
-            lines = decision["content"].strip().split("\n")
-            title = lines[0] if lines else "No title"
-            if title.startswith("## Decision"):
-                title = lines[1] if len(lines) > 1 else "No title"
-            title = title.strip("- ").strip()
+            title = decision.get("title") or "No title"
 
             table.add_row(
                 f"[{idx}]",
@@ -1006,13 +1125,6 @@ For Phase {phase} status, see [archive/current-phase{phase}.md](./archive/curren
                 console.print("[yellow]Archiving cancelled.[/yellow]")
                 raise ArchiverError("User cancelled archiving")
 
-        # Archive selected decisions
-        decisions_file = self.module_path / "decisions.md"
-        content = decisions_file.read_text(encoding="utf-8")
-
-        # Get decision numbers to archive
-        numbers_to_archive = [d["number"] for d in selected_decisions]
-
         # Create archive file name
         dates = [self._parse_decision_date(d["date"]) for d in selected_decisions if self._parse_decision_date(d["date"])]
         if dates:
@@ -1023,6 +1135,7 @@ For Phase {phase} status, see [archive/current-phase{phase}.md](./archive/curren
             archive_file_name = f"decisions-interactive-{datetime.now().strftime('%Y%m%d')}.md"
 
         archive_file = self.archive_path / archive_file_name
+        self._check_free(archive_file)
 
         if dry_run:
             console.print(f"\n[bold]Dry run - would archive to:[/bold]")
@@ -1030,31 +1143,17 @@ For Phase {phase} status, see [archive/current-phase{phase}.md](./archive/curren
             console.print(f"\n[bold]Mode:[/bold] interactive")
             return archive_file, len(selected_decisions)
 
-        # Perform archiving
-        # Ensure archive directory exists
-        self.archive_path.mkdir(parents=True, exist_ok=True)
+        # Keep everything not selected. Compared by identity rather than number:
+        # "#35" and "#35b" both parse as 35.
+        selected_ids = {id(d) for d in selected_decisions}
+        to_keep = [
+            d for d in suggestions["to_archive"] + suggestions["to_keep"]
+            if id(d) not in selected_ids
+        ]
 
-        # Create backup
-        backup_file = decisions_file.with_suffix(".md.bak")
-        shutil.copy2(decisions_file, backup_file)
-
-        # Create archive file
         min_num = min(d['number'] for d in selected_decisions)
         max_num = max(d['number'] for d in selected_decisions)
-        archive_content = self._build_archive_content_by_number(selected_decisions, min_num, max_num)
-        archive_file.write_text(archive_content, encoding="utf-8")
-
-        # Build list of decisions to keep (all except selected)
-        numbers_to_archive_set = set(numbers_to_archive)
-        all_decisions = self._parse_decisions(content)
-        to_keep = [d for d in all_decisions if d['number'] not in numbers_to_archive_set]
-
-        # Update decisions.md (keep non-archived)
-        new_content = self._build_updated_decisions_by_number(to_keep, archive_file_name, min_num, max_num)
-        decisions_file.write_text(new_content, encoding="utf-8")
-
-        # Update decisions-index.md
-        self._update_decisions_index_by_number(archive_file_name, min_num, max_num)
+        self._commit_by_number(archive_file, selected_decisions, to_keep, min_num, max_num)
 
         console.print(f"\n[green]OK Archived {len(selected_decisions)} decisions to:[/green]")
         console.print(f"  {archive_file}")

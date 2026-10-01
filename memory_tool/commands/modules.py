@@ -979,8 +979,8 @@ def archive(
                         age_threshold_months=6,
                         dry_run=dry_run
                     )
-                    if not dry_run:
-                        console.print(f"\n[dim]Backup: decisions.md.bak[/dim]")
+                    if not dry_run and archiver.last_backup:
+                        console.print(f"\n[dim]Backup: {display_path(archiver.last_backup)}[/dim]")
                 except ArchiverError as e:
                     console.print(f"[red]ERROR[/red] {e}")
                     sys.exit(1)
@@ -1031,7 +1031,7 @@ def archive(
                 else:
                     console.print(f"[green]OK[/green] Archived {num_archived} decisions")
                     console.print(f"  → {display_path(archive_path)}")
-                    console.print(f"\n[dim]Backup: decisions.md.bak[/dim]")
+                    console.print(f"\n[dim]Backup: {display_path(archiver.last_backup)}[/dim]")
 
             except ArchiverError as e:
                 console.print(f"[red]ERROR[/red] {e}")
@@ -1047,12 +1047,12 @@ def archive(
                 archive_path = archiver.archive_current(phase, dry_run)
 
                 if dry_run:
-                    console.print(f"[cyan]Would archive current.md to:[/cyan]")
+                    console.print(f"[cyan]Would archive the current status to:[/cyan]")
                     console.print(f"  {display_path(archive_path)}")
                 else:
-                    console.print(f"[green]OK[/green] Archived current.md")
+                    console.print(f"[green]OK[/green] Archived the current status")
                     console.print(f"  → {display_path(archive_path)}")
-                    console.print(f"\n[dim]Backup: current.md.bak[/dim]")
+                    console.print(f"\n[dim]Backup: {display_path(archiver.last_backup)}[/dim]")
 
             except ArchiverError as e:
                 console.print(f"[red]ERROR[/red] {e}")
@@ -1064,6 +1064,11 @@ def archive(
 
                 if not archived_files:
                     console.print("[yellow]No PLAN-*.md files found to archive[/yellow]")
+                    plan_modules = archiver.plan_modules()
+                    if plan_modules:
+                        console.print("\n[dim]These plans are modules of their own. Archive one with:[/dim]")
+                        for name in plan_modules:
+                            console.print(f"[dim]  mmodule archive {name}[/dim]")
                     return
 
                 if dry_run:
