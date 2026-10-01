@@ -1,4 +1,5 @@
 import { App, Modal, Notice, Platform } from "obsidian";
+import { bindCaptureSubmit } from "../captureKeys";
 
 /**
  * Minimal capture modal.
@@ -7,9 +8,9 @@ import { App, Modal, Notice, Platform } from "obsidian";
  * capture has room for little else, and every pixel of framing is a pixel the
  * user looks past before typing.
  *
- * The button is not decoration. On a phone, Enter is the newline key and there
- * is no Shift to hold, so a keyboard-only submit would be unreachable — the
- * button is the primary control there and the shortcut is the desktop extra.
+ * The button is not decoration. Enter records on either platform now (see
+ * bindCaptureSubmit), but on a phone it is the button a thumb reaches for, and
+ * it is the only control left standing once the keyboard is dismissed.
  */
 export class RecordModal extends Modal {
   private record: (message: string) => Promise<{ entry: string }>;
@@ -24,15 +25,13 @@ export class RecordModal extends Modal {
     contentEl.empty();
     modalEl.addClass("memory-tool-quick-modal");
 
-    const submitOnEnter = !Platform.isMobile;
+    const isMobile = Platform.isMobile;
 
     const input = contentEl.createEl("textarea", {
       cls: "memory-tool-quick-input",
       attr: {
-        rows: submitOnEnter ? "1" : "3",
-        placeholder: submitOnEnter
-          ? "지금 무엇을 하고 있나요?  Enter로 기록"
-          : "지금 무엇을 하고 있나요?",
+        rows: isMobile ? "3" : "1",
+        placeholder: "지금 무엇을 하고 있나요?  Enter로 기록",
       },
     });
 
@@ -42,17 +41,7 @@ export class RecordModal extends Modal {
     const submitBtn = row.createEl("button", { cls: "mod-cta", text: "기록" });
     submitBtn.addEventListener("click", () => this.submit(input.value));
 
-    input.addEventListener("keydown", (e: KeyboardEvent) => {
-      // A Korean IME fires keydown for the Enter that commits a composition.
-      // Without this guard that Enter submits the entry mid-syllable and the
-      // last character is silently dropped.
-      if (e.isComposing || e.keyCode === 229) return;
-
-      if (submitOnEnter && e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        this.submit(input.value);
-      }
-    });
+    bindCaptureSubmit(input, { isMobile, submit: () => this.submit(input.value) });
   }
 
   /**

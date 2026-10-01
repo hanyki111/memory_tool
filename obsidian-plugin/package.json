@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "node esbuild.config.mjs",
     "build": "node esbuild.config.mjs production",
-    "test": "node --test tests/paths.test.mjs tests/timeline.test.mjs tests/vaultScan.test.mjs"
+    "test": "node --test tests/captureKeys.test.mjs tests/paths.test.mjs tests/timeline.test.mjs tests/vaultScan.test.mjs"
   },
   "keywords": [
     "obsidian",

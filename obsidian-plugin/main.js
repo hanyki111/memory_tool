@@ -259,6 +259,34 @@ ${output}`);
 
 // src/modals/RecordModal.ts
 var import_obsidian2 = require("obsidian");
+
+// src/captureKeys.ts
+function isLineBreakInput(inputType) {
+  return inputType === "insertLineBreak" || inputType === "insertParagraph";
+}
+function bindCaptureSubmit(input, options) {
+  input.setAttribute("enterkeyhint", "send");
+  input.addEventListener("keydown", (e) => {
+    if (e.isComposing || e.keyCode === 229)
+      return;
+    if (e.key !== "Enter" || e.shiftKey)
+      return;
+    e.preventDefault();
+    options.submit();
+  });
+  if (!options.isMobile)
+    return;
+  input.addEventListener("beforeinput", (e) => {
+    if (!isLineBreakInput(e.inputType))
+      return;
+    if (e.isComposing)
+      return;
+    e.preventDefault();
+    options.submit();
+  });
+}
+
+// src/modals/RecordModal.ts
 var RecordModal = class extends import_obsidian2.Modal {
   constructor(app, record) {
     super(app);
@@ -268,26 +296,19 @@ var RecordModal = class extends import_obsidian2.Modal {
     const { contentEl, modalEl } = this;
     contentEl.empty();
     modalEl.addClass("memory-tool-quick-modal");
-    const submitOnEnter = !import_obsidian2.Platform.isMobile;
+    const isMobile = import_obsidian2.Platform.isMobile;
     const input = contentEl.createEl("textarea", {
       cls: "memory-tool-quick-input",
       attr: {
-        rows: submitOnEnter ? "1" : "3",
-        placeholder: submitOnEnter ? "\uC9C0\uAE08 \uBB34\uC5C7\uC744 \uD558\uACE0 \uC788\uB098\uC694?  Enter\uB85C \uAE30\uB85D" : "\uC9C0\uAE08 \uBB34\uC5C7\uC744 \uD558\uACE0 \uC788\uB098\uC694?"
+        rows: isMobile ? "3" : "1",
+        placeholder: "\uC9C0\uAE08 \uBB34\uC5C7\uC744 \uD558\uACE0 \uC788\uB098\uC694?  Enter\uB85C \uAE30\uB85D"
       }
     });
     input.focus();
     const row = contentEl.createDiv({ cls: "memory-tool-quick-actions" });
     const submitBtn = row.createEl("button", { cls: "mod-cta", text: "\uAE30\uB85D" });
     submitBtn.addEventListener("click", () => this.submit(input.value));
-    input.addEventListener("keydown", (e) => {
-      if (e.isComposing || e.keyCode === 229)
-        return;
-      if (submitOnEnter && e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        this.submit(input.value);
-      }
-    });
+    bindCaptureSubmit(input, { isMobile, submit: () => this.submit(input.value) });
   }
   /**
    * Close first, then write.
@@ -1020,12 +1041,12 @@ var MemoryPanelView = class extends import_obsidian6.ItemView {
   // --- Capture -------------------------------------------------------------
   buildCapture(root) {
     const section = root.createDiv({ cls: "memory-tool-capture" });
-    const submitOnEnter = !import_obsidian6.Platform.isMobile;
+    const isMobile = import_obsidian6.Platform.isMobile;
     this.captureInput = section.createEl("textarea", {
       cls: "memory-tool-capture-input",
       attr: {
-        rows: submitOnEnter ? "2" : "3",
-        placeholder: submitOnEnter ? "\uC9C0\uAE08 \uBB34\uC5C7\uC744 \uD558\uACE0 \uC788\uB098\uC694?  Enter\uB85C \uAE30\uB85D, Shift+Enter \uC904\uBC14\uAFC8" : "\uC9C0\uAE08 \uBB34\uC5C7\uC744 \uD558\uACE0 \uC788\uB098\uC694?"
+        rows: isMobile ? "3" : "2",
+        placeholder: isMobile ? "\uC9C0\uAE08 \uBB34\uC5C7\uC744 \uD558\uACE0 \uC788\uB098\uC694?  Enter\uB85C \uAE30\uB85D" : "\uC9C0\uAE08 \uBB34\uC5C7\uC744 \uD558\uACE0 \uC788\uB098\uC694?  Enter\uB85C \uAE30\uB85D, Shift+Enter \uC904\uBC14\uAFC8"
       }
     });
     const row = section.createDiv({ cls: "memory-tool-capture-row" });
@@ -1035,13 +1056,9 @@ var MemoryPanelView = class extends import_obsidian6.ItemView {
       text: "\uAE30\uB85D"
     });
     submitBtn.addEventListener("click", () => void this.submitCapture());
-    this.captureInput.addEventListener("keydown", (e) => {
-      if (e.isComposing || e.keyCode === 229)
-        return;
-      if (submitOnEnter && e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        void this.submitCapture();
-      }
+    bindCaptureSubmit(this.captureInput, {
+      isMobile,
+      submit: () => void this.submitCapture()
     });
   }
   async submitCapture() {

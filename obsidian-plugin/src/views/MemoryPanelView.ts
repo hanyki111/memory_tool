@@ -19,6 +19,7 @@ import { ItemView, Notice, Platform, TFile, WorkspaceLeaf, setIcon } from "obsid
 import { MemoryToolCli } from "../cli/memoryToolCli";
 import { candidatePaths } from "../timeline/format";
 import { moduleCandidatePaths, describePrefix } from "../paths";
+import { bindCaptureSubmit } from "../captureKeys";
 
 export const MEMORY_PANEL_VIEW = "memory-tool-panel";
 
@@ -111,19 +112,19 @@ export class MemoryPanelView extends ItemView {
   private buildCapture(root: HTMLElement): void {
     const section = root.createDiv({ cls: "memory-tool-capture" });
 
-    // On a phone, Enter is the newline key and there is no Shift to hold, so
-    // Enter-to-submit would make multi-line capture impossible and single-line
-    // capture surprising. The button is the primary control there; on desktop it
-    // sits alongside the Enter shortcut.
-    const submitOnEnter = !Platform.isMobile;
+    // Enter records on a phone too. It was desktop-only, to leave the key free
+    // as the newline where there is no Shift to hold, but a timeline entry is
+    // one line -- sanitizeMessage turns every newline into a space -- so what
+    // the key was being reserved for is an edit the file does not keep.
+    const isMobile = Platform.isMobile;
 
     this.captureInput = section.createEl("textarea", {
       cls: "memory-tool-capture-input",
       attr: {
-        rows: submitOnEnter ? "2" : "3",
-        placeholder: submitOnEnter
-          ? "지금 무엇을 하고 있나요?  Enter로 기록, Shift+Enter 줄바꿈"
-          : "지금 무엇을 하고 있나요?",
+        rows: isMobile ? "3" : "2",
+        placeholder: isMobile
+          ? "지금 무엇을 하고 있나요?  Enter로 기록"
+          : "지금 무엇을 하고 있나요?  Enter로 기록, Shift+Enter 줄바꿈",
       },
     });
 
@@ -136,16 +137,9 @@ export class MemoryPanelView extends ItemView {
     });
     submitBtn.addEventListener("click", () => void this.submitCapture());
 
-    this.captureInput.addEventListener("keydown", (e: KeyboardEvent) => {
-      // isComposing is essential, not defensive: with a Korean IME the Enter that
-      // commits a composition fires keydown too, so without this guard the entry
-      // is submitted mid-syllable and the last character is lost.
-      if (e.isComposing || e.keyCode === 229) return;
-
-      if (submitOnEnter && e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        void this.submitCapture();
-      }
+    bindCaptureSubmit(this.captureInput, {
+      isMobile,
+      submit: () => void this.submitCapture(),
     });
   }
 
