@@ -237,3 +237,179 @@ class TestListAndDone:
 
     def test_done_without_a_review(self, base):
         assert run("done", "1").exit_code == 1
+
+
+class FakeTools:
+    """Pretend the CLIs are installed and record how they are started."""
+
+    def __init__(self, monkeypatch, installed=("claude", "codex", "agy")):
+        self.calls = []
+        self.work_files = []
+        monkeypatch.setattr(
+            "memory_tool.review.writer.shutil.which",
+            lambda name: f"/bin/{name}" if name in installed else None,
+        )
+        monkeypatch.setattr("memory_tool.review.writer.subprocess.run", self.run)
+
+    def run(self, arguments, cwd=None, **kwargs):
+        self.calls.append((arguments, cwd))
+        if cwd is not None:
+            relative = arguments[-1].split("Read the file ")[1].split(" and follow")[0]
+            path = cwd / relative
+            self.work_files.append((path, path.read_text(encoding="utf-8")))
+
+
+class TestWriting:
+    def test_menu_lists_installed_tools_and_defaults_to_the_first(self, base, monkeypatch):
+        tools = FakeTools(monkeypatch, installed=("codex", "agy"))
+        FakeClient.answer = answer(1)
+
+        # Write now, accept the default tool, then say it was written.
+        result = run(input="1\n\n1\n")
+
+        assert result.exit_code == 0, result.output
+        assert "Claude Code" not in result.output
+        assert "1. Codex (default)" in result.output
+        assert "3. On my own" in result.output
+        assert tools.calls[0][0][0] == "/bin/codex"
+        assert states(base) == [store.STATE_WRITTEN]
+
+    def test_each_tool_gets_its_own_way_of_starting(self, base, monkeypatch):
+        tools = FakeTools(monkeypatch)
+        finish_with_deferred(base, 3)
+
+        for number, name in ((1, "claude"), (2, "codex"), (3, "antigravity")):
+            assert run("write", str(number), "--with", name, input="1\n").exit_code == 0
+
+        assert [call[0][0] for call in tools.calls] == ["/bin/claude", "/bin/codex", "/bin/agy"]
+        assert tools.calls[0][0][1].startswith("Read the file")
+        assert tools.calls[1][0][1].startswith("Read the file")
+        assert tools.calls[2][0][1] == "-i"
+        assert all(call[1].resolve() == base.parent.resolve() for call in tools.calls)
+
+    def test_never_skips_permission_prompts(self, base, monkeypatch):
+        tools = FakeTools(monkeypatch)
+        finish_with_deferred(base, 1)
+
+        run("write", "1", "--with", "codex", input="1\n")
+
+        assert not any("skip" in part or "bypass" in part for part in tools.calls[0][0])
+
+    def test_instruction_stays_short_and_the_work_file_carries_the_context(self, base, monkeypatch):
+        tools = FakeTools(monkeypatch)
+        finish_with_deferred(base, 1)
+
+        run("write", "1", "--with", "claude", input="1\n")
+
+        assert len(tools.calls[0][0][-1]) < 300
+        path, content = tools.work_files[0]
+        assert "MT-Write" in content
+        assert "Topic 1" in content
+        assert "synthetic [entry]" in content
+        assert not path.exists()
+
+    def test_project_copy_of_the_procedure_wins(self, base, monkeypatch):
+        tools = FakeTools(monkeypatch)
+        own = base.parent / ".claude" / "skills" / "mt-write" / "SKILL.md"
+        own.parent.mkdir(parents=True)
+        own.write_text("MY PROCEDURE", encoding="utf-8")
+        finish_with_deferred(base, 1)
+
+        run("write", "1", "--with", "claude", input="1\n")
+
+        assert "MY PROCEDURE" in tools.work_files[0][1]
+
+    def test_item_stays_open_until_marked_written(self, base, monkeypatch):
+        FakeTools(monkeypatch)
+        FakeClient.answer = answer(1)
+
+        # Write now, then "still writing".
+        result = run("--with", "claude", input="1\n2\n")
+
+        assert result.exit_code == 0, result.output
+        review = store.latest_review(base)
+        assert states(base) == [store.STATE_WRITING]
+        assert not review.is_done
+
+        second = run(input="1\n")
+
+        assert second.exit_code == 0, second.output
+        assert "You were writing this" in second.output
+        assert store.latest_review(base).is_done
+
+    def test_write_later_makes_no_file_until_writing_starts(self, base, monkeypatch):
+        monkeypatch.setattr("memory_tool.review.writer.open_in_editor", lambda path: None)
+        FakeTools(monkeypatch)
+        finish_with_deferred(base, 1)
+        assert list((base / "modules").rglob("*.md")) == []
+
+        result = run("write", "1", "--with", "solo", input="backup-reason\n1\n")
+
+        assert result.exit_code == 0, result.output
+        assert list((base / "modules").rglob("backup-reason.md"))
+        assert "synthetic [entry]" in result.output
+        assert states(base) == [store.STATE_WRITTEN]
+
+    def test_solo_update_opens_the_existing_document(self, base, monkeypatch):
+        opened = []
+        monkeypatch.setattr("memory_tool.review.writer.open_in_editor", opened.append)
+        FakeTools(monkeypatch)
+        (base / "modules" / "server.md").write_text("# server\n", encoding="utf-8")
+        today = f"{datetime.now():%Y-%m-%d}"
+        FakeClient.answer = json.dumps({"proposals": [
+            {"kind": "update", "title": "Port", "target": "server", "evidence": [today]}
+        ]})
+
+        result = run("--with", "solo", input="1\n1\n")
+
+        assert result.exit_code == 0, result.output
+        assert opened[0].name == "server.md"
+
+    def test_solo_asks_again_for_an_invalid_path(self, base, monkeypatch):
+        monkeypatch.setattr("memory_tool.review.writer.open_in_editor", lambda path: None)
+        FakeTools(monkeypatch)
+        finish_with_deferred(base, 1)
+
+        result = run("write", "1", "--with", "solo", input="../bad\ngood\n1\n")
+
+        assert result.exit_code == 0, result.output
+        assert states(base) == [store.STATE_WRITTEN]
+
+    def test_unknown_or_missing_tool_changes_nothing(self, base, monkeypatch):
+        FakeTools(monkeypatch, installed=("claude",))
+        finish_with_deferred(base, 1)
+
+        assert run("write", "1", "--with", "vim").exit_code == 1
+        assert run("write", "1", "--with", "codex").exit_code == 1
+        assert states(base) == [store.STATE_DEFERRED]
+
+    def test_writing_a_settled_item_is_refused(self, base, monkeypatch):
+        FakeTools(monkeypatch)
+        finish_with_deferred(base, 1)
+        run("done", "1")
+
+        assert run("write", "1", "--with", "claude").exit_code == 1
+
+    def test_configured_writer_is_the_default(self, base, monkeypatch):
+        FakeTools(monkeypatch)
+        (base / "config.yaml").write_text(
+            "version: '1.0'\nreview:\n  writer: codex\n", encoding="utf-8"
+        )
+        clear_cache()
+        FakeClient.answer = answer(1)
+
+        result = run(input="1\n\n1\n")
+
+        assert "2. Codex (default)" in result.output
+
+    def test_llm_provider_is_the_next_default(self, base, monkeypatch):
+        FakeTools(monkeypatch)
+        (base / "config.yaml").write_text(
+            "version: '1.0'\nllm:\n  provider: antigravity-cli\n", encoding="utf-8"
+        )
+        clear_cache()
+        FakeClient.answer = answer(1)
+
+        result = run(input="1\n\n1\n")
+
+        assert "3. Antigravity (default)" in result.output

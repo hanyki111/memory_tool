@@ -2,16 +2,17 @@
 
 import sys
 from datetime import datetime
+from pathlib import Path
 from typing import Callable, List, NoReturn, Optional, Tuple
 
 import click
 import typer
 
 from memory_tool.commands.common import app, console
-from memory_tool.review import session, store
+from memory_tool.review import session, store, writer
 from memory_tool.review.store import Item, Review, ReviewError
 from memory_tool.review.text import say
-from memory_tool.utils.paths import display_path, get_base_path
+from memory_tool.utils.paths import display_path, get_base_path, get_project_root
 
 review_app = typer.Typer(
     name="review",
@@ -71,6 +72,14 @@ def _ask(choices: List[Choice]) -> bool:
 
 def _pause(review: Review) -> bool:
     store.save_review(review)
+
+    if review.is_done:
+        _print(say(
+            "Left as being written. Run 'mreview done' when it is finished.",
+            "작성 중으로 남겨 두었습니다. 다 쓰면 mreview done을 실행해 주세요.",
+        ))
+        return False
+
     _print(say(
         f"Paused. Your choices are saved in {display_path(review.path)}. Run mreview to continue.",
         f"일시정지했습니다. 선택 내용은 {display_path(review.path)}에 저장했습니다. mreview로 이어 갈 수 있습니다.",
@@ -110,15 +119,96 @@ def _settle(review: Review, change: Callable[[Review, int], Item], number: int) 
     return True
 
 
-def _write_now(review: Review, item: Item, tool: Optional[str]) -> bool:
-    """Start writing an item. Writing takes time, so the review pauses for it."""
+def _pick_tool(title: str, tool: Optional[str]) -> str:
+    """Decide how to write: the tool given, or the menu.
+
+    Returns:
+        A tool key or ``writer.SOLO``.
+    """
+    if tool:
+        return writer.resolve_choice(tool)
+
+    installed = writer.installed_tools()
+    default = writer.default_tool(installed)
+
+    _print(say(f'How do you want to write "{title}"?', f'"{title}"을(를) 어떻게 쓰시겠습니까?'))
+
+    options = []
+    for candidate in installed:
+        options.append(candidate.key)
+        mark = say(" (default)", " (기본값)") if candidate is default else ""
+        _print(f"  {len(options)}. {candidate.name}{mark}")
+
+    options.append(writer.SOLO)
+    mark = "" if default else say(" (default)", " (기본값)")
+    _print(f"  {len(options)}. {say('On my own', '혼자 쓰기')}{mark}")
+
+    default_number = options.index(default.key if default else writer.SOLO) + 1
+
+    while True:
+        answer = typer.prompt(say("Choice", "선택"), default=str(default_number)).strip()
+        if answer.isdigit() and 1 <= int(answer) <= len(options):
+            return options[int(answer) - 1]
+        _print(say("Please pick one of the choices.", "목록에서 골라 주세요."))
+
+
+def _document_for_solo(base: Path, item: Item) -> Path:
+    """Find the document to edit, creating a new one now that writing starts."""
+    from memory_tool.core.module import ModuleError, ModuleManager
+    from memory_tool.utils.module_docs import resolve_module_document
+
+    modules = base / "modules"
+
+    if item.kind == store.KIND_UPDATE:
+        document = resolve_module_document(modules / str(item.target))
+        if document is None:
+            raise ReviewError(say(f"Document not found: {item.target}", f"문서를 찾을 수 없습니다: {item.target}"))
+        return document
+
+    manager = ModuleManager()
+
+    while True:
+        name = typer.prompt(say("Document path", "문서 경로"), default=writer.suggested_path(item.title)).strip()
+        try:
+            if not manager.module_exists(name):
+                manager.create(name, description=item.why, doc_type=item.doc_type)
+            break
+        except ModuleError as e:
+            _print(str(e))
+
+    document = resolve_module_document(modules / name)
+    if document is None:
+        raise ReviewError(say(f"Document not found: {name}", f"문서를 찾을 수 없습니다: {name}"))
+    return document
+
+
+def _write_item(base: Path, review: Review, item: Item, tool: Optional[str]) -> None:
+    """Mark an item as being written and start writing it.
+
+    The state is saved first, so if anything fails the item is asked about again.
+    """
     store.start_writing(review, item.number)
     store.save_review(review)
-    _print(say(
-        f"Write this, then run mreview to continue: {item.title}",
-        f"이 항목을 쓴 뒤 mreview로 이어 가세요: {item.title}",
-    ))
-    return False
+
+    choice = _pick_tool(item.title, tool)
+
+    if choice == writer.SOLO:
+        document = _document_for_solo(base, item)
+        for line in writer.evidence_lines(base, item.evidence):
+            _print(f"  {line}")
+        _print(f"-> {display_path(document)}")
+        writer.open_in_editor(document)
+        return
+
+    selected = next(candidate for candidate in writer.TOOLS if candidate.key == choice)
+    _print(say(f"Starting {selected.name}. Leave it when you are done.", f"{selected.name}을(를) 실행합니다. 다 쓰면 종료해 주세요."))
+    writer.write_with_tool(selected, base, get_project_root(), review, item)
+
+
+def _write_now(review: Review, item: Item, tool: Optional[str]) -> bool:
+    """Write an item. The next question asks how it went."""
+    _write_item(get_base_path(), review, item, tool)
+    return True
 
 
 def _item_choices(review: Review, item: Item, tool: Optional[str]) -> List[Choice]:
@@ -204,6 +294,7 @@ def _work_through(review: Review, tool: Optional[str]) -> None:
 def review(
     ctx: typer.Context,
     since: Optional[str] = typer.Option(None, "--since", help="Start of the period (YYYY-MM-DD), for a new review"),
+    with_tool: Optional[str] = typer.Option(None, "--with", help="How to write, skipping the menu: claude, codex, antigravity or solo"),
 ):
     """Find what is worth moving from the timeline into documents.
 
@@ -214,6 +305,8 @@ def review(
         mreview                       # Start or continue a review
         mreview --since 2026-10-01    # Start a review from a chosen date
         mreview list                  # Items waiting to be written
+        mreview write 2               # Write item 2 now
+        mreview write 2 --with codex  # The same, skipping the menu
         mreview done 2                # Mark item 2 as written
     """
     if ctx.invoked_subcommand:
@@ -223,6 +316,9 @@ def review(
     since_date = _parse_since(since)
 
     try:
+        if with_tool:
+            writer.resolve_choice(with_tool)
+
         current = store.latest_review(base)
         if since_date and current and not current.is_done:
             _print(say(
@@ -239,7 +335,7 @@ def review(
             _print(say("No new entries and nothing waiting.", "새 기록도, 대기 중인 항목도 없습니다."))
             return
 
-        _work_through(active, None)
+        _work_through(active, with_tool)
     except click.exceptions.Abort:
         _print()
         _print(say("Paused. Run mreview to continue.", "일시정지했습니다. mreview로 이어 갈 수 있습니다."))
@@ -263,6 +359,37 @@ def list_items():
 
     for item in waiting:
         _print(f"{item.number}. [{store.state_label(item)}] {store.item_label(item)}")
+
+
+@review_app.command("write")
+def write(
+    number: int = typer.Argument(..., help="Item number from 'mreview list'"),
+    with_tool: Optional[str] = typer.Option(None, "--with", help="How to write, skipping the menu: claude, codex, antigravity or solo"),
+):
+    """Write a waiting item now, without waiting for the next review."""
+    base = _base()
+
+    try:
+        latest = store.latest_review(base)
+        if latest is None:
+            _fail(say("There is no review yet.", "아직 리뷰가 없습니다."))
+
+        item = latest.item(number)
+        if not item.is_open:
+            _fail(say(f"Item {number} is already settled.", f"{number}번 항목은 이미 처리되었습니다."))
+        if with_tool:
+            writer.resolve_choice(with_tool)
+
+        _write_item(base, latest, item, with_tool)
+
+        _print()
+        _print(say("How did it go?", "어떻게 되었나요?"))
+        _ask(_item_choices(latest, item, None))
+    except click.exceptions.Abort:
+        _print()
+        _print(say("Left as being written.", "작성 중으로 남겨 두었습니다."))
+    except ReviewError as e:
+        _fail(str(e))
 
 
 @review_app.command("done")
