@@ -880,119 +880,66 @@ Reports broken links and missing files.
             "name": "mmodule / module",
             "summary": "Manage modules",
             "description": """
-Create, view, and manage knowledge modules.
+Create, view, and manage knowledge documents.
 Modules are the spatial organization of your knowledge.
 
-A module is one markdown file at [Folder]/[Folder].md holding its purpose,
-current state, decisions, dependencies and interface.
+A module is a document: one markdown file, topic.md. It moves to
+topic/topic.md when it gets a child, keeping its name, so [[topic]] links work.
 
-Templates (--kind / --nature)
------------------------------
---kind selects a document skeleton. First ask whether the subject exists yet:
+Creating a document (mmodule create)
+------------------------------------
+create writes frontmatter and a title. No section is required, and the body is
+yours. All of these are optional:
 
-  intent           not yet -- this is what I mean to do   (fails by drifting)
-  knowledge        it exists, and the knowledge is the artifact  (fails by
-                   being wrong)
-  implementation   it exists as code, and this summarizes it  (fails by going
-                   stale)
+  --type     참고, 이해, 방법 or 판단. Other values are accepted too.
+  --desc     One sentence on what the document answers.
+  --tags     Tags, comma-separated.
 
---nature selects the body outline. It answers: what makes this module need
-updating? implementation modules have no nature.
+Which type? Ask what you will come back to the document for:
 
-  knowledge:
-    concept     understanding deepens    -> problem, analogy, principle, example
-    reference   the subject is patched   -> lookup tables, formulas, sources
-    analysis    new evidence appears     -> facts, interpretation, red team
-    tracker     time passes              -> snapshots, scenarios, prediction log
-    method      application feedback     -> premises, procedure, failure modes
+  참고   What was that value or fact?             updated when the subject changes
+  이해   Why does this work this way?             updated as understanding deepens
+  방법   How do I do this?                        updated when applying it fails
+  판단   Why did I see it, or decide it, that way? not rewritten; a new one replaces it
 
-  intent:
-    idea        a new association lands  -> seed, stimulus, value hypothesis
-    inquiry     a round of debate ends   -> criteria first, then options, then
-                                            the counter-argument
-    plan        reality contradicts it   -> done-definition, phases, rollback
+Small decisions and daily notes belong in the timeline (m "Decision: ...").
 
-For intent, ask what you are doing right now: widening (idea), choosing
-(inquiry) or moving (plan). If unsure between analysis and tracker, ask whether
-the document has an expiry date. If still unsure, pick either -- the outline can
-be swapped later.
+Help with writing (mmodule guide)
+---------------------------------
+guide prints the questions and checks for a type. The mt-write skill uses them to
+help in conversation. By default the AI asks and points things out, and writes the
+body only when asked. Your own copy in <base>/guides/ takes precedence.
 
-An intent module ends in exactly one of three ways: carried over to an
-implementation module, promoted to a knowledge module, or dropped with its
-reason kept. Its header therefore requires a review date; without one the module
-is already drifting.
+Finding candidates
+------------------
+audit lists split and merge candidates without calling an LLM. suggest-links
+suggests related documents by path and links, and with --ai by reading their
+content. Neither changes any document.
 
-Starting from nothing (--draft / grow)
---------------------------------------
-The full skeleton assumes a finished document: it asks for a confidence rating,
-a scope boundary and a citable conclusion before any content exists. --draft
-writes the ~40-line seed instead -- what you can honestly fill in on day one --
-and ends with the ladder of what to add next. The classification still applies:
-a draft is the same kind of module earlier, not a different kind.
-
-  mmodule create asyncio --kind knowledge --nature concept --draft
-  mmodule grow asyncio        # one rung up the ladder
-
-grow advances one level at a time. Jumping from seed to full skeleton would put
-the wall of empty headings one step later rather than removing it.
-
-  1 seed        the draft itself
-  2 identity    reference/confidence header + first body section
-  3 outline     the body and its nature-specific detail
-  4 conclusion  the remaining body sections
-  5 (per kind)  what that kind exists to produce:
-                  knowledge       citable   -- interface (citable conclusions)
-                  intent          exit      -- 7. exit + interface (settled only)
-                  implementation  connected -- interface (public API) + dependencies
-
-The first four rungs are shared and move inside `module` and `current`, where a
-module's substance lives. Level 5/5 means the structure is filled in, not that
-the content is verified -- the confidence field says that -- so the last rung is
-no longer called "complete".
-
-Decisions, dependencies and scope are not stages a document passes through; they
-record things that happen. A decision can be made on day one, who cites a module
-is up to other modules, and scope matters just before someone quotes it. Attach
-them when that happens. Attaching does not climb a level.
-
-  --level N     stop at level N instead of taking one step
-  --part NAME   attach decisions, dependencies or scope (repeatable)
-  --all         every level and every part in one go
-
-grow adds only what the document does not have, matched by heading, and leaves
-everything already written untouched. Each new section goes where its part
-belongs, so a Decisions part attached early stays below the body. The **Level:** header field says
-where it is, and is recounted from the file so hand edits cannot desync it. Kind
-and nature come from the module's own header.
-
-Section order is content first: title and one-line purpose, then the body, then
-decisions, dependencies and interface, with the scope and premises last. Those
-boundary fields are what a reader checks just before citing and what an author
-tidies after writing, so neither one needs them at the top.
-
-Omitting --kind produces the original generic template. Set a project-wide
-default with: mconfig set modules.default_kind knowledge
-
-A project's own templates in <base>/templates/<kind>/ take precedence over the
-bundled ones, so local edits are preserved.
+Being retired
+-------------
+--kind, --nature, --draft, grow, --part, merge-templates, modules.default_kind,
+from-text --structure, ai-organize and suggest-ai still work with a warning, and
+will be removed in the next version. Documents they created stay readable.
             """,
             "examples": [
                 "mmodule list               # List all modules",
                 "mmodule tree               # Tree view of modules",
-                "mmodule create newproject  # Create new module",
-                "mmodule create asyncio --kind knowledge --nature concept",
-                "mmodule create api --kind implementation --desc \"REST endpoints\"",
-                "mmodule create PLAN-v2-release --kind intent --nature plan",
-                "mmodule create asyncio --kind knowledge --draft   # seed document",
-                "mmodule grow asyncio       # one rung up (--all for everything)",
-                "mmodule grow asyncio --part decisions   # attach when you decide",
+                "mmodule create \"asyncio\"   # Create a document",
+                "mmodule create \"asyncio\" --type 이해 --desc \"One sentence\"",
+                "mmodule create \"asyncio/tasks\"  # A child; asyncio.md moves into asyncio/",
+                "mmodule guide 판단         # Questions and checks for a type",
+                "mmodule audit              # Split and merge candidates",
+                "mmodule suggest-links \"asyncio\" --ai  # Related documents, by content",
                 "mmodule graph              # Visualize connections",
             ],
             "options": [
                 ("list", "List all modules"),
                 ("tree", "Tree view of modules"),
-                ("create", "Create new module"),
-                ("grow", "Advance one level up the five-step ladder, or attach a part"),
+                ("create", "Create a document"),
+                ("guide", "Print a writing guide"),
+                ("audit", "List split and merge candidates"),
+                ("suggest-links", "Suggest related documents (--ai reads their content)"),
                 ("graph", "Visualize connections"),
             ],
         },
@@ -1000,114 +947,66 @@ bundled ones, so local edits are preserved.
             "name": "mmodule / module",
             "summary": "모듈 관리",
             "description": """
-지식 모듈을 생성, 조회, 관리합니다.
-모듈은 지식의 공간적 조직입니다.
+지식 문서를 만들고 보고 관리합니다.
+모듈은 지식을 공간적으로 정리하는 단위입니다.
 
-모듈은 [폴더]/[폴더].md 하나의 마크다운 파일이며, 목적·현재 상태·결정·의존성·
-인터페이스를 모두 담습니다.
+모듈은 곧 문서이며, 마크다운 파일 하나(topic.md)입니다. 하위 문서가 생기면
+topic/topic.md로 옮겨지지만 이름은 그대로이므로 [[topic]] 링크는 유지됩니다.
 
-템플릿 (--kind / --nature)
---------------------------
---kind 는 문서 골격을 고릅니다. 먼저 물을 것은 대상이 이미 있느냐입니다:
-  "이 문서가 서술하는 대상이 이미 존재하는가?"
+문서 만들기 (mmodule create)
+----------------------------
+create는 frontmatter와 제목만 만듭니다. 필수 절은 없고 본문은 직접 씁니다.
+다음 항목은 모두 선택 사항입니다.
 
-  intent           아직 없다. 앞으로 하려는 것  (고유 실패: 표류)
-  knowledge        있다. 지식 자체가 산출물     (고유 실패: 틀림)
-  implementation   있다. 코드가 정본이고 이 문서는 요약  (고유 실패: 낡음)
+  --type     참고, 이해, 방법, 판단. 다른 값도 받습니다.
+  --desc     문서가 답하는 내용을 한 문장으로 적습니다.
+  --tags     태그 (쉼표로 구분)
 
-주제가 소프트웨어인지로 판별하지 않습니다. 대응 코드베이스가 없다면 knowledge 입니다.
+종류는 나중에 무엇을 찾으러 이 문서로 돌아올지로 고릅니다.
 
---nature 는 본문 목차를 고릅니다. 판별 질문은 "무엇이 이 모듈을 갱신시키는가?"
-implementation 에는 nature 가 없습니다.
+  참고   그 값이나 사실이 무엇이었지?     대상이 바뀔 때 갱신
+  이해   왜 이렇게 작동하지?              이해가 깊어질 때 갱신
+  방법   어떻게 하지?                     적용하다 실패했을 때 갱신
+  판단   왜 그렇게 보았거나 정했지?       고쳐 쓰지 않고 새 판단으로 대체
 
-  knowledge:
-    concept     내 이해가 깊어질 때   -> 문제, 비유, 원리, 예제, 한계, 오해
-    reference   대상이 패치될 때      -> 조회표, 변수, 공식, 출처, 버전 이력
-    analysis    새 증거가 나올 때     -> 사실, 해석, Red Team, Impact
-    tracker     시간이 흐를 때        -> 스냅샷, 시나리오, 예측 로그
-    method      적용 피드백이 올 때   -> 전제, 절차, 체크리스트, 실패 모드
+작은 결정과 일상 기록은 타임라인에 남깁니다 (m "Decision: ...").
 
-  intent:
-    idea        새 자극이 붙을 때     -> 씨앗, 자극, 확장, 가치 가설
-    inquiry     논의가 한 바퀴 돌 때  -> 판단 기준 먼저, 그다음 선택지, 반론
-    plan        현실이 계획을 어길 때 -> 완료의 정의, 단계, 위험, 롤백
+작성 지원 (mmodule guide)
+-------------------------
+guide는 종류별 질문과 점검 항목을 출력합니다. mt-write 스킬은 이를 사용해 대화로
+돕습니다. 기본적으로 AI는 질문하고 지적하며, 요청할 때만 본문을 씁니다.
+<기반폴더>/guides/ 에 사본을 두면 그 내용이 우선합니다.
 
-intent 는 지금 하려는 일이 넓히기(idea)인지, 고르기(inquiry)인지, 옮기기(plan)인지로
-가릅니다. analysis 와 tracker 가 헷갈리면 "이 문서에 유효기간이 있는가?" 하나로
-가릅니다. 그래도 애매하면 아무거나 두고 넘어갑니다 — 본문만 나중에 갈아끼우면 됩니다.
-분류를 고민하다 기록을 미루는 것이 가장 나쁩니다 (Time First 원칙).
+후보 찾기
+---------
+audit은 LLM 없이 분리와 병합 후보를 보여 줍니다. suggest-links는 경로와 링크를
+보고 관련 문서를 제안하며, --ai를 붙이면 내용을 읽고 제안합니다. 둘 다 문서를
+바꾸지 않습니다.
 
-intent 모듈은 세 가지 방법으로만 끝납니다: 구현 모듈로 승계되거나, 지식 모듈로
-승격되거나, 폐기 사유를 남기고 아카이브됩니다. 그래서 헤더에 '다음 판정일'이
-의무이며, 그 날짜가 비어 있으면 그 모듈은 이미 표류 중입니다.
-
-처음부터 쓰기 시작할 때 (--draft / grow)
------------------------------------------
-전체 골격은 완성된 문서를 전제로 합니다. 내용이 하나도 없는 시점에 신뢰도와 경계와
-인용 결론부터 요구합니다. --draft 는 대신 40줄짜리 씨앗 문서를 씁니다. 그날 정직하게
-채울 수 있는 것만 담고, 문서 끝에 다음 채울 항목을 순서대로 적어 둡니다.
-분류는 그대로 유지됩니다. 초안은 다른 종류의 문서가 아니라 같은 문서의 이른 시점입니다.
-
-  mmodule create asyncio --kind knowledge --nature concept --draft
-  mmodule grow asyncio        # 사다리를 한 칸 올린다
-
-grow 는 한 번에 한 칸씩 올라갑니다. 씨앗에서 완전판으로 한 번에 뛰면 빈 표제의 벽을
-없애는 것이 아니라 한 단계 뒤로 미루는 것이 됩니다.
-
-  1 씨앗   초안 그대로
-  2 정체   기준·신뢰도 헤더 + 본문 첫 절
-  3 뼈대   본문과 성격별 세부 목차
-  4 결론   남은 본문 절
-  5 (Kind별) 그 Kind 가 만들어 내야 하는 산출물
-             knowledge       인용  인터페이스 (인용 가능한 결론)
-             intent          종결  §7 종결 처리 + 인터페이스 (확정 결론만)
-             implementation  연결  인터페이스 (Public API) + 의존성
-
-1~4단계는 모든 Kind 에 공통이며 module 과 current 안에서 움직입니다. 모듈의 본체가
-거기 있기 때문입니다. 5/5 는 구조가 다 채워졌다는 뜻이지 내용이 검증되었다는 뜻이
-아닙니다. 그것은 신뢰도 필드가 알려 줍니다. 그래서 마지막 칸을 "완성"이라고 부르지
-않습니다.
-
-결정, 의존성, 범위와 전제는 문서가 거쳐 가는 단계가 아니라 그 일이 생겼을 때 남기는
-기록입니다. 결정은 첫날에도 내릴 수 있고, 누가 이 모듈을 인용하는지는 다른 모듈이
-정하며, 범위는 남이 인용하기 직전에야 중요해집니다. 그 일이 생겼을 때 붙이면 되고,
-붙여도 단계는 오르지 않습니다.
-
-  --level N     한 칸이 아니라 N단계까지
-  --part 이름   decisions, dependencies, scope 중 하나를 붙인다 (반복 가능)
-  --all         모든 단계와 모든 파트를 한 번에
-
-grow 는 문서에 없는 절만 붙이며, 판단 기준은 표제의 존재 여부입니다. 이미 쓴 내용은
-건드리지 않습니다. 새 절은 파트 순서에 맞는 자리에 들어가므로, 결정 파트를 먼저
-붙여도 본문은 그 위에 채워집니다. 지금 몇 단계인지는 헤더의 **Level:** 필드가 알려 주고, 그 값은 파일
-내용에서 다시 세므로 손으로 고쳐도 어긋나지 않습니다.
-
-절 순서는 본문이 먼저입니다. 제목과 한 문장 목적, 그다음 본문, 그다음 결정과 의존성과
-인터페이스, 범위와 전제가 맨 끝입니다. 경계 항목은 읽는 쪽이 인용 직전에 확인하고
-쓰는 쪽이 작성 후에 정리하는 것이라, 어느 쪽에서도 맨 앞에 있을 이유가 없습니다.
-
---kind 를 생략하면 기존 범용 템플릿이 생성됩니다. 프로젝트 기본값 설정:
-  mconfig set modules.default_kind knowledge
-
-<기반폴더>/templates/<kind>/ 에 프로젝트 자체 템플릿이 있으면 그것이 우선합니다.
+제거 예정
+---------
+--kind, --nature, --draft, grow, --part, merge-templates, modules.default_kind,
+from-text --structure, ai-organize, suggest-ai는 경고와 함께 계속 작동하며, 다음
+버전에서 제거됩니다. 이 기능으로 만든 문서는 계속 읽을 수 있습니다.
             """,
             "examples": [
                 "mmodule list               # 모든 모듈 나열",
                 "mmodule tree               # 모듈 트리 보기",
-                "mmodule create newproject  # 새 모듈 생성",
-                "mmodule create asyncio --kind knowledge --nature concept",
-                "mmodule create api --kind implementation --desc \"REST 엔드포인트\"",
-                "mmodule create PLAN-v2-release --kind intent --nature plan",
-                "mmodule create asyncio --kind knowledge --draft   # 씨앗 문서",
-                "mmodule grow asyncio       # 한 칸 올리기 (--all 이면 전부)",
-                "mmodule grow asyncio --part decisions   # 결정을 내렸을 때 붙이기",
+                "mmodule create \"asyncio\"   # 문서 만들기",
+                "mmodule create \"asyncio\" --type 이해 --desc \"한 문장 설명\"",
+                "mmodule create \"asyncio/tasks\"  # 하위 문서. asyncio.md는 asyncio/ 안으로 이동",
+                "mmodule guide 판단         # 종류별 질문과 점검 항목",
+                "mmodule audit              # 분리와 병합 후보",
+                "mmodule suggest-links \"asyncio\" --ai  # 내용을 읽고 관련 문서 제안",
                 "mmodule graph              # 연결 시각화",
             ],
             "options": [
                 ("list", "모든 모듈 나열"),
                 ("tree", "모듈 트리 보기"),
-                ("create", "새 모듈 생성"),
-                ("grow", "다섯 단계 사다리를 한 칸 올리거나 파트 붙이기"),
+                ("create", "문서 만들기"),
+                ("guide", "작성 가이드 출력"),
+                ("audit", "분리와 병합 후보 보기"),
+                ("suggest-links", "관련 문서 제안 (--ai는 내용을 읽음)"),
                 ("graph", "연결 시각화"),
             ],
         },
@@ -2262,8 +2161,8 @@ def _show_advanced_guide_en():
   - mcheck -> Validates all wiki links
 
 [bold]Create bidirectional connections:[/bold]
-  In auth-system/current.md: "Used by \\[\\[user-service]]"
-  In user-service/current.md: "Depends on \\[\\[auth-system]]" """,
+  In auth-system.md: "Used by \\[\\[user-service]]"
+  In user-service.md: "Depends on \\[\\[auth-system]]" """,
         title="[bold yellow]2. Wiki Links & Cross-References[/bold yellow]",
         border_style="cyan",
         box=box.ROUNDED
@@ -2293,23 +2192,21 @@ def _show_advanced_guide_en():
 
     # 4. Module Structure
     console.print(Panel(
-        """[bold]Module Structure[/bold] organizes knowledge spatially.
+        """[bold]Modules[/bold] organize knowledge spatially. A module is one document.
 
-[bold]Standard Module Files:[/bold]
-  module-name/
-  ├── module.md       # Metadata: name, description, tags
-  ├── current.md      # Current state, ongoing work
-  ├── decisions.md    # Important decisions & rationale
-  └── archive/        # Historical records
+[bold]A document:[/bold]
+  topic.md            # Frontmatter and a title, then your text
+  topic/topic.md      # Where it moves when it gets a child
+  topic/child.md
 
 [bold]Best Practices:[/bold]
-  -Keep current.md focused on active work
-  -Move completed items to decisions.md or archive/
-  -Use marchive --suggest to find archivable content
+  -Update an existing document before creating a new one
+  -Keep small decisions in the timeline
+  -Use mmodule guide when you want help writing
 
 [bold]Commands:[/bold]
-  mmodule create my-project --tags dev,web
-  mmodule show my-project
+  mmodule create my-topic --type 참고 --tags dev,web
+  mmodule guide 참고
   marchive --module my-project --interactive""",
         title="[bold yellow]4. Module Organization[/bold yellow]",
         border_style="cyan",
@@ -2412,8 +2309,8 @@ def _show_advanced_guide_ko():
   - mcheck -> 모든 위키 링크 검증
 
 [bold]양방향 연결 생성:[/bold]
-  auth-system/current.md: "\\[\\[user-service]]에서 사용됨"
-  user-service/current.md: "\\[\\[auth-system]]에 의존" """,
+  auth-system.md: "\\[\\[user-service]]에서 사용됨"
+  user-service.md: "\\[\\[auth-system]]에 의존" """,
         title="[bold yellow]2. 위키 링크 & 상호 참조[/bold yellow]",
         border_style="cyan",
         box=box.ROUNDED
@@ -2443,23 +2340,21 @@ def _show_advanced_guide_ko():
 
     # 4. Module Structure
     console.print(Panel(
-        """[bold]모듈 구조[/bold]로 지식을 공간적으로 조직합니다.
+        """[bold]모듈[/bold]로 지식을 공간적으로 조직합니다. 모듈은 곧 문서 하나입니다.
 
-[bold]표준 모듈 파일:[/bold]
-  module-name/
-  ├── module.md       # 메타데이터: 이름, 설명, 태그
-  ├── current.md      # 현재 상태, 진행 중인 작업
-  ├── decisions.md    # 중요 결정사항 & 근거
-  └── archive/        # 과거 기록
+[bold]문서:[/bold]
+  topic.md            # frontmatter와 제목, 그리고 직접 쓴 글
+  topic/topic.md      # 하위 문서가 생기면 옮겨지는 위치
+  topic/child.md
 
 [bold]모범 사례:[/bold]
-  -current.md는 활성 작업에 집중
-  -완료된 항목은 decisions.md 또는 archive/로 이동
-  -marchive --suggest로 아카이브 가능한 콘텐츠 찾기
+  -새 문서보다 기존 문서 갱신을 먼저 검토
+  -작은 결정은 타임라인에 기록
+  -쓰는 데 도움이 필요하면 mmodule guide 사용
 
 [bold]명령어:[/bold]
-  mmodule create my-project --tags dev,web
-  mmodule show my-project
+  mmodule create my-topic --type 참고 --tags dev,web
+  mmodule guide 참고
   marchive --module my-project --interactive""",
         title="[bold yellow]4. 모듈 조직[/bold yellow]",
         border_style="cyan",

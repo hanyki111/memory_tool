@@ -1,7 +1,7 @@
 {
   "id": "obsidian-memory-tool",
   "name": "Memory Tool Integration",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "minAppVersion": "0.15.0",
   "description": "memory_tool integration: instant timeline capture (works offline on mobile), module creation with the MOP templates, five-step growth, and AI context building.",
   "author": "hanyki111",

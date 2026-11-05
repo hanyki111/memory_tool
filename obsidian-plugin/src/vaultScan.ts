@@ -68,14 +68,15 @@ function stem(name: string): string {
 
 /**
  * Files the CLI ignores when discovering modules.
- * Mirrors the `_`-prefix / all-uppercase / MIGRATION-SUMMARY skips.
+ * Mirrors `is_meta_document` in memory_tool/utils/module_docs.py.
+ *
+ * Names are matched exactly, not by "all uppercase": AI.md and MIGRATION-PLAN.md
+ * are ordinary modules.
  */
 function isIgnoredFile(name: string): boolean {
   if (name.startsWith("_")) return true;
-  if (name === "MIGRATION-SUMMARY.md") return true;
-  // All-uppercase stems are meta/index documents, not modules (PLAN.md etc).
-  const base = stem(name);
-  return base === base.toUpperCase() && /[A-Z]/.test(base);
+  if (name === "PLAN.md" || name === "MIGRATION-SUMMARY.md") return true;
+  return name === name.toUpperCase() && /[A-Z]/.test(name);
 }
 
 /**

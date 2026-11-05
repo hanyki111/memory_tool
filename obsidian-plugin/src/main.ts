@@ -15,7 +15,6 @@ import { asScanAdapter, listModules, probeBasePrefix } from "./vaultScan";
 import {
   DEFAULT_BASE,
   describePrefix,
-  moduleNameFromPath,
   modulePrefixFromFolder,
   normalizePrefix,
   vaultRelativeBase,
@@ -178,9 +177,7 @@ export default class MemoryToolPlugin extends Plugin implements PanelHost {
    *
    * A folder inside the modules tree offers "여기에 모듈 생성": typing the
    * parent path by hand is the tedious, error-prone half of module creation,
-   * and the explorer already knows that path. A module document offers to grow
-   * itself, which is the same action the command runs, reachable without
-   * opening the note first.
+   * and the explorer already knows that path.
    *
    * Anything outside `<base>/modules` gets no entry at all -- modules cannot
    * live there, so offering one would only produce an error later.
@@ -190,34 +187,23 @@ export default class MemoryToolPlugin extends Plugin implements PanelHost {
       this.app.workspace.on("file-menu", (menu, file) => {
         // A folder has children; a note does not. Checking for the property
         // avoids importing TFolder just for an instanceof.
-        if ("children" in file) {
-          const prefix = modulePrefixFromFolder(this.basePrefix, file.path);
-          if (prefix === null) return;
+        if (!("children" in file)) return;
 
-          menu.addItem((item) => {
-            item
-              .setTitle("여기에 모듈 생성")
-              .setIcon("folder-plus")
-              .onClick(() => {
-                new CreateModuleModal(
-                  this.app,
-                  this.cli,
-                  () => this.basePrefix,
-                  prefix
-                ).open();
-              });
-          });
-          return;
-        }
-
-        const name = moduleNameFromPath(this.basePrefix, file.path);
-        if (name === null) return;
+        const prefix = modulePrefixFromFolder(this.basePrefix, file.path);
+        if (prefix === null) return;
 
         menu.addItem((item) => {
           item
-            .setTitle("모듈 한 단계 키우기")
-            .setIcon("sprout")
-            .onClick(() => void this.growModule(name));
+            .setTitle("여기에 모듈 생성")
+            .setIcon("folder-plus")
+            .onClick(() => {
+              new CreateModuleModal(
+                this.app,
+                this.cli,
+                () => this.basePrefix,
+                prefix
+              ).open();
+            });
         });
       })
     );
@@ -231,12 +217,6 @@ export default class MemoryToolPlugin extends Plugin implements PanelHost {
       callback: () => {
         new CreateModuleModal(this.app, this.cli, () => this.basePrefix).open();
       },
-    });
-
-    this.addCommand({
-      id: "grow-module",
-      name: "모듈 한 단계 키우기 (mmodule grow)",
-      callback: () => this.growFromContext(),
     });
 
     this.addCommand({
@@ -408,67 +388,6 @@ export default class MemoryToolPlugin extends Plugin implements PanelHost {
    * without Python. It is the fallback rather than the default because the CLI
    * remains the definition of what counts as a module.
    */
-  /**
-   * Grow whichever module the user is looking at.
-   *
-   * The moment a seed feels too small is the moment you are looking at it, so
-   * the open document is the default target and the picker is only the
-   * fallback. Shared by the command palette, the panel button and the file
-   * menu, so all three behave the same way.
-   */
-  growFromContext(): void {
-    const open = this.app.workspace.getActiveFile();
-    const name = open ? moduleNameFromPath(this.basePrefix, open.path) : null;
-
-    if (name) {
-      void this.growModule(name);
-      return;
-    }
-
-    new Notice("열린 문서가 모듈이 아닙니다. 목록에서 고르세요.");
-    new ModuleSuggestModal(
-      this.app,
-      () => this.listModules(),
-      () => this.basePrefix,
-      (chosen) => void this.growModule(chosen)
-    ).open();
-  }
-
-  /**
-   * Append the skeleton sections a module does not have yet.
-   *
-   * Reports the section names rather than a bare success: the point of the
-   * command is that something was added, and "nothing to add" is a real and
-   * unremarkable outcome that should not read as a failure.
-   */
-  async growModule(name: string): Promise<void> {
-    new Notice(`'${name}' 다음 단계로...`);
-    try {
-      const output = await this.cli.growModule(name);
-
-      // grow reports the rung it moved between; that transition is the whole
-      // point of the command, so it is what the notice shows.
-      const step = /(\d)\/(\d) \(([^)]+)\) -> (\d)\/\d \(([^)]+)\)/.exec(output);
-      const already = /already at level (\d)\/(\d) \(([^)]+)\)/.exec(output);
-
-      if (step) {
-        new Notice(
-          `${name}: ${step[1]}단계 ${step[3]} → ${step[4]}단계 ${step[5]}`,
-          6000
-        );
-      } else if (already) {
-        new Notice(
-          `${name}: 이미 ${already[1]}/${already[2]}단계 (${already[3]}). 바뀐 것이 없습니다.`,
-          6000
-        );
-      } else {
-        new Notice(`${name}: 골격을 확장했습니다.`, 6000);
-      }
-    } catch (err: any) {
-      new Notice(`골격 확장 실패: ${err.message}`, 8000);
-    }
-  }
-
   async listModules(): Promise<string[]> {
     if (this.cli.isAvailable()) {
       const fromCli = await this.cli.listModules();

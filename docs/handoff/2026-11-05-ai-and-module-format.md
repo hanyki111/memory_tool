@@ -2,7 +2,7 @@
 
 - 작성일: 2026-11-05
 - 출처: `memory_notion` 저장소에서 진행한 노트 체계 점검 세션
-- 상태: 쟁점 1~3의 논의를 마쳤고, 6절의 구현 계획을 승인받아 1단계부터 진행합니다(2026-11-05).
+- 상태: 6절의 1.2.0 작업(1~7단계)을 `feature/module-format-and-ai` 브랜치에 구현했습니다(2026-11-05). 병합과 1.3.0은 사용자 결정을 기다립니다.
 
 > 이 문서와 테스트 데이터에 실제 업무 노트를 넣지 마십시오. `memory_notion`의 타임라인에는 회사 업무 내용이 있습니다. 회귀 테스트는 합성 데이터로 작성합니다.
 
@@ -153,7 +153,7 @@ sources:
 
 **버전 1.3.0 (모든 기기의 플러그인을 1.2.0으로 바꾼 뒤)**
 
-8. 호환 기능을 제거합니다. 대상은 `--kind`, `--nature`, `--draft`, `grow`, `--part`, `merge-templates`, `modules.default_kind`, `ai-organize`, `suggest-ai`, `module_templates.py`, 번들 템플릿과 그 테스트입니다. `archiver.py:474`의 `plan` 판별은 기존 문서를 읽기 위해 유지합니다.
+8. 호환 기능을 제거합니다. 대상은 `--kind`, `--nature`, `--draft`, `grow`, `--part`, `merge-templates`, `modules.default_kind`, `ai-organize`, `suggest-ai`, `from-text --structure`, `module_templates.py`, 번들 템플릿과 그 테스트입니다. `archiver.py:474`의 `plan` 판별은 기존 문서를 읽기 위해 유지합니다.
 
 **1.2.0 이후에 이어서 진행할 작업**
 
@@ -162,6 +162,14 @@ sources:
 9. **리뷰 설계와 구현(5절 4번, 6번):** 타임라인 기록이 모듈로 옮겨지지 않는 문제를 해결하는 작업이므로 가장 먼저 합니다. `audit` 결과를 입력으로 연결합니다.
 10. **AI 기능의 JSON 출력:** 이후의 VS Code 화면과 서버 접속에서 재사용하기 위해 CLI에서 호출할 수 있게 합니다. 명령이 정리된 뒤에 해야 다시 만들지 않습니다.
 11. **VS Code용 타임라인 화면:** 10번을 사용합니다. 첫 버전 후보는 입력창, 기간별 이어 보기와 검색, Goal Loop 읽기 전용 표시, 선택 기간의 리뷰 요청입니다.
+
+**구현 중 확인한 사항**
+
+- `core/warnings.py`의 `FileSizeWarning`은 호출하는 곳이 없고 `modules/memory-system`만 봅니다. 고치지 않았으며, 삭제 후보입니다.
+- `memory_agent.py:498`의 계획 경로는 오류가 아닙니다. `daily_plan`이 실제로 `DD.md`로 저장합니다. 3절의 표는 이 부분을 잘못 짚었습니다.
+- `mcontext -i`(`commands/context.py`)는 `current.md`가 있는 모듈만 처리하고 `interface.md`를 별도 파일로 만듭니다. 단일 문서에서는 동작하지 않으며, 단순히 고치면 단일 문서 옆에 예전 파일이 생기므로 존치 여부부터 정해야 합니다.
+- `summary/context.py`의 최근 결정 수집은 최상위 `decisions.md`만 읽습니다. 요약의 참고 맥락이 비어 있을 뿐 오류는 나지 않습니다. 작은 결정이 타임라인으로 옮겨졌으므로 리뷰 설계와 함께 다룹니다.
+- 예전 구조를 설명하는 문서가 남아 있습니다: `docs/USER_GUIDE.md`, `docs/FAQ.md`, `docs/QUICKSTART.md`, `docs/CLAUDE_SETUP.md`, `memory_tool/data/USAGE.md`, `memory_tool/templates/docs/USAGE.md`, `memory_tool/utils/tutorial.py`, `memory_tool/utils/help_text.py`, 두 발행 스킬, 저장소의 `CLAUDE.md`.
 
 **별도로 진행할 작업**
 
