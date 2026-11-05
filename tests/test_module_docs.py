@@ -8,7 +8,7 @@ they then reported a large document as empty, or the module as missing.
 import pytest
 
 from memory_tool.context.builder import ContextBuilder
-from memory_tool.core.ai_organizer import ModuleAnalyzer
+from memory_tool.core.module_audit import ModuleAnalyzer
 from memory_tool.core.module import ModuleError, ModuleManager
 from memory_tool.utils.health_checker import DocumentHealthChecker
 from memory_tool.utils.module_docs import (

@@ -126,7 +126,7 @@ pip install git+https://github.com/hanyki111/memory_tool.git#egg=memory-tool[llm
 
 **What you get:**
 - `msummary` - Summarize timeline or modules
-- `module suggest-ai` - AI-based connection suggestions
+- `module suggest-links --ai` - AI-based connection suggestions
 
 **Configuration:**
 ```yaml

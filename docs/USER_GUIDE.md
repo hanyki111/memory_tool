@@ -1322,18 +1322,18 @@ Suggested connections for auth-system:
 
 ---
 
-### `module suggest-ai` - AI Suggestions
+### `module suggest-links --ai` - AI Suggestions
 
 **Purpose:** Get AI-powered connection suggestions (requires [llm])
 
 **Usage:**
 ```bash
-python -m memory_tool module suggest-ai [name] [--limit N]
+python -m memory_tool module suggest-links [name] --ai [--limit N]
 ```
 
 **Example:**
 ```bash
-python -m memory_tool module suggest-ai auth-system --limit 3
+python -m memory_tool module suggest-links auth-system --ai --limit 3
 ```
 
 **Output:**
@@ -2724,7 +2724,7 @@ msummary timeline
 msummary module auth-system
 
 # AI suggestions
-python -m memory_tool module suggest-ai auth-system
+python -m memory_tool module suggest-links auth-system --ai
 ```
 
 ### Option B: Ollama (Local)
@@ -2816,7 +2816,7 @@ msummary module auth-system
 #### 3. Connection Suggestions
 
 ```bash
-python -m memory_tool module suggest-ai auth-system
+python -m memory_tool module suggest-links auth-system --ai
 
 # Output: AI analysis of which modules should be connected
 # - Rationale
@@ -2918,7 +2918,7 @@ python -m memory_tool module suggest-links auth-system
 
 #### AI Suggestions
 ```bash
-python -m memory_tool module suggest-ai auth-system
+python -m memory_tool module suggest-links auth-system --ai
 ```
 
 **Based on:** Semantic analysis, domain knowledge
