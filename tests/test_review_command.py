@@ -73,6 +73,14 @@ def finish_with_deferred(base, count):
     assert result.exit_code == 0, result.output
 
 
+def add_entry_now(base):
+    """Add an entry the next review will see, since it starts at this minute."""
+    now = datetime.now()
+    path = base / "timeline" / "daily" / f"{now:%Y-%m}" / f"{now:%Y-%m-%d}.md"
+    with path.open("a", encoding="utf-8") as file:
+        file.write(f"- {now:%H:%M} | another entry\n")
+
+
 class TestChoosing:
     def test_three_choices_for_a_new_proposal(self, base):
         FakeClient.answer = answer(3)
@@ -190,6 +198,7 @@ class TestPausing:
 class TestCarriedItems:
     def test_carried_items_come_first_with_their_choices(self, base):
         finish_with_deferred(base, 1)
+        add_entry_now(base)
         FakeClient.answer = answer(1)
 
         result = run(input="1\n3\n")
