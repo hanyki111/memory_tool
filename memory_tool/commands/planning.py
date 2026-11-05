@@ -7,7 +7,8 @@ from typing import List, Optional
 
 import typer
 
-from memory_tool.commands.common import app, console, opt_str, arg_str, resolve_module_name
+from memory_tool.commands.common import app, console, opt_str, arg_str, resolve_module_name, print_llm_unavailable
+from memory_tool.core.doc_sections import SectionError, read_decisions_text
 from memory_tool.llm.client import LLMClient
 from memory_tool.summary import TimelineSummarizer, ModuleSummarizer
 from memory_tool.utils.paths import display_path, get_base_path
@@ -73,8 +74,7 @@ def summary(
     lang = opt_str(lang)
 
     if not LLMClient.check_availability():
-        console.print("[red]ERROR[/red] LLM not configured")
-        console.print("[dim]Set ANTHROPIC_API_KEY environment variable or add 'llm.api_key' to config.yaml[/dim]")
+        print_llm_unavailable(console)
         sys.exit(1)
 
     if decisions and not module_name:
@@ -95,13 +95,15 @@ def summary(
                     console.print(f"[cyan]Summarizing decisions.md from '{resolved_module}'...[/cyan]")
 
                 module_path = get_base_path() / "modules" / resolved_module
-                decisions_file = module_path / "decisions.md"
-
-                if not decisions_file.exists():
-                    console.print(f"[red]ERROR[/red] decisions.md not found in module '{resolved_module}'")
+                try:
+                    decisions_content = read_decisions_text(module_path)
+                except SectionError as e:
+                    console.print(f"[red]ERROR[/red] {e}")
                     sys.exit(1)
 
-                decisions_content = decisions_file.read_text(encoding="utf-8")
+                if decisions_content is None:
+                    console.print(f"[red]ERROR[/red] No decisions found in module '{resolved_module}'")
+                    sys.exit(1)
 
                 prompt = f"""Analyze and summarize the following decisions.md content from a software project module.
 
@@ -231,13 +233,12 @@ Provide a clear, structured summary in markdown format."""
 
 @app.command()
 def plan(
-    action: str = typer.Argument(..., help="Action: create, list, show, add, done, delete, daily, weekly, monthly, module"),
+    action: str = typer.Argument(..., help="Action: create, list, show, add, done, delete, daily, weekly, monthly"),
     name: str = typer.Argument(None, help="Plan name or sub-action (add/done/show)"),
     title: str = typer.Argument(None, help="Task title (for 'add' action)"),
     description: str = typer.Option("", "--desc", "-d", help="Plan description"),
     due_date: Optional[str] = typer.Option(None, "--due", help="Due date (YYYY-MM-DD)"),
     tags: List[str] = typer.Option([], "--tag", "-t", help="Tags"),
-    section: str = typer.Option("sprint", "--section", "-s", help="Module plan section: sprint, backlog, debt"),
 ):
     """Manage plans and tasks (mplan command).
 
@@ -253,7 +254,6 @@ def plan(
         daily: Daily plan (today)
         weekly: Weekly plan (this week)
         monthly: Monthly plan (this month)
-        module: Module plan (sprint/backlog/debt)
 
     Examples (Project Plans):
         mplan create "Project Alpha" --desc "Main project plan"
@@ -279,17 +279,13 @@ def plan(
 
         mplan monthly            # Show this month's plan
 
-        mplan module core-system              # Show module plan
-        mplan module core-system add "Task"   # Add to sprint (default)
-        mplan module core-system add "Task" --section backlog
-        mplan module core-system done "Task"
     """
     due_date = opt_str(due_date)
 
     try:
         from memory_tool.planner import (
             PlanManager, Task, TaskStatus,
-            DailyPlan, WeeklyPlan, MonthlyPlan, ModulePlan
+            DailyPlan, WeeklyPlan, MonthlyPlan
         )
         import subprocess
         import os
@@ -300,7 +296,7 @@ def plan(
             console.print("[red]ERROR[/red] .memory/ not found. Run 'minit' first.")
             sys.exit(1)
 
-        if action in ["daily", "weekly", "monthly", "module"]:
+        if action in ["daily", "weekly", "monthly"]:
             if action == "daily":
                 plan_mgr = DailyPlan(base_path=memory_path)
 
@@ -545,55 +541,6 @@ def plan(
                         subprocess.run([editor, str(plan_path)])
 
                     return
-
-            elif action == "module":
-                if not name:
-                    console.print("[red]ERROR[/red] Module name required")
-                    console.print("[dim]Usage: mplan module <module-name> [add|done|show][/dim]")
-                    sys.exit(1)
-
-                plan_mgr = ModulePlan(base_path=memory_path)
-
-                sub_action = title if title in ["add", "done", "show"] else "show"
-
-                if sub_action == "show" or title is None:
-                    content = plan_mgr.show_plan(name)
-                    console.print(content)
-
-                elif sub_action == "add":
-                    if not description:
-                        console.print("[red]ERROR[/red] Task required")
-                        console.print("[dim]Usage: mplan module <module> add --desc <task> [--section sprint|backlog|debt][/dim]")
-                        sys.exit(1)
-
-                    if plan_mgr.add_task(name, section, description):
-                        console.print(f"[green]OK[/green] Task added to {name}/{section}")
-                        console.print(f"  - [ ] {description}")
-                    else:
-                        console.print(f"[red]ERROR[/red] Failed to add task")
-                        sys.exit(1)
-
-                elif sub_action == "done":
-                    if not description:
-                        console.print("[red]ERROR[/red] Task required")
-                        console.print("[dim]Usage: mplan module <module> done --desc <task> [--section sprint|backlog|debt][/dim]")
-                        sys.exit(1)
-
-                    if plan_mgr.mark_done(name, section, description):
-                        console.print(f"[green]OK[/green] Task marked as completed")
-                        console.print(f"  - [x] {description}")
-                    else:
-                        console.print(f"[red]ERROR[/red] Task not found: {description}")
-                        sys.exit(1)
-
-                else:
-                    plan_path = plan_mgr.create_plan(name)
-                    console.print(f"[green]OK[/green] Module plan ready: {name}")
-                    console.print(f"  → {display_path(plan_path)}")
-
-                    editor = os.environ.get('EDITOR')
-                    if editor:
-                        subprocess.run([editor, str(plan_path)])
 
             return
 

@@ -19,6 +19,11 @@ class LLMClient:
     - gemini-cli: Gemini CLI in headless mode (uses CLI auth)
     """
 
+    #: Tried in this order when no provider is configured. An API key is a
+    #: deliberate setting, so it comes first; a local model comes last because
+    #: it is the most likely to be slow.
+    PROVIDER_ORDER = ("anthropic", "claude-cli", "gemini-cli", "ollama")
+
     def __new__(
         cls,
         provider: Optional[ProviderType] = None,
@@ -45,7 +50,7 @@ class LLMClient:
 
         # Determine provider
         if provider is None:
-            provider = config.get("llm.provider") or "anthropic"
+            provider = cls.get_provider()
 
         provider = provider.lower()
 
@@ -96,7 +101,7 @@ class LLMClient:
 
             # Determine provider
             if provider is None:
-                provider = config.get("llm.provider") or "anthropic"
+                provider = cls.get_provider()
 
             provider = provider.lower()
 
@@ -130,16 +135,29 @@ class LLMClient:
     @classmethod
     def get_provider(cls) -> str:
         """
-        Get current LLM provider from config.
+        Get the LLM provider to use.
+
+        The configured provider wins, even when it is unavailable, so that a
+        broken setting is reported rather than silently replaced. Without one,
+        the first available provider is used: a fixed "anthropic" default made
+        every AI command fail for someone who only has a CLI installed.
 
         Returns:
             Provider name (anthropic, ollama, claude-cli, gemini-cli)
         """
         try:
-            config = Config()
-            return config.get("llm.provider") or "anthropic"
+            configured = Config().get("llm.provider")
         except Exception:
-            return "anthropic"
+            configured = None
+
+        if configured:
+            return configured
+
+        for provider in cls.PROVIDER_ORDER:
+            if cls.check_availability(provider):
+                return provider
+
+        return cls.PROVIDER_ORDER[0]
 
     @classmethod
     def list_available_providers(cls) -> list:
@@ -152,8 +170,7 @@ class LLMClient:
         available = []
 
         # Check each provider
-        providers = ["anthropic", "ollama", "claude-cli", "gemini-cli"]
-        for provider in providers:
+        for provider in cls.PROVIDER_ORDER:
             if cls.check_availability(provider):
                 available.append(provider)
 

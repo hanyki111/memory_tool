@@ -368,17 +368,16 @@ def test_create_with_kind_writes_the_template(tmp_path):
     assert "**Kind:** knowledge | **Nature:** concept" in content
 
 
-def test_create_without_kind_keeps_the_legacy_template(tmp_path):
-    """Existing behaviour must be unchanged when no kind is requested."""
+def test_create_without_kind_writes_no_skeleton(tmp_path):
     make_base(tmp_path)
     manager = ModuleManager(tmp_path)
 
-    path = manager.create("legacy", description="d")
+    path = manager.create("plain", description="d")
     content = path.read_text(encoding="utf-8")
 
-    assert content.startswith("# Module: legacy")
+    assert content.startswith("---\n")
     assert "**Kind:**" not in content
-    assert "## Overview" in content
+    assert "## " not in content
 
 
 def test_bare_nature_implies_knowledge(tmp_path):

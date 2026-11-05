@@ -367,3 +367,15 @@ def resolve_module_name(module_name: str) -> str:
             console.print(f"  {i}. {match}")
         console.print("\n[dim]Please specify the full path (e.g., --module projects/website)[/dim]")
         raise typer.Exit(1)
+
+
+def print_llm_unavailable(console: Console) -> None:
+    """Explain that no LLM can be used, naming every way to provide one."""
+    console.print("[red]ERROR[/red] No LLM provider is available")
+    console.print(
+        "[dim]Install the claude or gemini CLI, run Ollama, or set ANTHROPIC_API_KEY.[/dim]"
+    )
+    console.print(
+        "[dim]To choose one, set llm.provider in config.yaml "
+        "(anthropic, claude-cli, gemini-cli, ollama). Check with: mproviders[/dim]"
+    )

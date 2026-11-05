@@ -175,21 +175,15 @@ export class MemoryToolCli {
   }
 
   /**
-   * Create a new module (`mmodule create`).
+   * Create a new document (`mmodule create`).
    *
-   * `kind` and `nature` are passed straight through so memory_tool performs the
-   * template assembly. It already resolves project templates over bundled ones,
-   * splices the Nature outline into the body and substitutes placeholders --
-   * duplicating that here would mean two template sources producing two
-   * different documents for the same choice.
+   * Requires memory_tool 1.2 or later, which added `--type`.
    */
   public async createModule(
     name: string,
     description: string = "",
     tags: string = "",
-    kind?: string,
-    nature?: string,
-    draft?: boolean
+    docType: string = ""
   ): Promise<string> {
     let cmd = `module create "${name}"`;
     if (description) {
@@ -198,27 +192,10 @@ export class MemoryToolCli {
     if (tags) {
       cmd += ` --tags "${escapeArg(tags)}"`;
     }
-    if (kind) {
-      cmd += ` --kind "${escapeArg(kind)}"`;
-    }
-    if (nature) {
-      cmd += ` --nature "${escapeArg(nature)}"`;
-    }
-    if (draft) {
-      cmd += " --draft";
+    if (docType) {
+      cmd += ` --type "${escapeArg(docType)}"`;
     }
     return this.executeCommand(cmd);
-  }
-
-  /**
-   * Append the skeleton sections a module does not have yet.
-   *
-   * The other half of `--draft`: a seed grows into the full document without
-   * the author copying sections out of the template. memory_tool reads the kind
-   * and nature from the module's own header, so neither is passed here.
-   */
-  public async growModule(name: string): Promise<string> {
-    return this.executeCommand(`module grow "${escapeArg(name)}"`);
   }
 
   /** Get list of active modules */

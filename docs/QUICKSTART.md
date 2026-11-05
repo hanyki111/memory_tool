@@ -170,7 +170,7 @@ m "Added new feature"   # Captured at 18:20
 python -m memory_tool module create auth-system
 
 # Organize knowledge by topic
-# .memory/modules/auth-system/current.md
+# .memory/modules/auth-system.md
 ```
 
 **Why?** You organize by topics. Your brain thinks "What did I decide about authentication?"
@@ -256,7 +256,7 @@ m "Project: Building todo app with React + FastAPI"
 m "Tech stack decided: React, FastAPI, PostgreSQL, Docker"
 
 # 3. Create project module
-python -m memory_tool module create projects/todo-app
+python -m memory_tool module create todo-app
 
 # 4. Start working
 m "Created initial project structure"

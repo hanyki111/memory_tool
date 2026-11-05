@@ -13,6 +13,7 @@ from textual.widgets import (
 )
 from textual.widgets.tree import TreeNode
 from rich.text import Text
+from memory_tool.utils.module_docs import resolve_module_document
 from memory_tool.utils.paths import base_dir_for_root
 
 
@@ -114,7 +115,7 @@ class ModulesMode(Static):
     def _build_tree_recursive(self, parent_node: TreeNode, tree_dict: Dict):
         """Recursively build tree from nested dict."""
         for name, children in sorted(tree_dict.items()):
-            # Determine if this is a module (has current.md)
+            # Determine if this is a module (has a document of its own)
             module_path = self.modules_path / name
 
             if isinstance(children, dict) and children:
@@ -123,7 +124,7 @@ class ModulesMode(Static):
                 self._build_tree_recursive(node, children)
             else:
                 # Leaf node
-                if module_path.exists() and (module_path / "current.md").exists():
+                if resolve_module_document(module_path) is not None:
                     parent_node.add_leaf(f"[green]{name}[/]")
                 else:
                     parent_node.add_leaf(f"{name}")
@@ -144,7 +145,9 @@ class ModulesMode(Static):
         """Show details for selected module."""
         module_path = self.modules_path / module_name
 
-        if not module_path.exists():
+        current_file = resolve_module_document(module_path)
+
+        if current_file is None and not module_path.exists():
             return
 
         # Build details text
@@ -154,9 +157,8 @@ class ModulesMode(Static):
         content.append(f"Module: ", style="bold")
         content.append(f"{module_name}\n\n", style="bold cyan")
 
-        # Read current.md
-        current_file = module_path / "current.md"
-        if current_file.exists():
+        # Preview the module's main document
+        if current_file is not None:
             try:
                 current_content = current_file.read_text(encoding="utf-8")
 

@@ -151,7 +151,16 @@ test("archive folders are skipped", async () => {
   assert.deepEqual(await listModules(adapter, ".memory"), ["a"]);
 });
 
-test("underscore and all-caps files are not modules", async () => {
+test("uppercase topics are modules, as in the CLI", async () => {
+  const adapter = fakeAdapter([
+    ".memory/modules/AI/AI.md",
+    ".memory/modules/MIGRATION-PLAN.md",
+  ]);
+
+  assert.deepEqual(await listModules(adapter, ".memory"), ["AI", "MIGRATION-PLAN"]);
+});
+
+test("underscore files and retired names are not modules", async () => {
   const adapter = fakeAdapter([
     ".memory/modules/a/a.md",
     ".memory/modules/_index.md",

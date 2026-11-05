@@ -265,69 +265,48 @@ class ContextBuilder:
         if not modules_path.exists():
             return health_issues
 
-        # Check all modules for large decisions.md or current.md files
-        for module_path in modules_path.rglob("*"):
-            if not module_path.is_dir():
-                continue
+        for module_name, document in self.get_module_docs().items():
+            # Legacy modules keep a decision log beside their main document.
+            decisions_file = modules_path / module_name / "decisions.md"
+            if decisions_file.is_file():
+                try:
+                    line_count = len(decisions_file.read_text(encoding="utf-8").splitlines())
+                except (OSError, UnicodeDecodeError):
+                    line_count = 0
 
-            # Get relative module name
+                if line_count > 300:
+                    health_issues.append({
+                        "module": module_name,
+                        "file": "decisions.md",
+                        "lines": line_count,
+                        "suggestion": (
+                            "⚠️ Very large, should archive soon"
+                            if line_count > 600
+                            else "Consider archiving"
+                        ),
+                    })
+
             try:
-                module_name = str(module_path.relative_to(modules_path)).replace("\\", "/")
-            except ValueError:
+                line_count = len(document.read_text(encoding="utf-8").splitlines())
+            except (OSError, UnicodeDecodeError):
                 continue
 
-            # Check decisions.md
-            decisions_file = module_path / "decisions.md"
-            if decisions_file.exists():
-                try:
-                    content = decisions_file.read_text(encoding="utf-8")
-                    line_count = len(content.splitlines())
+            # A single-file module holds what used to be five files, so judge
+            # it against the combined budget instead of current.md's.
+            is_legacy = document.name in ("current.md", "module.md")
+            warn_at, urgent_at = (200, 400) if is_legacy else (600, 1000)
 
-                    if line_count > 300:
-                        if line_count > 600:
-                            suggestion = "⚠️ Very large, should archive soon"
-                        else:
-                            suggestion = "Consider archiving"
-                        health_issues.append({
-                            "module": module_name,
-                            "file": "decisions.md",
-                            "lines": line_count,
-                            "suggestion": suggestion,
-                        })
-                except Exception:
-                    pass  # Skip files that can't be read
-
-            # Check the module's main document. Under the single-file layout
-            # everything lives in <folder>/<folder>.md rather than current.md,
-            # so checking only current.md missed those modules entirely.
-            current_file = module_path / "current.md"
-            if not current_file.exists():
-                candidate = module_path / f"{module_path.name}.md"
-                current_file = candidate if candidate.exists() else current_file
-
-            if current_file.exists():
-                try:
-                    content = current_file.read_text(encoding="utf-8")
-                    line_count = len(content.splitlines())
-
-                    # A single-file module holds what used to be five files, so
-                    # judge it against the combined budget instead of current.md's.
-                    is_single_file = current_file.name != "current.md"
-                    warn_at, urgent_at = (600, 1000) if is_single_file else (200, 400)
-
-                    if line_count > warn_at:
-                        if line_count > urgent_at:
-                            suggestion = "⚠️ Very large, consider archiving"
-                        else:
-                            suggestion = "Consider reviewing"
-                        health_issues.append({
-                            "module": module_name,
-                            "file": current_file.name,
-                            "lines": line_count,
-                            "suggestion": suggestion,
-                        })
-                except Exception:
-                    pass  # Skip files that can't be read
+            if line_count > warn_at:
+                health_issues.append({
+                    "module": module_name,
+                    "file": document.name,
+                    "lines": line_count,
+                    "suggestion": (
+                        "⚠️ Very large, consider archiving"
+                        if line_count > urgent_at
+                        else "Consider reviewing"
+                    ),
+                })
 
         return health_issues
 
@@ -567,7 +546,7 @@ class ContextBuilder:
                     file_name = item["file"]
                     line_count = item["lines"]
                     lines.append(f"- **{module_name}/{file_name}**: {line_count} lines - ⚠️ Very large, should archive soon")
-                    lines.append(f"  - Quick action: `marchive {file_name.replace('.md', '')} --module {module_name} --interactive`")
+                    lines.append(f"  - Quick action: `marchive {'current' if file_name == 'current.md' else 'decisions'} --module {module_name} --interactive`")
                 lines.append("")
 
             if warning:
@@ -599,31 +578,6 @@ class ContextBuilder:
             lines.append("")
             lines.append("---")
             lines.append("")
-
-        # Module Organization Quick Reference
-        lines.append("## Module Organization Quick Reference")
-        lines.append("")
-        lines.append("**When to Split a Module:**")
-        lines.append("- `current.md` > 300 lines")
-        lines.append("- Total files > 3000 lines")
-        lines.append("- More than 20 decisions")
-        lines.append("- More than 3 distinct topics")
-        lines.append("")
-        lines.append("**Decision Flow:**")
-        lines.append("```")
-        lines.append("Small enhancement (<100 lines)  → Add to existing module")
-        lines.append("New feature (>500 lines)        → Create new module")
-        lines.append("Unrelated topic                 → Create new module")
-        lines.append("Part of existing project        → Child module (projects/parent/child)")
-        lines.append("New project                     → New project (projects/new-project)")
-        lines.append("```")
-        lines.append("")
-        lines.append("**Full Documentation:**")
-        lines.append("- `.memory/docs/MODULE-ORGANIZATION-PRINCIPLES.md` - Complete principles")
-        lines.append("- `.memory/docs/QUICK-REFERENCE-MODULE-ORGANIZATION.md` - Quick decisions")
-        lines.append("")
-        lines.append("---")
-        lines.append("")
 
         # Footer
         lines.append("## Usage")

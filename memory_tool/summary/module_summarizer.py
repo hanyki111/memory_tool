@@ -2,6 +2,7 @@
 
 import hashlib
 import re
+from memory_tool.utils.module_docs import discover_module_paths, module_documents
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, Literal
@@ -156,15 +157,7 @@ class ModuleSummarizer:
         # Get timestamp
         timestamp = datetime.now().isoformat()
 
-        # Get relative path, handling both absolute and relative paths
-        try:
-            if module_path.is_absolute():
-                source_path = display_path(module_path).as_posix()
-            else:
-                source_path = module_path.as_posix()
-        except ValueError:
-            # If relative_to fails, just use the path as is
-            source_path = str(module_path)
+        source_path = Path(display_path(module_path)).as_posix()
 
         # Build metadata comment
         metadata = f"""<!-- metadata
@@ -200,32 +193,24 @@ generated: {timestamp}
             FileNotFoundError: If module doesn't exist
             ValueError: If module has no documentation files
         """
-        if not module_path.exists():
+        # Decision logs are left out of a legacy module's summary on purpose.
+        documents = module_documents(
+            module_path,
+            ("module.md", "README.md", "interface.md", "dependencies.md", "current.md"),
+        )
+
+        if not documents and not module_path.exists():
             raise FileNotFoundError(f"Module not found: {module_path}")
-
-        if not module_path.is_dir():
-            raise ValueError(f"Not a directory: {module_path}")
-
-        # Collect module documentation files
-        doc_files = [
-            "module.md",
-            "README.md",
-            "interface.md",
-            "dependencies.md",
-            "current.md",
-        ]
 
         module_content = []
         module_name = module_path.name
         source_files = []
 
-        for doc_file in doc_files:
-            file_path = module_path / doc_file
-            if file_path.exists():
-                content = file_path.read_text(encoding="utf-8")
-                if content.strip():
-                    module_content.append(f"## File: {doc_file}\n\n{content}")
-                    source_files.append(file_path)
+        for document in documents:
+            content = document.read_text(encoding="utf-8")
+            if content.strip():
+                module_content.append(f"## File: {document.name}\n\n{content}")
+                source_files.append(document)
 
         if not module_content:
             raise ValueError(f"No documentation files found in: {module_path}")
@@ -292,19 +277,13 @@ generated: {timestamp}
         if not modules_root.exists():
             raise FileNotFoundError(f"Modules directory not found: {modules_root}")
 
-        # Find all module directories (exclude archive and _index.md)
-        module_dirs = [
-            d for d in modules_root.iterdir()
-            if d.is_dir() and d.name != "archive" and not d.name.startswith("_")
-        ]
-
         summaries = {}
-        for module_dir in module_dirs:
+        for relative in discover_module_paths(modules_root):
+            name = relative.as_posix()
             try:
-                summary = self.summarize_module(module_dir, force=force)
-                summaries[module_dir.name] = summary
+                summaries[name] = self.summarize_module(modules_root / relative, force=force)
             except (FileNotFoundError, ValueError) as e:
                 # Skip modules without documentation
-                summaries[module_dir.name] = f"Error: {e}"
+                summaries[name] = f"Error: {e}"
 
         return summaries

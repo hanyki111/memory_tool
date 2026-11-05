@@ -1,10 +1,74 @@
 """Module management functionality."""
 
+import getpass
 import re
+import shutil
 from pathlib import Path
-from typing import Optional, List, Dict, Sequence
+from typing import Optional, List, Dict, Sequence, Tuple
 from datetime import datetime
+import yaml
+
+from memory_tool.utils.module_docs import discover_module_paths, resolve_module_document
 from memory_tool.utils.paths import base_dir_for_root, get_project_root
+
+
+def _yaml_value(value: str) -> str:
+    """Quote a frontmatter value only when plain YAML would misread it."""
+    if not value:
+        return ""
+    dumped = yaml.safe_dump(value, allow_unicode=True, default_flow_style=True)
+    return dumped.split("\n")[0].strip()
+
+
+def default_author() -> str:
+    """Name the person writing a new document, as ``human:<id>``."""
+    try:
+        return f"human:{getpass.getuser()}"
+    except Exception:
+        return "human:unknown"
+
+
+def render_new_document(
+    title: str,
+    doc_type: Optional[str] = None,
+    description: str = "",
+    tags: Optional[Sequence[str]] = None,
+    generated_by: Optional[str] = None,
+) -> str:
+    """Build a new document: frontmatter and a title.
+
+    Empty fields stay visible so they can be filled in later without having to
+    remember their names. There are no required sections and no instructions in
+    the document: it is the writer's text, and guidance lives in ``mmodule guide``.
+
+    Args:
+        title: Document title
+        doc_type: Document type
+        description: One sentence on what the document answers
+        tags: Tags
+        generated_by: Who writes it. Defaults to the current user.
+
+    Returns:
+        The document's text.
+    """
+    tag_values = ", ".join(_yaml_value(tag) for tag in (tags or []))
+    author = generated_by or default_author()
+    at = datetime.now().astimezone().isoformat(timespec="seconds")
+
+    lines = [
+        "---",
+        f"type: {_yaml_value(doc_type or '')}".rstrip(),
+        f"description: {_yaml_value(description or '')}".rstrip(),
+        f"tags: [{tag_values}]",
+        "generated:",
+        f"  by: {_yaml_value(author)}",
+        f"  at: {at}",
+        "---",
+        "",
+        f"# {title}",
+        "",
+    ]
+    return "\n".join(lines)
 
 
 class ModuleError(Exception):
@@ -68,10 +132,6 @@ class ModuleManager:
         dir_path = self.modules_path / name
         return dir_path.exists() and dir_path.is_dir() and ((dir_path / "module.md").exists() or (dir_path / "current.md").exists())
 
-    #: Filenames used by the legacy multi-file module layout, in the order they
-    #: should be preferred when looking for a module's main document.
-    LEGACY_DOC_NAMES = ("current.md", "module.md")
-
     def resolve_module_doc(self, name: str) -> Optional[Path]:
         """Find a module's primary markdown document.
 
@@ -89,21 +149,7 @@ class ModuleManager:
         Returns:
             Path to the module's main document, or None if none exists.
         """
-        encapsulated = self.get_module_file_path(name)
-        if encapsulated.is_file():
-            return encapsulated
-
-        flat = self.modules_path / f"{name}.md"
-        if flat.is_file():
-            return flat
-
-        module_dir = self.modules_path / name
-        for legacy_name in self.LEGACY_DOC_NAMES:
-            legacy = module_dir / legacy_name
-            if legacy.is_file():
-                return legacy
-
-        return None
+        return resolve_module_document(self.modules_path / name)
 
     def is_archived(self, name: str) -> bool:
         """Check if module is archived."""
@@ -124,8 +170,14 @@ class ModuleManager:
         kind: Optional[str] = None,
         nature: Optional[str] = None,
         draft: bool = False,
+        doc_type: Optional[str] = None,
+        generated_by: Optional[str] = None,
     ) -> Path:
-        """Create new single-file module structure at [Folder]/[Folder].md.
+        """Create a module.
+
+        Without a kind, this writes a new document: frontmatter and a title, in
+        one file. ``kind``, ``nature`` and ``draft`` select a deprecated template,
+        written to [Folder]/[Folder].md.
 
         Args:
             name: Module name or path (e.g. 'memory-tool' or 'memory-tool/core-system')
@@ -158,9 +210,6 @@ class ModuleManager:
         if self.module_exists(name):
             raise ModuleError(f"Module already exists: {name}")
 
-        file_path = self.get_module_file_path(name)
-        file_path.parent.mkdir(parents=True, exist_ok=True)
-
         resolved_kind = self._resolve_kind(kind, nature)
 
         if draft and resolved_kind is None:
@@ -170,85 +219,90 @@ class ModuleManager:
                 "modules.default_kind."
             )
 
-        if resolved_kind is not None:
-            return self._create_from_template(
-                file_path=file_path,
-                name=name,
-                kind=resolved_kind,
-                nature=nature,
-                description=description,
-                tags=tags,
-                draft=draft,
-            )
+        if resolved_kind is None:
+            return self._create_document(name, doc_type, description, tags, generated_by)
 
-        timestamp = datetime.now().strftime("%Y-%m-%d")
-        tags_str = ", ".join(tags) if tags else ""
-        desc_str = description if description else "TODO: Describe the purpose of this module"
+        file_path = self.get_module_file_path(name)
+        file_path.parent.mkdir(parents=True, exist_ok=True)
 
-        content = f"""# Module: {name}
+        return self._create_from_template(
+            file_path=file_path,
+            name=name,
+            kind=resolved_kind,
+            nature=nature,
+            description=description,
+            tags=tags,
+            draft=draft,
+        )
 
-**Created:** {timestamp}
-**Tags:** {tags_str}
+    def documents_moved_by_creating(self, name: str) -> List[Tuple[Path, Path]]:
+        """List the documents that move when a module is created at ``name``.
 
-## Overview
+        A document is one file until it gets children. It then moves into a
+        folder of its own name, so that renaming or archiving handles the whole
+        subject as one folder. Its file name stays the same, so ``[[topic]]``
+        links keep working.
 
-### Purpose
-{desc_str}
+        Args:
+            name: The module about to be created
 
-### Scope
-TODO: Define what is included and excluded from this module
+        Returns:
+            (current path, new path) pairs, outermost parent first.
+        """
+        moves = []
+        parts = Path(name).parts
 
-### Architecture
-TODO: Describe high-level architecture and design decisions
+        for depth in range(1, len(parts)):
+            ancestor = Path(*parts[:depth])
+            flat = self.modules_path / f"{ancestor.as_posix()}.md"
+            encapsulated = self.get_module_file_path(ancestor.as_posix())
 
-## Current Status
+            if flat.is_file() and not encapsulated.exists():
+                moves.append((flat, encapsulated))
 
-### In Progress
-- [ ] TODO: Add current tasks
+        return moves
 
-### Completed
-- [x] Module created
+    def _create_document(
+        self,
+        name: str,
+        doc_type: Optional[str],
+        description: str,
+        tags: Optional[Sequence[str]],
+        generated_by: Optional[str],
+    ) -> Path:
+        """Write a new document: frontmatter and a title, nothing else.
 
-### Blocked
-None
+        Args:
+            name: Module name or path
+            doc_type: Document type. Free text; see ``mmodule guide``.
+            description: One sentence on what the document answers
+            tags: Tags
+            generated_by: Who writes it, ``human:<id>`` or ``<producer>/<version>``
 
-### Next Steps
-1. TODO: Define next actions
+        Returns:
+            Path to the new document.
+        """
+        for current, target in self.documents_moved_by_creating(name):
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(current), str(target))
 
-## Decisions
+        folder = self.modules_path / name
+        if folder.is_dir():
+            path = self.get_module_file_path(name)
+        else:
+            path = self.modules_path / f"{name}.md"
 
-### Decision 1: Module Creation ({timestamp})
-**Context:** Initial module setup
-**Decision:** Created {name} module
-**Rationale:** {desc_str}
-**Status:** Accepted
-
-## Dependencies
-
-### Internal Dependencies
-None yet
-
-### External Dependencies
-None yet
-
-### Dependents
-None yet
-
-## Interface
-
-### Public API
-TODO: Document public interfaces, commands, or APIs
-
-### Data Structures
-TODO: Document key data structures
-"""
+        path.parent.mkdir(parents=True, exist_ok=True)
 
         try:
-            file_path.write_text(content, encoding="utf-8")
-        except Exception as e:
+            path.write_text(
+                render_new_document(Path(name).name, doc_type, description, tags, generated_by),
+                encoding="utf-8",
+            )
+        except OSError as e:
             raise ModuleError(f"Failed to create module file: {e}")
 
-        return file_path
+        return path
 
     def _resolve_kind(self, kind: Optional[str], nature: Optional[str]) -> Optional[str]:
         """Decide which template kind to use.
@@ -452,48 +506,7 @@ TODO: Document key data structures
         Returns:
             List of module relative paths (without .md extension) sorted by path.
         """
-        if not self.modules_path.exists():
-            return []
-
-        modules = set()
-
-        for md_file in self.modules_path.rglob("*.md"):
-            # Skip archive directory
-            if not include_archived and "archive" in md_file.parts:
-                continue
-            # Skip uppercase meta summary files or index files starting with _ or special files
-            if md_file.name.startswith("_") or md_file.name.isupper() or md_file.name in ["MIGRATION-SUMMARY.md"]:
-                continue
-
-            # Case 1: Legacy multi-file module (module.md, current.md, etc.)
-            if md_file.name in ["module.md", "current.md", "decisions.md", "dependencies.md", "interface.md"]:
-                legacy_dir = md_file.parent
-                try:
-                    rel_legacy = legacy_dir.relative_to(self.modules_path)
-                    modules.add(rel_legacy)
-                except ValueError:
-                    pass
-                continue
-
-            # Case 2: [Folder]/[Folder].md (e.g. memory-tool/core-system/core-system.md)
-            if md_file.stem == md_file.parent.name:
-                try:
-                    rel_path = md_file.parent.relative_to(self.modules_path)
-                    modules.add(rel_path)
-                    continue
-                except ValueError:
-                    pass
-
-            # Case 3: Flat single-file module (e.g. memory-tool/core-system.md)
-            try:
-                rel_path = md_file.relative_to(self.modules_path).with_suffix("")
-                modules.add(rel_path)
-            except ValueError:
-                continue
-
-        result = list(modules)
-        result.sort(key=lambda p: str(p))
-        return result
+        return discover_module_paths(self.modules_path, include_archived)
 
     def find_module_by_name(self, name: str, exact: bool = False) -> List[str]:
         """Find module(s) by name, searching all module paths.
@@ -745,23 +758,33 @@ TODO: Document key data structures
 
         file_path = self.get_module_file_path(name)
         dir_path = self.modules_path / name
+        flat_path = self.modules_path / f"{name}.md"
 
-        if not file_path.exists() and not dir_path.exists():
+        if not dir_path.is_dir() and not flat_path.is_file():
             raise ModuleError(f"Module not found: {name}")
 
         if self.is_archived(name):
             raise ModuleError(f"Module already archived: {name}")
 
         self.archive_path.mkdir(parents=True, exist_ok=True)
-        import shutil
 
         target_archive = self.archive_path / f"{name}.md"
         target_archive.parent.mkdir(parents=True, exist_ok=True)
 
-        if file_path.exists():
+        if flat_path.is_file():
+            shutil.move(str(flat_path), str(target_archive))
+        elif file_path.is_file() and sum(1 for _ in dir_path.iterdir()) == 1:
+            # The folder holds nothing else, so nothing is left behind.
             shutil.move(str(file_path), str(target_archive))
-        elif dir_path.exists():
-            shutil.move(str(dir_path), str(self.archive_path / name))
+            dir_path.rmdir()
+
+        # What remains is a subject with children, or a legacy module: it moves
+        # as a whole, because the children belong to it.
+        if dir_path.is_dir():
+            target_folder = self.archive_path / name
+            shutil.move(str(dir_path), str(target_folder))
+            if not target_archive.exists():
+                target_archive = target_folder
 
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
         index_path = self.archive_path / "_index.md"
@@ -798,18 +821,18 @@ TODO: Document key data structures
                 f"Active module with name '{name}' already exists. Archive or rename it first."
             )
 
-        import shutil
-        file_path = self.get_module_file_path(name)
-        file_path.parent.mkdir(parents=True, exist_ok=True)
+        restored = self.modules_path / name
+        restored.parent.mkdir(parents=True, exist_ok=True)
+        result = restored
 
-        if archive_file.exists():
-            shutil.move(str(archive_file), str(file_path))
-            res = file_path
-        else:
-            shutil.move(str(archive_dir), str(self.modules_path / name))
-            res = self.modules_path / name
+        if archive_dir.is_dir():
+            shutil.move(str(archive_dir), str(restored))
 
-        return res
+        if archive_file.is_file():
+            result = self.modules_path / f"{name}.md"
+            shutil.move(str(archive_file), str(result))
+
+        return result
 
     def rename(self, old_name: str, new_name: str) -> Path:
         """Rename a module."""
@@ -821,32 +844,69 @@ TODO: Document key data structures
 
         self._validate_module_name(new_name)
 
-        old_file = self.get_module_file_path(old_name)
         old_dir = self.modules_path / old_name
+        old_flat = self.modules_path / f"{old_name}.md"
 
-        if not old_file.exists() and not old_dir.exists():
+        if not old_dir.is_dir() and not old_flat.is_file():
             raise ModuleError(f"Module not found: {old_name}")
 
-        if self.module_exists(new_name):
+        new_dir = self.modules_path / new_name
+        new_flat = self.modules_path / f"{new_name}.md"
+
+        old_parts = Path(old_name).parts
+        if Path(new_name).parts[: len(old_parts)] == old_parts:
+            raise ModuleError(f"Cannot move module inside itself: {old_name} -> {new_name}")
+
+        # A folder at the target is refused even without a document of its own:
+        # moving into it would merge two trees and nest this one inside it.
+        if self.module_exists(new_name) or new_dir.exists() or new_flat.exists():
             raise ModuleError(f"Module already exists: {new_name}")
 
-        import shutil
-        new_file = self.get_module_file_path(new_name)
-        new_file.parent.mkdir(parents=True, exist_ok=True)
+        old_doc_name = f"{Path(old_name).name}.md"
+        new_doc_name = f"{Path(new_name).name}.md"
+        moves_document = old_dir.is_dir() and (old_dir / old_doc_name).is_file()
 
-        if old_file.exists():
-            shutil.move(str(old_file), str(new_file))
-            try:
-                content = new_file.read_text(encoding="utf-8")
-                old_base = Path(old_name).name
-                new_base = Path(new_name).name
-                content = content.replace(f"# Module: {old_base}", f"# Module: {new_base}")
-                content = content.replace(f"# Module: {old_name}", f"# Module: {new_name}")
-                new_file.write_text(content, encoding="utf-8")
-            except Exception:
-                pass
-            return new_file
-        else:
-            shutil.move(str(old_dir), str(self.modules_path / new_name))
-            return self.modules_path / new_name
+        if moves_document and (old_dir / new_doc_name).exists():
+            raise ModuleError(
+                f"Cannot rename {old_name}: its folder already holds {new_doc_name}, "
+                f"which would be overwritten."
+            )
+
+        new_dir.parent.mkdir(parents=True, exist_ok=True)
+
+        if old_dir.is_dir():
+            shutil.move(str(old_dir), str(new_dir))
+            if moves_document:
+                (new_dir / old_doc_name).rename(new_dir / new_doc_name)
+
+        if old_flat.is_file():
+            shutil.move(str(old_flat), str(new_flat))
+
+        renamed_doc = None
+        if moves_document:
+            renamed_doc = new_dir / new_doc_name
+        elif new_flat.is_file():
+            renamed_doc = new_flat
+
+        if renamed_doc is None:
+            return new_dir
+
+        self._update_module_title(renamed_doc, old_name, new_name)
+        return renamed_doc
+
+    @staticmethod
+    def _update_module_title(document: Path, old_name: str, new_name: str) -> None:
+        """Rewrite the ``# Module:`` title of a renamed document, if it has one."""
+        try:
+            content = document.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            return
+
+        for old_title, new_title in (
+            (Path(old_name).name, Path(new_name).name),
+            (old_name, new_name),
+        ):
+            content = content.replace(f"# Module: {old_title}", f"# Module: {new_title}")
+
+        document.write_text(content, encoding="utf-8")
 

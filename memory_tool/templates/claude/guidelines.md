@@ -107,10 +107,7 @@ m "Decision: Using approach A because..."
 m "Completed: Feature X"
 ```
 
-**Use Edit tool for Modules:**
-- `current.md` - Module status
-- `decisions.md` - Key decisions
-- `module.md` - Module definition
+**Edit documents directly.** Small decisions go in the timeline. Write a document only for what someone will look up or need explained later.
 
 **Don't:**
 - Manually edit timeline files
@@ -120,42 +117,38 @@ m "Completed: Feature X"
 
 ## 4. Module Organization Summary
 
-### When to Split
-- `current.md` > 300 lines
-- More than 20 decisions
-- More than 3 distinct topics
+A module is one document, created with frontmatter and a title. No section is required. The type is optional:
 
-### Decision Flow
-```
-Small enhancement (<100 lines)  → Add to existing module
-New feature (>500 lines)        → Create new module
-Unrelated topic                 → Create new module
-Part of existing project        → Child module (projects/parent/child)
-New project                     → New project (projects/new-project)
+| Type | Answers |
+|---------|---------|
+| 참고 | What was that value or fact? |
+| 이해 | Why does this work this way? |
+| 방법 | How do I do this? |
+| 판단 | Why did I see it, or decide it, that way? |
+
+```bash
+ms "topic"                                  # Check for an existing document first
+mmodule create "topic" --type 참고 --desc "One sentence"
+mmodule guide 참고                          # Questions and checks for that type
 ```
 
-### Hierarchy vs Flat
-- **Hierarchy** (projects/parent/child): Clear containment, shared context
-- **Flat** (projects/module-a): Independent concerns, different lifecycles
+**When helping the user write:** the user writes. Ask questions and point out problems, and write the body only when asked. See `mmodule guide`, or use the `mt-write` skill. Do not add empty sections or placeholders.
 
 **Full documentation:** `.memory/docs/MODULE-ORGANIZATION.md`
 
 ---
 
-## 5. Related Files Section
+## 5. Linking Documents to Code
 
-Link modules to source code in `current.md`:
+List what a document rests on in its frontmatter:
 
-```markdown
-## Related Files
-
-- **Source:** `src/feature/`
-- **Tests:** `tests/feature/`
-- **Docs:** `docs/feature.md`
+```yaml
+sources:
+  - id: source
+    resource: src/feature/
 ```
 
-**Validate:** `mcheck`
-**Include in context:** `mcontext --structure`
+**Validate:** `mcheck`. Existing `## Related Files` sections are still read.
 
 ---
 
@@ -176,23 +169,15 @@ Context file: `.claude/memory-context.md`
 ## 7. Workflow Tips
 
 ### Daily Workflow
-1. Run `mcontext` at session start
+1. Resuming work: read the recent timeline (`mweek`) and `git log`. If the project uses Goal Loop, read it as well. There is no status document to maintain.
 2. Record progress with `m "message"` at natural breakpoints
 3. Check `mtoday` to review work
 
-### When Creating Features
-1. Create module: `mmodule create projects/project/feature`
-2. Add Related Files section to `current.md`
-3. Record start: `m "Starting feature X"`
-4. Work on feature
-5. Record completion: `m "Completed feature X"`
-6. Update module `current.md` and `decisions.md`
-
-### Weekly Review
+### Periodic Check
 ```bash
-mweek                    # Review week's timeline
-mcheck                   # Validate module paths
-marchive --suggest       # Check for archiving needs
+mweek                    # Review the week's timeline
+mcheck                   # Verify paths in documents
+mmodule audit            # Split and merge candidates
 ```
 
 ### Knowledge Federation

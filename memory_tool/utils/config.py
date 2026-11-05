@@ -60,7 +60,7 @@ class Config:
             "min_count": 1,  # Minimum usage count to display
         },
         "llm": {
-            "provider": "anthropic",
+            "provider": None,  # None: use the first available (LLMClient.PROVIDER_ORDER)
             "ollama_host": "http://localhost:11434",
             "ollama_model": "llama3.2",
             "anthropic_api_key": None,

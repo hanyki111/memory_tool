@@ -137,18 +137,22 @@ msort --all                      # Sort all timeline files
 
 ## 4. Modules (mmodule)
 
-Modules organize knowledge spatially. Each module is a folder with standardized files.
+Modules organize knowledge spatially. A module is one document.
 
 ### Module Structure
 ```
 .memory/modules/
-  projects/
-    my-project/
-      module.md       # Metadata (name, description, tags)
-      current.md      # Current state, ongoing work
-      decisions.md    # Important decisions & rationale
-      archive/        # Historical records
+├── auth-system.md          # One document
+├── todo-app/               # A subject with children
+│   ├── todo-app.md
+│   ├── frontend.md
+│   └── backend.md
+└── concepts/               # A folder grouping documents
+    ├── jwt-tokens.md
+    └── oauth2-flow.md
 ```
+
+A new document holds frontmatter and a title. It moves into a folder of its own name when it gets a child. Older folders with `current.md` are still read.
 
 ### Commands
 ```bash
@@ -156,6 +160,9 @@ mmodule list                     # List all modules
 mmodule tree                     # Tree view of modules
 mmodule create newproject        # Create new module
 mmodule create proj --tags dev,web  # Create with tags
+mmodule create proj --type 참고     # Create with a type
+mmodule guide 참고               # Writing guide for a type
+mmodule audit                    # Split and merge candidates
 mmodule graph                    # Visualize module connections
 mmodule connections myproject    # Show connections for module
 ```
@@ -164,9 +171,9 @@ mmodule connections myproject    # Show connections for module
 Connect modules using `[[double brackets]]`:
 
 ```markdown
-# In current.md
+# In any document
 See [[auth-system]] for authentication details.
-Related to [[projects/website]].
+Related to [[website]].
 ```
 
 Validate links: `mcheck`
@@ -411,7 +418,7 @@ mmodule create myproject --tags dev,web
 
 ### Tag Format
 - Tags are stored as `#tag1 #tag2` at end of timeline entries
-- Module tags in `module.md` header
+- Document tags in the frontmatter's `tags`
 
 ### Searching by Tag
 ```bash

@@ -1,21 +1,13 @@
 import { App, Modal, Notice, TFile } from "obsidian";
 import { MemoryToolCli } from "../cli/memoryToolCli";
 import { DEFAULT_BASE, moduleCandidatePaths } from "../paths";
-import {
-  KINDS,
-  ModuleKind,
-  ModuleNature,
-  NATURES_BY_KIND,
-} from "../moduleKinds";
+import { DOCUMENT_TYPES } from "../documentTypes";
 
 /**
- * Create a module, asking the two MOP decision questions first.
+ * Create a document: a path, and optionally a type and one sentence.
  *
- * The answers are passed to `mmodule create --kind --nature`; memory_tool owns
- * template resolution and assembly, including the project-over-bundled override
- * and the Nature outline splice. The modal's job is only to make the two
- * questions unavoidable at the moment the module is created, which is the point
- * at which they are cheap to answer and easy to skip.
+ * memory_tool writes the file, which holds frontmatter and a title. The body is
+ * the writer's, so nothing here adds sections or asks about structure.
  */
 export class CreateModuleModal extends Modal {
   private cli: MemoryToolCli;
@@ -24,9 +16,7 @@ export class CreateModuleModal extends Modal {
   /** Pre-filled module path, from a right-clicked folder. */
   private initialPath: string;
 
-  private kind: ModuleKind = "knowledge";
-  private nature: ModuleNature | undefined = "concept";
-  private draft = false;
+  private docType = "";
 
   constructor(
     app: App,
@@ -68,10 +58,10 @@ export class CreateModuleModal extends Modal {
     nameInput.setSelectionRange(nameInput.value.length, nameInput.value.length);
 
     const descGroup = contentEl.createDiv({ cls: "memory-tool-form-group" });
-    descGroup.createEl("label", { text: "목적 (한 문장)" });
+    descGroup.createEl("label", { text: "설명 (한 문장, 선택)" });
     const descInput = descGroup.createEl("input", {
       type: "text",
-      placeholder: "두 문장이 넘어가면 모듈을 분리하라는 신호입니다",
+      placeholder: "한 문장으로 쓰기 어려우면 문서를 나눌 신호입니다",
     });
 
     const tagsGroup = contentEl.createDiv({ cls: "memory-tool-form-group" });
@@ -81,80 +71,25 @@ export class CreateModuleModal extends Modal {
       placeholder: "예: search, python, cli",
     });
 
-    // --- Kind: the one question that decides the template ---
-    const kindGroup = contentEl.createDiv({ cls: "memory-tool-form-group" });
-    kindGroup.createEl("label", {
-      text: "Kind — 이 문서가 서술하는 대상이 이미 존재하는가?",
-    });
-    const kindSelect = kindGroup.createEl("select");
-    for (const k of KINDS) {
-      kindSelect.createEl("option", { value: k.id, text: `${k.answer} → ${k.id}` });
+    // --- Type: optional, and free to stay empty ---
+    const typeGroup = contentEl.createDiv({ cls: "memory-tool-form-group" });
+    typeGroup.createEl("label", { text: "종류 (선택)" });
+    const typeSelect = typeGroup.createEl("select");
+    typeSelect.createEl("option", { value: "", text: "정하지 않음" });
+    for (const option of DOCUMENT_TYPES) {
+      typeSelect.createEl("option", {
+        value: option.id,
+        text: `${option.id}: ${option.answers}`,
+      });
     }
-    kindSelect.value = this.kind;
+    const typeHint = typeGroup.createDiv({ cls: "memory-tool-hint" });
 
-    // --- Nature: knowledge and intent, each with its own set ---
-    const natureGroup = contentEl.createDiv({ cls: "memory-tool-form-group" });
-    natureGroup.createEl("label", { text: "Nature — 무엇이 이 모듈을 갱신시키는가?" });
-    const natureSelect = natureGroup.createEl("select");
-    const natureHint = natureGroup.createDiv({ cls: "memory-tool-hint" });
-
-    const syncNatureHint = () => {
-      const chosen = NATURES_BY_KIND[this.kind].find(
-        (n) => n.id === natureSelect.value
-      );
-      natureHint.setText(chosen ? `답하는 질문: ${chosen.answers}` : "");
-    };
-
-    // The two sets share no names, so the options are rebuilt on every Kind
-    // change rather than filtered -- a leftover selection from the other set
-    // would be rejected by `mmodule create`.
-    const syncNatureOptions = () => {
-      const options = NATURES_BY_KIND[this.kind];
-      natureSelect.empty();
-      natureGroup.toggleClass("memory-tool-hidden", options.length === 0);
-
-      for (const n of options) {
-        natureSelect.createEl("option", {
-          value: n.id,
-          text: `${n.trigger} → ${n.label} · ${n.lifetime}`,
-        });
-      }
-
-      this.nature = options.length ? options[0].id : undefined;
-      if (options.length) {
-        natureSelect.value = options[0].id;
-      }
-      syncNatureHint();
-    };
-    syncNatureOptions();
-
-    natureSelect.addEventListener("change", () => {
-      this.nature = natureSelect.value as ModuleNature;
-      syncNatureHint();
+    typeSelect.addEventListener("change", () => {
+      this.docType = typeSelect.value;
+      const chosen = DOCUMENT_TYPES.find((option) => option.id === this.docType);
+      typeHint.setText(chosen ? `갱신 계기: ${chosen.updatedWhen}` : "");
     });
 
-    kindSelect.addEventListener("change", () => {
-      this.kind = kindSelect.value as ModuleKind;
-      syncNatureOptions();
-    });
-
-    // --- Draft: the seed document, for a module being started from nothing ---
-    const draftGroup = contentEl.createDiv({ cls: "memory-tool-form-group" });
-    const draftLabel = draftGroup.createEl("label");
-    const draftToggle = draftLabel.createEl("input", { type: "checkbox" });
-    draftLabel.appendText(" 초안으로 시작 (--draft)");
-    draftGroup.createDiv({
-      cls: "memory-tool-hint",
-      text:
-        "전체 골격 대신 40줄짜리 씨앗 문서를 만듭니다. " +
-        "필요해지면 'mmodule grow' 로 나머지 절을 붙입니다.",
-    });
-
-    draftToggle.addEventListener("change", () => {
-      this.draft = draftToggle.checked;
-    });
-
-    // --- Buttons ---
     const buttonsEl = contentEl.createDiv({ cls: "memory-tool-modal-buttons" });
     const cancelBtn = buttonsEl.createEl("button", { text: "취소" });
     const submitBtn = buttonsEl.createEl("button", { text: "생성", cls: "mod-cta" });
@@ -180,14 +115,7 @@ export class CreateModuleModal extends Modal {
   }
 
   private async create(name: string, description: string, tags: string): Promise<void> {
-    await this.cli.createModule(
-      name,
-      description,
-      tags,
-      this.kind,
-      this.nature,
-      this.draft
-    );
+    await this.cli.createModule(name, description, tags, this.docType);
 
     const basePrefix = this.getBasePrefix();
     const candidates = moduleCandidatePaths(basePrefix, name);
@@ -203,9 +131,7 @@ export class CreateModuleModal extends Modal {
 
     await this.openPath(path);
 
-    const base = this.nature ? `${this.kind} / ${this.nature}` : this.kind;
-    const label = this.draft ? `${base} (draft)` : base;
-    new Notice(`모듈 생성: ${name} (${label})`);
+    new Notice(this.docType ? `모듈 생성: ${name} (${this.docType})` : `모듈 생성: ${name}`);
   }
 
   /**

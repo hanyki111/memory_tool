@@ -5,6 +5,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from memory_tool.utils.frontmatter import Frontmatter
+from memory_tool.utils.module_docs import resolve_module_document
+
 
 @dataclass
 class PathEntry:
@@ -28,7 +31,7 @@ class RelatedFiles:
     raw: Dict[str, List[str]] = field(default_factory=dict)
 
     # Metadata
-    format_type: str = "none"  # "standard", "legacy", "none"
+    format_type: str = "none"  # "standard", "legacy", "sources", "none"
 
     # Line number tracking: path -> line_number
     line_numbers: Dict[str, int] = field(default_factory=dict)
@@ -298,51 +301,38 @@ class RelatedFilesParser:
         """
         try:
             content = file_path.read_text(encoding="utf-8")
-            return self.parse(content)
+            result = self.parse(content)
         except Exception:
             return RelatedFiles(format_type="none")
 
+        return self._add_frontmatter_sources(result, content)
 
-#: Names a module document can take inside its own folder, in the order they
-#: should be preferred. ``<folder>.md`` is the current single-file layout and is
-#: resolved separately, because it is named after the folder rather than fixed.
-MODULE_DOC_NAMES = ("current.md", "module.md")
+    @staticmethod
+    def _add_frontmatter_sources(result: RelatedFiles, content: str) -> RelatedFiles:
+        """Add local paths from the frontmatter's ``sources`` to what gets checked.
 
+        Any document can point at code this way, without a Related Files section.
+        URLs are left alone, since only local paths can be checked.
+        """
+        metadata, _ = Frontmatter.parse(content)
+        sources = metadata.get("sources") if isinstance(metadata, dict) else None
 
-def resolve_module_document(module_path: Path) -> Optional[Path]:
-    """Find the markdown document that holds a module's Related Files.
+        if not isinstance(sources, list):
+            return result
 
-    Three layouts are in use and all remain readable:
-      1. ``<folder>/<folder>.md`` -- current single-file layout
-      2. ``<folder>.md``          -- flat single file
-      3. ``<folder>/current.md``  -- legacy multi-file layout
+        paths = [
+            source.get("resource")
+            for source in sources
+            if isinstance(source, dict) and isinstance(source.get("resource"), str)
+        ]
+        paths = [path for path in paths if "://" not in path and path not in result.all_paths()]
 
-    Args:
-        module_path: Either the module's folder or its document itself
+        if paths:
+            result.other.extend(paths)
+            if result.format_type == "none":
+                result.format_type = "sources"
 
-    Returns:
-        Path to the module document, or None when the module has none.
-    """
-    if module_path.is_file():
-        return module_path
-
-    if module_path.is_dir():
-        encapsulated = module_path / f"{module_path.name}.md"
-        if encapsulated.is_file():
-            return encapsulated
-
-        for doc_name in MODULE_DOC_NAMES:
-            legacy = module_path / doc_name
-            if legacy.is_file():
-                return legacy
-
-    # Appended rather than substituted: with_suffix would read a dot in the
-    # module's own name as an extension and truncate it.
-    flat = module_path.parent / f"{module_path.name}.md"
-    if flat.is_file():
-        return flat
-
-    return None
+        return result
 
 
 def get_module_related_files(

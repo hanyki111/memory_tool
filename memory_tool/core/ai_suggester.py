@@ -1,4 +1,4 @@
-"""AI-based connection suggestions and auto-tagging."""
+"""AI-based connection suggestions."""
 
 import json
 import hashlib
@@ -11,7 +11,11 @@ from .embedding_cache import (
     get_embedding_cache,
     SimilarityCalculator,
 )
+from memory_tool.utils.module_docs import read_module_text
 from memory_tool.utils.paths import get_base_path
+
+#: Legacy files that describe what a module is about. Decision logs are left out.
+SUGGESTION_LEGACY_DOCS = ("module.md", "current.md", "README.md", "interface.md")
 
 
 class SuggestionCache:
@@ -262,19 +266,7 @@ class AIConnectionSuggester:
         Returns:
             Combined content from module files
         """
-        content_parts = []
-
-        # Read key files
-        for filename in ["module.md", "current.md", "README.md", "interface.md"]:
-            file_path = module_path / filename
-            if file_path.exists():
-                try:
-                    text = file_path.read_text(encoding="utf-8")
-                    content_parts.append(f"## {filename}\n\n{text}")
-                except Exception:
-                    pass
-
-        return "\n\n".join(content_parts)
+        return read_module_text(module_path, SUGGESTION_LEGACY_DOCS)
 
     def suggest_connections(
         self,
@@ -788,59 +780,6 @@ If no strong connections exist, respond with: NO_SUGGESTIONS
         text = ' '.join(text.split())
 
         return text.strip()
-
-    def suggest_tags(self, module_path: Path, max_tags: int = 5) -> List[str]:
-        """Suggest tags for a module based on its content.
-
-        Args:
-            module_path: Path to module directory
-            max_tags: Maximum number of tags to suggest
-
-        Returns:
-            List of suggested tags
-        """
-        # Read module content
-        content = self._read_module_content(module_path)
-
-        if not content:
-            return []
-
-        # Build prompt
-        prompt = f"""Analyze the following module content and suggest {max_tags} relevant tags.
-
-MODULE CONTENT:
-{content[:3000]}
-
-Task:
-Suggest {max_tags} concise tags (1-2 words each) that best categorize this module.
-
-Focus on:
-- Main topics or themes
-- Technologies mentioned
-- Problem domains
-- Module purpose
-
-Format: Return only the tags, one per line, without numbering or explanations.
-"""
-
-        try:
-            # Get LLM response
-            response = self.llm_client.generate(
-                prompt=prompt,
-                max_tokens=200,
-            )
-
-            # Parse tags (one per line)
-            tags = []
-            for line in response.strip().split('\n'):
-                tag = line.strip().strip('-•*').strip()
-                if tag and len(tag) > 0:
-                    tags.append(tag)
-
-            return tags[:max_tags]
-
-        except Exception as e:
-            return []
 
     def analyze_content_similarity(
         self,

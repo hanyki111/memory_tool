@@ -33,6 +33,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Timeline/Review/Plan 시스템 전체 완료 (Phase 1-5)
 - README.md 및 design 문서 최종 업데이트
 
+## [1.2.0] - 2026-11-05
+
+### ⚠️ 호환 없이 바뀐 동작
+
+- **`module auto-tag` 제거:** 대체 기능은 없습니다.
+- **`mplan module`과 `PLAN.md` 제거:** `mplan`의 나머지 기능은 그대로입니다. 기존 `PLAN.md`는 삭제되지 않으며, 모듈 목록에 더는 나타나지 않습니다.
+- **옵션 없는 `mmodule create`의 결과 변경:** 범용 골격 대신 frontmatter와 제목만 있는 파일 하나(`topic.md`)를 만듭니다. `modules.default_kind`를 설정한 프로젝트는 이전처럼 동작합니다.
+- **`mmodule from-text`의 결과 변경:** 파일 3개 대신 문서 하나로 저장하며, `generated.by`에 AI 작성으로 표시합니다. `--structure`는 더 이상 효과가 없습니다.
+- **Obsidian 플러그인 1.2.0의 `grow` 메뉴 제거:** 생성 화면은 Kind와 Nature 대신 종류를 묻습니다. 이 플러그인은 `--type`을 쓰므로 memory_tool 1.2 이상이 필요합니다. 이전 플러그인은 1.2에서 경고와 함께 계속 작동합니다.
+- **LLM 제공자 기본값 변경:** `llm.provider`가 없으면 `anthropic`으로 고정하지 않고, `anthropic`, `claude-cli`, `gemini-cli`, `ollama` 순서로 사용 가능한 제공자를 고릅니다.
+- **`mmodule rename`의 대상 제한:** 대상 폴더가 이미 있으면 합치지 않고 거부합니다.
+
+### 🗑️ Deprecated
+
+다음 기능은 경고와 함께 계속 작동하며, 이후 버전에서 제거될 수 있습니다. 이 기능으로 만든 문서는 계속 읽을 수 있습니다.
+
+- `--kind`, `--nature`, `--draft`, `mmodule grow`, `--part`, `merge-templates`, `modules.default_kind`
+- `mmodule ai-organize` (`mmodule audit`으로 대체)
+- `mmodule suggest-ai` (`mmodule suggest-links --ai`로 대체)
+
+### ✨ Added
+
+- **새 문서 형식:** `mmodule create --type <종류>`. 종류는 참고, 이해, 방법, 판단이며 선택 사항입니다. 첫 하위 문서를 만들면 `topic.md`가 `topic/topic.md`로 옮겨지고, `[[topic]]` 링크는 유지됩니다.
+- **작성 지원:** `mmodule guide [종류]`와 `mt-write` 스킬. 기본적으로 AI는 질문하고 지적하며, 요청할 때만 본문을 씁니다. `<기반폴더>/guides/`의 파일이 번들 가이드보다 우선합니다.
+- **`mmodule audit`:** 분리와 병합 후보를 보여 줍니다. LLM을 쓰지 않으며 문서를 바꾸지 않습니다.
+- **`mmodule suggest-links --ai`:** 내용을 읽고 관련 문서를 제안합니다.
+- **`mask`의 기간 조회:** 시작일과 종료일을 지정해 타임라인을 읽습니다.
+- **연결 그래프의 Markdown 링크:** 위키 링크와 함께 읽습니다.
+- **`mcheck`의 `sources` 검증:** frontmatter의 로컬 경로를 확인합니다.
+
+### 🐛 Fixed
+
+- **`mask`:** 날짜형 파일명의 타임라인과 단일 문서 모듈을 읽지 못하던 문제를 고쳤습니다. 읽을 수 없는 날짜를 오늘로 처리해 다른 날의 기록으로 답하던 문제도 고쳤습니다.
+- **`msummary`:** 타임라인과 모듈 요약이 `AttributeError`로 중단되던 문제를 고쳤습니다. `--decisions`는 단일 문서의 결정 절도 읽습니다. 도움말의 없는 옵션(`--week`, `--days`)도 바로잡았습니다.
+- **`claude-cli`:** 긴 프롬프트가 Windows 명령줄 길이 제한에 걸리지 않도록 표준 입력으로 전달합니다.
+- **`PLAN.md`:** CLI가 모듈로 나열하던 문제를 고쳤습니다.
+- **플러그인 모듈 목록:** `AI.md`, `MIGRATION-PLAN.md`처럼 대문자로 된 파일명을 숨기던 문제를 고쳤습니다.
+- **`mmodule rename`:** 하위 문서를 남겨 두거나 잘못된 위치로 옮기던 문제를 고쳤습니다.
+- **`mmodule archive`, `unarchive`, 연결 그래프, `mpublish`:** 단일 파일 모듈을 처리합니다. 하위 문서를 남겨 두거나, 하위 문서의 링크를 상위 문서의 것으로 집계하던 문제도 고쳤습니다.
+- **`suggest-links`, `check-links`:** 문서 이름이 빈 괄호로 출력되던 문제를 고쳤습니다.
+
+### 📚 Documentation
+
+- 도움말, README, 사용자 가이드, 튜토리얼, 스킬을 새 문서 형식 기준으로 수정했습니다.
+- `minit`은 `MODULE-ORGANIZATION-PRINCIPLES.md`와 `QUICK-REFERENCE-MODULE-ORGANIZATION.md`를 더 이상 만들지 않습니다.
+
+### ⚠️ 알려진 제한
+
+- `mcontext -i`는 단일 문서 모듈에서 동작하지 않습니다.
+- 플러그인 1.2.0은 빌드와 단위 테스트만 거쳤고, Obsidian 안에서 화면을 직접 확인하지 않았습니다.
+
 ## [1.0.0-alpha] - 2025-11-15
 
 ### 🎉 Initial Alpha Release

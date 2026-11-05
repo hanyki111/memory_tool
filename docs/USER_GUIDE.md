@@ -176,12 +176,7 @@ The **Module System** is your topic-based organization system. Think of it as yo
 
 ```
 Knowledge organizes by TOPIC:
-└── projects/
-    └── auth-system/
-        ├── current.md        # Current state
-        ├── decisions.md      # Key decisions
-        ├── dependencies.md   # What it depends on
-        └── interface.md      # How to use it
+└── auth-system.md        # One document on one subject
 
 Your brain thinks: "What did I decide about authentication?"
 ```
@@ -190,80 +185,47 @@ Your brain thinks: "What did I decide about authentication?"
 
 ```
 .memory/modules/
-├── auth-system/           # Flat module
-│   ├── module.md
-│   ├── current.md
-│   └── decisions.md
-│
-├── projects/              # Hierarchical modules
-│   ├── todo-app/
-│   │   ├── frontend/
-│   │   ├── backend/
-│   │   └── deployment/
-│   └── blog/
-│
-└── concepts/              # Conceptual knowledge
-    ├── jwt-tokens/
-    └── oauth2-flow/
+├── auth-system.md          # One document
+├── todo-app/               # A subject with children
+│   ├── todo-app.md
+│   ├── frontend.md
+│   └── backend.md
+└── concepts/               # A folder grouping documents
+    ├── jwt-tokens.md
+    └── oauth2-flow.md
 ```
 
-### Module Files
+A module is one document. It stays one file until it gets a child, then moves into a folder of its own name. Its file name stays the same, so `[[auth-system]]` links keep working.
 
-**module.md** - Definition
+Older projects may have folders holding `module.md`, `current.md` and `decisions.md`. Those are still read.
+
+### A Document
+
+`mmodule create` writes frontmatter and a title. No section is required.
+
 ```markdown
-# Auth System
+---
+type: 참고
+description: One sentence on what this document answers
+tags: []
+generated:
+  by: human:example
+  at: 2026-11-05T10:00:00+09:00
+---
 
-**Purpose:** User authentication and authorization
-
-**Scope:**
-- User login/logout
-- JWT token management
-- Password reset
-- Email verification
-
-**Out of scope:**
-- User profile management
-- Social login
+# auth-system
 ```
 
-**current.md** - Current state
-```markdown
-# Current Status
+The type is optional. Choose it by what you will come back to the document for:
 
-**Phase:** Implementation
-**Progress:** 75%
+| Type | Answers | Updated when |
+|:---|:---|:---|
+| 참고 | What was that value or fact? | The subject changes |
+| 이해 | Why does this work this way? | Your understanding deepens |
+| 방법 | How do I do this? | Applying it fails |
+| 판단 | Why did I see it, or decide it, that way? | Never rewritten; a new judgment replaces it |
 
-## Completed
-- ✅ User registration
-- ✅ Email verification
-- ✅ JWT token generation
-
-## In Progress
-- 🔄 Password reset flow
-
-## Pending
-- ⏳ Remember me functionality
-- ⏳ Two-factor authentication
-```
-
-**decisions.md** - Key decisions
-```markdown
-# Key Decisions
-
-## Decision #1: JWT vs Sessions
-
-**Date:** 2025-11-10
-**Decision:** Using JWT tokens instead of sessions
-**Rationale:**
-- Stateless (no server-side storage)
-- Scalable (no session store)
-- Mobile-friendly (REST API)
-
-**Trade-offs:**
-- Can't invalidate tokens before expiry
-- Larger payload in requests
-- **Mitigation:** Short expiry (15min) + refresh tokens
-```
+Small decisions and daily notes belong in the timeline. For help writing, run `mmodule guide`. See `.memory/docs/MODULE-ORGANIZATION.md` for the details.
 
 ### Why Modules?
 
@@ -1028,8 +990,11 @@ python -m memory_tool module create <name> [--desc "description"]
 # Flat module
 python -m memory_tool module create auth-system
 
-# Hierarchical module
-python -m memory_tool module create projects/todo-app
+# A child of auth-system (auth-system.md moves into auth-system/)
+python -m memory_tool module create auth-system/jwt
+
+# With a type
+python -m memory_tool module create auth-system --type 참고
 
 # With description
 python -m memory_tool module create auth-system --desc "User authentication and authorization"
@@ -1038,32 +1003,19 @@ python -m memory_tool module create auth-system --desc "User authentication and 
 python -m memory_tool module create auth-system --tags security,backend
 ```
 
-**What it creates:**
-```
-.memory/modules/auth-system/
-├── module.md          # Definition
-├── current.md         # Current state
-├── decisions.md       # Key decisions
-├── dependencies.md    # Dependencies
-└── interface.md       # Usage interface
-```
+**What it creates:** `.memory/modules/auth-system.md`, holding frontmatter and a title.
 
-**Templates are pre-filled:**
 ```markdown
+---
+type: 참고
+description: One sentence on what this document answers
+tags: []
+generated:
+  by: human:example
+  at: 2026-11-05T10:00:00+09:00
+---
+
 # auth-system
-
-**Purpose:** User authentication and authorization
-
-**Status:** Active
-**Created:** 2025-11-15
-
-## Scope
-
-Define what this module covers...
-
-## Current State
-
-Document current status...
 ```
 
 ---
@@ -1322,18 +1274,18 @@ Suggested connections for auth-system:
 
 ---
 
-### `module suggest-ai` - AI Suggestions
+### `module suggest-links --ai` - AI Suggestions
 
 **Purpose:** Get AI-powered connection suggestions (requires [llm])
 
 **Usage:**
 ```bash
-python -m memory_tool module suggest-ai [name] [--limit N]
+python -m memory_tool module suggest-links [name] --ai [--limit N]
 ```
 
 **Example:**
 ```bash
-python -m memory_tool module suggest-ai auth-system --limit 3
+python -m memory_tool module suggest-links auth-system --ai --limit 3
 ```
 
 **Output:**
@@ -1351,34 +1303,6 @@ AI-suggested connections for auth-system:
 3. logging (confidence: medium)
    Rationale: Security events like failed login attempts should be logged
    for audit trails and intrusion detection.
-```
-
----
-
-### `module auto-tag` - Auto Tagging
-
-**Purpose:** Generate tags using AI (requires [llm])
-
-**Usage:**
-```bash
-python -m memory_tool module auto-tag [name]
-```
-
-**Example:**
-```bash
-python -m memory_tool module auto-tag auth-system
-```
-
-**Output:**
-```
-Generated tags for auth-system:
-  - security
-  - backend
-  - authentication
-  - jwt
-  - api
-
-Tags added to module.md
 ```
 
 ---
@@ -1502,7 +1426,7 @@ msummary timeline --date 2025-11-14
 msummary timeline --from 2025-11-01 --to 2025-11-15
 
 # This week
-msummary timeline --week
+msummary week
 ```
 
 **Output:**
@@ -1538,10 +1462,10 @@ Next Steps:
 #### Summarize Module
 ```bash
 # Specific module
-msummary module auth-system
+msummary --module auth-system
 
 # All modules
-msummary module --all
+msummary --module --all
 ```
 
 **Output:**
@@ -1886,8 +1810,8 @@ marchive <type> [options]
 ```
 
 **Types:**
-- `decisions` - Archive old decisions from decisions.md
-- `current` - Archive old content from current.md
+- `decisions` - Archive old decisions (the Decisions section of a document, or decisions.md)
+- `current` - Archive old status (the Current section of a document, or current.md)
 - `plans` - Archive completed PLAN-*.md files
 
 **Options:**
@@ -2104,18 +2028,6 @@ mplan monthly add "Release v1.0"
 
 # Complete milestone
 mplan monthly done "v1.0"
-```
-
-#### Module Plan
-```bash
-# View module plan
-mplan module auth-system
-
-# Add to sprint
-mplan module auth-system add "JWT refresh rotation"
-
-# Complete task
-mplan module auth-system done "JWT refresh"
 ```
 
 **Generated Structure:**
@@ -2349,13 +2261,13 @@ m "Tech stack: React, FastAPI, PostgreSQL, Docker"
 m "Goal: Full-stack todo app with user auth and real-time updates"
 
 # 3. Create project module
-python -m memory_tool module create projects/todo-app \
+python -m memory_tool module create todo-app \
   --desc "Full-stack todo application"
 
 # 4. Document architecture decisions
-python -m memory_tool module create projects/todo-app/frontend
-python -m memory_tool module create projects/todo-app/backend
-python -m memory_tool module create projects/todo-app/database
+python -m memory_tool module create todo-app/frontend
+python -m memory_tool module create todo-app/backend
+python -m memory_tool module create todo-app/database
 
 # 5. Start working
 m "Created initial project structure"
@@ -2395,11 +2307,10 @@ m "Learning: Pydantic models provide great validation out of box"
 mweek
 
 # 2. Summarize progress
-msummary timeline --week
+msummary week
 
-# 3. Update module status
-# Edit .memory/modules/projects/todo-app/current.md
-# Update progress, blockers, next steps
+# 3. Update documents the week made wrong
+# Edit .memory/modules/todo-app/backend.md
 
 # 4. Create connections
 # Add [[wiki links]] between related modules
@@ -2465,7 +2376,7 @@ m "Rationale: Gets stateless benefits + can revoke refresh tokens"
 python -m memory_tool module create concepts/jwt-authentication
 
 # Document in module
-# Edit .memory/modules/concepts/jwt-authentication/current.md
+# Edit .memory/modules/concepts/jwt-authentication.md
 # - What is JWT
 # - How it works
 # - Pros and cons
@@ -2568,10 +2479,10 @@ limiting, I recommend...
    # Claude will know this in next session
    ```
 
-4. **Update module status**
+4. **Keep documents correct**
    ```bash
-   # Edit current.md before major Claude sessions
-   # Claude reads module status
+   # Fix documents the work made wrong
+   # Claude reads them, the timeline and git log
    ```
 
 5. **Record Claude's suggestions**
@@ -2761,13 +2672,10 @@ EOF
 msummary timeline
 
 # Summarize module
-msummary module auth-system
+msummary --module auth-system
 
 # AI suggestions
-python -m memory_tool module suggest-ai auth-system
-
-# Auto-tag
-python -m memory_tool module auto-tag auth-system
+python -m memory_tool module suggest-links auth-system --ai
 ```
 
 ### Option B: Ollama (Local)
@@ -2845,7 +2753,7 @@ msummary timeline
 #### 2. Module Summarization
 
 ```bash
-msummary module auth-system
+msummary --module auth-system
 
 # Output:
 # - Overview
@@ -2859,21 +2767,12 @@ msummary module auth-system
 #### 3. Connection Suggestions
 
 ```bash
-python -m memory_tool module suggest-ai auth-system
+python -m memory_tool module suggest-links auth-system --ai
 
 # Output: AI analysis of which modules should be connected
 # - Rationale
 # - Confidence
 # - Suggested link type
-```
-
-#### 4. Auto-Tagging
-
-```bash
-python -m memory_tool module auto-tag auth-system
-
-# Output: AI-generated tags based on content
-# - Automatically added to module.md
 ```
 
 ### Cost Management (Anthropic)
@@ -2905,7 +2804,7 @@ llm:
 Link modules using `[[wiki syntax]]`:
 
 ```markdown
-# In auth-system/current.md
+# In auth-system.md
 
 We're using [[database]] for user storage and [[email-service]]
 for verification emails. The [[api]] layer calls our endpoints.
@@ -2922,7 +2821,7 @@ See also: [[concepts/jwt-authentication]]
 
 **Hierarchical:**
 ```markdown
-[[projects/todo-app/backend]]
+[[todo-app/backend]]
 ```
 
 **With display text:**
@@ -2970,7 +2869,7 @@ python -m memory_tool module suggest-links auth-system
 
 #### AI Suggestions
 ```bash
-python -m memory_tool module suggest-ai auth-system
+python -m memory_tool module suggest-links auth-system --ai
 ```
 
 **Based on:** Semantic analysis, domain knowledge
@@ -3049,9 +2948,9 @@ python -m memory_tool module graph-diff --v1 3 --v2 4
 Use the **Module Organization Principles**:
 
 **Size thresholds:**
-- current.md > 300 lines → Consider split
-- decisions.md > 20 decisions → Consider split
-- >3 distinct topics → Consider split
+- The sections answer different questions → Consider split
+- `description` no longer fits one sentence → Consider split
+- `mmodule audit` lists candidates; a long lookup table is fine
 
 **Conceptual thresholds:**
 - Clear boundary → Create module
@@ -3067,7 +2966,7 @@ Part of project                 → Create child module
 New project                     → Create new project
 ```
 
-**Full guide:** See `.memory/docs/MODULE-ORGANIZATION-PRINCIPLES.md`
+**Full guide:** See `.memory/docs/MODULE-ORGANIZATION.md`
 
 ### Flat vs Hierarchical
 
@@ -3115,8 +3014,8 @@ python -m memory_tool module create auth-system
 m "Implemented user registration"
 m "Decision: Using bcrypt for passwords"
 
-# Update module
-# Edit .memory/modules/auth-system/current.md
+# Update the document
+# Edit .memory/modules/auth-system.md
 ```
 
 #### 3. Connect
@@ -3140,24 +3039,11 @@ python -m memory_tool module archive old-api \
   --reason "Migrated to new API v2"
 ```
 
-### Module Templates
+### Document Help
 
-**Standard template (default):**
-- module.md
-- current.md
-- decisions.md
-- dependencies.md
-- interface.md
+New documents have no template. `mmodule guide <type>` prints questions and checks for a type, and the `mt-write` skill uses them in conversation. To change a guide, put your own copy in `<base>/guides/`.
 
-**Minimal template:**
-- module.md
-- current.md
-
-**Project template:**
-- module.md
-- current.md
-- decisions.md
-- README.md (project-specific)
+The `--kind`, `--nature` and `--draft` options and `mmodule grow` still work but are deprecated.
 
 ### Migration and Refactoring
 
@@ -3167,15 +3053,15 @@ python -m memory_tool module archive old-api \
 
 ```bash
 # 1. Create children
-python -m memory_tool module create projects/auth/core
-python -m memory_tool module create projects/auth/jwt
-python -m memory_tool module create projects/auth/oauth
+python -m memory_tool module create auth/core
+python -m memory_tool module create auth/jwt
+python -m memory_tool module create auth/oauth
 
 # 2. Migrate content
 # Copy/move relevant sections from auth-system to children
 
 # 3. Update links
-# Change [[auth-system]] → [[projects/auth/jwt]] where appropriate
+# Change [[auth-system]] → [[auth/jwt]] where appropriate
 
 # 4. Archive parent
 python -m memory_tool module archive auth-system \

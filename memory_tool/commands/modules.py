@@ -7,6 +7,7 @@ from typing import List, Optional
 import typer
 
 from memory_tool.commands.common import (
+    print_llm_unavailable,
     app, console, opt_str, arg_str, resolve_module_name
 )
 from memory_tool.core.module import ModuleManager, ModuleError
@@ -14,9 +15,66 @@ from memory_tool.llm.client import LLMClient
 from memory_tool.utils.paths import display_path, get_base_path
 
 
+def _warn_retiring(what: str, instead: Optional[str] = None) -> None:
+    """Say that a template feature still works but is deprecated."""
+    suffix = f" Prefer {instead}." if instead else ""
+    console.print(f"[yellow]{what} is deprecated and may be removed in a later version.{suffix}[/yellow]")
+
+
+def _suggest_links_with_ai(name: str, limit: int) -> None:
+    """Suggest related modules by having an LLM read their content.
+
+    Args:
+        name: Module to find connections for
+        limit: Maximum number of suggestions
+    """
+    if not LLMClient.check_availability():
+        print_llm_unavailable(console)
+        sys.exit(1)
+
+    from memory_tool.core.ai_suggester import AIConnectionSuggester
+
+    manager = ModuleManager()
+
+    if not manager.resolve_module_doc(name):
+        console.print(f"[red]ERROR[/red] Module not found: {name}")
+        sys.exit(1)
+
+    console.print(f"[cyan]Reading module content for suggestions:[/cyan] {name}\n")
+
+    candidates = [
+        (module.as_posix(), manager.modules_path / module)
+        for module in manager.discover_all_modules()
+        if module.as_posix() != name
+    ]
+
+    try:
+        suggestions = AIConnectionSuggester().suggest_connections(
+            manager.modules_path / name,
+            candidates,
+            max_suggestions=limit,
+        )
+    except Exception as e:
+        console.print(f"[red]ERROR[/red] AI suggestion failed: {e}")
+        sys.exit(1)
+
+    if not suggestions:
+        console.print("[dim]No strong connections suggested.[/dim]")
+        return
+
+    console.print(f"[green]Suggested connections ({len(suggestions)}):[/green]\n")
+    for suggested, reason_text, confidence in suggestions:
+        color = "green" if confidence >= 0.7 else "yellow" if confidence >= 0.5 else "dim"
+        display_name = suggested.replace("\\", "/")
+        console.print(f"  -> \\[\\[{display_name}]] [{color}]({int(confidence * 100)}%)[/{color}]")
+        console.print(f"    [dim]{reason_text}[/dim]")
+        console.print()
+    console.print("[dim]Add these links to your documents to create connections.[/dim]")
+
+
 @app.command()
 def module(
-    action: str = typer.Argument(..., help="Action: create, grow, list, tree, rename, relink, merge-templates, archive, unarchive, migrate, connections, graph, rebuild-graph, check-links, suggest-links, suggest-ai, ai-organize, auto-tag, graph-history, graph-diff, graph-snapshot, from-text"),
+    action: str = typer.Argument(..., help="Action: create, grow, list, tree, rename, relink, merge-templates, archive, unarchive, migrate, connections, graph, rebuild-graph, check-links, suggest-links, audit, guide, graph-history, graph-diff, graph-snapshot, from-text"),
     name: str = typer.Argument(None, help="Module name or path (e.g., 'projects/website')"),
     description: str = typer.Option("", "--desc", "-d", help="Module description"),
     reason: str = typer.Option("", "--reason", "-r", help="Reason for archiving"),
@@ -30,6 +88,7 @@ def module(
     version2: int = typer.Option(None, "--v2", help="Second version ID (for graph-diff)"),
     notes: str = typer.Option("", "--notes", "-n", help="Notes for graph snapshot"),
     limit: int = typer.Option(10, "--limit", "-l", help="Limit number of results"),
+    ai: bool = typer.Option(False, "--ai", help="For suggest-links: read document content with an LLM"),
     text: Optional[str] = typer.Option(None, "--text", help="Input text for from-text action"),
     text_file: Optional[str] = typer.Option(None, "--text-file", help="File path containing input text for from-text action"),
     preview: bool = typer.Option(False, "--preview", "-p", help="Preview generated module without saving (for from-text action)"),
@@ -37,6 +96,8 @@ def module(
     remove: bool = typer.Option(False, "--remove", help="Delete the merged-from directories (for merge-templates)"),
     lang: Optional[str] = typer.Option(None, "--lang", help="Output language for from-text: 'ko', 'en', 'auto'"),
     structure: Optional[str] = typer.Option(None, "--structure", "-s", help="Module structure type for from-text: 'feature' (software), 'topic' (learning/KB), 'auto'"),
+    doc_type: Optional[str] = typer.Option(None, "--type", help="Document type for create: 참고, 이해, 방법, 판단, or none. See 'mmodule guide'"),
+    generated_by: Optional[str] = typer.Option(None, "--by", help="For create: who writes the document, human:<id> or <producer>/<version>"),
     kind: Optional[str] = typer.Option(None, "--kind", "-k", help="Template kind for create: 'knowledge', 'implementation' or 'intent'"),
     nature: Optional[str] = typer.Option(None, "--nature", help="Body outline. knowledge: concept, reference, analysis, tracker, method | intent: idea, inquiry, plan"),
     draft: bool = typer.Option(False, "--draft", help="Create a seed document instead of the full skeleton; grow it later with 'mmodule grow'"),
@@ -49,6 +110,15 @@ def module(
     name = opt_str(name)
     format = opt_str(format)
     output = opt_str(output)
+
+    # Old names, kept for existing users.
+    if action.lower() == "ai-organize":
+        console.print("[yellow]'ai-organize' is now 'audit'. The old name may be removed in a later version.[/yellow]\n")
+        action = "audit"
+    elif action.lower() == "suggest-ai":
+        console.print("[yellow]'suggest-ai' is now 'suggest-links --ai'. The old name may be removed in a later version.[/yellow]\n")
+        action = "suggest-links"
+        ai = True
 
     manager = ModuleManager()
 
@@ -63,15 +133,32 @@ def module(
             kind_opt = opt_str(kind)
             nature_opt = opt_str(nature)
 
+            legacy_template = bool(kind_opt or nature_opt or draft)
+            if legacy_template:
+                _warn_retiring("--kind, --nature and --draft", "--type")
+
+            moved = [] if legacy_template else manager.documents_moved_by_creating(name)
+
             console.print(f"[cyan]Creating module '{name}'...[/cyan]")
             module_path = manager.create(
                 name, description, tag_list,
                 kind=kind_opt, nature=nature_opt, draft=draft,
+                doc_type=opt_str(doc_type), generated_by=opt_str(generated_by),
             )
 
             rel_path = display_path(module_path)
-            console.print(f"\n[green]OK[/green] Single-file module created: {name}")
+            console.print(f"\n[green]OK[/green] Module created: {name}")
             console.print(f"[dim]File location: {rel_path}[/dim]")
+
+            for current, target in moved:
+                console.print(
+                    f"[yellow]Moved[/yellow] {display_path(current)} -> {display_path(target)}"
+                )
+            if moved:
+                console.print(
+                    "[dim]Links by name still work. To fix links that spell out "
+                    "the old path: mmodule relink --dry-run[/dim]"
+                )
 
             if kind_opt or nature_opt:
                 from memory_tool.core.module_templates import kind_for_nature
@@ -90,11 +177,8 @@ def module(
                     "[dim]Seed document written. Fill the ladder at the bottom, "
                     f"then run 'mmodule grow \"{name}\"' for the rest.[/dim]"
                 )
-            else:
-                console.print(
-                    "[dim]Tip: --kind knowledge|implementation|intent applies "
-                    "the MOP templates. See 'mhelp module'.[/dim]"
-                )
+            elif not legacy_template:
+                console.print("[dim]For help writing it: mmodule guide[/dim]")
 
             try:
                 from memory_tool.utils.suggestion_helper import check_and_suggest_after_command
@@ -104,6 +188,8 @@ def module(
                 pass
 
         elif action.lower() == "grow":
+            _warn_retiring("grow", "writing in the document directly (see 'mmodule guide')")
+
             if not name:
                 console.print("[red]ERROR[/red] Module name is required for grow")
                 console.print("[dim]Usage: module grow <name>[/dim]")
@@ -239,6 +325,8 @@ def module(
                     )
 
         elif action.lower() == "merge-templates":
+            _warn_retiring("merge-templates")
+
             # `migrate` consolidates a *module*'s files; template sets are a
             # different shape (they carry a natures menu that is never emitted)
             # and live outside modules/, so they need their own pass.
@@ -489,7 +577,7 @@ def module(
                 for source, targets in sorted(broken.items()):
                     console.print(f"  {source}:")
                     for target in targets:
-                        console.print(f"    [red]x[/red] [[{target}]] -> module not found")
+                        console.print(f"    [red]x[/red] \\[\\[{target}]] -> module not found")
                 console.print()
             else:
                 console.print("[green]OK[/green] No broken links found\n")
@@ -507,8 +595,12 @@ def module(
         elif action.lower() == "suggest-links":
             if not name:
                 console.print("[red]ERROR[/red] Module name is required for suggest-links")
-                console.print("[dim]Usage: module suggest-links <name>[/dim]")
+                console.print("[dim]Usage: module suggest-links <name> [--ai][/dim]")
                 sys.exit(1)
+
+            if ai:
+                _suggest_links_with_ai(name, limit)
+                return
 
             from memory_tool.core.connections import ConnectionGraph
 
@@ -520,7 +612,7 @@ def module(
             if suggestions:
                 console.print(f"[green]Suggested connections ({len(suggestions)}):[/green]\n")
                 for mod, reason_text in suggestions:
-                    console.print(f"  → [[{mod}]]")
+                    console.print(f"  → \\[\\[{mod}]]")
                     console.print(f"    [dim]{reason_text}[/dim]")
                     console.print()
                 console.print("[dim]Add these links to your module's .md files to create connections.[/dim]")
@@ -560,134 +652,15 @@ def module(
                     console.print(f"[red]ERROR[/red] Failed to rebuild graph: {e}")
                 sys.exit(1)
 
-        elif action.lower() == "suggest-ai":
-            if not name:
-                console.print("[red]ERROR[/red] Module name is required for suggest-ai")
-                console.print("[dim]Usage: module suggest-ai <name>[/dim]")
-                sys.exit(1)
+        elif action.lower() == "audit":
+            from memory_tool.core.module_audit import ModuleAuditor, format_report
 
-            if not LLMClient.check_availability():
-                console.print("[red]ERROR[/red] LLM not configured")
-                console.print("[dim]Set ANTHROPIC_API_KEY environment variable or configure Ollama[/dim]")
-                console.print("[dim]See config.yaml for LLM configuration[/dim]")
-                sys.exit(1)
+            auditor = ModuleAuditor(manager.modules_path)
 
-            from memory_tool.core.ai_suggester import AIConnectionSuggester
+            with console.status("[dim]Examining modules...[/dim]"):
+                report = auditor.audit(scope=name)
 
-            console.print(f"[cyan]Analyzing module content for AI suggestions:[/cyan] {name}\n")
-            console.print("[dim]Using LLM to analyze content similarity...[/dim]\n")
-
-            mod_manager = ModuleManager()
-            module_path = mod_manager.modules_path / name
-
-            if not module_path.exists():
-                console.print(f"[red]ERROR[/red] Module not found: {name}")
-                sys.exit(1)
-
-            all_modules = mod_manager.discover_all_modules()
-            candidates = [
-                (str(mod), mod_manager.modules_path / mod)
-                for mod in all_modules
-                if str(mod) != name
-            ]
-
-            suggester = AIConnectionSuggester()
-            try:
-                suggestions = suggester.suggest_connections(
-                    module_path,
-                    candidates,
-                    max_suggestions=5
-                )
-
-                if suggestions:
-                    console.print(f"[green]AI-suggested connections ({len(suggestions)}):[/green]\n")
-                    for module_name_sug, reason_text, confidence in suggestions:
-                        confidence_pct = int(confidence * 100)
-                        color = "green" if confidence >= 0.7 else "yellow" if confidence >= 0.5 else "dim"
-                        display_name = module_name_sug.replace('\\', '/')
-                        console.print(f"  → \\[\\[{display_name}]] [{color}]({confidence_pct}%)[/{color}]")
-                        console.print(f"    [dim]{reason_text}[/dim]")
-                        console.print()
-                    console.print("[dim]Add these links to your module's .md files to create connections.[/dim]")
-                else:
-                    console.print("[dim]No strong connections suggested by AI.[/dim]")
-                    console.print("[dim]The module content may be too unique or general.[/dim]")
-
-            except Exception as e:
-                console.print(f"[red]ERROR[/red] AI suggestion failed: {e}")
-                sys.exit(1)
-
-        elif action.lower() == "ai-organize":
-            from memory_tool.core.ai_organizer import ModuleOrganizer
-
-            console.print("[cyan]Analyzing module structure...[/cyan]\n")
-
-            mod_manager = ModuleManager()
-            organizer = ModuleOrganizer(mod_manager.modules_path)
-
-            try:
-                scope = name if name else None
-                include_merges = True
-
-                with console.status("[dim]Analyzing modules (this may take a moment)...[/dim]"):
-                    suggestions = organizer.analyze_and_suggest(
-                        scope=scope,
-                        include_merges=include_merges
-                    )
-
-                if suggestions:
-                    output_text = organizer.format_suggestions(suggestions)
-                    console.print(output_text)
-                    console.print(f"\n[dim]Total suggestions: {len(suggestions)}[/dim]")
-                    console.print("[dim]Use these suggestions to improve your module organization.[/dim]")
-                else:
-                    console.print("[green]✓ Module structure looks good![/green]")
-                    console.print("[dim]No organization suggestions at this time.[/dim]")
-
-            except Exception as e:
-                console.print(f"[red]ERROR[/red] Analysis failed: {e}")
-                sys.exit(1)
-
-        elif action.lower() == "auto-tag":
-            if not name:
-                console.print("[red]ERROR[/red] Module name is required for auto-tag")
-                console.print("[dim]Usage: module auto-tag <name>[/dim]")
-                sys.exit(1)
-
-            if not LLMClient.check_availability():
-                console.print("[red]ERROR[/red] LLM not configured")
-                console.print("[dim]Set ANTHROPIC_API_KEY environment variable or configure Ollama[/dim]")
-                console.print("[dim]See config.yaml for LLM configuration[/dim]")
-                sys.exit(1)
-
-            from memory_tool.core.ai_suggester import AIConnectionSuggester
-
-            console.print(f"[cyan]Analyzing module content for tags:[/cyan] {name}\n")
-            console.print("[dim]Using LLM to generate relevant tags...[/dim]\n")
-
-            mod_manager = ModuleManager()
-            module_path = mod_manager.modules_path / name
-
-            if not module_path.exists():
-                console.print(f"[red]ERROR[/red] Module not found: {name}")
-                sys.exit(1)
-
-            suggester = AIConnectionSuggester()
-            try:
-                tag_suggestions = suggester.suggest_tags(module_path, max_tags=5)
-
-                if tag_suggestions:
-                    console.print(f"[green]Suggested tags ({len(tag_suggestions)}):[/green]\n")
-                    for tag in tag_suggestions:
-                        console.print(f"  • {tag}")
-                    console.print(f"\n[dim]Add these tags to your module's metadata or use them for organization.[/dim]")
-                else:
-                    console.print("[dim]No tags suggested by AI.[/dim]")
-                    console.print("[dim]The module may need more content for tag generation.[/dim]")
-
-            except Exception as e:
-                console.print(f"[red]ERROR[/red] Tag generation failed: {e}")
-                sys.exit(1)
+            console.print(format_report(report, limit=limit))
 
         elif action.lower() == "graph-snapshot":
             from memory_tool.core.graph_versions import GraphVersionManager
@@ -816,6 +789,17 @@ def module(
             console.print(f"\n[green]OK[/green] Module restored: {name}")
             console.print(f"[dim]Location: {rel_path}[/dim]")
 
+        elif action.lower() == "guide":
+            from memory_tool.core.writing_guides import GuideError, read_guide
+
+            try:
+                text = read_guide(name, manager.memory_path)
+            except GuideError as e:
+                console.print(f"[red]ERROR[/red] {e}")
+                sys.exit(1)
+
+            console.print(text, markup=False, highlight=False, soft_wrap=True)
+
         elif action.lower() == "from-text":
             from memory_tool.core.ai_module_generator import AIModuleGenerator
 
@@ -840,56 +824,38 @@ def module(
                 sys.exit(1)
 
             if not LLMClient.check_availability():
-                console.print("[red]ERROR[/red] LLM not configured")
-                console.print("[dim]Set ANTHROPIC_API_KEY environment variable or configure Ollama[/dim]")
+                print_llm_unavailable(console)
                 sys.exit(1)
 
-            structure_type = structure if structure else "auto"
-            if structure_type not in ["feature", "topic", "auto"]:
-                console.print(f"[red]ERROR[/red] Invalid structure type: {structure_type}")
-                console.print("[dim]Valid values: 'feature', 'topic', 'auto'[/dim]")
-                sys.exit(1)
+            if opt_str(structure):
+                console.print(
+                    "[yellow]--structure no longer has any effect.[/yellow]"
+                )
 
-            console.print("[cyan]Analyzing text and generating module structure...[/cyan]")
-            if structure_type != "auto":
-                structure_label = "Feature-based" if structure_type == "feature" else "Topic-based"
-                console.print(f"[dim]Structure type: {structure_label} (forced)[/dim]")
+            console.print("[cyan]Writing a document from the text...[/cyan]")
 
             try:
                 generator = AIModuleGenerator()
-                output_lang = lang if lang else "auto"
 
-                with console.status("[dim]Generating module (this may take a moment)...[/dim]"):
-                    generated = generator.generate(input_text, language=output_lang, structure_type=structure_type)
+                with console.status("[dim]Generating (this may take a moment)...[/dim]"):
+                    generated = generator.generate(input_text, language=lang if lang else "auto")
 
                 if preview:
                     console.print()
-                    preview_output = generator.format_preview(generated)
-                    console.print(preview_output)
+                    console.print(generator.format_preview(generated))
                     console.print()
                     console.print("[yellow]Preview mode:[/yellow] Module not saved")
-                    console.print(f"[dim]To save, run without --preview flag[/dim]")
+                    console.print("[dim]To save, run without --preview[/dim]")
                 else:
                     module_path = generator.save_module(generated)
-                    rel_path = display_path(module_path)
-
-                    structure_label = "Feature-based" if generated.structure_type == "feature" else "Topic-based"
                     console.print(f"\n[green]OK[/green] Module created: {generated.name}")
-                    console.print(f"[dim]Location: {rel_path}[/dim]")
-                    console.print(f"[dim]Structure: {structure_label}[/dim]")
-                    console.print(f"[dim]Type: {generated.module_type}[/dim]")
-
-                    if generated.suggested_connections:
-                        console.print(f"\n[cyan]Suggested connections:[/cyan]")
-                        for conn in generated.suggested_connections:
-                            console.print(f"  - [[{conn}]]")
-
-                    console.print(f"\n[dim]Files created:[/dim]")
-                    console.print(f"  - module.md      (module definition)")
-                    console.print(f"  - current.md     (current status)")
-                    console.print(f"  - decisions.md   (decisions)")
-                    if generated.suggested_connections:
-                        console.print(f"  - dependencies.md (dependencies)")
+                    console.print(f"[dim]File location: {display_path(module_path)}[/dim]")
+                    if generated.doc_type:
+                        console.print(f"[dim]Type: {generated.doc_type}[/dim]")
+                    console.print(
+                        "[dim]Written by AI, and marked so in generated.by. "
+                        "Please read it before relying on it.[/dim]"
+                    )
 
             except ValueError as e:
                 console.print(f"[red]ERROR[/red] {e}")
@@ -901,7 +867,7 @@ def module(
         else:
             console.print(f"[red]ERROR[/red] Unknown action: {action}")
             console.print("Valid actions: create, list, tree, archive, unarchive, connections, graph, rebuild-graph,")
-            console.print("  check-links, suggest-links, suggest-ai, ai-organize, auto-tag, graph-snapshot,")
+            console.print("  check-links, suggest-links, audit, guide, graph-snapshot,")
             console.print("  graph-history, graph-diff, from-text")
             sys.exit(1)
 

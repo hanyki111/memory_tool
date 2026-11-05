@@ -12,6 +12,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, List, Optional, Tuple
 
+from memory_tool.utils.module_docs import resolve_module_document
+
 HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*$")
 
 #: A horizontal rule in any of the spellings found in real modules: "---",
@@ -346,3 +348,32 @@ class CurrentSection:
 
         out += self.gap or [""]
         return self.lines[: self.start] + out + self.lines[self.end:]
+
+
+def read_decisions_text(module_path: Path) -> Optional[str]:
+    """Read a module's decisions, from either a legacy file or its document.
+
+    Args:
+        module_path: The module's folder, or its path without a suffix
+
+    Returns:
+        The decisions text, or None when the module records none.
+
+    Raises:
+        SectionError: If the document has several decisions sections, as a
+            document merged from several modules does.
+    """
+    legacy = module_path / "decisions.md"
+    if legacy.is_file():
+        return legacy.read_text(encoding="utf-8")
+
+    document = resolve_module_document(module_path)
+    if document is None:
+        return None
+
+    lines, _ = read_document(document)
+    if not any(h.level == 1 and DECISIONS_TITLE.search(h.title) for h in scan_headings(lines)):
+        return None
+
+    start, end = find_section(lines, lambda title: bool(DECISIONS_TITLE.search(title)), "decisions")
+    return "\n".join(lines[start:end])

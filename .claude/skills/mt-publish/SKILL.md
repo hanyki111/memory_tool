@@ -23,9 +23,8 @@ This skill helps refine a specific module's knowledge into reusable, context-ind
 
 **Review target module:**
 ```bash
-cat .memory/modules/<path>/current.md
-cat .memory/modules/<path>/decisions.md
-cat .memory/modules/<path>/module.md
+ls .memory/modules/<path>*
+# Read <path>.md or <path>/<name>.md. Older modules use current.md and decisions.md.
 ```
 
 **Identify publishable content:**

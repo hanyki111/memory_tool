@@ -25,7 +25,7 @@ class TimelineSummarizer:
             llm_client: LLM client (optional, creates one if not provided)
         """
         self.llm_client = llm_client or LLMClient()
-        self.timeline = Timeline(Path.cwd())
+        self.timeline = Timeline()
         self.config = Config()
         self.context_gatherer = ContextGatherer()
 
@@ -36,6 +36,10 @@ class TimelineSummarizer:
         # Summary directory
         self.summary_dir = get_base_path() / "summaries"
         self.summary_dir.mkdir(parents=True, exist_ok=True)
+
+    def _existing_timeline_file(self, target_date) -> Optional[Path]:
+        """Find a date's timeline file, whichever name and location it has."""
+        return Timeline.resolve_existing_file(self.timeline.timeline_path, target_date)
 
     def get_content_hash(self, file_path: Path) -> str:
         """
@@ -133,15 +137,7 @@ class TimelineSummarizer:
         # Get timestamp
         timestamp = datetime.now().isoformat()
 
-        # Get relative path, handling both absolute and relative paths
-        try:
-            if source_file.is_absolute():
-                source_path = display_path(source_file).as_posix()
-            else:
-                source_path = source_file.as_posix()
-        except ValueError:
-            # If relative_to fails, just use the path as is
-            source_path = str(source_file)
+        source_path = Path(display_path(source_file)).as_posix()
 
         # Build metadata comment
         metadata = f"""<!-- metadata
@@ -232,12 +228,10 @@ language: {language}
             FileNotFoundError: If timeline file doesn't exist
             ValueError: If timeline is empty
         """
-        # Get timeline file path
-        dt = datetime.combine(date, datetime.min.time())
-        timeline_file = self.timeline.get_timeline_file(dt)
+        timeline_file = self._existing_timeline_file(date)
 
-        if not timeline_file.exists():
-            raise FileNotFoundError(f"Timeline not found: {timeline_file}")
+        if timeline_file is None:
+            raise FileNotFoundError(f"Timeline not found for {date.isoformat()}")
 
         # Read timeline content
         content = timeline_file.read_text(encoding="utf-8")
@@ -315,10 +309,9 @@ language: {language}
         week_files = []
         for i in range(7):
             date = start_date + timedelta(days=i)
-            dt = datetime.combine(date, datetime.min.time())
-            timeline_file = self.timeline.get_timeline_file(dt)
+            timeline_file = self._existing_timeline_file(date)
 
-            if timeline_file.exists():
+            if timeline_file is not None:
                 content = timeline_file.read_text(encoding="utf-8")
                 if content.strip():
                     week_content.append(f"## {date.isoformat()}\n\n{content}")
@@ -411,10 +404,9 @@ language: {language}
         current_date = start_date
 
         while current_date <= end_date:
-            dt = datetime.combine(current_date, datetime.min.time())
-            timeline_file = self.timeline.get_timeline_file(dt)
+            timeline_file = self._existing_timeline_file(current_date)
 
-            if timeline_file.exists():
+            if timeline_file is not None:
                 content = timeline_file.read_text(encoding="utf-8")
                 if content.strip():
                     range_content.append(
