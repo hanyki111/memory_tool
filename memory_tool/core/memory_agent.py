@@ -65,11 +65,16 @@ class MemoryAgent:
             "examples": ["get_timeline(date='yesterday')", "get_timeline(date='2026-01-20')"]
         },
         "get_timeline_range": {
-            "description": "Get timeline entries for a date range (recent N days)",
+            "description": "Get timeline entries for a period: the recent N days, or between two dates",
             "args": {
-                "days": "Number of days to look back (default: 7)"
+                "days": "Number of days to look back (default: 7)",
+                "start": "First date 'YYYY-MM-DD' (optional)",
+                "end": "Last date 'YYYY-MM-DD' (optional, defaults to today)"
             },
-            "examples": ["get_timeline_range(days=7)", "get_timeline_range(days=30)"]
+            "examples": [
+                "get_timeline_range(days=7)",
+                "get_timeline_range(start='2026-01-05', end='2026-01-11')"
+            ]
         },
         "search": {
             "description": "Search memory (timeline, modules, plans) for keywords or semantically similar content",
@@ -183,7 +188,9 @@ IMPORTANT: You MUST output ONLY a JSON block. No explanations before or after.
 Tool Selection Rules:
 - "어제/yesterday" → get_timeline(date="yesterday")
 - "오늘/today" → get_timeline(date="today")
-- "지난주/last week" → get_plan_weekly(week="last") or get_timeline_range(days=7)
+- 특정 날짜 ("2026-09-03", "9월 3일", "3일 전") → get_timeline(date="YYYY-MM-DD"), computed from Today
+- 특정 기간 ("9월 첫째 주", "지난달", "지난주") → get_timeline_range(start="YYYY-MM-DD", end="YYYY-MM-DD")
+- "지난주 계획/last week's plan" → get_plan_weekly(week="last")
 - "최근/recently" → get_timeline_range(days=7)
 - "모듈/module + 이름" → get_module(name="...")
 - "찾아/검색/search + 키워드" → search(query="키워드만", mode="hybrid")
@@ -316,19 +323,23 @@ Rules:
 
     def _parse_date(self, date_str: str) -> date:
         """Parse date string to date object."""
-        date_str = date_str.lower().strip()
+        cleaned = str(date_str).lower().strip()
         today = date.today()
 
-        if date_str in ("today", "오늘"):
+        if cleaned in ("today", "오늘"):
             return today
-        elif date_str in ("yesterday", "어제"):
+        if cleaned in ("yesterday", "어제"):
             return today - timedelta(days=1)
-        else:
-            # Try to parse YYYY-MM-DD
+
+        for date_format in ("%Y-%m-%d", "%Y/%m/%d", "%Y.%m.%d"):
             try:
-                return datetime.strptime(date_str, "%Y-%m-%d").date()
+                return datetime.strptime(cleaned, date_format).date()
             except ValueError:
-                return today
+                continue
+
+        # Falling back to today would answer a question about one day with the
+        # records of another, and nothing in the answer would show it.
+        raise ValueError(f"Cannot read date: {date_str}. Use 'YYYY-MM-DD'.")
 
     def _parse_week(self, week_str: str) -> date:
         """Parse week string to a date in that week."""
@@ -368,27 +379,54 @@ Rules:
         content = timeline_path.read_text(encoding="utf-8")
         return f"Timeline for {target_date.isoformat()}:\n\n{content}"
 
-    def _tool_get_timeline_range(self, days: int = 7) -> str:
-        """Get timeline for recent N days."""
-        results = []
-        today = date.today()
+    def _tool_get_timeline_range(
+        self,
+        days: int = 7,
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+    ) -> str:
+        """Get timeline for the recent N days, or between two dates.
 
-        for i in range(days):
-            target_date = today - timedelta(days=i)
+        Args:
+            days: Days to look back. Ignored when ``start`` is given.
+            start: First date, inclusive
+            end: Last date, inclusive. Defaults to today.
+
+        Returns:
+            Entries per day, most recent first.
+        """
+        end_date = self._parse_date(end) if end else date.today()
+        if start:
+            start_date = self._parse_date(start)
+        else:
+            start_date = end_date - timedelta(days=int(days) - 1)
+
+        results = []
+        target_date = end_date
+
+        while target_date >= start_date:
             timeline_path = Timeline.resolve_existing_file(
                 self.memory_path / "timeline", target_date
             )
 
             if timeline_path is not None:
                 content = timeline_path.read_text(encoding="utf-8")
-                # Skip header line if present
-                lines = content.strip().split("\n")
-                entries = [l for l in lines if l.startswith("- ")]
+                # Everything but the title counts: entries written by hand need
+                # not be bullets, and dropping them reported a full day as empty.
+                entries = [
+                    line for line in content.strip().split("\n")
+                    if line.strip() and not line.startswith("# ")
+                ]
                 if entries:
                     results.append(f"### {target_date.isoformat()}\n" + "\n".join(entries))
 
+            target_date -= timedelta(days=1)
+
         if not results:
-            return f"No timeline entries found in the last {days} days"
+            return (
+                f"No timeline entries found between "
+                f"{start_date.isoformat()} and {end_date.isoformat()}"
+            )
 
         return "\n\n".join(results)
 
@@ -1085,7 +1123,9 @@ Example: get_usage_guide(topic='tags')"""
             if tool_name == "get_timeline":
                 result = self._tool_get_timeline(args.get("date", "today"))
             elif tool_name == "get_timeline_range":
-                result = self._tool_get_timeline_range(args.get("days", 7))
+                result = self._tool_get_timeline_range(
+                    args.get("days", 7), args.get("start"), args.get("end")
+                )
             elif tool_name == "search":
                 result = self._tool_search(
                     args.get("query", ""),

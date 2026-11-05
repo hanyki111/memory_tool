@@ -8,6 +8,7 @@ from typing import List, Optional
 import typer
 
 from memory_tool.commands.common import app, console, opt_str, arg_str, resolve_module_name
+from memory_tool.core.doc_sections import SectionError, read_decisions_text
 from memory_tool.llm.client import LLMClient
 from memory_tool.summary import TimelineSummarizer, ModuleSummarizer
 from memory_tool.utils.paths import display_path, get_base_path
@@ -95,13 +96,15 @@ def summary(
                     console.print(f"[cyan]Summarizing decisions.md from '{resolved_module}'...[/cyan]")
 
                 module_path = get_base_path() / "modules" / resolved_module
-                decisions_file = module_path / "decisions.md"
-
-                if not decisions_file.exists():
-                    console.print(f"[red]ERROR[/red] decisions.md not found in module '{resolved_module}'")
+                try:
+                    decisions_content = read_decisions_text(module_path)
+                except SectionError as e:
+                    console.print(f"[red]ERROR[/red] {e}")
                     sys.exit(1)
 
-                decisions_content = decisions_file.read_text(encoding="utf-8")
+                if decisions_content is None:
+                    console.print(f"[red]ERROR[/red] No decisions found in module '{resolved_module}'")
+                    sys.exit(1)
 
                 prompt = f"""Analyze and summarize the following decisions.md content from a software project module.
 

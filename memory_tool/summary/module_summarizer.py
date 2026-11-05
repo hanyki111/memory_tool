@@ -157,15 +157,7 @@ class ModuleSummarizer:
         # Get timestamp
         timestamp = datetime.now().isoformat()
 
-        # Get relative path, handling both absolute and relative paths
-        try:
-            if module_path.is_absolute():
-                source_path = display_path(module_path).as_posix()
-            else:
-                source_path = module_path.as_posix()
-        except ValueError:
-            # If relative_to fails, just use the path as is
-            source_path = str(module_path)
+        source_path = Path(display_path(module_path)).as_posix()
 
         # Build metadata comment
         metadata = f"""<!-- metadata

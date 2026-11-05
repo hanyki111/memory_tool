@@ -93,12 +93,12 @@ class ClaudeCLIClient:
         else:
             full_prompt = user_content
 
-        # Add prompt as argument
-        cmd.append(full_prompt)
-
+        # Sent on stdin: as an argument, a long period exceeds the command-line
+        # length limit on Windows (about 8 KB through a .cmd shim).
         try:
             result = subprocess.run(
                 cmd,
+                input=full_prompt,
                 capture_output=True,
                 text=True,
                 timeout=300,  # 5 minute timeout
