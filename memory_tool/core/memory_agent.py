@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass, field
 from datetime import datetime, date, timedelta
+from memory_tool.core.timeline import Timeline
+from memory_tool.utils.module_docs import discover_module_paths, read_module_text
 from memory_tool.utils.paths import base_dir_for_root, get_project_root
 
 
@@ -356,14 +358,11 @@ Rules:
         """Get timeline for a specific date."""
         target_date = self._parse_date(date_str)
 
-        # Build timeline file path
-        timeline_path = (
-            self.memory_path / "timeline" / "daily" /
-            target_date.strftime("%Y-%m") /
-            f"{target_date.day:02d}.md"
+        timeline_path = Timeline.resolve_existing_file(
+            self.memory_path / "timeline", target_date
         )
 
-        if not timeline_path.exists():
+        if timeline_path is None:
             return f"No timeline found for {target_date.isoformat()}"
 
         content = timeline_path.read_text(encoding="utf-8")
@@ -376,13 +375,11 @@ Rules:
 
         for i in range(days):
             target_date = today - timedelta(days=i)
-            timeline_path = (
-                self.memory_path / "timeline" / "daily" /
-                target_date.strftime("%Y-%m") /
-                f"{target_date.day:02d}.md"
+            timeline_path = Timeline.resolve_existing_file(
+                self.memory_path / "timeline", target_date
             )
 
-            if timeline_path.exists():
+            if timeline_path is not None:
                 content = timeline_path.read_text(encoding="utf-8")
                 # Skip header line if present
                 lines = content.strip().split("\n")
@@ -523,17 +520,12 @@ Rules:
         return f"Weekly plan for {year}-W{week_num:02d}:\n\n{content}"
 
     def _tool_get_module(self, name: str) -> str:
-        """Get module's current.md content."""
-        module_path = self.memory_path / "modules" / name / "current.md"
+        """Get a module's content, whichever layout it uses."""
+        module_path = self.memory_path / "modules" / name.lstrip("/")
+        content = read_module_text(module_path)
 
-        if not module_path.exists():
-            # Try without leading path
-            module_path = self.memory_path / "modules" / name.lstrip("/") / "current.md"
-
-        if not module_path.exists():
+        if not content:
             return f"Module not found: {name}"
-
-        content = module_path.read_text(encoding="utf-8")
 
         # Truncate if too long
         if len(content) > 3000:
@@ -548,10 +540,7 @@ Rules:
         if not modules_path.exists():
             return "No modules directory found"
 
-        modules = []
-        for current_md in modules_path.rglob("current.md"):
-            rel_path = current_md.parent.relative_to(modules_path)
-            modules.append(str(rel_path))
+        modules = [path.as_posix() for path in discover_module_paths(modules_path)]
 
         if not modules:
             return "No modules found"

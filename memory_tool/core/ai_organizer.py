@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass
 from enum import Enum
+from memory_tool.utils.module_docs import discover_module_paths, module_documents
 from .embedding_cache import (
     get_model_manager,
     get_embedding_cache,
@@ -82,45 +83,29 @@ class ModuleAnalyzer:
         Returns:
             ModuleInfo with metrics
         """
-        name = str(module_path.relative_to(self.modules_path))
+        name = module_path.relative_to(self.modules_path).as_posix()
 
-        # Count lines in key files
         total_lines = 0
-        file_count = 0
         content_parts = []
+        documents = module_documents(module_path)
+        document_names = {document.name for document in documents}
 
-        key_files = ["current.md", "decisions.md", "module.md", "interface.md", "README.md"]
-        has_current = False
-        has_decisions = False
-        has_module_md = False
-
-        for filename in key_files:
-            file_path = module_path / filename
-            if file_path.exists():
-                file_count += 1
-                try:
-                    content = file_path.read_text(encoding="utf-8")
-                    lines = len(content.splitlines())
-                    total_lines += lines
-                    content_parts.append(content[:500])
-
-                    if filename == "current.md":
-                        has_current = True
-                    elif filename == "decisions.md":
-                        has_decisions = True
-                    elif filename == "module.md":
-                        has_module_md = True
-                except Exception:
-                    pass
+        for document in documents:
+            try:
+                content = document.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                continue
+            total_lines += len(content.splitlines())
+            content_parts.append(content[:2000])
 
         return ModuleInfo(
             name=name,
             path=module_path,
             line_count=total_lines,
-            file_count=file_count,
-            has_current=has_current,
-            has_decisions=has_decisions,
-            has_module_md=has_module_md,
+            file_count=len(documents),
+            has_current="current.md" in document_names,
+            has_decisions="decisions.md" in document_names,
+            has_module_md="module.md" in document_names,
             content_preview="\n".join(content_parts)[:2000]
         )
 
@@ -130,23 +115,10 @@ class ModuleAnalyzer:
         Returns:
             List of ModuleInfo for all modules
         """
-        modules = []
-
-        if not self.modules_path.exists():
-            return modules
-
-        # Find all directories that look like modules
-        for item in self.modules_path.rglob("*"):
-            if item.is_dir():
-                # Check if it's a module (has module files)
-                has_module_files = any(
-                    (item / f).exists()
-                    for f in ["module.md", "current.md", "README.md"]
-                )
-                if has_module_files:
-                    modules.append(self.get_module_info(item))
-
-        return modules
+        return [
+            self.get_module_info(self.modules_path / relative)
+            for relative in discover_module_paths(self.modules_path)
+        ]
 
     def find_large_modules(self, modules: List[ModuleInfo]) -> List[ModuleInfo]:
         """Find modules that exceed size thresholds.

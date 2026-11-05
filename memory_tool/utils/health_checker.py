@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Optional
 
 from memory_tool.context.related_files import resolve_module_document
+from memory_tool.utils.module_docs import is_meta_document
 
 
 @dataclass
@@ -59,7 +60,7 @@ class DocumentHealthChecker:
 
         # Recursively find all module files (.md) or legacy directories
         for module_file in self.modules_dir.rglob("*.md"):
-            if "archive" in module_file.parts or module_file.name.startswith("_") or module_file.name.isupper() or module_file.name == "MIGRATION-SUMMARY.md":
+            if "archive" in module_file.relative_to(self.modules_dir).parts or is_meta_document(module_file.name):
                 continue
             if module_file.name in ["module.md", "current.md", "decisions.md", "dependencies.md", "interface.md"]:
                 continue

@@ -580,15 +580,15 @@ def module(
             mod_manager = ModuleManager()
             module_path = mod_manager.modules_path / name
 
-            if not module_path.exists():
+            if not mod_manager.resolve_module_doc(name):
                 console.print(f"[red]ERROR[/red] Module not found: {name}")
                 sys.exit(1)
 
             all_modules = mod_manager.discover_all_modules()
             candidates = [
-                (str(mod), mod_manager.modules_path / mod)
+                (mod.as_posix(), mod_manager.modules_path / mod)
                 for mod in all_modules
-                if str(mod) != name
+                if mod.as_posix() != name
             ]
 
             suggester = AIConnectionSuggester()

@@ -11,7 +11,11 @@ from .embedding_cache import (
     get_embedding_cache,
     SimilarityCalculator,
 )
+from memory_tool.utils.module_docs import read_module_text
 from memory_tool.utils.paths import get_base_path
+
+#: Legacy files that describe what a module is about. Decision logs are left out.
+SUGGESTION_LEGACY_DOCS = ("module.md", "current.md", "README.md", "interface.md")
 
 
 class SuggestionCache:
@@ -262,19 +266,7 @@ class AIConnectionSuggester:
         Returns:
             Combined content from module files
         """
-        content_parts = []
-
-        # Read key files
-        for filename in ["module.md", "current.md", "README.md", "interface.md"]:
-            file_path = module_path / filename
-            if file_path.exists():
-                try:
-                    text = file_path.read_text(encoding="utf-8")
-                    content_parts.append(f"## {filename}\n\n{text}")
-                except Exception:
-                    pass
-
-        return "\n\n".join(content_parts)
+        return read_module_text(module_path, SUGGESTION_LEGACY_DOCS)
 
     def suggest_connections(
         self,

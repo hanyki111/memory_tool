@@ -1,9 +1,11 @@
 """Module management functionality."""
 
 import re
+import shutil
 from pathlib import Path
 from typing import Optional, List, Dict, Sequence
 from datetime import datetime
+from memory_tool.utils.module_docs import discover_module_paths, resolve_module_document
 from memory_tool.utils.paths import base_dir_for_root, get_project_root
 
 
@@ -68,10 +70,6 @@ class ModuleManager:
         dir_path = self.modules_path / name
         return dir_path.exists() and dir_path.is_dir() and ((dir_path / "module.md").exists() or (dir_path / "current.md").exists())
 
-    #: Filenames used by the legacy multi-file module layout, in the order they
-    #: should be preferred when looking for a module's main document.
-    LEGACY_DOC_NAMES = ("current.md", "module.md")
-
     def resolve_module_doc(self, name: str) -> Optional[Path]:
         """Find a module's primary markdown document.
 
@@ -89,21 +87,7 @@ class ModuleManager:
         Returns:
             Path to the module's main document, or None if none exists.
         """
-        encapsulated = self.get_module_file_path(name)
-        if encapsulated.is_file():
-            return encapsulated
-
-        flat = self.modules_path / f"{name}.md"
-        if flat.is_file():
-            return flat
-
-        module_dir = self.modules_path / name
-        for legacy_name in self.LEGACY_DOC_NAMES:
-            legacy = module_dir / legacy_name
-            if legacy.is_file():
-                return legacy
-
-        return None
+        return resolve_module_document(self.modules_path / name)
 
     def is_archived(self, name: str) -> bool:
         """Check if module is archived."""
@@ -452,48 +436,7 @@ TODO: Document key data structures
         Returns:
             List of module relative paths (without .md extension) sorted by path.
         """
-        if not self.modules_path.exists():
-            return []
-
-        modules = set()
-
-        for md_file in self.modules_path.rglob("*.md"):
-            # Skip archive directory
-            if not include_archived and "archive" in md_file.parts:
-                continue
-            # Skip uppercase meta summary files or index files starting with _ or special files
-            if md_file.name.startswith("_") or md_file.name.isupper() or md_file.name in ["MIGRATION-SUMMARY.md"]:
-                continue
-
-            # Case 1: Legacy multi-file module (module.md, current.md, etc.)
-            if md_file.name in ["module.md", "current.md", "decisions.md", "dependencies.md", "interface.md"]:
-                legacy_dir = md_file.parent
-                try:
-                    rel_legacy = legacy_dir.relative_to(self.modules_path)
-                    modules.add(rel_legacy)
-                except ValueError:
-                    pass
-                continue
-
-            # Case 2: [Folder]/[Folder].md (e.g. memory-tool/core-system/core-system.md)
-            if md_file.stem == md_file.parent.name:
-                try:
-                    rel_path = md_file.parent.relative_to(self.modules_path)
-                    modules.add(rel_path)
-                    continue
-                except ValueError:
-                    pass
-
-            # Case 3: Flat single-file module (e.g. memory-tool/core-system.md)
-            try:
-                rel_path = md_file.relative_to(self.modules_path).with_suffix("")
-                modules.add(rel_path)
-            except ValueError:
-                continue
-
-        result = list(modules)
-        result.sort(key=lambda p: str(p))
-        return result
+        return discover_module_paths(self.modules_path, include_archived)
 
     def find_module_by_name(self, name: str, exact: bool = False) -> List[str]:
         """Find module(s) by name, searching all module paths.
@@ -821,32 +764,69 @@ TODO: Document key data structures
 
         self._validate_module_name(new_name)
 
-        old_file = self.get_module_file_path(old_name)
         old_dir = self.modules_path / old_name
+        old_flat = self.modules_path / f"{old_name}.md"
 
-        if not old_file.exists() and not old_dir.exists():
+        if not old_dir.is_dir() and not old_flat.is_file():
             raise ModuleError(f"Module not found: {old_name}")
 
-        if self.module_exists(new_name):
+        new_dir = self.modules_path / new_name
+        new_flat = self.modules_path / f"{new_name}.md"
+
+        old_parts = Path(old_name).parts
+        if Path(new_name).parts[: len(old_parts)] == old_parts:
+            raise ModuleError(f"Cannot move module inside itself: {old_name} -> {new_name}")
+
+        # A folder at the target is refused even without a document of its own:
+        # moving into it would merge two trees and nest this one inside it.
+        if self.module_exists(new_name) or new_dir.exists() or new_flat.exists():
             raise ModuleError(f"Module already exists: {new_name}")
 
-        import shutil
-        new_file = self.get_module_file_path(new_name)
-        new_file.parent.mkdir(parents=True, exist_ok=True)
+        old_doc_name = f"{Path(old_name).name}.md"
+        new_doc_name = f"{Path(new_name).name}.md"
+        moves_document = old_dir.is_dir() and (old_dir / old_doc_name).is_file()
 
-        if old_file.exists():
-            shutil.move(str(old_file), str(new_file))
-            try:
-                content = new_file.read_text(encoding="utf-8")
-                old_base = Path(old_name).name
-                new_base = Path(new_name).name
-                content = content.replace(f"# Module: {old_base}", f"# Module: {new_base}")
-                content = content.replace(f"# Module: {old_name}", f"# Module: {new_name}")
-                new_file.write_text(content, encoding="utf-8")
-            except Exception:
-                pass
-            return new_file
-        else:
-            shutil.move(str(old_dir), str(self.modules_path / new_name))
-            return self.modules_path / new_name
+        if moves_document and (old_dir / new_doc_name).exists():
+            raise ModuleError(
+                f"Cannot rename {old_name}: its folder already holds {new_doc_name}, "
+                f"which would be overwritten."
+            )
+
+        new_dir.parent.mkdir(parents=True, exist_ok=True)
+
+        if old_dir.is_dir():
+            shutil.move(str(old_dir), str(new_dir))
+            if moves_document:
+                (new_dir / old_doc_name).rename(new_dir / new_doc_name)
+
+        if old_flat.is_file():
+            shutil.move(str(old_flat), str(new_flat))
+
+        renamed_doc = None
+        if moves_document:
+            renamed_doc = new_dir / new_doc_name
+        elif new_flat.is_file():
+            renamed_doc = new_flat
+
+        if renamed_doc is None:
+            return new_dir
+
+        self._update_module_title(renamed_doc, old_name, new_name)
+        return renamed_doc
+
+    @staticmethod
+    def _update_module_title(document: Path, old_name: str, new_name: str) -> None:
+        """Rewrite the ``# Module:`` title of a renamed document, if it has one."""
+        try:
+            content = document.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            return
+
+        for old_title, new_title in (
+            (Path(old_name).name, Path(new_name).name),
+            (old_name, new_name),
+        ):
+            content = content.replace(f"# Module: {old_title}", f"# Module: {new_title}")
+
+        document.write_text(content, encoding="utf-8")
 
