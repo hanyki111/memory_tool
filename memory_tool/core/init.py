@@ -141,6 +141,7 @@ class MemoryInitializer:
         structure[".claude/skills"] = "dir"
         structure[".claude/skills/mt-publish"] = "dir"
         structure[".claude/skills/mt-master-module"] = "dir"
+        structure[".claude/skills/mt-write"] = "dir"
 
         return structure
 
@@ -1079,7 +1080,8 @@ Action: Split by clear criteria
     def create_claude_skills(self) -> list[Path]:
         """Copy memory_tool skills to project's .claude/skills/.
 
-        Copies mt-publish and mt-master-module skills for KB federation workflow.
+        Copies the KB federation skills (mt-publish, mt-master-module) and the
+        writing support skill (mt-write).
         Skills are stored inside the package at memory_tool/templates/skills/.
 
         Returns:
@@ -1088,7 +1090,7 @@ Action: Split by clear criteria
         created_files = []
 
         # Skills to copy
-        skill_names = ["mt-publish", "mt-master-module"]
+        skill_names = ["mt-publish", "mt-master-module", "mt-write"]
 
         # Source: memory_tool package's templates/skills/
         package_dir = Path(__file__).parent.parent  # memory_tool/

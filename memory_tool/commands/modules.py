@@ -74,7 +74,7 @@ def _suggest_links_with_ai(name: str, limit: int) -> None:
 
 @app.command()
 def module(
-    action: str = typer.Argument(..., help="Action: create, grow, list, tree, rename, relink, merge-templates, archive, unarchive, migrate, connections, graph, rebuild-graph, check-links, suggest-links, audit, graph-history, graph-diff, graph-snapshot, from-text"),
+    action: str = typer.Argument(..., help="Action: create, grow, list, tree, rename, relink, merge-templates, archive, unarchive, migrate, connections, graph, rebuild-graph, check-links, suggest-links, audit, guide, graph-history, graph-diff, graph-snapshot, from-text"),
     name: str = typer.Argument(None, help="Module name or path (e.g., 'projects/website')"),
     description: str = typer.Option("", "--desc", "-d", help="Module description"),
     reason: str = typer.Option("", "--reason", "-r", help="Reason for archiving"),
@@ -789,6 +789,17 @@ def module(
             console.print(f"\n[green]OK[/green] Module restored: {name}")
             console.print(f"[dim]Location: {rel_path}[/dim]")
 
+        elif action.lower() == "guide":
+            from memory_tool.core.writing_guides import GuideError, read_guide
+
+            try:
+                text = read_guide(name, manager.memory_path)
+            except GuideError as e:
+                console.print(f"[red]ERROR[/red] {e}")
+                sys.exit(1)
+
+            console.print(text, markup=False, highlight=False, soft_wrap=True)
+
         elif action.lower() == "from-text":
             from memory_tool.core.ai_module_generator import AIModuleGenerator
 
@@ -816,52 +827,35 @@ def module(
                 print_llm_unavailable(console)
                 sys.exit(1)
 
-            structure_type = structure if structure else "auto"
-            if structure_type not in ["feature", "topic", "auto"]:
-                console.print(f"[red]ERROR[/red] Invalid structure type: {structure_type}")
-                console.print("[dim]Valid values: 'feature', 'topic', 'auto'[/dim]")
-                sys.exit(1)
+            if opt_str(structure):
+                console.print(
+                    "[yellow]--structure no longer has any effect and will be removed.[/yellow]"
+                )
 
-            console.print("[cyan]Analyzing text and generating module structure...[/cyan]")
-            if structure_type != "auto":
-                structure_label = "Feature-based" if structure_type == "feature" else "Topic-based"
-                console.print(f"[dim]Structure type: {structure_label} (forced)[/dim]")
+            console.print("[cyan]Writing a document from the text...[/cyan]")
 
             try:
                 generator = AIModuleGenerator()
-                output_lang = lang if lang else "auto"
 
-                with console.status("[dim]Generating module (this may take a moment)...[/dim]"):
-                    generated = generator.generate(input_text, language=output_lang, structure_type=structure_type)
+                with console.status("[dim]Generating (this may take a moment)...[/dim]"):
+                    generated = generator.generate(input_text, language=lang if lang else "auto")
 
                 if preview:
                     console.print()
-                    preview_output = generator.format_preview(generated)
-                    console.print(preview_output)
+                    console.print(generator.format_preview(generated))
                     console.print()
                     console.print("[yellow]Preview mode:[/yellow] Module not saved")
-                    console.print(f"[dim]To save, run without --preview flag[/dim]")
+                    console.print("[dim]To save, run without --preview[/dim]")
                 else:
                     module_path = generator.save_module(generated)
-                    rel_path = display_path(module_path)
-
-                    structure_label = "Feature-based" if generated.structure_type == "feature" else "Topic-based"
                     console.print(f"\n[green]OK[/green] Module created: {generated.name}")
-                    console.print(f"[dim]Location: {rel_path}[/dim]")
-                    console.print(f"[dim]Structure: {structure_label}[/dim]")
-                    console.print(f"[dim]Type: {generated.module_type}[/dim]")
-
-                    if generated.suggested_connections:
-                        console.print(f"\n[cyan]Suggested connections:[/cyan]")
-                        for conn in generated.suggested_connections:
-                            console.print(f"  - \\[\\[{conn}]]")
-
-                    console.print(f"\n[dim]Files created:[/dim]")
-                    console.print(f"  - module.md      (module definition)")
-                    console.print(f"  - current.md     (current status)")
-                    console.print(f"  - decisions.md   (decisions)")
-                    if generated.suggested_connections:
-                        console.print(f"  - dependencies.md (dependencies)")
+                    console.print(f"[dim]File location: {display_path(module_path)}[/dim]")
+                    if generated.doc_type:
+                        console.print(f"[dim]Type: {generated.doc_type}[/dim]")
+                    console.print(
+                        "[dim]Written by AI, and marked so in generated.by. "
+                        "Please read it before relying on it.[/dim]"
+                    )
 
             except ValueError as e:
                 console.print(f"[red]ERROR[/red] {e}")
@@ -873,7 +867,7 @@ def module(
         else:
             console.print(f"[red]ERROR[/red] Unknown action: {action}")
             console.print("Valid actions: create, list, tree, archive, unarchive, connections, graph, rebuild-graph,")
-            console.print("  check-links, suggest-links, audit, graph-snapshot,")
+            console.print("  check-links, suggest-links, audit, guide, graph-snapshot,")
             console.print("  graph-history, graph-diff, from-text")
             sys.exit(1)
 
