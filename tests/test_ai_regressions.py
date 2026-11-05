@@ -365,7 +365,7 @@ def test_several_decision_sections_are_reported_rather_than_guessed(base):
 
 def test_claude_cli_sends_the_prompt_on_stdin(monkeypatch):
     """A long prompt must not depend on the Windows command-line length limit."""
-    import memory_tool.llm.claude_cli_client as module
+    import memory_tool.llm.cli_client as module
 
     seen = {}
 

@@ -271,7 +271,7 @@ Available tools: get_timeline, search, get_plan, get_module, list_modules
             "options": [
                 ("--verbose, -v", "Show agent's reasoning and tool calls"),
                 ("--simple, -s", "Use simple keyword search (faster)"),
-                ("--provider, -p", "LLM provider: claude-cli, gemini-cli, etc."),
+                ("--provider, -p", "LLM provider: claude-cli, codex-cli, antigravity-cli, glm, etc."),
             ],
         },
         "ko": {
@@ -294,7 +294,7 @@ AI를 사용하여 메모리 내용에 대한 질문에 답변합니다.
             "options": [
                 ("--verbose, -v", "에이전트의 추론 과정과 도구 호출 표시"),
                 ("--simple, -s", "단순 키워드 검색 사용 (더 빠름)"),
-                ("--provider, -p", "LLM 제공자: claude-cli, gemini-cli 등"),
+                ("--provider, -p", "LLM 제공자: claude-cli, codex-cli, antigravity-cli, glm 등"),
             ],
         },
     },
@@ -2254,10 +2254,13 @@ def _show_advanced_guide_en():
 
 [bold]LLM Providers:[/bold]
   -claude-cli: Uses Claude CLI
-  -ollama: Local LLM (default)
-  -gemini-cli: Google Gemini
+  -codex-cli: Uses Codex CLI
+  -antigravity-cli: Uses Antigravity CLI
+  -glm: GLM through the Claude CLI (needs llm.glm settings)
+  -ollama: Local LLM
 
-Configure with: mconfig set llm.provider ollama""",
+Without a setting, the first available one is used.
+Configure with: mconfig set llm.provider codex-cli""",
         title="[bold yellow]6. AI & LLM Features[/bold yellow]",
         border_style="cyan",
         box=box.ROUNDED
@@ -2402,10 +2405,13 @@ def _show_advanced_guide_ko():
 
 [bold]LLM 제공자:[/bold]
   -claude-cli: Claude CLI 사용
-  -ollama: 로컬 LLM (기본값)
-  -gemini-cli: Google Gemini
+  -codex-cli: Codex CLI 사용
+  -antigravity-cli: Antigravity CLI 사용
+  -glm: Claude CLI로 GLM에 연결 (llm.glm 설정 필요)
+  -ollama: 로컬 LLM
 
-설정: mconfig set llm.provider ollama""",
+설정이 없으면 사용 가능한 제공자를 차례로 찾습니다.
+설정: mconfig set llm.provider codex-cli""",
         title="[bold yellow]6. AI & LLM 기능[/bold yellow]",
         border_style="cyan",
         box=box.ROUNDED

@@ -20,16 +20,28 @@ except ImportError:
     ClaudeCLIClient = None
 
 try:
-    from .gemini_cli_client import GeminiCLIClient
+    from .codex_cli_client import CodexCLIClient
 except ImportError:
-    GeminiCLIClient = None
+    CodexCLIClient = None
+
+try:
+    from .antigravity_cli_client import AntigravityCLIClient
+except ImportError:
+    AntigravityCLIClient = None
+
+try:
+    from .glm_client import GLMClient
+except ImportError:
+    GLMClient = None
 
 __all__ = [
     "LLMClient",
     "AnthropicClient",
     "OllamaClient",
     "ClaudeCLIClient",
-    "GeminiCLIClient",
+    "CodexCLIClient",
+    "AntigravityCLIClient",
+    "GLMClient",
     "TIMELINE_SUMMARY_PROMPT",
     "CONVERSATION_SUMMARY_PROMPT",
     "MODULE_SUMMARY_PROMPT",

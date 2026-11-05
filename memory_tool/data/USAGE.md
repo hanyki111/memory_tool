@@ -292,7 +292,7 @@ help:
 
 # LLM provider
 llm:
-  provider: ollama               # ollama, claude-cli, gemini-cli
+  provider: claude-cli           # anthropic, claude-cli, codex-cli, antigravity-cli, glm, ollama
   ollama_model: qwen3-vl:8b
   anthropic_model: claude-3-5-sonnet-20241022
 

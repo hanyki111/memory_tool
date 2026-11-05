@@ -782,7 +782,7 @@ def tutorial(
         installation   - Install and set up memory_tool
         setup          - Configure CLAUDE.md for AI integration
         daily          - Daily workflow guide
-        ai-integration - Claude Code, Gemini CLI integration
+        ai-integration - Claude Code, Codex and other AI tools
         recording      - Recording best practices
         search         - Search and retrieval
         modules        - Module organization
@@ -1570,14 +1570,17 @@ def config(
                     console.print(Panel(
                         "[bold]llm.provider[/bold]\n"
                         + ("LLM 제공자를 선택합니다.\n\n" if is_ko else "Select LLM provider.\n\n")
-                        + "  [cyan]anthropic[/cyan] - Claude API (Anthropic)\n"
-                        + "  [cyan]openai[/cyan]    - OpenAI API\n"
-                        + "  [cyan]ollama[/cyan]    - Local Ollama\n\n"
+                        + "  [cyan]anthropic[/cyan]       - Claude API (Anthropic)\n"
+                        + "  [cyan]claude-cli[/cyan]      - Claude Code CLI\n"
+                        + "  [cyan]codex-cli[/cyan]       - Codex CLI\n"
+                        + "  [cyan]antigravity-cli[/cyan] - Antigravity CLI\n"
+                        + "  [cyan]glm[/cyan]             - GLM (Claude CLI, llm.glm)\n"
+                        + "  [cyan]ollama[/cyan]          - Local Ollama\n\n"
                         + "[bold]llm.model[/bold]\n"
                         + ("사용할 모델 이름입니다.\n" if is_ko else "Model name to use.\n")
                         + ("예: claude-3-5-sonnet-20241022, gpt-4o, llama3.2\n\n" if is_ko else "ex: claude-3-5-sonnet-20241022, gpt-4o, llama3.2\n\n")
                         + "[bold]llm.api_key[/bold]\n"
-                        + ("API 키 (Anthropic/OpenAI용)\n" if is_ko else "API key (for Anthropic/OpenAI)\n"),
+                        + ("API 키 (Anthropic용)\n" if is_ko else "API key (for Anthropic)\n"),
                         title="LLM 설정" if is_ko else "LLM Settings",
                         border_style="blue"
                     ))
@@ -1587,7 +1590,7 @@ def config(
                     console.print(f"\n{msg['current']} llm.provider: [green]{current_provider}[/green]")
                     new_provider = Prompt.ask(
                         "llm.provider",
-                        choices=["anthropic", "openai", "ollama", ""],
+                        choices=["anthropic", "claude-cli", "codex-cli", "antigravity-cli", "glm", "ollama", ""],
                         default=""
                     )
                     if new_provider:

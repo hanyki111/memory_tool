@@ -333,7 +333,7 @@ mtutorial --lang ko
 
 # 특정 레슨 보기
 mtutorial setup                    # CLAUDE.md 설정 가이드
-mtutorial ai-integration           # AI 도구 연동 (Claude Code, Gemini CLI)
+mtutorial ai-integration           # AI 도구 연동 (Claude Code, Codex)
 mtutorial daily                    # 일상 워크플로우
 mtutorial recording                # 기록 모범 사례
 
@@ -1078,12 +1078,18 @@ msummary today --force           # 캐시 무시
 
 Memory Tool은 다양한 LLM 제공자를 지원합니다:
 
-| 제공자       | 설명                    | API 키 필요        |
-| ------------ | ----------------------- | ------------------ |
-| `ollama`     | 로컬 LLM (기본값, 무료) | ❌                 |
-| `anthropic`  | Claude API              | ✅                 |
-| `claude-cli` | Claude CLI 도구 사용    | ❌ (CLI 설치 필요) |
-| `gemini-cli` | Google Gemini CLI 사용  | ❌ (CLI 설치 필요) |
+| 제공자            | 설명                       | 필요한 것                 |
+| ----------------- | -------------------------- | ------------------------- |
+| `anthropic`       | Claude API                 | API 키                    |
+| `claude-cli`      | Claude Code CLI 사용       | CLI 설치와 로그인         |
+| `codex-cli`       | Codex CLI 사용             | CLI 설치와 로그인         |
+| `antigravity-cli` | Antigravity CLI 사용       | CLI 설치와 로그인         |
+| `glm`             | Claude CLI로 GLM에 연결    | Claude CLI, `llm.glm` 설정 |
+| `ollama`          | 로컬 LLM                   | Ollama 서버               |
+
+`llm.provider`가 없으면 `anthropic`, `claude-cli`, `codex-cli`, `antigravity-cli`, `ollama` 순서로 사용 가능한 제공자를 고릅니다. `glm`은 자동으로 고르지 않습니다. `codex`, `agy`, `antigravity`도 이름으로 쓸 수 있습니다.
+
+CLI 제공자는 빈 임시 폴더에서 실행하며, 프롬프트는 표준 입력으로 전달합니다. Codex는 `read-only`, Antigravity는 `plan` 모드로 실행합니다.
 
 **설정 예시:**
 
@@ -1103,9 +1109,18 @@ llm:
   # provider: "claude-cli"
   # (별도 API 키 불필요, Claude CLI가 설치되어 있어야 함)
 
-  # === Gemini CLI (gemini 명령어 사용) ===
-  # provider: "gemini-cli"
-  # (별도 API 키 불필요, Gemini CLI가 설치되어 있어야 함)
+  # === Codex CLI (codex 명령어 사용) ===
+  # provider: "codex-cli"
+
+  # === Antigravity CLI (agy 명령어 사용) ===
+  # provider: "antigravity-cli"
+
+  # === GLM (Claude CLI 경유) ===
+  # 토큰을 이 파일에 적지 말고, 값이 있는 곳만 가리킵니다.
+  # provider: "glm"
+  # glm:
+  #   env_from_ps1: "E:/secrets/set-glm.ps1"  # $env:ANTHROPIC_BASE_URL = '...' 형식
+  #   model: "opus"
 
   # 공통 설정
   max_tokens: 4096
@@ -1118,7 +1133,8 @@ llm:
 ```bash
 mask "어제 무엇을 했나요?"                    # config 기본 제공자 사용
 mask "summarize last week" --provider claude-cli  # Claude CLI 사용
-mask "what decisions were made?" --provider gemini-cli  # Gemini CLI 사용
+mask "what decisions were made?" --provider codex-cli  # Codex CLI 사용
+mask "오늘 뭐 했지?" --provider agy               # Antigravity CLI 사용
 ```
 
 ### 문서 아카이브 (marchive)
