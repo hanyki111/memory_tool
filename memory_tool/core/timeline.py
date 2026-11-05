@@ -32,6 +32,9 @@ _DATE_STEM = re.compile(r"^(\d{4})-(\d{2})-(\d{2})$")
 _DAY_STEM = re.compile(r"^(\d{1,2})$")
 _MONTH_DIR = re.compile(r"^(\d{4})-(\d{2})$")
 
+#: "- 14:30 | message"
+ENTRY_PATTERN = re.compile(r"^- (\d{1,2}:\d{2})\s*\|\s*(.+)$", re.MULTILINE)
+
 
 def timeline_filename(target_date, layout: str = DEFAULT_FILENAME_LAYOUT) -> str:
     """Build the filename for a timeline date.
@@ -739,9 +742,8 @@ class Timeline:
             return file_path, [], parsed_date
 
         entries = []
-        entry_pattern = re.compile(r"^- (\d{1,2}:\d{2})\s*\|\s*(.+)$", re.MULTILINE)
 
-        for i, match in enumerate(entry_pattern.finditer(content)):
+        for i, match in enumerate(ENTRY_PATTERN.finditer(content)):
             entries.append({
                 'index': i,
                 'time': match.group(1),
