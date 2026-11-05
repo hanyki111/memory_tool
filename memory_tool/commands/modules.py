@@ -612,7 +612,7 @@ def module(
             if suggestions:
                 console.print(f"[green]Suggested connections ({len(suggestions)}):[/green]\n")
                 for mod, reason_text in suggestions:
-                    console.print(f"  → \[\[{mod}]]")
+                    console.print(f"  → \\[\\[{mod}]]")
                     console.print(f"    [dim]{reason_text}[/dim]")
                     console.print()
                 console.print("[dim]Add these links to your module's .md files to create connections.[/dim]")
@@ -854,7 +854,7 @@ def module(
                     if generated.suggested_connections:
                         console.print(f"\n[cyan]Suggested connections:[/cyan]")
                         for conn in generated.suggested_connections:
-                            console.print(f"  - \[\[{conn}]]")
+                            console.print(f"  - \\[\\[{conn}]]")
 
                     console.print(f"\n[dim]Files created:[/dim]")
                     console.print(f"  - module.md      (module definition)")
