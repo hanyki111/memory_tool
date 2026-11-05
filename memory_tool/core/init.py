@@ -218,17 +218,30 @@ codemap:
 # Uncomment ONE provider section to enable:
 
 # llm:
-#   provider: gemini-cli       # Options: anthropic, ollama, claude-cli, gemini-cli
+#   provider: claude-cli       # anthropic, claude-cli, codex-cli, antigravity-cli, glm, ollama
+#                              # Without this, the first available one is used.
 #
-#   # --- Claude CLI (recommended, uses CLI auth) ---
+#   # --- Claude CLI (uses CLI login) ---
 #   claude_cli:
 #     command: claude          # CLI command name
 #     model: null              # null = use CLI default
 #
-#   # --- Gemini CLI (uses CLI auth) ---
-#   gemini_cli:
-#     command: gemini          # CLI command name
-#     model: null              # null = use CLI default
+#   # --- Codex CLI (uses CLI login) ---
+#   codex_cli:
+#     command: codex
+#     model: null
+#
+#   # --- Antigravity CLI (uses CLI login) ---
+#   antigravity_cli:
+#     command: agy
+#     model: null
+#
+#   # --- GLM through the Claude CLI ---
+#   # Point to where the connection values are. Do not put a token in this file.
+#   glm:
+#     env_from_ps1: null       # File with $env:ANTHROPIC_BASE_URL = '...' lines
+#     env_from_env: {}         # Or: {ANTHROPIC_AUTH_TOKEN: GLM_API_KEY, ...}
+#     model: opus              # Name as the Claude CLI knows it
 #
 #   # --- Anthropic API (requires API key) ---
 #   # anthropic:

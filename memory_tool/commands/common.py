@@ -371,11 +371,19 @@ def resolve_module_name(module_name: str) -> str:
 
 def print_llm_unavailable(console: Console) -> None:
     """Explain that no LLM can be used, naming every way to provide one."""
+    from memory_tool.llm.client import LLMClient
+
+    notice = LLMClient.removed_provider_notice()
+    if notice:
+        console.print(f"[red]ERROR[/red] {notice}")
+        return
+
     console.print("[red]ERROR[/red] No LLM provider is available")
     console.print(
-        "[dim]Install the claude or gemini CLI, run Ollama, or set ANTHROPIC_API_KEY.[/dim]"
+        "[dim]Install the claude, codex or agy CLI, run Ollama, or set ANTHROPIC_API_KEY.[/dim]"
     )
     console.print(
         "[dim]To choose one, set llm.provider in config.yaml "
-        "(anthropic, claude-cli, gemini-cli, ollama). Check with: mproviders[/dim]"
+        "(anthropic, claude-cli, codex-cli, antigravity-cli, glm, ollama). "
+        "Check with: mproviders[/dim]"
     )

@@ -38,11 +38,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### ⚠️ 호환 없이 바뀐 동작
 
 - **`module auto-tag` 제거:** 대체 기능은 없습니다.
+- **`gemini-cli` 제공자 제거:** Gemini CLI가 개인용 Code Assist 계정을 더 이상 지원하지 않습니다. `antigravity-cli`를 사용하십시오. 설정에 `gemini-cli`가 남아 있으면 이 내용을 안내합니다.
 - **`mplan module`과 `PLAN.md` 제거:** `mplan`의 나머지 기능은 그대로입니다. 기존 `PLAN.md`는 삭제되지 않으며, 모듈 목록에 더는 나타나지 않습니다.
 - **옵션 없는 `mmodule create`의 결과 변경:** 범용 골격 대신 frontmatter와 제목만 있는 파일 하나(`topic.md`)를 만듭니다. `modules.default_kind`를 설정한 프로젝트는 이전처럼 동작합니다.
 - **`mmodule from-text`의 결과 변경:** 파일 3개 대신 문서 하나로 저장하며, `generated.by`에 AI 작성으로 표시합니다. `--structure`는 더 이상 효과가 없습니다.
 - **Obsidian 플러그인 1.2.0의 `grow` 메뉴 제거:** 생성 화면은 Kind와 Nature 대신 종류를 묻습니다. 이 플러그인은 `--type`을 쓰므로 memory_tool 1.2 이상이 필요합니다. 이전 플러그인은 1.2에서 경고와 함께 계속 작동합니다.
-- **LLM 제공자 기본값 변경:** `llm.provider`가 없으면 `anthropic`으로 고정하지 않고, `anthropic`, `claude-cli`, `gemini-cli`, `ollama` 순서로 사용 가능한 제공자를 고릅니다.
+- **LLM 제공자 기본값 변경:** `llm.provider`가 없으면 `anthropic`으로 고정하지 않고, `anthropic`, `claude-cli`, `codex-cli`, `antigravity-cli`, `ollama` 순서로 사용 가능한 제공자를 고릅니다.
+- **CLI 제공자의 실행 위치 변경:** `claude-cli`를 포함한 CLI 제공자는 빈 임시 폴더에서 실행합니다. 프로젝트 파일을 건드리지 않고 프로젝트 지침도 읽지 않습니다.
 - **`mmodule rename`의 대상 제한:** 대상 폴더가 이미 있으면 합치지 않고 거부합니다.
 
 ### 🗑️ Deprecated
@@ -55,6 +57,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ✨ Added
 
+- **LLM 제공자 추가:** `codex-cli`(별칭 `codex`), `antigravity-cli`(별칭 `agy`, `antigravity`), `glm`. Codex는 `read-only`, Antigravity는 `plan` 모드로 실행합니다.
+- **`glm`:** Claude CLI를 GLM에 연결합니다. `llm.glm.env_from_ps1` 또는 `llm.glm.env_from_env`로 연결 값이 있는 곳을 지정하며, 값은 설정 파일에 적지 않습니다. 자동으로 선택되지 않습니다.
 - **새 문서 형식:** `mmodule create --type <종류>`. 종류는 참고, 이해, 방법, 판단이며 선택 사항입니다. 첫 하위 문서를 만들면 `topic.md`가 `topic/topic.md`로 옮겨지고, `[[topic]]` 링크는 유지됩니다.
 - **작성 지원:** `mmodule guide [종류]`와 `mt-write` 스킬. 기본적으로 AI는 질문하고 지적하며, 요청할 때만 본문을 씁니다. `<기반폴더>/guides/`의 파일이 번들 가이드보다 우선합니다.
 - **`mmodule audit`:** 분리와 병합 후보를 보여 줍니다. LLM을 쓰지 않으며 문서를 바꾸지 않습니다.

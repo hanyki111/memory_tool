@@ -22,7 +22,7 @@ def _emit_json(payload: dict) -> None:
 @app.command(name="ask")
 def memory_ask(
     question: str = typer.Argument(..., help="Natural language question about your memory"),
-    provider: Optional[str] = typer.Option(None, "--provider", "-p", help="LLM provider (anthropic, ollama, claude-cli, gemini-cli)"),
+    provider: Optional[str] = typer.Option(None, "--provider", "-p", help="LLM provider (anthropic, claude-cli, codex-cli, antigravity-cli, glm, ollama)"),
     simple: bool = typer.Option(False, "--simple", "-s", help="Use simple keyword search (not agentic)"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed process (agent steps, sources)"),
     no_timeline: bool = typer.Option(False, "--no-timeline", help="Don't search timeline (simple mode only)"),
@@ -253,7 +253,9 @@ def list_providers():
             "anthropic": "Claude API (requires API key)",
             "ollama": "Local LLM (requires Ollama server)",
             "claude-cli": "Claude Code CLI (requires CLI installed)",
-            "gemini-cli": "Gemini CLI (requires CLI installed)",
+            "codex-cli": "Codex CLI (requires CLI installed)",
+            "antigravity-cli": "Antigravity CLI (requires CLI installed)",
+            "glm": "GLM through the Claude CLI (requires llm.glm settings)",
         }
 
         current = LLMClient.get_provider()

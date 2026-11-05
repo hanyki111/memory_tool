@@ -731,7 +731,7 @@ search:
 
 ```yaml
 llm:
-  provider: anthropic     # 기본 제공자: anthropic, ollama, claude-cli, gemini-cli
+  provider: claude-cli    # anthropic, claude-cli, codex-cli, antigravity-cli, glm, ollama
   ollama_host: "http://localhost:11434"
   ollama_model: "llama3.2"
   anthropic_api_key: null # 또는 환경변수 ANTHROPIC_API_KEY 사용
@@ -742,13 +742,16 @@ llm:
 
 ## 제공자별 설정
 1. **claude-cli** (권장): Claude Code 환경에서 자동 사용
-2. **gemini-cli**: Gemini CLI 사용
-3. **anthropic**: API 키 필요
-4. **ollama**: 로컬 LLM (Ollama 서버 필요)
+2. **codex-cli**: Codex CLI 사용
+3. **antigravity-cli**: Antigravity CLI 사용
+4. **glm**: Claude CLI로 GLM에 연결 (`llm.glm` 설정 필요)
+5. **anthropic**: API 키 필요
+6. **ollama**: 로컬 LLM (Ollama 서버 필요)
+
+`llm.provider`가 없으면 anthropic, claude-cli, codex-cli, antigravity-cli, ollama 순서로 사용 가능한 제공자를 고릅니다.
 
 ## 환경변수
-- ANTHROPIC_API_KEY: Anthropic API 키
-- GOOGLE_API_KEY: Gemini API 키""",
+- ANTHROPIC_API_KEY: Anthropic API 키""",
 
             "help": """# help 설정
 
@@ -1190,6 +1193,10 @@ Example: get_usage_guide(topic='tags')"""
 
         # Check LLM availability
         if not LLMClient.check_availability(provider):
+            notice = LLMClient.removed_provider_notice(provider)
+            if notice:
+                raise RuntimeError(notice)
+
             available = LLMClient.list_available_providers()
             if available:
                 raise RuntimeError(
@@ -1199,7 +1206,7 @@ Example: get_usage_guide(topic='tags')"""
                 raise RuntimeError("No LLM providers available.")
 
         llm = LLMClient(provider=provider)
-        actual_provider = provider or LLMClient.get_provider()
+        actual_provider = LLMClient.normalize(provider) if provider else LLMClient.get_provider()
 
         # Step 1: LLM interprets question and selects tools
         if verbose:
