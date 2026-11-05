@@ -711,6 +711,7 @@ ms "hybrid search" --with-kb
 | `mweek`    | 이번 주 작업 보기     | `mweek`                     |
 | `mmonth`   | 이번 달 작업 보기     | `mmonth`                    |
 | `mdays`    | 최근 N일 작업 보기    | `mdays 7`                   |
+| `mreview`  | 기록을 문서로 옮기기  | `mreview`                   |
 | `mask`     | 메모리 기반 Q&A (RAG) | `mask "최근 결정 사항?"`    |
 | `mbase`    | 기반 폴더 확인/변경   | `mbase show`                |
 | `mconfig`  | 설정 관리             | `mconfig get help.language` |

@@ -179,6 +179,42 @@ def mark_written(review: Review, number: int) -> Item:
     return item
 
 
+def finish_if_ready(review: Review) -> bool:
+    """Finish a review once its items and reflection are settled.
+
+    Returns:
+        True if the review is now done.
+    """
+    if review.is_done:
+        return True
+
+    if review.reflection == REFLECTION_OPEN and not review.entry_count:
+        review.reflection = REFLECTION_SKIPPED
+
+    if review.choices_settled() and review.reflection != REFLECTION_OPEN:
+        review.status = STATUS_DONE
+        return True
+
+    return False
+
+
+def review_to_dict(review: Review) -> dict:
+    """Describe a review for programs that read ``--json`` output."""
+    return {
+        "name": review.name,
+        "path": str(review.path),
+        "status": review.status,
+        "start": review.start,
+        "end": review.end,
+        "entry_count": review.entry_count,
+        "active_days": review.active_days,
+        "dropped": review.dropped,
+        "reflection": review.reflection,
+        "can_defer": review.can_defer(),
+        "items": [asdict(item) for item in review.items],
+    }
+
+
 def _open_item(review: Review, number: int) -> Item:
     item = review.item(number)
     if not item.is_open:

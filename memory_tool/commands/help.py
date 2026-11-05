@@ -326,6 +326,73 @@ AI를 사용하여 메모리 내용에 대한 질문에 답변합니다.
         },
     },
 
+    "review": {
+        "en": {
+            "name": "mreview / review",
+            "summary": "Move what is worth keeping from the timeline into documents",
+            "description": """Reads the entries since the last review and proposes up to five things to move into documents, updates of existing documents first.
+
+For each proposal choose: write now, write later, or reject. While more than five items remain open, nothing can be put off. Writing opens a menu of the installed AI CLIs (Claude Code, Codex, Antigravity) and writing on your own. At the end you may reflect on the period, or skip it.
+
+Choosing creates no file: a document is created when writing starts. Every choice is saved, so you can pause at any time and run mreview to continue. Proposals send the period's entries to the configured LLM provider.
+
+Reviews are saved as reviews/YYYY-MM-DD.md. A notice appears on the day's first entry and in mcontext after 7 days and 10 entries.""",
+            "examples": [
+                "mreview                       # Start or continue a review",
+                "mreview --since 2026-10-01    # Start a review from a chosen date",
+                "mreview --with codex          # Write with Codex, skipping the menu",
+                "mreview list                  # Items waiting to be written",
+                "mreview write 2               # Write item 2 now",
+                "mreview done 2                # Mark item 2 as written",
+                "mreview --json                # For editors and scripts",
+                "mreview set 2 later           # Choose without being asked (prints JSON)",
+                "mreview reflection skipped    # Settle the reflection (prints JSON)",
+            ],
+            "options": [
+                ("--since DATE", "Start of the period, for a new review (first review: last 14 days)"),
+                ("--with TOOL", "claude, codex, antigravity or solo"),
+                ("--json", "Print as JSON without asking anything"),
+                ("config: review.notice", "enabled, min_days (7), min_entries (10)"),
+                ("config: review.writer", "The tool offered by default"),
+                ("config: review.reflection_questions", "Fixed questions for writing on your own"),
+                ("guides/review-proposals.md", "Your own criteria for proposals"),
+                ("guides/review-reflection.md", "Your own guide for reflecting with an AI"),
+            ],
+        },
+        "ko": {
+            "name": "mreview / review",
+            "summary": "타임라인에서 남길 내용을 문서로 옮기기",
+            "description": """지난 리뷰 이후의 기록을 읽고, 문서로 옮길 내용을 다섯 건까지 제안합니다. 기존 문서 갱신을 먼저 제안합니다.
+
+제안마다 지금 쓰기, 나중에 쓰기, 거절 중에서 고릅니다. 남은 항목이 다섯 건을 넘는 동안에는 미룰 수 없습니다. 쓰기를 고르면 설치된 AI CLI(Claude Code, Codex, Antigravity)와 혼자 쓰기를 메뉴로 보여 줍니다. 마지막으로 그 기간을 돌아보거나 건너뜁니다.
+
+고르는 것만으로는 파일이 생기지 않으며, 쓰기를 시작할 때 문서를 만듭니다. 선택은 바로 저장되므로 언제든 멈추고 mreview로 이어 갈 수 있습니다. 제안을 만들 때 그 기간의 기록을 설정된 LLM 제공자로 보냅니다.
+
+리뷰는 reviews/YYYY-MM-DD.md로 저장합니다. 7일이 지나고 기록이 10건 쌓이면 그날의 첫 기록과 mcontext에서 알려 줍니다.""",
+            "examples": [
+                "mreview                       # 리뷰 시작 또는 이어 가기",
+                "mreview --since 2026-10-01    # 지정한 날짜부터 리뷰 시작",
+                "mreview --with codex          # 메뉴 없이 Codex로 쓰기",
+                "mreview list                  # 쓰기를 기다리는 항목",
+                "mreview write 2               # 2번 항목을 지금 쓰기",
+                "mreview done 2                # 2번 항목을 썼음으로 표시",
+                "mreview --json                # 편집기와 스크립트용",
+                "mreview set 2 later           # 묻지 않고 선택 (JSON 출력)",
+                "mreview reflection skipped    # 돌아보기 처리 (JSON 출력)",
+            ],
+            "options": [
+                ("--since 날짜", "새 리뷰의 시작일 (첫 리뷰는 최근 14일)"),
+                ("--with 도구", "claude, codex, antigravity, solo"),
+                ("--json", "묻지 않고 JSON으로 출력"),
+                ("설정: review.notice", "enabled, min_days (7), min_entries (10)"),
+                ("설정: review.writer", "기본으로 제시할 도구"),
+                ("설정: review.reflection_questions", "혼자 쓸 때의 고정 질문"),
+                ("guides/review-proposals.md", "제안 기준을 직접 정할 때"),
+                ("guides/review-reflection.md", "AI와 돌아볼 때의 가이드를 직접 정할 때"),
+            ],
+        },
+    },
+
     "plan": {
         "en": {
             "name": "mplan / plan",
@@ -1963,7 +2030,7 @@ GitHub에서 최신 릴리즈 태그를 확인하고 현재 설치된 버전과 
 COMMAND_CATEGORIES = {
     "en": {
         "core": ("Core Commands", ["record", "init", "status", "tutorial"]),
-        "timeline": ("Timeline", ["today", "week", "month", "days", "sort"]),
+        "timeline": ("Timeline", ["today", "week", "month", "days", "sort", "review"]),
         "search": ("Search", ["search", "tag", "browse", "check", "cache"]),
         "module": ("Modules", ["module", "archive", "context", "map"]),
         "plan": ("Planning", ["plan", "summary"]),
@@ -1974,7 +2041,7 @@ COMMAND_CATEGORIES = {
     },
     "ko": {
         "core": ("핵심 명령어", ["record", "init", "status", "tutorial"]),
-        "timeline": ("타임라인", ["today", "week", "month", "days", "sort"]),
+        "timeline": ("타임라인", ["today", "week", "month", "days", "sort", "review"]),
         "search": ("검색", ["search", "tag", "browse", "check", "cache"]),
         "module": ("모듈 관리", ["module", "archive", "context", "map"]),
         "plan": ("계획", ["plan", "summary"]),

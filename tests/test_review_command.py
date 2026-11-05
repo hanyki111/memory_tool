@@ -426,6 +426,102 @@ class TestWriting:
         assert states(base) == [store.STATE_WRITING]
 
 
+class TestJson:
+    def payload(self, result):
+        return json.loads(result.output.strip())
+
+    def test_starts_a_review_and_prints_it_on_one_line(self, base):
+        FakeClient.answer = answer(2)
+
+        result = run("--json")
+
+        assert result.exit_code == 0, result.output
+        assert len(result.output.strip().splitlines()) == 1
+        review = self.payload(result)["review"]
+        assert review["status"] == "in_progress"
+        assert review["can_defer"] is True
+        assert [item["title"] for item in review["items"]] == ["Topic 1", "Topic 2"]
+
+    def test_reads_the_review_in_progress_without_calling(self, base):
+        FakeClient.answer = answer(1)
+        run("--json")
+
+        result = run("--json")
+
+        assert FakeClient.calls == 1
+        assert self.payload(result)["ok"] is True
+
+    def test_nothing_to_review(self, base):
+        for path in (base / "timeline").rglob("*.md"):
+            path.unlink()
+
+        assert self.payload(run("--json")) == {"ok": True, "review": None}
+
+    def test_failure_is_reported_as_json(self, base):
+        FakeClient.answer = "not json"
+
+        result = run("--json")
+
+        assert result.exit_code == 1
+        assert self.payload(result)["ok"] is False
+        assert store.review_files(base) == []
+
+    def test_choices_follow_the_same_rules(self, base):
+        finish_with_deferred(base, 1)
+        add_entry_now(base)
+        FakeClient.answer = answer(5)
+        run("--json")
+
+        refused = run("set", "1", "later")
+
+        assert refused.exit_code == 1
+        assert self.payload(refused)["ok"] is False
+
+        assert self.payload(run("set", "1", "reject"))["review"]["can_defer"] is True
+        assert self.payload(run("set", "2", "later"))["review"]["items"][1]["state"] == "deferred"
+
+    def test_write_only_marks_the_item(self, base, monkeypatch):
+        tools = FakeTools(monkeypatch)
+        FakeClient.answer = answer(1)
+        run("--json")
+
+        review = self.payload(run("set", "1", "write"))["review"]
+
+        assert review["items"][0]["state"] == "writing"
+        assert tools.calls == []
+
+    def test_review_finishes_when_everything_is_settled(self, base):
+        FakeClient.answer = answer(1)
+        run("--json")
+
+        assert self.payload(run("set", "1", "reject"))["review"]["status"] == "in_progress"
+        assert self.payload(run("reflection", "skipped"))["review"]["status"] == "done"
+
+    def test_unknown_values_are_refused(self, base):
+        FakeClient.answer = answer(1)
+        run("--json")
+
+        assert run("set", "1", "maybe").exit_code == 1
+        assert run("reflection", "maybe").exit_code == 1
+
+    def test_list_as_json(self, base):
+        finish_with_deferred(base, 2)
+
+        items = self.payload(run("list", "--json"))["items"]
+
+        assert [item["number"] for item in items] == [1, 2]
+
+    def test_text_review_is_not_changed_by_json_settling(self, base):
+        FakeClient.answer = answer(1)
+        run("--json")
+        run("set", "1", "reject")
+
+        result = run(input="s\n")
+
+        assert result.exit_code == 0, result.output
+        assert store.latest_review(base).is_done
+
+
 class TestReflection:
     def test_skipping_ends_the_review_with_the_fixed_question_left_as_a_comment(self, base):
         FakeClient.answer = answer(0)
