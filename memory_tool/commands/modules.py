@@ -16,9 +16,9 @@ from memory_tool.utils.paths import display_path, get_base_path
 
 
 def _warn_retiring(what: str, instead: Optional[str] = None) -> None:
-    """Say that a template feature still works but is on its way out."""
-    suffix = f" Use {instead} instead." if instead else ""
-    console.print(f"[yellow]{what} will be removed in the next version.{suffix}[/yellow]")
+    """Say that a template feature still works but is deprecated."""
+    suffix = f" Prefer {instead}." if instead else ""
+    console.print(f"[yellow]{what} is deprecated and may be removed in a later version.{suffix}[/yellow]")
 
 
 def _suggest_links_with_ai(name: str, limit: int) -> None:
@@ -111,12 +111,12 @@ def module(
     format = opt_str(format)
     output = opt_str(output)
 
-    # Old names, kept for one version. See docs/handoff.
+    # Old names, kept for existing users.
     if action.lower() == "ai-organize":
-        console.print("[yellow]'ai-organize' is now 'audit'. The old name will be removed.[/yellow]\n")
+        console.print("[yellow]'ai-organize' is now 'audit'. The old name may be removed in a later version.[/yellow]\n")
         action = "audit"
     elif action.lower() == "suggest-ai":
-        console.print("[yellow]'suggest-ai' is now 'suggest-links --ai'. The old name will be removed.[/yellow]\n")
+        console.print("[yellow]'suggest-ai' is now 'suggest-links --ai'. The old name may be removed in a later version.[/yellow]\n")
         action = "suggest-links"
         ai = True
 
@@ -829,7 +829,7 @@ def module(
 
             if opt_str(structure):
                 console.print(
-                    "[yellow]--structure no longer has any effect and will be removed.[/yellow]"
+                    "[yellow]--structure no longer has any effect.[/yellow]"
                 )
 
             console.print("[cyan]Writing a document from the text...[/cyan]")

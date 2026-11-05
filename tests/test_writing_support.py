@@ -296,3 +296,21 @@ def test_module_help_shows_wiki_links(language, base):
 
     assert result.exit_code == 0, result.output
     assert "[[topic]]" in result.output
+
+
+def test_minit_writes_only_the_current_organization_guide(project):
+    docs = project / ".memory" / "docs"
+    MemoryInitializer(project)._copy_docs_templates()
+
+    assert [p.name for p in docs.glob("*.md")] == ["MODULE-ORGANIZATION.md"]
+    assert "mmodule guide" in (docs / "MODULE-ORGANIZATION.md").read_text(encoding="utf-8")
+
+
+def test_module_help_text_describes_one_document():
+    from memory_tool.utils import help_text
+
+    source = help_text.__file__
+    text = open(source, encoding="utf-8").read()
+
+    assert "mmodule edit" not in text
+    assert "mmodule guide" in text

@@ -99,7 +99,7 @@ class MemoryAgent:
             "examples": ["get_plan_weekly(week='this')", "get_plan_weekly(week='last')"]
         },
         "get_module": {
-            "description": "Get a module's current status (current.md content)",
+            "description": "Get the content of a module's document",
             "args": {
                 "name": "Module name (e.g., 'projects/memory-tool')"
             },
@@ -569,7 +569,7 @@ Rules:
         if len(content) > 3000:
             content = content[:3000] + "\n\n[... truncated ...]"
 
-        return f"Module '{name}' current status:\n\n{content}"
+        return f"Module '{name}':\n\n{content}"
 
     def _tool_list_modules(self) -> str:
         """List all available modules."""

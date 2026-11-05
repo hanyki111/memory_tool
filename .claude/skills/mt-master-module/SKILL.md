@@ -30,8 +30,8 @@ mmodule tree
 
 **Review key modules:**
 ```bash
-cat .memory/modules/projects/*/current.md
-cat .memory/modules/projects/*/decisions.md
+mmodule tree
+# Read the documents the tree lists. Decisions are also in the timeline: ms "Decision:"
 ```
 
 **Check timeline for milestones:**
@@ -47,18 +47,16 @@ mtoday
 mmodule create master
 ```
 
-This creates `.memory/modules/master/` locally.
+This creates `.memory/modules/master.md` locally.
 
 When published, the registry key automatically includes project name prefix
 (e.g., `memory-tool/master`) to avoid collisions across projects.
 
-**Required files:**
-- `current.md` - Project overview (main document)
-- `decisions.md` - Architectural decisions summary
+The document holds the project overview and a summary of architectural decisions.
 
 ### Phase 3: Write Content
 
-**Master module template (current.md):**
+**Master module outline:**
 
 ```markdown
 # [Project Name] - Master Module
@@ -197,10 +195,8 @@ Modules found: 6
 
 Creating master module...
 
-Files created:
-- .memory/modules/master/current.md
-- .memory/modules/master/decisions.md
-- .memory/modules/master/module.md
+File created:
+- .memory/modules/master.md
 
 Next steps:
 1. Review and customize the generated content
@@ -234,9 +230,7 @@ Modules: 6 active modules
 Creating master module...
 
 Created:
-- .memory/modules/master/current.md (project overview)
-- .memory/modules/master/decisions.md (key decisions)
-- .memory/modules/master/module.md (module definition)
+- .memory/modules/master.md (project overview and key decisions)
 
 Please review the generated content and add any missing details.
 

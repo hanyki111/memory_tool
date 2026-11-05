@@ -336,7 +336,7 @@ memory_tool automatically maintains `.claude/memory-context.md` with:
 Don't duplicate what's in modules:
 ```markdown
 **Authentication System:**
-See `.memory/modules/auth-system/current.md` for implementation details
+See `.memory/modules/auth-system.md` for implementation details
 ```
 
 ### 3. Use memory_tool Commands

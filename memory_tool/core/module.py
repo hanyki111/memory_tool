@@ -176,8 +176,8 @@ class ModuleManager:
         """Create a module.
 
         Without a kind, this writes a new document: frontmatter and a title, in
-        one file. ``kind``, ``nature`` and ``draft`` select a retiring template,
-        kept for one version, written to [Folder]/[Folder].md.
+        one file. ``kind``, ``nature`` and ``draft`` select a deprecated template,
+        written to [Folder]/[Folder].md.
 
         Args:
             name: Module name or path (e.g. 'memory-tool' or 'memory-tool/core-system')

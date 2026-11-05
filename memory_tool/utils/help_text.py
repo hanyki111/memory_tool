@@ -332,44 +332,41 @@ Examples:
             "en": """Manage knowledge modules and their connections.
 
 Modules are the spatial organization of your knowledge, complementing
-the timeline's temporal organization. Each module contains:
-  - current.md: Current state and ongoing work
-  - decisions.md: Important decisions and rationale
-  - archive/: Historical records
+the timeline's temporal organization. A module is one document, holding
+frontmatter and a title until you write in it.
 
 Subcommands:
-  list      - List all modules
-  show      - Display module details
-  create    - Create new module
-  edit      - Edit module files
-  connect   - Create connections between modules
+  list           - List all modules
+  tree           - Show modules as a tree
+  create         - Create a document
+  guide          - Print a writing guide
+  audit          - List split and merge candidates
+  suggest-links  - Suggest related documents
 
 Examples:
     mmodule list                           # List all modules
-    mmodule show projects/memory-tool      # Show module details
-    mmodule create projects/new-feature    # Create module
-    mmodule edit projects/memory-tool --current  # Edit current.md
+    mmodule create "new-feature"           # Create a document
+    mmodule create "topic" --type 참고     # Create with a type
+    mmodule guide 참고                     # Writing guide for a type
 """,
             "ko": """지식 모듈과 연결을 관리합니다.
 
 모듈은 지식의 공간적 조직으로, 타임라인의 시간적 조직을 보완합니다.
-각 모듈에는 다음이 포함됩니다:
-  - current.md: 현재 상태와 진행 중인 작업
-  - decisions.md: 중요한 결정 사항과 근거
-  - archive/: 과거 기록
+모듈은 곧 문서 하나이며, 직접 쓰기 전에는 frontmatter와 제목만 있습니다.
 
 하위 명령어:
-  list      - 모든 모듈 나열
-  show      - 모듈 상세 정보 표시
-  create    - 새 모듈 생성
-  edit      - 모듈 파일 편집
-  connect   - 모듈 간 연결 생성
+  list           - 모든 모듈 나열
+  tree           - 모듈 트리 보기
+  create         - 문서 만들기
+  guide          - 작성 가이드 출력
+  audit          - 분리와 병합 후보 보기
+  suggest-links  - 관련 문서 제안
 
 예시:
     mmodule list                           # 모든 모듈 나열
-    mmodule show projects/memory-tool      # 모듈 상세 정보 보기
-    mmodule create projects/new-feature    # 모듈 생성
-    mmodule edit projects/memory-tool --current  # current.md 편집
+    mmodule create "new-feature"           # 문서 만들기
+    mmodule create "topic" --type 참고     # 종류를 지정하여 만들기
+    mmodule guide 참고                     # 종류별 작성 가이드
 """,
         },
     },

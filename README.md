@@ -237,9 +237,9 @@ mmodule suggest-links "asyncio" --ai # 내용을 읽고 관련 문서 제안
 
 모두 제안만 하며 문서를 바꾸지 않습니다.
 
-### 제거 예정 기능
+### 지원 중단 예정 기능
 
-`--kind`, `--nature`, `--draft`, `grow`, `--part`, `merge-templates`, `modules.default_kind`, `from-text --structure`, `ai-organize`, `suggest-ai`는 경고와 함께 계속 작동하며 다음 버전에서 제거됩니다. 이 기능으로 만든 문서는 계속 읽을 수 있습니다.
+`--kind`, `--nature`, `--draft`, `grow`, `--part`, `merge-templates`, `modules.default_kind`, `from-text --structure`, `ai-organize`, `suggest-ai`는 경고와 함께 계속 작동하며 이후 버전에서 제거될 수 있습니다. 이 기능으로 만든 문서는 계속 읽을 수 있습니다.
 
 ---
 
@@ -1239,10 +1239,10 @@ your-project/
 │   ├── timeline/daily/          # 시간순 기록
 │   │   └── YYYY-MM/DD.md
 │   ├── modules/                 # 주제별 정리
-│   │   └── module-name/
-│   │       ├── current.md
-│   │       ├── decisions.md
-│   │       └── ...
+│   │   ├── topic.md             # 문서 하나
+│   │   └── subject/             # 하위 문서가 있는 주제
+│   │       ├── subject.md
+│   │       └── child.md
 │   ├── concepts/                # 개념 문서
 │   └── config.yaml              # 설정
 │

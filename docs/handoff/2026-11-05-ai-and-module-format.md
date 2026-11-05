@@ -2,7 +2,7 @@
 
 - 작성일: 2026-11-05
 - 출처: `memory_notion` 저장소에서 진행한 노트 체계 점검 세션
-- 상태: 6절의 1.2.0 작업(1~7단계)을 `feature/module-format-and-ai` 브랜치에 구현했습니다(2026-11-05). 병합과 1.3.0은 사용자 결정을 기다립니다.
+- 상태: 6절의 1.2.0 작업과 예전 문서 정리를 `feature/module-format-and-ai` 브랜치에 구현했습니다(2026-11-05). 다음 논의는 5절 4번(리뷰)이며, 새 세션에서 시작합니다.
 
 > 이 문서와 테스트 데이터에 실제 업무 노트를 넣지 마십시오. `memory_notion`의 타임라인에는 회사 업무 내용이 있습니다. 회귀 테스트는 합성 데이터로 작성합니다.
 
@@ -39,7 +39,7 @@
 12. **작성 지원:** 종류별 AI 가이드(질문과 점검 항목)를 두고 `mmodule guide <종류>`와 `mt-write` 스킬로 전달합니다. CLI에 대화 화면을 만들지 않습니다. 임시 기본 동작은 질문, 작성 후 지적, 막힐 때 개요, 요청 시 대신 작성의 순서입니다.
 13. **코드 프로젝트:** 문서 종류가 아니라 지식 베이스가 놓인 장소와 코드 연결로 봅니다. `--project`를 만들지 않으며, 코드 연결은 어떤 문서든 `sources`에 적을 수 있습니다. 기존 `Related Files`도 계속 읽습니다.
 14. **현황:** 별도의 종류나 문서로 두지 않습니다. 코드 작업을 재개할 때는 타임라인과 Git을 읽고, Goal Loop가 있으면 함께 읽습니다. Goal Loop는 별도의 프로그램이므로 도구와 안내문이 그 존재를 전제하면 안 됩니다. 계속 변하는 상황을 추적하는 문서는 `참고`와 `stale_after`로 처리합니다.
-15. **기존 구조:** Kind, Nature, `grow`, `--part`, `--draft`, 번들 템플릿은 호환 기간을 거쳐 제거합니다. 쓰기 기능은 경고와 함께 한 버전 유지하고, 기존 문서를 읽는 기능은 제거하지 않습니다.
+15. **기존 구조:** Kind, Nature, `grow`, `--part`, `--draft`, 번들 템플릿은 호환 기간을 거쳐 제거합니다. 다른 사용자를 위해 쓰기 기능을 경고와 함께 당분간 유지합니다. 제거 시기는 정하지 않았으며, 이후에 제거할 수 있습니다. 기존 문서를 읽는 기능은 제거하지 않습니다.
 16. **`PLAN.md`:** `mplan module`과 함께 호환 기간 없이 제거합니다. `mplan`의 나머지 기능과 `PLAN-*.md` 처리는 유지합니다.
 17. **하위 문서:** 도구로 하위 문서를 만들면 `topic.md`를 `topic/topic.md`로 옮기고, 하위 문서는 `topic/child.md`로 만듭니다. 상위 문서의 내용은 건드리지 않습니다. 상위 문서가 없는 폴더와, Obsidian에서 직접 만든 `topic.md`, `topic/child.md` 형태도 정상으로 처리합니다.
 18. **AI 명령:** `ai-organize`를 `mmodule audit`으로 바꾸고, 이동, 계층, 네임스페이스 제안은 버립니다. 분리와 병합 후보 계산은 리뷰의 입력으로 재사용합니다. `suggest-ai`는 `suggest-links --ai`로 합칩니다. 모든 기능은 제안만 하며, 문서는 승인 후에 바꿉니다.
@@ -151,9 +151,9 @@ sources:
    - 플러그인의 생성 화면을 `--type` 기준으로 바꾸고, `grow` 버튼과 명령을 제거합니다. CLI와 함께 1.2.0으로 올립니다.
    - `mhelp`, `README.md`, `guidelines.md`, `MODULE-ORGANIZATION.md`와 번들 사본을 새 기준으로 고칩니다. 코드 재개 시 타임라인과 Git을 읽고, Goal Loop가 있으면 함께 읽으라는 안내도 여기에 넣습니다.
 
-**버전 1.3.0 (모든 기기의 플러그인을 1.2.0으로 바꾼 뒤)**
+**호환 기능의 제거 (시기 미정)**
 
-8. 호환 기능을 제거합니다. 대상은 `--kind`, `--nature`, `--draft`, `grow`, `--part`, `merge-templates`, `modules.default_kind`, `ai-organize`, `suggest-ai`, `from-text --structure`, `module_templates.py`, 번들 템플릿과 그 테스트입니다. `archiver.py:474`의 `plan` 판별은 기존 문서를 읽기 위해 유지합니다.
+8. 다른 사용자를 위해 당분간 유지합니다. 제거하기로 정하면 대상은 `--kind`, `--nature`, `--draft`, `grow`, `--part`, `merge-templates`, `modules.default_kind`, `ai-organize`, `suggest-ai`, `from-text --structure`, `module_templates.py`, 번들 템플릿과 그 테스트입니다. `archiver.py:474`의 `plan` 판별은 기존 문서를 읽기 위해 유지합니다.
 
 **1.2.0 이후에 이어서 진행할 작업**
 
@@ -169,7 +169,9 @@ sources:
 - `memory_agent.py:498`의 계획 경로는 오류가 아닙니다. `daily_plan`이 실제로 `DD.md`로 저장합니다. 3절의 표는 이 부분을 잘못 짚었습니다.
 - `mcontext -i`(`commands/context.py`)는 `current.md`가 있는 모듈만 처리하고 `interface.md`를 별도 파일로 만듭니다. 단일 문서에서는 동작하지 않으며, 단순히 고치면 단일 문서 옆에 예전 파일이 생기므로 존치 여부부터 정해야 합니다.
 - `summary/context.py`의 최근 결정 수집은 최상위 `decisions.md`만 읽습니다. 요약의 참고 맥락이 비어 있을 뿐 오류는 나지 않습니다. 작은 결정이 타임라인으로 옮겨졌으므로 리뷰 설계와 함께 다룹니다.
-- 예전 구조를 설명하는 문서가 남아 있습니다: `docs/USER_GUIDE.md`, `docs/FAQ.md`, `docs/QUICKSTART.md`, `docs/CLAUDE_SETUP.md`, `memory_tool/data/USAGE.md`, `memory_tool/templates/docs/USAGE.md`, `memory_tool/utils/tutorial.py`, `memory_tool/utils/help_text.py`, 두 발행 스킬, 저장소의 `CLAUDE.md`.
+- `README.md`의 Notion 동기화 구조도와 `docs/USER_GUIDE.md`의 `marchive` 예시는 `current.md`, `decisions.md`를 그대로 보여 줍니다. `notion/` 코드와 `marchive`가 그 파일을 실제로 다루므로 고치지 않았습니다.
+- `CLAUDE.md`와 `.claude/guidelines.md`는 Git 추적 대상이 아닙니다. 이 저장소에서 고친 내용은 로컬에만 있습니다.
+- 호환 기간 없이 바뀐 동작이 있습니다. `auto-tag`와 `mplan module`은 제거되었고, 옵션 없는 `mmodule create`는 예전 범용 골격 대신 새 형식을 만들며, `from-text`의 결과 형식도 바뀌었습니다. 플러그인 1.2.0에는 `grow` 메뉴가 없습니다. 다른 사용자를 위해 되살릴지는 미결입니다.
 
 **별도로 진행할 작업**
 

@@ -916,11 +916,11 @@ audit lists split and merge candidates without calling an LLM. suggest-links
 suggests related documents by path and links, and with --ai by reading their
 content. Neither changes any document.
 
-Being retired
--------------
+Deprecated
+----------
 --kind, --nature, --draft, grow, --part, merge-templates, modules.default_kind,
 from-text --structure, ai-organize and suggest-ai still work with a warning, and
-will be removed in the next version. Documents they created stay readable.
+may be removed in a later version. Documents they created stay readable.
             """,
             "examples": [
                 "mmodule list               # List all modules",
@@ -983,11 +983,11 @@ audit은 LLM 없이 분리와 병합 후보를 보여 줍니다. suggest-links�
 보고 관련 문서를 제안하며, --ai를 붙이면 내용을 읽고 제안합니다. 둘 다 문서를
 바꾸지 않습니다.
 
-제거 예정
----------
+지원 중단 예정
+--------------
 --kind, --nature, --draft, grow, --part, merge-templates, modules.default_kind,
-from-text --structure, ai-organize, suggest-ai는 경고와 함께 계속 작동하며, 다음
-버전에서 제거됩니다. 이 기능으로 만든 문서는 계속 읽을 수 있습니다.
+from-text --structure, ai-organize, suggest-ai는 경고와 함께 계속 작동하며, 이후
+버전에서 제거될 수 있습니다. 이 기능으로 만든 문서는 계속 읽을 수 있습니다.
             """,
             "examples": [
                 "mmodule list               # 모든 모듈 나열",

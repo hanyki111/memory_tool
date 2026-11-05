@@ -278,11 +278,11 @@ Knowledge organizes by topic:
 - ❌ "Just in case"
 
 **Guidelines:**
-- current.md > 300 lines → Consider split
-- >20 decisions → Consider split
-- >3 distinct topics → Consider split
+- The sections answer different questions → Consider split
+- `description` no longer fits one sentence → Consider split
+- `mmodule audit` lists candidates
 
-**Full guide:** `.memory/docs/MODULE-ORGANIZATION-PRINCIPLES.md`
+**Full guide:** `.memory/docs/MODULE-ORGANIZATION.md`
 
 ---
 
@@ -576,7 +576,7 @@ ms --all "query"
 
 **Option 1: Wiki Links (Recommended)**
 ```markdown
-# In project-a/.memory/modules/auth/current.md
+# In project-a/.memory/modules/auth.md
 Similar to [[../../project-b/modules/auth]]
 ```
 

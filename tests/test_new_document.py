@@ -240,7 +240,7 @@ def test_retiring_options_still_work_and_warn(project, arguments):
     result = runner.invoke(app, arguments)
 
     assert result.exit_code == 0, result.output
-    assert "will be removed" in result.output
+    assert "deprecated" in result.output
     assert "**Kind:**" in (
         project / ".memory" / "modules" / "old" / "old.md"
     ).read_text(encoding="utf-8")
@@ -252,13 +252,13 @@ def test_grow_still_works_and_warns(project):
     result = runner.invoke(app, ["module", "grow", "old"])
 
     assert result.exit_code == 0, result.output
-    assert "will be removed" in result.output
+    assert "deprecated" in result.output
 
 
 def test_a_plain_create_gives_no_warning(project):
     result = runner.invoke(app, ["module", "create", "topic"])
 
-    assert "will be removed" not in result.output
+    assert "deprecated" not in result.output
 
 
 def test_check_links_names_the_broken_target(project, modules):
