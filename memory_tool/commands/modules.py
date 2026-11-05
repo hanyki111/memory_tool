@@ -15,6 +15,12 @@ from memory_tool.llm.client import LLMClient
 from memory_tool.utils.paths import display_path, get_base_path
 
 
+def _warn_retiring(what: str, instead: Optional[str] = None) -> None:
+    """Say that a template feature still works but is on its way out."""
+    suffix = f" Use {instead} instead." if instead else ""
+    console.print(f"[yellow]{what} will be removed in the next version.{suffix}[/yellow]")
+
+
 def _suggest_links_with_ai(name: str, limit: int) -> None:
     """Suggest related modules by having an LLM read their content.
 
@@ -90,6 +96,8 @@ def module(
     remove: bool = typer.Option(False, "--remove", help="Delete the merged-from directories (for merge-templates)"),
     lang: Optional[str] = typer.Option(None, "--lang", help="Output language for from-text: 'ko', 'en', 'auto'"),
     structure: Optional[str] = typer.Option(None, "--structure", "-s", help="Module structure type for from-text: 'feature' (software), 'topic' (learning/KB), 'auto'"),
+    doc_type: Optional[str] = typer.Option(None, "--type", help="Document type for create: 참고, 이해, 방법, 판단, or none. See 'mmodule guide'"),
+    generated_by: Optional[str] = typer.Option(None, "--by", help="For create: who writes the document, human:<id> or <producer>/<version>"),
     kind: Optional[str] = typer.Option(None, "--kind", "-k", help="Template kind for create: 'knowledge', 'implementation' or 'intent'"),
     nature: Optional[str] = typer.Option(None, "--nature", help="Body outline. knowledge: concept, reference, analysis, tracker, method | intent: idea, inquiry, plan"),
     draft: bool = typer.Option(False, "--draft", help="Create a seed document instead of the full skeleton; grow it later with 'mmodule grow'"),
@@ -125,15 +133,32 @@ def module(
             kind_opt = opt_str(kind)
             nature_opt = opt_str(nature)
 
+            legacy_template = bool(kind_opt or nature_opt or draft)
+            if legacy_template:
+                _warn_retiring("--kind, --nature and --draft", "--type")
+
+            moved = [] if legacy_template else manager.documents_moved_by_creating(name)
+
             console.print(f"[cyan]Creating module '{name}'...[/cyan]")
             module_path = manager.create(
                 name, description, tag_list,
                 kind=kind_opt, nature=nature_opt, draft=draft,
+                doc_type=opt_str(doc_type), generated_by=opt_str(generated_by),
             )
 
             rel_path = display_path(module_path)
-            console.print(f"\n[green]OK[/green] Single-file module created: {name}")
+            console.print(f"\n[green]OK[/green] Module created: {name}")
             console.print(f"[dim]File location: {rel_path}[/dim]")
+
+            for current, target in moved:
+                console.print(
+                    f"[yellow]Moved[/yellow] {display_path(current)} -> {display_path(target)}"
+                )
+            if moved:
+                console.print(
+                    "[dim]Links by name still work. To fix links that spell out "
+                    "the old path: mmodule relink --dry-run[/dim]"
+                )
 
             if kind_opt or nature_opt:
                 from memory_tool.core.module_templates import kind_for_nature
@@ -152,11 +177,8 @@ def module(
                     "[dim]Seed document written. Fill the ladder at the bottom, "
                     f"then run 'mmodule grow \"{name}\"' for the rest.[/dim]"
                 )
-            else:
-                console.print(
-                    "[dim]Tip: --kind knowledge|implementation|intent applies "
-                    "the MOP templates. See 'mhelp module'.[/dim]"
-                )
+            elif not legacy_template:
+                console.print("[dim]For help writing it: mmodule guide[/dim]")
 
             try:
                 from memory_tool.utils.suggestion_helper import check_and_suggest_after_command
@@ -166,6 +188,8 @@ def module(
                 pass
 
         elif action.lower() == "grow":
+            _warn_retiring("grow", "writing in the document directly (see 'mmodule guide')")
+
             if not name:
                 console.print("[red]ERROR[/red] Module name is required for grow")
                 console.print("[dim]Usage: module grow <name>[/dim]")
@@ -301,6 +325,8 @@ def module(
                     )
 
         elif action.lower() == "merge-templates":
+            _warn_retiring("merge-templates")
+
             # `migrate` consolidates a *module*'s files; template sets are a
             # different shape (they carry a natures menu that is never emitted)
             # and live outside modules/, so they need their own pass.
@@ -551,7 +577,7 @@ def module(
                 for source, targets in sorted(broken.items()):
                     console.print(f"  {source}:")
                     for target in targets:
-                        console.print(f"    [red]x[/red] [[{target}]] -> module not found")
+                        console.print(f"    [red]x[/red] \\[\\[{target}]] -> module not found")
                 console.print()
             else:
                 console.print("[green]OK[/green] No broken links found\n")

@@ -1,12 +1,74 @@
 """Module management functionality."""
 
+import getpass
 import re
 import shutil
 from pathlib import Path
-from typing import Optional, List, Dict, Sequence
+from typing import Optional, List, Dict, Sequence, Tuple
 from datetime import datetime
+import yaml
+
 from memory_tool.utils.module_docs import discover_module_paths, resolve_module_document
 from memory_tool.utils.paths import base_dir_for_root, get_project_root
+
+
+def _yaml_value(value: str) -> str:
+    """Quote a frontmatter value only when plain YAML would misread it."""
+    if not value:
+        return ""
+    dumped = yaml.safe_dump(value, allow_unicode=True, default_flow_style=True)
+    return dumped.split("\n")[0].strip()
+
+
+def default_author() -> str:
+    """Name the person writing a new document, as ``human:<id>``."""
+    try:
+        return f"human:{getpass.getuser()}"
+    except Exception:
+        return "human:unknown"
+
+
+def render_new_document(
+    title: str,
+    doc_type: Optional[str] = None,
+    description: str = "",
+    tags: Optional[Sequence[str]] = None,
+    generated_by: Optional[str] = None,
+) -> str:
+    """Build a new document: frontmatter and a title.
+
+    Empty fields stay visible so they can be filled in later without having to
+    remember their names. There are no required sections and no instructions in
+    the document: it is the writer's text, and guidance lives in ``mmodule guide``.
+
+    Args:
+        title: Document title
+        doc_type: Document type
+        description: One sentence on what the document answers
+        tags: Tags
+        generated_by: Who writes it. Defaults to the current user.
+
+    Returns:
+        The document's text.
+    """
+    tag_values = ", ".join(_yaml_value(tag) for tag in (tags or []))
+    author = generated_by or default_author()
+    at = datetime.now().astimezone().isoformat(timespec="seconds")
+
+    lines = [
+        "---",
+        f"type: {_yaml_value(doc_type or '')}".rstrip(),
+        f"description: {_yaml_value(description or '')}".rstrip(),
+        f"tags: [{tag_values}]",
+        "generated:",
+        f"  by: {_yaml_value(author)}",
+        f"  at: {at}",
+        "---",
+        "",
+        f"# {title}",
+        "",
+    ]
+    return "\n".join(lines)
 
 
 class ModuleError(Exception):
@@ -108,8 +170,14 @@ class ModuleManager:
         kind: Optional[str] = None,
         nature: Optional[str] = None,
         draft: bool = False,
+        doc_type: Optional[str] = None,
+        generated_by: Optional[str] = None,
     ) -> Path:
-        """Create new single-file module structure at [Folder]/[Folder].md.
+        """Create a module.
+
+        Without a kind, this writes a new document: frontmatter and a title, in
+        one file. ``kind``, ``nature`` and ``draft`` select a retiring template,
+        kept for one version, written to [Folder]/[Folder].md.
 
         Args:
             name: Module name or path (e.g. 'memory-tool' or 'memory-tool/core-system')
@@ -142,9 +210,6 @@ class ModuleManager:
         if self.module_exists(name):
             raise ModuleError(f"Module already exists: {name}")
 
-        file_path = self.get_module_file_path(name)
-        file_path.parent.mkdir(parents=True, exist_ok=True)
-
         resolved_kind = self._resolve_kind(kind, nature)
 
         if draft and resolved_kind is None:
@@ -154,85 +219,90 @@ class ModuleManager:
                 "modules.default_kind."
             )
 
-        if resolved_kind is not None:
-            return self._create_from_template(
-                file_path=file_path,
-                name=name,
-                kind=resolved_kind,
-                nature=nature,
-                description=description,
-                tags=tags,
-                draft=draft,
-            )
+        if resolved_kind is None:
+            return self._create_document(name, doc_type, description, tags, generated_by)
 
-        timestamp = datetime.now().strftime("%Y-%m-%d")
-        tags_str = ", ".join(tags) if tags else ""
-        desc_str = description if description else "TODO: Describe the purpose of this module"
+        file_path = self.get_module_file_path(name)
+        file_path.parent.mkdir(parents=True, exist_ok=True)
 
-        content = f"""# Module: {name}
+        return self._create_from_template(
+            file_path=file_path,
+            name=name,
+            kind=resolved_kind,
+            nature=nature,
+            description=description,
+            tags=tags,
+            draft=draft,
+        )
 
-**Created:** {timestamp}
-**Tags:** {tags_str}
+    def documents_moved_by_creating(self, name: str) -> List[Tuple[Path, Path]]:
+        """List the documents that move when a module is created at ``name``.
 
-## Overview
+        A document is one file until it gets children. It then moves into a
+        folder of its own name, so that renaming or archiving handles the whole
+        subject as one folder. Its file name stays the same, so ``[[topic]]``
+        links keep working.
 
-### Purpose
-{desc_str}
+        Args:
+            name: The module about to be created
 
-### Scope
-TODO: Define what is included and excluded from this module
+        Returns:
+            (current path, new path) pairs, outermost parent first.
+        """
+        moves = []
+        parts = Path(name).parts
 
-### Architecture
-TODO: Describe high-level architecture and design decisions
+        for depth in range(1, len(parts)):
+            ancestor = Path(*parts[:depth])
+            flat = self.modules_path / f"{ancestor.as_posix()}.md"
+            encapsulated = self.get_module_file_path(ancestor.as_posix())
 
-## Current Status
+            if flat.is_file() and not encapsulated.exists():
+                moves.append((flat, encapsulated))
 
-### In Progress
-- [ ] TODO: Add current tasks
+        return moves
 
-### Completed
-- [x] Module created
+    def _create_document(
+        self,
+        name: str,
+        doc_type: Optional[str],
+        description: str,
+        tags: Optional[Sequence[str]],
+        generated_by: Optional[str],
+    ) -> Path:
+        """Write a new document: frontmatter and a title, nothing else.
 
-### Blocked
-None
+        Args:
+            name: Module name or path
+            doc_type: Document type. Free text; see ``mmodule guide``.
+            description: One sentence on what the document answers
+            tags: Tags
+            generated_by: Who writes it, ``human:<id>`` or ``<producer>/<version>``
 
-### Next Steps
-1. TODO: Define next actions
+        Returns:
+            Path to the new document.
+        """
+        for current, target in self.documents_moved_by_creating(name):
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(current), str(target))
 
-## Decisions
+        folder = self.modules_path / name
+        if folder.is_dir():
+            path = self.get_module_file_path(name)
+        else:
+            path = self.modules_path / f"{name}.md"
 
-### Decision 1: Module Creation ({timestamp})
-**Context:** Initial module setup
-**Decision:** Created {name} module
-**Rationale:** {desc_str}
-**Status:** Accepted
-
-## Dependencies
-
-### Internal Dependencies
-None yet
-
-### External Dependencies
-None yet
-
-### Dependents
-None yet
-
-## Interface
-
-### Public API
-TODO: Document public interfaces, commands, or APIs
-
-### Data Structures
-TODO: Document key data structures
-"""
+        path.parent.mkdir(parents=True, exist_ok=True)
 
         try:
-            file_path.write_text(content, encoding="utf-8")
-        except Exception as e:
+            path.write_text(
+                render_new_document(Path(name).name, doc_type, description, tags, generated_by),
+                encoding="utf-8",
+            )
+        except OSError as e:
             raise ModuleError(f"Failed to create module file: {e}")
 
-        return file_path
+        return path
 
     def _resolve_kind(self, kind: Optional[str], nature: Optional[str]) -> Optional[str]:
         """Decide which template kind to use.
@@ -688,23 +758,33 @@ TODO: Document key data structures
 
         file_path = self.get_module_file_path(name)
         dir_path = self.modules_path / name
+        flat_path = self.modules_path / f"{name}.md"
 
-        if not file_path.exists() and not dir_path.exists():
+        if not dir_path.is_dir() and not flat_path.is_file():
             raise ModuleError(f"Module not found: {name}")
 
         if self.is_archived(name):
             raise ModuleError(f"Module already archived: {name}")
 
         self.archive_path.mkdir(parents=True, exist_ok=True)
-        import shutil
 
         target_archive = self.archive_path / f"{name}.md"
         target_archive.parent.mkdir(parents=True, exist_ok=True)
 
-        if file_path.exists():
+        if flat_path.is_file():
+            shutil.move(str(flat_path), str(target_archive))
+        elif file_path.is_file() and sum(1 for _ in dir_path.iterdir()) == 1:
+            # The folder holds nothing else, so nothing is left behind.
             shutil.move(str(file_path), str(target_archive))
-        elif dir_path.exists():
-            shutil.move(str(dir_path), str(self.archive_path / name))
+            dir_path.rmdir()
+
+        # What remains is a subject with children, or a legacy module: it moves
+        # as a whole, because the children belong to it.
+        if dir_path.is_dir():
+            target_folder = self.archive_path / name
+            shutil.move(str(dir_path), str(target_folder))
+            if not target_archive.exists():
+                target_archive = target_folder
 
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
         index_path = self.archive_path / "_index.md"
@@ -741,18 +821,18 @@ TODO: Document key data structures
                 f"Active module with name '{name}' already exists. Archive or rename it first."
             )
 
-        import shutil
-        file_path = self.get_module_file_path(name)
-        file_path.parent.mkdir(parents=True, exist_ok=True)
+        restored = self.modules_path / name
+        restored.parent.mkdir(parents=True, exist_ok=True)
+        result = restored
 
-        if archive_file.exists():
-            shutil.move(str(archive_file), str(file_path))
-            res = file_path
-        else:
-            shutil.move(str(archive_dir), str(self.modules_path / name))
-            res = self.modules_path / name
+        if archive_dir.is_dir():
+            shutil.move(str(archive_dir), str(restored))
 
-        return res
+        if archive_file.is_file():
+            result = self.modules_path / f"{name}.md"
+            shutil.move(str(archive_file), str(result))
+
+        return result
 
     def rename(self, old_name: str, new_name: str) -> Path:
         """Rename a module."""

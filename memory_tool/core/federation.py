@@ -14,6 +14,7 @@ from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 
 from memory_tool.utils.frontmatter import Frontmatter
+from memory_tool.utils.module_docs import is_meta_document
 
 
 @dataclass
@@ -231,15 +232,28 @@ class Publisher:
 
         # Direct path check
         direct_path = self.modules_path / module_name
-        if direct_path.exists() and direct_path.is_dir():
+        if direct_path.is_dir():
             return direct_path
 
+        direct_file = self.modules_path / f"{module_name}.md"
+        if direct_file.is_file():
+            return direct_file
+
         # Search recursively
-        for module_dir in self.modules_path.rglob("*"):
-            if module_dir.is_dir() and module_dir.name == module_name:
-                return module_dir
+        for candidate in self.modules_path.rglob("*"):
+            if candidate.is_dir() and candidate.name == module_name:
+                return candidate
+            if candidate.is_file() and candidate.name == f"{module_name}.md":
+                return candidate
 
         return None
+
+    @staticmethod
+    def _module_files(module_path: Path) -> List[Path]:
+        """List the files a module publishes: one document, or a whole folder."""
+        if module_path.is_file():
+            return [module_path]
+        return [f for f in sorted(module_path.rglob("*.md")) if not is_meta_document(f.name)]
 
     def _get_module_key(self, module_path: Path) -> str:
         """Get module key from path.
@@ -254,7 +268,9 @@ class Publisher:
             Module key with project prefix (e.g., "memory-tool/master")
         """
         rel_path = module_path.relative_to(self.modules_path)
-        local_key = str(rel_path).replace("\\", "/")
+        if module_path.is_file():
+            rel_path = rel_path.with_suffix("")
+        local_key = rel_path.as_posix()
         # Add project name prefix for global uniqueness in KB registry
         return f"{self.project_name}/{local_key}"
 
@@ -270,7 +286,7 @@ class Publisher:
         import hashlib
 
         hasher = hashlib.sha256()
-        for file_path in sorted(module_path.rglob("*.md")):
+        for file_path in self._module_files(module_path):
             content = file_path.read_text(encoding="utf-8")
             # Hash body only (exclude frontmatter)
             _, body = Frontmatter.parse(content)
@@ -330,7 +346,8 @@ class Publisher:
             version = existing.version + 1
 
         # Determine KB path
-        kb_module_path = f"modules/{category}/{self.project_name}/{module_path.name}"
+        module_folder_name = module_path.stem if module_path.is_file() else module_path.name
+        kb_module_path = f"modules/{category}/{self.project_name}/{module_folder_name}"
         kb_dest = self.kb_path / kb_module_path
 
         if dry_run:
@@ -339,7 +356,7 @@ class Publisher:
             result["message"] = f"Would publish '{module_key}' to '{kb_module_path}'"
             result["source_hash"] = source_hash
             result["version"] = version
-            result["files_to_publish"] = [str(f.name) for f in module_path.rglob("*.md")]
+            result["files_to_publish"] = [f.name for f in self._module_files(module_path)]
             return result
 
         # Ensure registry exists
@@ -356,8 +373,9 @@ class Publisher:
         published_at = datetime.now().isoformat()
         files_published = []
 
-        for file_path in module_path.rglob("*.md"):
-            rel_file = file_path.relative_to(module_path)
+        for file_path in self._module_files(module_path):
+            # A single document arrives in its own folder, as a folder module does.
+            rel_file = Path(file_path.name) if module_path.is_file() else file_path.relative_to(module_path)
             dest_file = kb_dest / rel_file
             dest_file.parent.mkdir(parents=True, exist_ok=True)
 

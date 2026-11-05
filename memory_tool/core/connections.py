@@ -4,11 +4,15 @@ Parses wiki-style [[module-name]] links from Markdown files
 and builds a connection graph stored in SQLite.
 """
 
+import os
 import re
 import sqlite3
 from pathlib import Path
 from typing import List, Dict, Set, Tuple, Optional
 from datetime import datetime
+from urllib.parse import unquote
+
+from memory_tool.utils.module_docs import module_documents
 from memory_tool.utils.paths import get_base_path
 
 
@@ -62,6 +66,9 @@ class Connection:
 class ConnectionParser:
     """Parse wiki-style links from Markdown files."""
 
+    #: Matches [text](path.md) and [text](path.md#section), but not images.
+    MARKDOWN_LINK_PATTERN = re.compile(r'(?<!!)\[[^\]]*\]\(([^()\s#]+\.md)(?:#[^()\s]*)?\)')
+
     #: Matches [[target]], [[target|alias]], [[target#section]], [[target^block]].
     #:
     #: The target is "anything that is not structural punctuation" rather than an
@@ -81,12 +88,22 @@ class ConnectionParser:
     )
 
     @classmethod
-    def parse_file(cls, file_path: Path, module_path: str) -> List[Connection]:
+    def parse_file(
+        cls,
+        file_path: Path,
+        module_path: str,
+        modules_root: Optional[Path] = None,
+    ) -> List[Connection]:
         """Parse connections from a Markdown file.
+
+        Wiki links are always read. Markdown links to other documents are read
+        when ``modules_root`` is given, since they are relative to the file and
+        need it to become a module name.
 
         Args:
             file_path: Path to Markdown file
             module_path: Path of the module containing this file (e.g., 'projects/website')
+            modules_root: The modules directory
 
         Returns:
             List of connections found in the file
@@ -101,20 +118,21 @@ class ConnectionParser:
             lines = content.split('\n')
 
             for line_num, line in enumerate(lines, 1):
-                # Find all [[module-name]] patterns
-                matches = cls.LINK_PATTERN.finditer(line)
+                targets = [match.group(1) for match in cls.LINK_PATTERN.finditer(line)]
 
-                for match in matches:
-                    target_module = match.group(1)
+                if modules_root is not None:
+                    for match in cls.MARKDOWN_LINK_PATTERN.finditer(line):
+                        target = cls._markdown_target(match.group(1), file_path, modules_root)
+                        if target and target != module_path:
+                            targets.append(target)
 
-                    # Create connection
-                    conn = Connection(
+                for target_module in targets:
+                    connections.append(Connection(
                         source=module_path,
                         target=target_module,
                         source_file=str(file_path),
                         line_number=line_num,
-                    )
-                    connections.append(conn)
+                    ))
 
         except Exception as e:
             # Skip files that can't be read
@@ -122,30 +140,48 @@ class ConnectionParser:
 
         return connections
 
+    @staticmethod
+    def _markdown_target(link: str, file_path: Path, modules_root: Path) -> Optional[str]:
+        """Turn a relative Markdown link into a module name.
+
+        Returns:
+            The module name, or None for a link outside the modules directory.
+        """
+        if "://" in link or link.startswith(("/", "mailto:")):
+            return None
+
+        resolved = os.path.normpath(os.path.join(file_path.parent, unquote(link)))
+        try:
+            relative = Path(resolved).relative_to(os.path.normpath(modules_root))
+        except ValueError:
+            return None
+
+        if relative.stem == relative.parent.name:
+            return relative.parent.as_posix()
+        return relative.with_suffix("").as_posix()
+
     @classmethod
     def parse_module(cls, module_dir: Path, module_path: str) -> List[Connection]:
-        """Parse all connections from a module's Markdown files.
+        """Parse all connections from a module's own documents.
+
+        Children in the same folder are modules themselves, so their links are
+        theirs and are not counted here.
 
         Args:
-            module_dir: Path to module directory
+            module_dir: The module's folder, or its path without a suffix
             module_path: Module path (e.g., 'projects/website')
 
         Returns:
             List of all connections in the module
         """
-        if not module_dir.exists() or not module_dir.is_dir():
-            return []
+        modules_root = module_dir
+        for _ in Path(module_path).parts:
+            modules_root = modules_root.parent
 
         all_connections = []
 
-        # Parse all .md files in module
-        for md_file in module_dir.glob("*.md"):
-            # Skip archive directory
-            if "archive" in md_file.parts:
-                continue
-
-            connections = cls.parse_file(md_file, module_path)
-            all_connections.extend(connections)
+        for document in module_documents(module_dir):
+            all_connections.extend(cls.parse_file(document, module_path, modules_root))
 
         return all_connections
 
