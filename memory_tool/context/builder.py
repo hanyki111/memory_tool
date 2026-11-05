@@ -579,6 +579,17 @@ class ContextBuilder:
             lines.append("---")
             lines.append("")
 
+        # Review notice. Never let it stop the context from being built.
+        try:
+            from memory_tool.review.notice import review_notice
+
+            notice = review_notice(self.memory_path)
+        except Exception:
+            notice = None
+
+        if notice:
+            lines.extend(["## Review", "", notice, "", "---", ""])
+
         # Footer
         lines.append("## Usage")
         lines.append("")

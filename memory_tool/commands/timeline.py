@@ -10,6 +10,7 @@ import typer
 
 from memory_tool.commands.common import app, console, sanitize_output, opt_str, arg_str
 from memory_tool.core.timeline import (
+    ENTRY_PATTERN,
     Timeline,
     TimelineError,
     FutureTimeError,
@@ -20,6 +21,11 @@ from memory_tool.core.sort import TimelineSorter, SortError
 from memory_tool.context.builder import ContextBuilder
 from memory_tool.utils.config import Config
 from memory_tool.utils.paths import display_path, get_base_path
+
+
+def _is_first_entry(file_path: Path) -> bool:
+    """Tell whether a timeline file holds a single entry."""
+    return len(ENTRY_PATTERN.findall(file_path.read_text(encoding="utf-8"))) == 1
 
 
 @app.command(
@@ -107,6 +113,17 @@ def record(
                 console.print(f"[dim]-> {rel_context} updated[/dim]")
         except Exception as e:
             console.print(f"[yellow]Warning:[/yellow] Auto-update failed: {e}")
+
+        # Review notice, on the day's first entry only. It must never stop a record.
+        try:
+            if dt.date() == datetime.now().date() and _is_first_entry(file_path):
+                from memory_tool.review.notice import review_notice
+
+                notice = review_notice(get_base_path())
+                if notice:
+                    console.print(notice, markup=False, highlight=False)
+        except Exception:
+            pass
 
         # Document health suggestion
         try:
