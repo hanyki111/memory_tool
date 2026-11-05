@@ -1355,34 +1355,6 @@ AI-suggested connections for auth-system:
 
 ---
 
-### `module auto-tag` - Auto Tagging
-
-**Purpose:** Generate tags using AI (requires [llm])
-
-**Usage:**
-```bash
-python -m memory_tool module auto-tag [name]
-```
-
-**Example:**
-```bash
-python -m memory_tool module auto-tag auth-system
-```
-
-**Output:**
-```
-Generated tags for auth-system:
-  - security
-  - backend
-  - authentication
-  - jwt
-  - api
-
-Tags added to module.md
-```
-
----
-
 ### `module graph-history` - Version History
 
 **Purpose:** View graph evolution over time
@@ -2106,18 +2078,6 @@ mplan monthly add "Release v1.0"
 mplan monthly done "v1.0"
 ```
 
-#### Module Plan
-```bash
-# View module plan
-mplan module auth-system
-
-# Add to sprint
-mplan module auth-system add "JWT refresh rotation"
-
-# Complete task
-mplan module auth-system done "JWT refresh"
-```
-
 **Generated Structure:**
 ```
 .memory/plans/
@@ -2765,9 +2725,6 @@ msummary module auth-system
 
 # AI suggestions
 python -m memory_tool module suggest-ai auth-system
-
-# Auto-tag
-python -m memory_tool module auto-tag auth-system
 ```
 
 ### Option B: Ollama (Local)
@@ -2865,15 +2822,6 @@ python -m memory_tool module suggest-ai auth-system
 # - Rationale
 # - Confidence
 # - Suggested link type
-```
-
-#### 4. Auto-Tagging
-
-```bash
-python -m memory_tool module auto-tag auth-system
-
-# Output: AI-generated tags based on content
-# - Automatically added to module.md
 ```
 
 ### Cost Management (Anthropic)

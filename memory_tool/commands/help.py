@@ -1233,13 +1233,16 @@ Supports daily, weekly, and module summaries.
             """,
             "examples": [
                 "msummary                   # Summarize today",
-                "msummary --week            # Summarize this week",
+                "msummary week              # Summarize this week",
+                "msummary 2026-09-03        # Summarize one date",
+                "msummary 2026-09-01:2026-09-07  # Summarize a period",
                 "msummary --module myproj   # Summarize module",
             ],
             "options": [
-                ("--week", "Summarize this week"),
-                ("--module", "Summarize specific module"),
-                ("--days", "Number of days to summarize"),
+                ("SCOPE", "today (default), week, YYYY-MM-DD or YYYY-MM-DD:YYYY-MM-DD"),
+                ("--module, -m", "Summarize specific module"),
+                ("--decisions", "With --module, summarize only its decisions"),
+                ("--force, -f", "Ignore the saved summary"),
             ],
         },
         "ko": {
@@ -1251,13 +1254,16 @@ LLM을 사용하여 타임라인이나 모듈 내용의 요약을 생성합니�
             """,
             "examples": [
                 "msummary                   # 오늘 요약",
-                "msummary --week            # 이번 주 요약",
+                "msummary week              # 이번 주 요약",
+                "msummary 2026-09-03        # 특정 날짜 요약",
+                "msummary 2026-09-01:2026-09-07  # 특정 기간 요약",
                 "msummary --module myproj   # 모듈 요약",
             ],
             "options": [
-                ("--week", "이번 주 요약"),
-                ("--module", "특정 모듈 요약"),
-                ("--days", "요약할 일수"),
+                ("SCOPE", "today(기본값), week, YYYY-MM-DD, YYYY-MM-DD:YYYY-MM-DD"),
+                ("--module, -m", "특정 모듈 요약"),
+                ("--decisions", "--module과 함께 쓰면 결정 내용만 요약"),
+                ("--force, -f", "저장된 요약을 쓰지 않고 다시 요약"),
             ],
         },
     },
@@ -2346,7 +2352,7 @@ def _show_advanced_guide_en():
 
 [bold]msummary (Summarization):[/bold]
   msummary                    # Summarize today
-  msummary --week             # Weekly summary
+  msummary week               # Weekly summary
   msummary --module auth      # Module summary
 
 [bold]LLM Providers:[/bold]
@@ -2496,7 +2502,7 @@ def _show_advanced_guide_ko():
 
 [bold]msummary (요약):[/bold]
   msummary                    # 오늘 요약
-  msummary --week             # 주간 요약
+  msummary week               # 주간 요약
   msummary --module auth      # 모듈 요약
 
 [bold]LLM 제공자:[/bold]

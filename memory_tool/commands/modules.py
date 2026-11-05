@@ -7,6 +7,7 @@ from typing import List, Optional
 import typer
 
 from memory_tool.commands.common import (
+    print_llm_unavailable,
     app, console, opt_str, arg_str, resolve_module_name
 )
 from memory_tool.core.module import ModuleManager, ModuleError
@@ -16,7 +17,7 @@ from memory_tool.utils.paths import display_path, get_base_path
 
 @app.command()
 def module(
-    action: str = typer.Argument(..., help="Action: create, grow, list, tree, rename, relink, merge-templates, archive, unarchive, migrate, connections, graph, rebuild-graph, check-links, suggest-links, suggest-ai, ai-organize, auto-tag, graph-history, graph-diff, graph-snapshot, from-text"),
+    action: str = typer.Argument(..., help="Action: create, grow, list, tree, rename, relink, merge-templates, archive, unarchive, migrate, connections, graph, rebuild-graph, check-links, suggest-links, suggest-ai, ai-organize, graph-history, graph-diff, graph-snapshot, from-text"),
     name: str = typer.Argument(None, help="Module name or path (e.g., 'projects/website')"),
     description: str = typer.Option("", "--desc", "-d", help="Module description"),
     reason: str = typer.Option("", "--reason", "-r", help="Reason for archiving"),
@@ -567,9 +568,7 @@ def module(
                 sys.exit(1)
 
             if not LLMClient.check_availability():
-                console.print("[red]ERROR[/red] LLM not configured")
-                console.print("[dim]Set ANTHROPIC_API_KEY environment variable or configure Ollama[/dim]")
-                console.print("[dim]See config.yaml for LLM configuration[/dim]")
+                print_llm_unavailable(console)
                 sys.exit(1)
 
             from memory_tool.core.ai_suggester import AIConnectionSuggester
@@ -646,47 +645,6 @@ def module(
 
             except Exception as e:
                 console.print(f"[red]ERROR[/red] Analysis failed: {e}")
-                sys.exit(1)
-
-        elif action.lower() == "auto-tag":
-            if not name:
-                console.print("[red]ERROR[/red] Module name is required for auto-tag")
-                console.print("[dim]Usage: module auto-tag <name>[/dim]")
-                sys.exit(1)
-
-            if not LLMClient.check_availability():
-                console.print("[red]ERROR[/red] LLM not configured")
-                console.print("[dim]Set ANTHROPIC_API_KEY environment variable or configure Ollama[/dim]")
-                console.print("[dim]See config.yaml for LLM configuration[/dim]")
-                sys.exit(1)
-
-            from memory_tool.core.ai_suggester import AIConnectionSuggester
-
-            console.print(f"[cyan]Analyzing module content for tags:[/cyan] {name}\n")
-            console.print("[dim]Using LLM to generate relevant tags...[/dim]\n")
-
-            mod_manager = ModuleManager()
-            module_path = mod_manager.modules_path / name
-
-            if not module_path.exists():
-                console.print(f"[red]ERROR[/red] Module not found: {name}")
-                sys.exit(1)
-
-            suggester = AIConnectionSuggester()
-            try:
-                tag_suggestions = suggester.suggest_tags(module_path, max_tags=5)
-
-                if tag_suggestions:
-                    console.print(f"[green]Suggested tags ({len(tag_suggestions)}):[/green]\n")
-                    for tag in tag_suggestions:
-                        console.print(f"  • {tag}")
-                    console.print(f"\n[dim]Add these tags to your module's metadata or use them for organization.[/dim]")
-                else:
-                    console.print("[dim]No tags suggested by AI.[/dim]")
-                    console.print("[dim]The module may need more content for tag generation.[/dim]")
-
-            except Exception as e:
-                console.print(f"[red]ERROR[/red] Tag generation failed: {e}")
                 sys.exit(1)
 
         elif action.lower() == "graph-snapshot":
@@ -840,8 +798,7 @@ def module(
                 sys.exit(1)
 
             if not LLMClient.check_availability():
-                console.print("[red]ERROR[/red] LLM not configured")
-                console.print("[dim]Set ANTHROPIC_API_KEY environment variable or configure Ollama[/dim]")
+                print_llm_unavailable(console)
                 sys.exit(1)
 
             structure_type = structure if structure else "auto"
@@ -901,7 +858,7 @@ def module(
         else:
             console.print(f"[red]ERROR[/red] Unknown action: {action}")
             console.print("Valid actions: create, list, tree, archive, unarchive, connections, graph, rebuild-graph,")
-            console.print("  check-links, suggest-links, suggest-ai, ai-organize, auto-tag, graph-snapshot,")
+            console.print("  check-links, suggest-links, suggest-ai, ai-organize, graph-snapshot,")
             console.print("  graph-history, graph-diff, from-text")
             sys.exit(1)
 
