@@ -134,7 +134,8 @@ def _to_item(
     if not isinstance(raw, dict):
         return None
 
-    title = str(raw.get("title") or "").strip()
+    # On one line, so that a title cannot pass for a heading in the review file.
+    title = " ".join(str(raw.get("title") or "").split())
     kind = raw.get("kind")
     evidence = raw.get("evidence")
 
@@ -161,7 +162,7 @@ def _to_item(
         title=title,
         target=target,
         doc_type=doc_type if doc_type in DOCUMENT_TYPES else None,
-        why=str(raw.get("why") or "").strip(),
+        why=" ".join(str(raw.get("why") or "").split()),
         evidence=sorted(days),
     )
 

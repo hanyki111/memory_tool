@@ -16,12 +16,14 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-from memory_tool.review.collector import collect_entries
+from memory_tool.core.writing_guides import read_guide_file
+from memory_tool.review.collector import collect_entries, parse_time
 from memory_tool.review.store import KIND_UPDATE, Item, Review, ReviewError
 from memory_tool.review.text import say
 from memory_tool.utils.module_docs import resolve_module_document
 
 SOLO = "solo"
+REFLECTION_GUIDE = "review-reflection"
 
 WRITE_PROCEDURE = Path(__file__).parent.parent / "templates" / "skills" / "mt-write" / "SKILL.md"
 
@@ -174,14 +176,17 @@ def write_work_file(base: Path, name: str, content: str) -> Path:
     return path
 
 
-def _instruction(work_file: Path, root: Path) -> str:
+def _shown_path(path: Path, root: Path) -> str:
+    """Write a path relative to the project, where the CLI runs."""
     try:
-        shown = os.path.relpath(work_file, root).replace("\\", "/")
+        return os.path.relpath(path, root).replace("\\", "/")
     except ValueError:
-        shown = str(work_file)
+        return str(path)
 
+
+def _instruction(work_file: Path, root: Path) -> str:
     return (
-        f"Read the file {shown} and follow it. "
+        f"Read the file {_shown_path(work_file, root)} and follow it. "
         "It tells you what we are doing. Speak to me in the language of the timeline entries."
     )
 
@@ -212,6 +217,30 @@ def write_with_tool(tool: WritingTool, base: Path, root: Path, review: Review, i
         _task_text(base, item),
     ])
     work_file = write_work_file(base, f"{review.name}-item-{item.number}", content)
+
+    try:
+        run_tool(tool, work_file, root)
+    finally:
+        work_file.unlink(missing_ok=True)
+
+
+def reflect_with_tool(tool: WritingTool, base: Path, root: Path, review: Review) -> None:
+    """Hold a reflection conversation about a review's period."""
+    start = parse_time(review.start)
+    end = parse_time(review.end)
+    entries = [
+        f"- {entry.when:%Y-%m-%d %H:%M} | {entry.text}"
+        for entry in collect_entries(base, start, end)
+    ]
+    content = "\n\n".join([
+        "# Your instructions\n\nFollow the guide below to help the user reflect on this period.",
+        read_guide_file(REFLECTION_GUIDE, base),
+        "# The period\n\n"
+        f"From {review.start} to {review.end}.\n"
+        f"Write the user's answers in {_shown_path(review.path, root)}, under its last heading.",
+        "## Timeline entries\n\n" + "\n".join(entries),
+    ])
+    work_file = write_work_file(base, f"{review.name}-reflection", content)
 
     try:
         run_tool(tool, work_file, root)

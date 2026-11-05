@@ -279,11 +279,16 @@ def save_review(review: Review, reflection_comment: str = "") -> None:
     existing = path.read_text(encoding="utf-8") if path.exists() else ""
     _, old_body = Frontmatter.parse(existing)
     start = _REFLECTION_START.search(old_body)
+    heading = say("## Reflection", "## 돌아보기")
 
     if start:
         reflection = old_body[start.start():]
+    elif old_body.strip():
+        # The heading was removed by hand. Keep the text, even if the summary
+        # then appears twice, because it cannot be told apart from what was added.
+        reflection = f"{heading}\n\n{old_body.strip()}\n"
     else:
-        reflection = f"{say('## Reflection', '## 돌아보기')}\n\n{reflection_comment}".rstrip() + "\n"
+        reflection = f"{heading}\n\n{reflection_comment}".rstrip() + "\n"
 
     metadata = {
         "type": "review",

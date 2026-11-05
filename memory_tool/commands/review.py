@@ -52,8 +52,12 @@ def _parse_since(since: Optional[str]) -> Optional[datetime]:
         _fail(say(f"Invalid date: {since}. Use YYYY-MM-DD.", f"날짜 형식이 잘못되었습니다: {since}. YYYY-MM-DD로 입력해 주세요."))
 
 
-def _ask(choices: List[Choice]) -> bool:
+def _ask(choices: List[Choice], default: Optional[str] = None) -> bool:
     """Show choices until one is picked, then run it.
+
+    Args:
+        choices: The choices
+        default: The key that Enter picks
 
     Returns:
         What the chosen action returned.
@@ -64,7 +68,7 @@ def _ask(choices: List[Choice]) -> bool:
     actions = {key: action for key, _, action in choices}
 
     while True:
-        answer = typer.prompt(say("Choice", "선택")).strip().lower()
+        answer = typer.prompt(say("Choice", "선택"), default=default).strip().lower()
         if answer in actions:
             return actions[answer]()
         _print(say("Please pick one of the choices.", "목록에서 골라 주세요."))
@@ -250,6 +254,59 @@ def _item_choices(review: Review, item: Item, tool: Optional[str]) -> List[Choic
     return choices
 
 
+def _reflect(review: Review) -> bool:
+    """Offer the optional reflection, once the items are settled.
+
+    Returns:
+        False if the user paused the review.
+    """
+    if review.reflection != store.REFLECTION_OPEN:
+        return True
+
+    if not review.entry_count:
+        review.reflection = store.REFLECTION_SKIPPED
+        store.save_review(review)
+        return True
+
+    def finish_with(state: str) -> bool:
+        review.reflection = state
+        store.save_review(review)
+        return True
+
+    def with_tool(tool: writer.WritingTool) -> bool:
+        _print(say(f"Starting {tool.name}. Leave it when you are done.", f"{tool.name}을(를) 실행합니다. 다 쓰면 종료해 주세요."))
+        writer.reflect_with_tool(tool, get_base_path(), get_project_root(), review)
+        return finish_with(store.REFLECTION_WRITTEN)
+
+    def alone() -> bool:
+        _print(f"-> {display_path(review.path)}")
+        writer.open_in_editor(review.path)
+        return finish_with(store.REFLECTION_WRITTEN)
+
+    _print()
+    _print(say(
+        f"Reflection (optional): {review.entry_count} entries on {review.active_days} days.",
+        f"돌아보기(선택 사항): 활동 {review.active_days}일, 기록 {review.entry_count}건입니다.",
+    ))
+
+    installed = writer.installed_tools()
+    default = writer.default_tool(installed)
+    # A default-argument binding, so that each choice keeps its own tool.
+    choices: List[Choice] = [
+        (
+            str(number),
+            tool.name + (say(" (default)", " (기본값)") if tool is default else ""),
+            lambda tool=tool: with_tool(tool),
+        )
+        for number, tool in enumerate(installed, 1)
+    ]
+    choices.append((str(len(choices) + 1), say("On my own", "혼자 쓰기"), alone))
+    choices.append(("s", say("Skip", "건너뛰기"), lambda: finish_with(store.REFLECTION_SKIPPED)))
+    choices.append(("p", say("Pause", "일시정지"), lambda: _pause(review)))
+
+    return _ask(choices, default="1" if default else None)
+
+
 def _finish(review: Review) -> None:
     review.status = store.STATUS_DONE
     store.save_review(review)
@@ -287,7 +344,8 @@ def _work_through(review: Review, tool: Optional[str]) -> None:
         if not _ask(_item_choices(review, waiting[0], tool)):
             return
 
-    _finish(review)
+    if _reflect(review):
+        _finish(review)
 
 
 @review_app.callback()

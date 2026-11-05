@@ -69,8 +69,9 @@ def states(base):
 
 def finish_with_deferred(base, count):
     FakeClient.answer = answer(count)
-    result = run(input="2\n" * count)
+    result = run(input="2\n" * count + "s\n")
     assert result.exit_code == 0, result.output
+    assert store.latest_review(base).is_done
 
 
 def add_entry_now(base):
@@ -85,7 +86,7 @@ class TestChoosing:
     def test_three_choices_for_a_new_proposal(self, base):
         FakeClient.answer = answer(3)
 
-        result = run(input="2\n3\n2\n")
+        result = run(input="2\n3\n2\ns\n")
 
         assert result.exit_code == 0, result.output
         assert states(base) == [store.STATE_DEFERRED, store.STATE_REJECTED, store.STATE_DEFERRED]
@@ -148,7 +149,7 @@ class TestDeferLimit:
         FakeClient.answer = answer(5)
 
         # Eight are open. The first three go, so the rest may wait.
-        result = run(input="2\n2\n1\n2\n2\n2\n2\n2\n")
+        result = run(input="2\n2\n1\n2\n2\n2\n2\n2\ns\n")
 
         assert result.exit_code == 0, result.output
         assert "nothing can be put off" in result.output
@@ -168,7 +169,7 @@ class TestPausing:
         assert states(base) == [store.STATE_REJECTED, store.STATE_PROPOSED]
 
         FakeClient.answer = answer(5)
-        second = run(input="3\n")
+        second = run(input="3\ns\n")
 
         assert second.exit_code == 0, second.output
         assert FakeClient.calls == 1
@@ -201,7 +202,7 @@ class TestCarriedItems:
         add_entry_now(base)
         FakeClient.answer = answer(1)
 
-        result = run(input="1\n3\n")
+        result = run(input="1\n3\ns\n")
 
         assert result.exit_code == 0, result.output
         assert "Put off in an earlier review" in result.output
@@ -331,7 +332,7 @@ class TestWriting:
         assert states(base) == [store.STATE_WRITING]
         assert not review.is_done
 
-        second = run(input="1\n")
+        second = run(input="1\ns\n")
 
         assert second.exit_code == 0, second.output
         assert "You were writing this" in second.output
@@ -413,3 +414,100 @@ class TestWriting:
         result = run(input="1\n\n1\n")
 
         assert "3. Antigravity (default)" in result.output
+
+    def test_left_as_being_written_after_the_review_ended(self, base, monkeypatch):
+        FakeTools(monkeypatch)
+        finish_with_deferred(base, 1)
+
+        result = run("write", "1", "--with", "claude", input="2\n")
+
+        assert result.exit_code == 0, result.output
+        assert "Left as being written" in result.output
+        assert states(base) == [store.STATE_WRITING]
+
+
+class TestReflection:
+    def test_skipping_ends_the_review_with_the_fixed_question_left_as_a_comment(self, base):
+        FakeClient.answer = answer(0)
+
+        result = run(input="s\n")
+
+        assert result.exit_code == 0, result.output
+        review = store.latest_review(base)
+        assert review.is_done
+        assert review.reflection == store.REFLECTION_SKIPPED
+        assert "<!-- What went well" in review.path.read_text(encoding="utf-8")
+
+    def test_on_my_own_opens_the_review_file_and_keeps_the_text(self, base, monkeypatch):
+        tools = FakeTools(monkeypatch, installed=("claude",))
+
+        def edit(path):
+            with path.open("a", encoding="utf-8") as file:
+                file.write("\nDeploys failed because I skipped the check.\n")
+
+        monkeypatch.setattr("memory_tool.review.writer.open_in_editor", edit)
+
+        result = run(input="2\n")
+
+        assert result.exit_code == 0, result.output
+        review = store.latest_review(base)
+        assert review.is_done
+        assert review.reflection == store.REFLECTION_WRITTEN
+        assert "I skipped the check." in review.path.read_text(encoding="utf-8")
+        assert tools.calls == []
+
+    def test_enter_starts_the_default_tool_with_the_period_and_guide(self, base, monkeypatch):
+        tools = FakeTools(monkeypatch)
+
+        result = run(input="\n")
+
+        assert result.exit_code == 0, result.output
+        path, content = tools.work_files[0]
+        assert "돌아보기 가이드" in content
+        assert "synthetic [entry]" in content
+        assert store.latest_review(base).path.name in content
+        assert not path.exists()
+        assert store.latest_review(base).reflection == store.REFLECTION_WRITTEN
+
+    def test_generates_no_questions_in_advance(self, base):
+        FakeClient.answer = answer(0)
+        run(input="s\n")
+
+        assert FakeClient.calls == 1
+
+    def test_pausing_returns_to_the_reflection_without_asking_again(self, base):
+        FakeClient.answer = answer(1)
+
+        first = run(input="3\np\n")
+
+        assert first.exit_code == 0, first.output
+        assert not store.latest_review(base).is_done
+
+        second = run(input="s\n")
+
+        assert second.exit_code == 0, second.output
+        assert "Topic 1" not in second.output
+        assert store.latest_review(base).is_done
+
+    def test_not_offered_when_no_entries_were_read(self, base):
+        finish_with_deferred(base, 1)
+        # The next review has only the carried item, one minute later at most.
+        for path in (base / "timeline").rglob("*.md"):
+            path.unlink()
+
+        result = run(input="3\n")
+
+        assert result.exit_code == 0, result.output
+        assert "Reflection" not in result.output
+        assert store.latest_review(base).is_done
+
+    def test_text_survives_a_removed_heading(self, base):
+        FakeClient.answer = answer(1)
+        run(input="p\n")
+        review = store.latest_review(base)
+        text = review.path.read_text(encoding="utf-8")
+        review.path.write_text(text.replace("## Reflection", "") + "\nKeep me.\n", encoding="utf-8")
+
+        store.save_review(store.load_review(review.path))
+
+        assert "Keep me." in review.path.read_text(encoding="utf-8")
