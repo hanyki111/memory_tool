@@ -884,7 +884,7 @@ Create, view, and manage knowledge documents.
 Modules are the spatial organization of your knowledge.
 
 A module is a document: one markdown file, topic.md. It moves to
-topic/topic.md when it gets a child, keeping its name, so [[topic]] links work.
+topic/topic.md when it gets a child, keeping its name, so \\[\\[topic]] links work.
 
 Creating a document (mmodule create)
 ------------------------------------
@@ -951,7 +951,7 @@ will be removed in the next version. Documents they created stay readable.
 모듈은 지식을 공간적으로 정리하는 단위입니다.
 
 모듈은 곧 문서이며, 마크다운 파일 하나(topic.md)입니다. 하위 문서가 생기면
-topic/topic.md로 옮겨지지만 이름은 그대로이므로 [[topic]] 링크는 유지됩니다.
+topic/topic.md로 옮겨지지만 이름은 그대로이므로 \\[\\[topic]] 링크는 유지됩니다.
 
 문서 만들기 (mmodule create)
 ----------------------------

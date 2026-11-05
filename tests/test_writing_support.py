@@ -283,3 +283,16 @@ def test_from_text_structure_option_warns_that_it_is_ignored(project, llm_answer
 
     assert result.exit_code == 0, result.output
     assert "--structure" in result.output
+
+
+@pytest.mark.parametrize("language", ["en", "ko"])
+def test_module_help_shows_wiki_links(language, base):
+    (base / "config.yaml").write_text(
+        f"version: '1.0'\nhelp:\n  language: {language}\n", encoding="utf-8"
+    )
+    clear_cache()
+
+    result = runner.invoke(app, ["help", "module"])
+
+    assert result.exit_code == 0, result.output
+    assert "[[topic]]" in result.output
