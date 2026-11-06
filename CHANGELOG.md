@@ -33,6 +33,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Timeline/Review/Plan 시스템 전체 완료 (Phase 1-5)
 - README.md 및 design 문서 최종 업데이트
 
+## [1.5.0] - 2026-11-06
+
+### ⚠️ 호환 없이 바뀐 동작
+
+- **`mcontext --update-interfaces`(`-i`), `--include-archived`, `mmap --interface` 제거:** 모듈 옆에 `interface.md`를 따로 만드는 기능이었습니다. 문서가 `주제.md` 하나인 새 형식에서는 예전 형식의 파일을 다시 만들게 되고, 문서 본문에 써 넣으면 사람이 쓴 문서를 도구가 고치게 되어 없앴습니다. 코드 구조는 `mmap`과 `mcontext --with-map`으로 볼 수 있고, 문서에 적은 소스 경로는 `mcheck`가 확인합니다. 이미 만들어진 `interface.md`는 그대로 둡니다.
+
+### 🐛 수정
+
+- **`msummary`의 최근 결정:** `modules/` 바로 아래의 `decisions.md`만 읽어서, 새 형식에서는 요약에 넣는 최근 결정이 늘 비어 있었습니다. 이제 기간 안에 만든 `판단` 문서(`generated.at` 기준)와, 하위 모듈까지 포함한 예전 결정 기록을 읽습니다.
+
+### 🧹 정리
+
+- 아무 데서도 쓰지 않던 `core/warnings.py`(`FileSizeWarning`)를 지웠습니다.
+
 ## [1.4.1] - 2026-11-06
 
 ### 🐛 수정
