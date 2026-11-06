@@ -319,3 +319,89 @@ class TestDocumentHealthNotice:
         from memory_tool.utils.suggestion_helper import document_health_notice
 
         assert document_health_notice(tmp_path, "m") is None
+
+
+# ---------------------------------------------------------------------------
+# Search
+# ---------------------------------------------------------------------------
+
+
+def search(*args):
+    # --no-cache keeps the tests out of the user's global search cache.
+    result = runner.invoke(app, ["search", *args, "--no-cache", "--no-index", "--json"])
+    return result, last_json(result.output)
+
+
+@pytest.fixture
+def searchable(base):
+    write_day(base, date(2026, 3, 1), "- 15:10 | 서버 포트를 8443으로 변경 #설정\n- 16:00 | 다른 일\n")
+    (base / "modules" / "server.md").write_text("# Server\n\n포트 8443은 내부용입니다.\n", encoding="utf-8")
+    return base
+
+
+class FakeVectorSearcher:
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def semantic_search(self, query, top_k=10, threshold=0.5):
+        path = FakeVectorSearcher.path
+        # Semantic search keeps the entry text without its time.
+        return [{"content": "서버 포트를 8443으로 변경 #설정", "date": "daily-2026-03", "file": str(path), "line": 2, "similarity": 0.9}]
+
+
+class TestSearch:
+    def test_keyword_results_with_entries(self, searchable):
+        result, data = search("8443")
+
+        assert result.exit_code == 0
+        assert (data["ok"], data["query"], data["mode"], data["cached"]) == (True, "8443", "keyword", False)
+
+        by_kind = {item["kind"]: item for item in data["results"]}
+        timeline = by_kind["timeline"]
+        assert timeline["date"] == "2026-03-01"
+        assert timeline["entry"] == {"date": "2026-03-01", "time": "15:10", "text": "서버 포트를 8443으로 변경 #설정", "tags": ["설정"]}
+        assert "entry" not in by_kind["module"]
+        assert by_kind["module"]["path"].endswith("server.md")
+
+    def test_no_results_is_an_empty_list(self, searchable):
+        _, data = search("없는단어")
+
+        assert data["ok"] is True and data["results"] == []
+
+    def test_bad_period(self, searchable):
+        result, data = search("8443", "--from", "2026-03-05", "--to", "2026-03-01")
+
+        assert result.exit_code == 1 and data["code"] == "invalid_argument"
+
+    def test_semantic_hit_gets_its_time_from_the_file(self, searchable, monkeypatch):
+        FakeVectorSearcher.path = searchable / "timeline" / "daily" / "2026-03" / "2026-03-01.md"
+        monkeypatch.setattr("memory_tool.core.vector_search.VectorSearcher", FakeVectorSearcher)
+
+        _, data = search("포트", "--semantic")
+
+        [item] = data["results"]
+        assert data["mode"] == "semantic"
+        assert item["score"] == 0.9 and item["date"] == "2026-03-01"
+        assert item["entry"]["time"] == "15:10"
+
+    def test_missing_vector_package(self, searchable, monkeypatch):
+        from memory_tool.core import vector_search
+
+        class Unavailable:
+            def __init__(self, *args, **kwargs):
+                raise vector_search.VectorSearchNotAvailableError("no model")
+
+        monkeypatch.setattr("memory_tool.core.vector_search.VectorSearcher", Unavailable)
+
+        result, data = search("포트", "--semantic")
+
+        assert result.exit_code == 1 and data["code"] == "feature_unavailable"
+
+    def test_hybrid(self, searchable, monkeypatch):
+        FakeVectorSearcher.path = searchable / "timeline" / "daily" / "2026-03" / "2026-03-01.md"
+        monkeypatch.setattr("memory_tool.core.vector_search.VectorSearcher", FakeVectorSearcher)
+
+        result, data = search("8443", "--hybrid")
+
+        assert result.exit_code == 0 and data["mode"] == "hybrid"
+        assert any(item.get("entry", {}).get("time") == "15:10" for item in data["results"])
