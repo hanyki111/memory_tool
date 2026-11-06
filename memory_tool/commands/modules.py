@@ -6,6 +6,7 @@ from typing import List, Optional
 
 import typer
 
+from memory_tool.commands import json_output
 from memory_tool.commands.common import (
     print_llm_unavailable,
     app, console, opt_str, arg_str, resolve_module_name
@@ -19,6 +20,93 @@ def _warn_retiring(what: str, instead: Optional[str] = None) -> None:
     """Say that a template feature still works but is deprecated."""
     suffix = f" Prefer {instead}." if instead else ""
     console.print(f"[yellow]{what} is deprecated and may be removed in a later version.{suffix}[/yellow]")
+
+
+def _suggest_links_json(name: Optional[str], limit: int, notices: list) -> None:
+    """suggest-links --ai --json"""
+    if not name:
+        json_output.fail(json_output.INVALID_ARGUMENT, "Module name is required for suggest-links")
+    if not LLMClient.check_availability():
+        json_output.fail(json_output.LLM_UNAVAILABLE, json_output.llm_unavailable_message())
+
+    from memory_tool.core.ai_suggester import AIConnectionSuggester
+
+    manager = ModuleManager()
+    if not manager.resolve_module_doc(name):
+        json_output.fail(json_output.NOT_FOUND, f"Module not found: {name}")
+
+    candidates = [
+        (module.as_posix(), manager.modules_path / module)
+        for module in manager.discover_all_modules()
+        if module.as_posix() != name
+    ]
+
+    try:
+        suggestions = AIConnectionSuggester().suggest_connections(
+            manager.modules_path / name, candidates, max_suggestions=limit,
+        )
+    except Exception as e:
+        json_output.fail(json_output.LLM_FAILED, f"AI suggestion failed: {e}")
+
+    json_output.succeed(
+        module=name,
+        suggestions=[
+            {
+                "module": suggested.replace("\\", "/"),
+                "path": json_output.path_text(manager.resolve_module_doc(suggested.replace("\\", "/"))),
+                "reason": reason_text,
+                "confidence": confidence,
+            }
+            for suggested, reason_text, confidence in suggestions
+        ],
+        notices=notices,
+    )
+
+
+def _from_text_json(
+    text: Optional[str], text_file: Optional[str], preview: bool, lang: Optional[str], notices: list
+) -> None:
+    """from-text --json"""
+    if text:
+        input_text = text
+    elif text_file:
+        text_path = Path(text_file)
+        if not text_path.exists():
+            json_output.fail(json_output.NOT_FOUND, f"Text file not found: {text_file}")
+        input_text = text_path.read_text(encoding="utf-8")
+    else:
+        json_output.fail(json_output.INVALID_ARGUMENT, "Either --text or --text-file is required")
+
+    if not input_text.strip():
+        json_output.fail(json_output.INVALID_ARGUMENT, "Input text is empty")
+    if not LLMClient.check_availability():
+        json_output.fail(json_output.LLM_UNAVAILABLE, json_output.llm_unavailable_message())
+
+    from memory_tool.core.ai_module_generator import AIModuleGenerator
+
+    generator = AIModuleGenerator()
+    try:
+        generated = generator.generate(input_text, language=lang if lang else "auto")
+    except Exception as e:
+        json_output.fail(json_output.LLM_FAILED, f"Module generation failed: {e}")
+
+    document = {
+        "name": generated.name,
+        "type": generated.doc_type,
+        "description": generated.description,
+        "suggested_connections": generated.suggested_connections,
+    }
+
+    if preview:
+        json_output.succeed(saved=False, path=None, document={**document, "body": generated.body}, notices=notices)
+        return
+
+    try:
+        module_path = generator.save_module(generated)
+    except ValueError as e:
+        json_output.fail(json_output.FAILED, str(e))
+
+    json_output.succeed(saved=True, path=json_output.path_text(module_path), document=document, notices=notices)
 
 
 def _suggest_links_with_ai(name: str, limit: int) -> None:
@@ -104,6 +192,7 @@ def module(
     to_level: Optional[int] = typer.Option(None, "--level", help="For grow: stop at this level (1-5) instead of taking one step"),
     all_levels: bool = typer.Option(False, "--all", help="For grow: go straight to the full skeleton, on-demand parts included"),
     parts: Optional[List[str]] = typer.Option(None, "--part", help="For grow: attach a part no level adds (decisions, dependencies, scope). Repeatable. On its own it does not climb a level"),
+    as_json: bool = typer.Option(False, "--json", help="For suggest-links --ai and from-text: print the result as one line of JSON"),
 ):
     """Manage modules (supports single-file modules, hierarchical paths, wiki-style [[connections]], and AI suggestions)."""
     action = arg_str(action)
@@ -112,13 +201,27 @@ def module(
     output = opt_str(output)
 
     # Old names, kept for existing users.
+    renamed = None
     if action.lower() == "ai-organize":
-        console.print("[yellow]'ai-organize' is now 'audit'. The old name may be removed in a later version.[/yellow]\n")
+        renamed = "'ai-organize' is now 'audit'. The old name may be removed in a later version."
         action = "audit"
     elif action.lower() == "suggest-ai":
-        console.print("[yellow]'suggest-ai' is now 'suggest-links --ai'. The old name may be removed in a later version.[/yellow]\n")
+        renamed = "'suggest-ai' is now 'suggest-links --ai'. The old name may be removed in a later version."
         action = "suggest-links"
         ai = True
+
+    if as_json:
+        notices = [json_output.notice("renamed", renamed)] if renamed else []
+        if action.lower() == "suggest-links" and ai:
+            _suggest_links_json(name, limit, notices)
+        elif action.lower() == "from-text":
+            _from_text_json(text, text_file, preview, opt_str(lang), notices)
+        else:
+            json_output.fail(json_output.INVALID_ARGUMENT, "--json works with 'suggest-links --ai' and 'from-text'.")
+        return
+
+    if renamed:
+        console.print(f"[yellow]{renamed}[/yellow]\n")
 
     manager = ModuleManager()
 
@@ -528,13 +631,13 @@ def module(
                 elif format.lower() == "json":
                     import json
                     graph_data = graph.to_json()
-                    json_output = json.dumps(graph_data, indent=2, ensure_ascii=False)
+                    graph_json = json.dumps(graph_data, indent=2, ensure_ascii=False)
                     if output:
                         output_path = Path(output)
-                        output_path.write_text(json_output, encoding="utf-8")
+                        output_path.write_text(graph_json, encoding="utf-8")
                         console.print(f"[green]OK[/green] JSON saved to: {output}")
                     else:
-                        print(json_output)
+                        print(graph_json)
 
                 else:
                     console.print(f"[red]ERROR[/red] Unknown format: {format}")

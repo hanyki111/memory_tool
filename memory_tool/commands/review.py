@@ -370,26 +370,25 @@ def _emit_json(payload: dict) -> None:
     json_output.emit(payload)
 
 
-def _json_failure(message: str) -> NoReturn:
-    _emit_json({"ok": False, "error": message})
-    sys.exit(1)
+def _json_failure(message: str, code: str = json_output.FAILED) -> NoReturn:
+    json_output.fail(code, message)
 
 
 def _review_as_json(since: Optional[str]) -> None:
     base = get_base_path()
 
     if not base.exists():
-        _json_failure("Knowledge base not found. Run 'minit' first.")
+        _json_failure("Knowledge base not found. Run 'minit' first.", json_output.NOT_INITIALIZED)
 
     try:
         since_date = datetime.strptime(since, "%Y-%m-%d") if since else None
     except ValueError:
-        _json_failure(f"Invalid date: {since}. Use YYYY-MM-DD.")
+        _json_failure(f"Invalid date: {since}. Use YYYY-MM-DD.", json_output.INVALID_ARGUMENT)
 
     try:
         active = session.open_review(base, since=since_date)
     except ReviewError as e:
-        _json_failure(str(e))
+        _json_failure(str(e), e.code)
 
     _emit_json({"ok": True, "review": store.review_to_dict(active) if active else None})
 
@@ -412,18 +411,18 @@ def set_choice(
     }
 
     if choice not in changes:
-        _json_failure(f"Unknown choice: {choice}. Choose from: {', '.join(changes)}")
+        _json_failure(f"Unknown choice: {choice}. Choose from: {', '.join(changes)}", json_output.INVALID_ARGUMENT)
 
     try:
         latest = store.latest_review(get_base_path())
         if latest is None:
-            _json_failure("There is no review yet.")
+            _json_failure("There is no review yet.", json_output.NOT_FOUND)
 
         changes[choice](latest, number)
         store.finish_if_ready(latest)
         store.save_review(latest)
     except ReviewError as e:
-        _json_failure(str(e))
+        _json_failure(str(e), e.code)
 
     _emit_json({"ok": True, "review": store.review_to_dict(latest)})
 
@@ -434,18 +433,18 @@ def set_reflection(
 ):
     """Settle the reflection without being asked, printing the review as JSON."""
     if state not in (store.REFLECTION_WRITTEN, store.REFLECTION_SKIPPED):
-        _json_failure(f"Unknown state: {state}. Choose written or skipped.")
+        _json_failure(f"Unknown state: {state}. Choose written or skipped.", json_output.INVALID_ARGUMENT)
 
     try:
         latest = store.latest_review(get_base_path())
         if latest is None:
-            _json_failure("There is no review yet.")
+            _json_failure("There is no review yet.", json_output.NOT_FOUND)
 
         latest.reflection = state
         store.finish_if_ready(latest)
         store.save_review(latest)
     except ReviewError as e:
-        _json_failure(str(e))
+        _json_failure(str(e), e.code)
 
     _emit_json({"ok": True, "review": store.review_to_dict(latest)})
 
@@ -455,7 +454,7 @@ def review(
     ctx: typer.Context,
     since: Optional[str] = typer.Option(None, "--since", help="Start of the period (YYYY-MM-DD), for a new review"),
     with_tool: Optional[str] = typer.Option(None, "--with", help="How to write, skipping the menu: claude, codex, antigravity or solo"),
-    json_output: bool = typer.Option(False, "--json", help="Start or read the review without asking anything, and print it as JSON"),
+    as_json: bool = typer.Option(False, "--json", help="Start or read the review without asking anything, and print it as JSON"),
 ):
     """Find what is worth moving from the timeline into documents.
 
@@ -473,7 +472,7 @@ def review(
     if ctx.invoked_subcommand:
         return
 
-    if json_output:
+    if as_json:
         _review_as_json(since)
         return
 
@@ -510,19 +509,19 @@ def review(
 
 @review_app.command("list")
 def list_items(
-    json_output: bool = typer.Option(False, "--json", help="Print the items as JSON"),
+    as_json: bool = typer.Option(False, "--json", help="Print the items as JSON"),
 ):
     """Show the items waiting to be written."""
     try:
-        latest = store.latest_review(get_base_path() if json_output else _base())
+        latest = store.latest_review(get_base_path() if as_json else _base())
     except ReviewError as e:
-        if json_output:
-            _json_failure(str(e))
+        if as_json:
+            _json_failure(str(e), e.code)
         _fail(str(e))
 
     waiting = latest.open_items() if latest else []
 
-    if json_output:
+    if as_json:
         _emit_json({"ok": True, "items": [asdict(item) for item in waiting]})
         return
 

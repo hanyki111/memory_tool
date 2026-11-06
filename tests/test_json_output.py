@@ -405,3 +405,176 @@ class TestSearch:
 
         assert result.exit_code == 0 and data["mode"] == "hybrid"
         assert any(item.get("entry", {}).get("time") == "15:10" for item in data["results"])
+
+
+# ---------------------------------------------------------------------------
+# AI commands
+# ---------------------------------------------------------------------------
+
+
+class FakeLLM:
+    available = True
+    calls = 0
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    @classmethod
+    def check_availability(cls, provider=None):
+        return cls.available
+
+    @classmethod
+    def removed_provider_notice(cls, provider=None):
+        return None
+
+    def summarize(self, content, system_prompt=None, **kwargs):
+        FakeLLM.calls += 1
+        return "요약입니다."
+
+
+@pytest.fixture
+def llm(monkeypatch):
+    FakeLLM.available = True
+    FakeLLM.calls = 0
+    for target in (
+        "memory_tool.commands.planning.LLMClient",
+        "memory_tool.commands.modules.LLMClient",
+        "memory_tool.llm.client.LLMClient",
+    ):
+        monkeypatch.setattr(target, FakeLLM)
+    return FakeLLM
+
+
+def invoke_json(*args):
+    result = runner.invoke(app, list(args))
+    return result, last_json(result.output)
+
+
+class TestSummary:
+    def test_date_summary_then_cached(self, base, llm):
+        write_day(base, date(2026, 3, 1), "- 10:00 | 합성 기록\n")
+
+        result, first = invoke_json("summary", "2026-03-01", "--json")
+        _, second = invoke_json("summary", "2026-03-01", "--json")
+
+        assert result.exit_code == 0, result.output
+        assert first == {
+            "ok": True, "kind": "timeline", "scope": "2026-03-01",
+            "summary": first["summary"], "cached": False, "saved_to": None,
+        }
+        assert "요약입니다." in first["summary"]
+        assert second["cached"] is True and llm.calls == 1
+
+    def test_missing_day_is_not_found(self, base, llm):
+        result, data = invoke_json("summary", "2026-03-01", "--json")
+
+        assert result.exit_code == 1 and data["code"] == "not_found"
+
+    def test_bad_scope(self, base, llm):
+        result, data = invoke_json("summary", "yesterday-ish", "--json")
+
+        assert result.exit_code == 1 and data["code"] == "invalid_argument"
+
+    def test_no_llm(self, base, llm):
+        llm.available = False
+
+        result, data = invoke_json("summary", "today", "--json")
+
+        assert result.exit_code == 1 and data["code"] == "llm_unavailable"
+        assert "mproviders" in data["error"]
+
+
+class TestModuleAI:
+    def test_suggest_links(self, base, llm, monkeypatch):
+        (base / "modules" / "alpha.md").write_text("# Alpha\n", encoding="utf-8")
+        (base / "modules" / "beta.md").write_text("# Beta\n", encoding="utf-8")
+        monkeypatch.setattr(
+            "memory_tool.core.ai_suggester.AIConnectionSuggester.suggest_connections",
+            lambda self, path, candidates, max_suggestions=10: [("beta", "같은 주제", 0.8)],
+        )
+
+        result, data = invoke_json("module", "suggest-links", "alpha", "--ai", "--json")
+
+        assert result.exit_code == 0, result.output
+        assert data["module"] == "alpha"
+        assert data["suggestions"] == [{
+            "module": "beta", "path": str((base / "modules" / "beta.md").resolve()),
+            "reason": "같은 주제", "confidence": 0.8,
+        }]
+
+    def test_old_name_is_a_notice(self, base, llm, monkeypatch):
+        (base / "modules" / "alpha.md").write_text("# Alpha\n", encoding="utf-8")
+        monkeypatch.setattr(
+            "memory_tool.core.ai_suggester.AIConnectionSuggester.suggest_connections",
+            lambda self, path, candidates, max_suggestions=10: [],
+        )
+
+        _, data = invoke_json("module", "suggest-ai", "alpha", "--json")
+
+        assert data["ok"] is True and data["notices"][0]["kind"] == "renamed"
+
+    def test_unknown_module(self, base, llm):
+        result, data = invoke_json("module", "suggest-links", "nothing", "--ai", "--json")
+
+        assert result.exit_code == 1 and data["code"] == "not_found"
+
+    def test_from_text(self, base, llm, monkeypatch):
+        from memory_tool.core.ai_module_generator import GeneratedModule
+
+        monkeypatch.setattr(
+            "memory_tool.core.ai_module_generator.AIModuleGenerator.generate",
+            lambda self, text, language="auto": GeneratedModule(
+                name="backup-notes", doc_type="참고", description="백업 설정", body="# 백업\n\n본문\n",
+            ),
+        )
+
+        _, preview = invoke_json("module", "from-text", "--text", "합성 글", "--preview", "--json")
+        assert preview["saved"] is False and preview["document"]["body"].startswith("# 백업")
+        assert not list((base / "modules").rglob("backup-notes*"))
+
+        result, saved = invoke_json("module", "from-text", "--text", "합성 글", "--json")
+        assert result.exit_code == 0, result.output
+        assert saved["saved"] is True and saved["document"]["name"] == "backup-notes"
+        assert "body" not in saved["document"]
+        assert open(saved["path"], encoding="utf-8").read()
+
+    def test_json_with_other_actions(self, base):
+        result, data = invoke_json("module", "list", "--json")
+
+        assert result.exit_code == 1 and data["code"] == "invalid_argument"
+
+
+class TestExistingJson:
+    def test_review_without_a_knowledge_base(self, base, monkeypatch):
+        monkeypatch.setattr("memory_tool.commands.review.get_base_path", lambda: base.parent / "missing")
+
+        result, data = invoke_json("review", "--json")
+
+        assert result.exit_code == 1 and data["code"] == "not_initialized"
+
+    def test_review_llm_failure(self, base, monkeypatch):
+        class Broken:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def generate(self, prompt, system_prompt=None, **kwargs):
+                return "not json"
+
+        monkeypatch.setattr("memory_tool.llm.client.LLMClient", Broken)
+        write_day(base, datetime.now(), "- 00:00 | 합성 기록\n")
+
+        result, data = invoke_json("review", "--json")
+
+        assert result.exit_code == 1 and data["code"] == "llm_failed"
+
+    def test_mask_keeps_its_fields_and_adds_a_code(self, base, monkeypatch):
+        def unavailable(**kwargs):
+            raise RuntimeError("No provider")
+
+        monkeypatch.setattr("memory_tool.commands.qa._ask_agent", unavailable)
+
+        result, data = invoke_json("ask", "질문", "--json")
+
+        assert result.exit_code == 1
+        assert data["code"] == "llm_unavailable"
+        assert {"ok", "question", "error", "available_providers"} <= set(data)

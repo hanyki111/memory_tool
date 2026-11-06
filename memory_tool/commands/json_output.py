@@ -63,6 +63,19 @@ def fail(code: str, message: str, **fields: Any) -> NoReturn:
     sys.exit(1)
 
 
+def llm_unavailable_message() -> str:
+    """Why no LLM can be used, as one sentence for ``error``."""
+    from memory_tool.llm.client import LLMClient
+
+    removed = LLMClient.removed_provider_notice()
+    if removed:
+        return removed
+    return (
+        "No LLM provider is available. Install the claude, codex or agy CLI, run Ollama, "
+        "or set ANTHROPIC_API_KEY, and choose one with llm.provider in config.yaml. Check with: mproviders"
+    )
+
+
 def notice(kind: str, message: str) -> Dict[str, str]:
     """Build one entry of a ``notices`` list."""
     return {"kind": kind, "message": message}

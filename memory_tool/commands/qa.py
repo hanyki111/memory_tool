@@ -25,7 +25,7 @@ def memory_ask(
     no_plans: bool = typer.Option(False, "--no-plans", help="Don't search plans (simple mode only)"),
     days: int = typer.Option(30, "--days", "-d", help="Days of timeline to search (simple mode only)"),
     max_context: int = typer.Option(15, "--max-context", "-c", help="Maximum context items (simple mode only)"),
-    json_output: bool = typer.Option(
+    as_json: bool = typer.Option(
         False, "--json", help="Emit the answer as JSON on one line (for editors and scripts)"
     ),
 ):
@@ -63,7 +63,7 @@ def memory_ask(
                 no_plans=no_plans,
                 days=days,
                 max_context=max_context,
-                as_json=json_output,
+                as_json=as_json,
             )
         else:
             # Use agentic approach (default)
@@ -71,16 +71,17 @@ def memory_ask(
                 question=question,
                 provider=provider,
                 verbose=verbose,
-                as_json=json_output,
+                as_json=as_json,
             )
 
     except RuntimeError as e:
         from memory_tool.llm.client import LLMClient
         available = LLMClient.list_available_providers()
 
-        if json_output:
+        if as_json:
             _emit_json({
                 "ok": False,
+                "code": "llm_unavailable",
                 "question": question,
                 "error": str(e),
                 "available_providers": available,
@@ -101,8 +102,8 @@ def memory_ask(
         sys.exit(1)
 
     except Exception as e:
-        if json_output:
-            _emit_json({"ok": False, "question": question, "error": str(e)})
+        if as_json:
+            _emit_json({"ok": False, "code": "llm_failed", "question": question, "error": str(e)})
             sys.exit(1)
 
         console.print(f"[red]Error:[/red] {e}")
