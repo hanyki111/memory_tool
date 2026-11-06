@@ -57,10 +57,10 @@
 | 도구 | 위치 | 버전 | 확인 |
 |---|---|---|---|
 | JDK | `E:\dev\jdk-17` | Temurin 17.0.21+9 | Adoptium API의 SHA-256 |
-| 안드로이드 명령줄 도구 | `E:\devndroid-sdk\cmdline-tools\latest` | 23.0 | Google 저장소 목록의 SHA-1 |
-| SDK 플랫폼 | `E:\devndroid-sdk\platformsndroid-36` | API 36(Android 16) | sdkmanager가 확인 |
-| 빌드 도구 | `E:\devndroid-sdkuild-tools.1.0` | 36.1.0 | sdkmanager가 확인 |
-| platform-tools(`adb`) | `E:\devndroid-sdk\platform-tools` | 37.0.1 | sdkmanager가 확인 |
+| 안드로이드 명령줄 도구 | `E:\dev\android-sdk\cmdline-tools\latest` | 23.0 | Google 저장소 목록의 SHA-1 |
+| SDK 플랫폼 | `E:\dev\android-sdk\platforms\android-36` | API 36(Android 16) | sdkmanager가 확인 |
+| 빌드 도구 | `E:\dev\android-sdk\build-tools\36.1.0` | 36.1.0 | sdkmanager가 확인 |
+| platform-tools(`adb`) | `E:\dev\android-sdk\platform-tools` | 37.0.1 | sdkmanager가 확인 |
 | Gradle | `E:\dev\gradle-8.13` | 8.13 | services.gradle.org의 SHA-256 |
 
 - 이 버전의 `sdkmanager`는 사용 중단 예정이라는 경고를 내고, 패키지 이름을 `platforms/android-36`처럼 `/`로 표시합니다. Windows의 `.bat`는 `;`를 인수 구분자로 읽으므로, 설치할 때도 `/` 형식을 써야 합니다.
