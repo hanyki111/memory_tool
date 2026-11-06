@@ -1,0 +1,121 @@
+package io.github.hanyki111.memorycapture.data
+
+import android.content.Context
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
+import android.util.Base64
+import io.github.hanyki111.memorycapture.core.CommandTemplate
+import io.github.hanyki111.memorycapture.ssh.KeyMaterial
+import io.github.hanyki111.memorycapture.ssh.Ssh
+import io.github.hanyki111.memorycapture.ssh.Target
+import java.security.KeyStore
+import javax.crypto.Cipher
+import javax.crypto.KeyGenerator
+import javax.crypto.SecretKey
+import javax.crypto.spec.GCMParameterSpec
+
+/** What the person sets: the PC, the command, the voice delay, and the trusted fingerprint. */
+class Settings(context: Context) {
+    private val prefs = context.applicationContext.getSharedPreferences("settings", Context.MODE_PRIVATE)
+
+    var host: String
+        get() = prefs.getString("host", "").orEmpty()
+        set(value) = prefs.edit().putString("host", value.trim()).apply()
+
+    var port: Int
+        get() = prefs.getInt("port", 22)
+        set(value) = prefs.edit().putInt("port", value).apply()
+
+    var user: String
+        get() = prefs.getString("user", "").orEmpty()
+        set(value) = prefs.edit().putString("user", value.trim()).apply()
+
+    var template: String
+        get() = prefs.getString("template", CommandTemplate.DEFAULT).orEmpty()
+        set(value) = prefs.edit().putString("template", value.trim()).apply()
+
+    /** Seconds a voice entry is shown before it is sent */
+    var voiceDelaySeconds: Int
+        get() = prefs.getInt("voiceDelay", 3)
+        set(value) = prefs.edit().putInt("voiceDelay", value.coerceIn(0, 30)).apply()
+
+    /** The PC's host key fingerprint the person confirmed, or empty */
+    var fingerprint: String
+        get() = prefs.getString("fingerprint", "").orEmpty()
+        set(value) = prefs.edit().putString("fingerprint", value).apply()
+
+    fun target(): Target? =
+        if (host.isEmpty() || user.isEmpty() || port !in 1..65535) null else Target(host, port, user)
+
+    /** What is still missing before anything can be sent, or null when ready. */
+    fun missing(): String? = when {
+        target() == null -> "PC address, port and user"
+        CommandTemplate.parse(template).isFailure -> "the command"
+        fingerprint.isEmpty() -> "the PC's fingerprint"
+        else -> null
+    }
+}
+
+/**
+ * The phone's SSH key. The private key is encrypted with a key that lives in
+ * the Android Keystore and never leaves it, so the stored file is useless
+ * anywhere else.
+ */
+class PhoneKey(context: Context) {
+    private val prefs = context.applicationContext.getSharedPreferences("phone_key", Context.MODE_PRIVATE)
+
+    /** The key, made on first use. */
+    @Synchronized
+    fun get(): KeyMaterial {
+        val publicLine = prefs.getString("public", null)
+        val sealed = prefs.getString("private", null)
+        val iv = prefs.getString("iv", null)
+        if (publicLine != null && sealed != null && iv != null) {
+            try {
+                val cipher = Cipher.getInstance(TRANSFORMATION)
+                cipher.init(Cipher.DECRYPT_MODE, wrappingKey(), GCMParameterSpec(128, decode(iv)))
+                return KeyMaterial(cipher.doFinal(decode(sealed)), publicLine)
+            } catch (e: Exception) {
+                // The Keystore key is gone, as after data was copied from another
+                // phone. The old key cannot be opened; make a new one, which the
+                // person registers on the PC like any new phone.
+                prefs.edit().clear().commit()
+            }
+        }
+
+        val fresh = Ssh.generateKey("memory-capture@${android.os.Build.MODEL.replace(' ', '-')}")
+        val cipher = Cipher.getInstance(TRANSFORMATION)
+        cipher.init(Cipher.ENCRYPT_MODE, wrappingKey())
+        prefs.edit()
+            .putString("public", fresh.publicKeyLine)
+            .putString("private", encode(cipher.doFinal(fresh.privateKey)))
+            .putString("iv", encode(cipher.iv))
+            .apply()
+        return fresh
+    }
+
+    fun publicKeyLine(): String = get().publicKeyLine
+
+    private fun wrappingKey(): SecretKey {
+        val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        (store.getKey(ALIAS, null) as? SecretKey)?.let { return it }
+
+        val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
+        generator.init(
+            KeyGenParameterSpec.Builder(ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
+                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .setKeySize(256)
+                .build()
+        )
+        return generator.generateKey()
+    }
+
+    private fun encode(bytes: ByteArray) = Base64.encodeToString(bytes, Base64.NO_WRAP)
+    private fun decode(text: String) = Base64.decode(text, Base64.NO_WRAP)
+
+    private companion object {
+        const val ALIAS = "memorycapture.ssh-key"
+        const val TRANSFORMATION = "AES/GCM/NoPadding"
+    }
+}

@@ -1,0 +1,13 @@
+# Machine-specific: where the Android SDK is
+local.properties
+
+# Build output and Gradle caches
+.gradle/
+.kotlin/
+build/
+app/build/
+
+# Signing keys never go in the repository
+*.jks
+*.keystore
+keystore.properties

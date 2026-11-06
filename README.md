@@ -324,6 +324,12 @@ VS Code 안에서 타임라인에 기록하고, 여러 날의 기록을 이어 �
 창에서 연 폴더의 지식 베이스를 쓰며, 리뷰 버튼은 화면에 보이는 기간으로 `mreview`를 실행합니다.
 설치와 사용법은 [vscode/README.md](vscode/README.md)에 있습니다.
 
+## 안드로이드 앱
+
+휴대폰에서 타임라인에 기록하는 앱입니다. 기록을 SSH로 PC에 보내고, PC의 `memory_tool record`가 기록합니다.
+연결되지 않을 때 쓴 기록은 휴대폰에 보관했다가, 적은 시각으로 나중에 보냅니다.
+설정과 빌드 방법은 [android/README.md](android/README.md)에 있습니다.
+
 ## 튜토리얼
 
 Memory Tool의 상세한 사용법을 단계별로 학습할 수 있습니다.

@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Memory Capture</string>
+    <string name="share_label">타임라인에 기록</string>
+    <string name="tile_label">기록</string>
+    <string name="widget_label">타임라인에 기록</string>
+    <string name="widget_hint">타임라인에 기록…</string>
+    <string name="widget_voice">말하기</string>
+    <string name="widget_pending">보낼 기록 %1$d건</string>
+    <string name="widget_attention">확인할 기록 %1$d건</string>
+
+    <string name="capture_hint">무슨 일이 있었나요? ([태그] 또는 #태그)</string>
+    <string name="capture_send">보내기</string>
+    <string name="capture_voice">말하기</string>
+    <string name="capture_tap_to_edit">곧 보냅니다. 고치려면 글을 누르세요.</string>
+
+    <string name="toast_recorded">%1$s에 기록함</string>
+    <string name="notify_setup_needed">아직 보내지 못했습니다. 앱에서 %1$s을(를) 설정해 주세요.</string>
+    <string name="notify_check_failed">기록되었는지 확인하지 못했습니다. PC 타임라인을 확인해 주세요: %1$s</string>
+    <string name="toast_already_recorded">PC에 이미 기록되어 있음 (%1$s)</string>
+    <string name="notify_unreadable">PC의 응답을 앱이 읽지 못했습니다.</string>
+    <string name="channel_notices">memory_tool 안내</string>
+    <string name="notify_sending">기록을 보내는 중…</string>
+    <string name="channel_sending">전송 중</string>
+    <string name="channel_attention">확인할 기록</string>
+
+    <string name="main_new_entry">새 기록</string>
+    <string name="main_attention">확인할 기록 (%1$d건)</string>
+    <string name="main_maybe_recorded">보낸 뒤 연결이 끊겨, PC에 이미 기록되었을 수 있습니다. 타임라인을 확인한 뒤 골라 주세요.</string>
+    <string name="main_reason">이유: %1$s</string>
+    <string name="main_checking">보낸 뒤 연결이 끊겼습니다(%1$s). 다시 보내기 전에 PC 타임라인을 확인합니다.</string>
+    <string name="main_mark_sent">기록되어 있음</string>
+    <string name="main_resend">다시 보내기</string>
+    <string name="main_pending">보낼 기록 (%1$d건)</string>
+    <string name="main_send_now">지금 보내기</string>
+    <string name="main_sent">최근 보낸 기록</string>
+    <string name="main_not_tried">아직 보내지 않았습니다. 네트워크가 연결되면 보냅니다.</string>
+    <string name="main_last_try">마지막 시도 %1$s: %2$s</string>
+    <string name="main_battery">배터리</string>
+    <string name="main_battery_unrestricted">제한 없음: 백그라운드에서도 바로 보냅니다.</string>
+    <string name="main_battery_restricted">배터리 최적화가 켜져 있어, 백그라운드 전송이 늦어질 수 있습니다. 앱 설정의 배터리에서 \'제한 없음\'을 골라 주세요.</string>
+    <string name="main_battery_open">앱 설정 열기</string>
+    <string name="main_pc">PC</string>
+    <string name="main_host">주소 (DDNS 이름 또는 IP)</string>
+    <string name="main_port">포트</string>
+    <string name="main_user">사용자</string>
+    <string name="main_command">명령</string>
+    <string name="main_command_help">PC의 PowerShell이 실행합니다. {args} 자리에 앱이 memory_tool의 인수를 넣습니다.</string>
+    <string name="main_voice_delay">말한 내용을 보여 주는 시간(초)</string>
+    <string name="main_saved">저장했습니다</string>
+    <string name="main_key">이 휴대폰의 키</string>
+    <string name="main_key_help">이 한 줄을 PC의 C:\\ProgramData\\ssh\\administrators_authorized_keys에 추가하세요(관리자 계정의 경우).</string>
+    <string name="main_fingerprint">PC의 지문</string>
+    <string name="main_fingerprint_none">아직 신뢰하지 않았습니다. PC 정보를 저장한 뒤 지문을 받아 주세요.</string>
+    <string name="main_get_fingerprint">지문 받기</string>
+    <string name="main_test">연결 시험</string>
+    <string name="main_fill_pc">주소, 포트, 사용자를 먼저 입력해 주세요.</string>
+    <string name="main_failed">연결하지 못했습니다</string>
+    <string name="main_trust_title">이 PC를 신뢰할까요?</string>
+    <string name="main_trust_body">PC에서 확인한 값과 비교해 주세요: ssh-keygen -lf C:\\ProgramData\\ssh\\ssh_host_ed25519_key.pub. 같을 때만 신뢰하세요.</string>
+    <string name="main_trust">같습니다, 신뢰</string>
+
+    <string name="save">저장</string>
+    <string name="copy">복사</string>
+    <string name="share">공유</string>
+    <string name="delete">삭제</string>
+    <string name="cancel">취소</string>
+    <string name="ok">확인</string>
+</resources>
