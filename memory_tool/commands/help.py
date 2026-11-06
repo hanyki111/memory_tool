@@ -32,6 +32,7 @@ Tags are searchable with: ms "query" --tag tagname
                 'm "Meeting notes #meeting #team"',
             ],
             "options": [
+                ("--json", "Print the result as one line of JSON, for editors and scripts"),
                 ("--date, -d", "Record to a specific date (YYYY-MM-DD)"),
                 ("--time, -t", "Override timestamp (HH:MM)"),
                 ("--tags, -t", "Comma-separated tags (e.g., bug,auth,urgent)"),
@@ -57,6 +58,7 @@ Tags are searchable with: ms "query" --tag tagname
                 'm "회의 노트 #meeting #team"',
             ],
             "options": [
+                ("--json", "결과를 JSON 한 줄로 출력합니다(편집기, 스크립트용)"),
                 ("--date, -d", "특정 날짜에 기록 (YYYY-MM-DD)"),
                 ("--time, -t", "타임스탬프 직접 지정 (HH:MM)"),
                 ("--tags, -t", "쉼표로 구분된 태그 (예: bug,auth,urgent)"),
@@ -84,6 +86,7 @@ Supports regex patterns, date filtering, and result ranking.
                 'ms "[urgent]"                   # Search by bracket tag',
             ],
             "options": [
+                ("--json", "Print the result as one line of JSON, for editors and scripts"),
                 ("--hybrid", "Combine keyword and semantic search"),
                 ("--semantic, -s", "Use semantic (meaning-based) search"),
                 ("--date", "Date filter: today, yesterday, this-week, last-N-days"),
@@ -110,6 +113,7 @@ Supports regex patterns, date filtering, and result ranking.
                 'ms "[긴급]"                      # 대괄호 태그로 검색',
             ],
             "options": [
+                ("--json", "결과를 JSON 한 줄로 출력합니다(편집기, 스크립트용)"),
                 ("--hybrid", "키워드와 시맨틱 검색 결합"),
                 ("--semantic, -s", "시맨틱(의미 기반) 검색 사용"),
                 ("--date", "날짜 필터: today, yesterday, this-week, last-N-days"),
@@ -269,6 +273,7 @@ Available tools: get_timeline, search, get_plan, get_module, list_modules
                 'mask "지난주에 무엇을 했나요?" --verbose',
             ],
             "options": [
+                ("--json", "Print the result as one line of JSON, for editors and scripts"),
                 ("--verbose, -v", "Show agent's reasoning and tool calls"),
                 ("--simple, -s", "Use simple keyword search (faster)"),
                 ("--provider, -p", "LLM provider: claude-cli, codex-cli, antigravity-cli, glm, etc."),
@@ -292,6 +297,7 @@ AI를 사용하여 메모리 내용에 대한 질문에 답변합니다.
                 'mask "What did I do yesterday?" --verbose',
             ],
             "options": [
+                ("--json", "결과를 JSON 한 줄로 출력합니다(편집기, 스크립트용)"),
                 ("--verbose, -v", "에이전트의 추론 과정과 도구 호출 표시"),
                 ("--simple, -s", "단순 키워드 검색 사용 (더 빠름)"),
                 ("--provider, -p", "LLM 제공자: claude-cli, codex-cli, antigravity-cli, glm 등"),
@@ -306,10 +312,10 @@ AI를 사용하여 메모리 내용에 대한 질문에 답변합니다.
             "description": "Displays all entries recorded today in chronological order.",
             "examples": [
                 "mtoday                # Show today's entries",
-                "mtoday --yesterday    # Show yesterday's entries",
+                "mday 2026-11-05       # Another day",
             ],
             "options": [
-                ("--yesterday", "Show yesterday instead"),
+                ("--json", "Print the result as one line of JSON, for editors and scripts"),
             ],
         },
         "ko": {
@@ -318,10 +324,10 @@ AI를 사용하여 메모리 내용에 대한 질문에 답변합니다.
             "description": "오늘 기록된 모든 항목을 시간순으로 표시합니다.",
             "examples": [
                 "mtoday                # 오늘 기록 보기",
-                "mtoday --yesterday    # 어제 기록 보기",
+                "mday 2026-11-05       # 다른 날짜 보기",
             ],
             "options": [
-                ("--yesterday", "어제 기록 보기"),
+                ("--json", "결과를 JSON 한 줄로 출력합니다(편집기, 스크립트용)"),
             ],
         },
     },
@@ -681,7 +687,9 @@ Entries are grouped by date for easy scanning.
             "examples": [
                 "mweek                      # Show this week's entries",
             ],
-            "options": [],
+            "options": [
+                ("--json", "Print the result as one line of JSON, for editors and scripts"),
+            ],
         },
         "ko": {
             "name": "mweek / week (주간)",
@@ -693,7 +701,9 @@ Entries are grouped by date for easy scanning.
             "examples": [
                 "mweek                      # 이번 주 항목 보기",
             ],
-            "options": [],
+            "options": [
+                ("--json", "결과를 JSON 한 줄로 출력합니다(편집기, 스크립트용)"),
+            ],
         },
     },
 
@@ -708,7 +718,9 @@ Entries are grouped by date.
             "examples": [
                 "mmonth                     # Show this month's entries",
             ],
-            "options": [],
+            "options": [
+                ("--json", "Print the result as one line of JSON, for editors and scripts"),
+            ],
         },
         "ko": {
             "name": "mmonth / month (월간)",
@@ -720,7 +732,9 @@ Entries are grouped by date.
             "examples": [
                 "mmonth                     # 이번 달 항목 보기",
             ],
-            "options": [],
+            "options": [
+                ("--json", "결과를 JSON 한 줄로 출력합니다(편집기, 스크립트용)"),
+            ],
         },
     },
 
@@ -729,29 +743,39 @@ Entries are grouped by date.
             "name": "mdays / days",
             "summary": "Show last N days timeline",
             "description": """
-Displays timeline entries for the last N days.
-Default is 7 days if not specified.
+Displays timeline entries for the last N days, or for a period.
+Default is 14 days if not specified.
             """,
             "examples": [
-                "mdays                      # Show last 7 days",
+                "mdays                      # Show last 14 days",
                 "mdays 3                    # Show last 3 days",
-                "mdays 30                   # Show last 30 days",
+                "mdays --from 2026-10-20 --to 2026-11-03   # Show a period",
+                "mdays --from 2026-10-20    # From a date to today",
             ],
-            "options": [],
+            "options": [
+                ("--json", "Print the result as one line of JSON, for editors and scripts"),
+                ("--from DATE", "First date (YYYY-MM-DD), in place of the number of days"),
+                ("--to DATE", "Last date (YYYY-MM-DD), default: today"),
+            ],
         },
         "ko": {
             "name": "mdays / days (일수)",
             "summary": "최근 N일 타임라인 보기",
             "description": """
-최근 N일간의 타임라인 항목을 표시합니다.
-지정하지 않으면 기본값은 7일입니다.
+최근 N일이나 지정한 기간의 타임라인 항목을 표시합니다.
+일수를 지정하지 않으면 기본값은 14일입니다.
             """,
             "examples": [
-                "mdays                      # 최근 7일 보기",
+                "mdays                      # 최근 14일 보기",
                 "mdays 3                    # 최근 3일 보기",
-                "mdays 30                   # 최근 30일 보기",
+                "mdays --from 2026-10-20 --to 2026-11-03   # 기간 보기",
+                "mdays --from 2026-10-20    # 그 날짜부터 오늘까지",
             ],
-            "options": [],
+            "options": [
+                ("--json", "결과를 JSON 한 줄로 출력합니다(편집기, 스크립트용)"),
+                ("--from DATE", "시작일(YYYY-MM-DD). 일수 대신 씁니다"),
+                ("--to DATE", "마지막 날(YYYY-MM-DD). 기본값은 오늘"),
+            ],
         },
     },
 
@@ -771,7 +795,9 @@ Supports flexible date formats:
                 "mday 01-15                 # January 15 (current year)",
                 "mday 15                    # 15th of current month",
             ],
-            "options": [],
+            "options": [
+                ("--json", "Print the result as one line of JSON, for editors and scripts"),
+            ],
         },
         "ko": {
             "name": "mday / day (날짜)",
@@ -788,7 +814,9 @@ Supports flexible date formats:
                 "mday 01-15                 # 1월 15일 (현재 연도)",
                 "mday 15                    # 현재 월의 15일",
             ],
-            "options": [],
+            "options": [
+                ("--json", "결과를 JSON 한 줄로 출력합니다(편집기, 스크립트용)"),
+            ],
         },
     },
 
@@ -1001,6 +1029,7 @@ may be removed in a later version. Documents they created stay readable.
                 "mmodule graph              # Visualize connections",
             ],
             "options": [
+                ("--json", "With suggest-links --ai and from-text: print the result as one line of JSON"),
                 ("list", "List all modules"),
                 ("tree", "Tree view of modules"),
                 ("create", "Create a document"),
@@ -1068,6 +1097,7 @@ from-text --structure, ai-organize, suggest-ai는 경고와 함께 계속 작동
                 "mmodule graph              # 연결 시각화",
             ],
             "options": [
+                ("--json", "suggest-links --ai, from-text에서 결과를 JSON 한 줄로 출력합니다"),
                 ("list", "모든 모듈 나열"),
                 ("tree", "모듈 트리 보기"),
                 ("create", "문서 만들기"),
@@ -1205,6 +1235,7 @@ Supports daily, weekly, and module summaries.
                 "msummary --module myproj   # Summarize module",
             ],
             "options": [
+                ("--json", "Print the result as one line of JSON, for editors and scripts"),
                 ("SCOPE", "today (default), week, YYYY-MM-DD or YYYY-MM-DD:YYYY-MM-DD"),
                 ("--module, -m", "Summarize specific module"),
                 ("--decisions", "With --module, summarize only its decisions"),
@@ -1226,6 +1257,7 @@ LLM을 사용하여 타임라인이나 모듈 내용의 요약을 생성합니�
                 "msummary --module myproj   # 모듈 요약",
             ],
             "options": [
+                ("--json", "결과를 JSON 한 줄로 출력합니다(편집기, 스크립트용)"),
                 ("SCOPE", "today(기본값), week, YYYY-MM-DD, YYYY-MM-DD:YYYY-MM-DD"),
                 ("--module, -m", "특정 모듈 요약"),
                 ("--decisions", "--module과 함께 쓰면 결정 내용만 요약"),

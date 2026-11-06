@@ -246,7 +246,8 @@ def propose(base: Path, entries: List[Entry], client: Any = None) -> Tuple[List[
             say(
                 f"The entries exceed {MAX_ENTRY_BYTES // 1024} KB. Choose a shorter period with --since.",
                 f"기록이 {MAX_ENTRY_BYTES // 1024}KB를 넘습니다. --since로 기간을 좁혀 주세요.",
-            )
+            ),
+            code="invalid_argument",
         )
 
     documents = document_list(base)
@@ -269,7 +270,8 @@ def propose(base: Path, entries: List[Entry], client: Any = None) -> Tuple[List[
             say(
                 f"Could not get proposals, so the review did not start: {e}",
                 f"제안을 받지 못해 리뷰를 시작하지 않았습니다: {e}",
-            )
+            ),
+            code="llm_failed",
         )
 
     add_split_notes(base, items)

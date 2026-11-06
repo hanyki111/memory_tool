@@ -33,6 +33,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Timeline/Review/Plan 시스템 전체 완료 (Phase 1-5)
 - README.md 및 design 문서 최종 업데이트
 
+## [1.4.0] - 2026-11-06
+
+### ✨ 추가
+
+- **JSON 출력:** 기록, 조회, 검색, AI 명령에 `--json`을 추가했습니다. 편집기와 스크립트가 터미널 출력을 해석하지 않고 결과를 받을 수 있습니다. 형식은 `docs/USER_GUIDE.md`의 "JSON Output"에 정리했습니다.
+  - 대상: `m`, `mtoday`, `mday`, `mweek`, `mmonth`, `mdays`, `ms`, `msummary`, `mmodule suggest-links --ai`, `mmodule from-text`
+  - 결과는 표준 출력에 UTF-8 JSON 한 줄로만 나옵니다. 실패에는 `code`가 붙고, 리뷰 알림 같은 안내는 `notices`에 담깁니다.
+  - 조회와 검색은 기록마다 시각, 원문, 태그를 담습니다. 조회는 파일 원문도 함께 담습니다.
+- **기간 조회:** `mdays --from 날짜 --to 날짜`로 원하는 기간의 기록을 봅니다.
+- **`mday` 명령 등록:** 도움말에 있었지만 실행 명령으로 등록되어 있지 않았습니다.
+
+### 🔧 변경
+
+- `mask --json`, `mreview --json`의 실패에 `code`를 추가했습니다. 기존 항목은 그대로입니다.
+
+### 🐛 수정
+
+- **의미 검색이 바뀐 파일만 검색하던 문제:** 한 번 색인한 타임라인 파일은 바뀌지 않는 한 검색 대상에서 빠졌습니다. 그래서 두 번째 검색부터는 그사이에 바뀐 파일의 기록만 찾았습니다. `ms --semantic`, 혼합 검색, `mask`의 의미 검색이 영향을 받았습니다. 이제 검색할 때는 모든 파일을 읽고, 바뀌지 않은 파일을 건너뛰는 동작은 미리 색인하기에만 남겼습니다.
+- **의미 검색 결과의 날짜:** `daily/` 구조에서 `daily-2026-11`처럼 잘못된 날짜가 나왔습니다.
+- `mhelp days`가 기본값을 7일로 안내했지만 실제 기본값은 14일입니다.
+- `mhelp today`와 사용자 안내서에 있던, 실제로는 없는 옵션(`--yesterday`, `--reverse`, `--limit`)을 지웠습니다.
+
 ## [1.3.0] - 2026-11-05
 
 ### ⚠️ 호환 없이 바뀐 동작

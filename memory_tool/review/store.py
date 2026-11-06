@@ -54,7 +54,14 @@ _REFLECTION_START = re.compile(
 
 
 class ReviewError(Exception):
-    """Raised when a review cannot go on, with a message for the user."""
+    """Raised when a review cannot go on, with a message for the user.
+
+    ``code`` is the failure code that ``--json`` reports.
+    """
+
+    def __init__(self, message: str, code: str = "failed"):
+        super().__init__(message)
+        self.code = code
 
 
 @dataclass

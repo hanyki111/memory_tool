@@ -1,16 +1,22 @@
 """Search-related CLI commands."""
 
+import io
 import re
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import List, NoReturn, Optional
+
+from rich.console import Console
 
 import typer
 
+from memory_tool.commands import json_output
 from memory_tool.commands.common import (
     app, console, sanitize_output, opt_str, arg_str, resolve_module_name
 )
+from memory_tool.commands.common import console as shared_console
+from memory_tool.core.timeline import date_from_timeline_path, parse_entry_lines
 from memory_tool.core.search import MemorySearcher, SearchError
 from memory_tool.utils.path_checker import PathChecker, format_check_result
 from memory_tool.utils.config import Config
@@ -21,6 +27,100 @@ from memory_tool.utils.paths import (
     base_dir_for_root,
     get_base_path,
 )
+
+
+_VECTOR_HINT = "Install with: pip install memory-tool[vector]"
+
+
+def _search_failed(as_json: bool, code: str, message: str, hint: Optional[str] = None) -> NoReturn:
+    if as_json:
+        json_output.fail(code, message)
+    shared_console.print(f"[red]ERROR[/red] {message}")
+    if hint:
+        shared_console.print(f"[dim]{hint}[/dim]")
+    sys.exit(1)
+
+
+def _semantic_result(found: dict):
+    """Give a semantic search hit the shape of the other two kinds of search."""
+    from memory_tool.core.search import SearchResult
+
+    return SearchResult(
+        file_path=Path(found["file"]),
+        line_number=found["line"],
+        line_content=found["content"],
+        match_context=found["content"],
+        score=found["similarity"],
+    )
+
+
+_KINDS = {"timeline": "timeline", "modules": "module", "reviews": "review", "plans": "plan"}
+
+
+def _result_kind(path: Path, memory_path: Path) -> str:
+    """Tell what part of a knowledge base a result comes from."""
+    try:
+        parts = path.resolve().relative_to(memory_path.resolve()).parts
+    except ValueError:
+        parts = path.parts  # Another knowledge base (--with-kb, --all)
+
+    for part in parts:
+        if part in _KINDS:
+            return _KINDS[part]
+    return "other"
+
+
+def _entry_at(path: Path, line_number: int, line: str) -> Optional[dict]:
+    """Read the entry a timeline hit points at.
+
+    Semantic search keeps only an entry's text, so the line is read again from
+    the file when the hit itself does not carry the time.
+    """
+    entries = parse_entry_lines(line)
+    if not entries:
+        try:
+            lines = path.read_text(encoding="utf-8").splitlines()
+            entries = parse_entry_lines(lines[line_number - 1]) if 0 < line_number <= len(lines) else []
+        except (OSError, UnicodeDecodeError):
+            entries = []
+    return entries[0] if entries else None
+
+
+def _result_dict(result, memory_path: Path) -> dict:
+    path = Path(result.file_path)
+    kind = _result_kind(path, memory_path)
+    day = date_from_timeline_path(path) if kind == "timeline" else None
+    day = day or result.date
+
+    item = {
+        "path": json_output.path_text(path),
+        "kind": kind,
+        "line": result.line_number,
+        "text": result.line_content,
+        "context": result.match_context,
+        "score": result.score,
+        "date": json_output.date_text(day),
+        "source": result.source,
+        "project": result.origin_project,
+    }
+
+    if kind == "timeline":
+        entry = _entry_at(path, result.line_number, result.line_content)
+        if entry is not None:
+            item["entry"] = json_output.entry_dict(day, entry)
+
+    return item
+
+
+def _emit_results(query: str, mode: str, results, cached: bool = False, notices=None) -> None:
+    memory_path = get_base_path()
+    json_output.succeed(
+        query=query,
+        mode=mode,
+        cached=cached,
+        results=[_result_dict(result, memory_path) for result in results],
+        notices=notices or [],
+    )
 
 
 @app.command(
@@ -53,6 +153,7 @@ def search(
     semantic_weight: Optional[float] = typer.Option(None, "--semantic-weight", help="Semantic weight for hybrid (default from config: 0.3)"),
     no_cache: bool = typer.Option(False, "--no-cache", help="Disable result caching"),
     cache_ttl: int = typer.Option(3600, "--cache-ttl", help="Cache TTL in seconds (default: 3600)"),
+    as_json: bool = typer.Option(False, "--json", help="Print the results as one line of JSON (for editors and scripts)"),
 ):
     """Search timeline and modules (ms command).
 
@@ -72,6 +173,10 @@ def search(
         ms "feature" --date this-week       # Filter by date
         ms "refactor" --type timeline       # Filter by file type
     """
+    # Everything below prints through `console`. In JSON mode nothing but the
+    # result line may reach standard output, so that console prints nowhere.
+    console = Console(file=io.StringIO()) if as_json else shared_console
+
     query = arg_str(query)
     from_date = opt_str(from_date)
     to_date = opt_str(to_date)
@@ -124,6 +229,8 @@ def search(
     if threshold is None:
         threshold = config.get("search.semantic_threshold", 0.5)
 
+    mode = "hybrid" if hybrid else "semantic" if semantic else "keyword"
+
     search_cache = None
     cache_key_params = {
         "with_kb": with_kb,
@@ -152,6 +259,9 @@ def search(
 
         cached_results = search_cache.get(query, **cache_key_params)
         if cached_results:
+            if as_json:
+                _emit_results(query, mode, cached_results, cached=True)
+                return
             console.print("[dim]Using cached results...[/dim]\n")
             if show_score or summary or not no_context:
                 from memory_tool.search import ResultFormatter
@@ -188,8 +298,7 @@ def search(
                 if to_date:
                     parsed_to = datetime.strptime(to_date, "%Y-%m-%d").date()
             except ValueError as e:
-                console.print(f"[red]ERROR[/red] Invalid date format: {e}")
-                sys.exit(1)
+                _search_failed(as_json, json_output.INVALID_ARGUMENT, f"Invalid date format: {e}")
 
             text_results_dict = searcher.search(
                 query,
@@ -273,6 +382,10 @@ def search(
                 if search_cache:
                     search_cache.set(query, all_results, **cache_key_params)
 
+                if as_json:
+                    _emit_results(query, mode, all_results[:max_results] if max_results else all_results)
+                    return
+
                 if all_results:
                     if show_score or summary or not no_context:
                         from memory_tool.search import ResultFormatter
@@ -295,14 +408,10 @@ def search(
                 return
 
             except VectorSearchNotAvailableError as e:
-                console.print(f"[red]ERROR[/red] {e}")
-                console.print("[dim]Install with: pip install memory-tool[vector][/dim]")
-                sys.exit(1)
+                _search_failed(as_json, json_output.FEATURE_UNAVAILABLE, str(e), _VECTOR_HINT)
 
         except ImportError:
-            console.print("[red]ERROR[/red] Vector search not available for hybrid mode")
-            console.print("[dim]Install with: pip install memory-tool[vector][/dim]")
-            sys.exit(1)
+            _search_failed(as_json, json_output.FEATURE_UNAVAILABLE, "Vector search not available for hybrid mode", _VECTOR_HINT)
 
     if semantic:
         try:
@@ -315,6 +424,10 @@ def search(
                     top_k=max_results or 10,
                     threshold=threshold
                 )
+
+                if as_json:
+                    _emit_results(query, mode, [_semantic_result(r) for r in results_list])
+                    return
 
                 if not results_list:
                     console.print("[yellow]No results found[/yellow]")
@@ -331,14 +444,10 @@ def search(
                 return
 
             except VectorSearchNotAvailableError as e:
-                console.print(f"[red]ERROR[/red] {e}")
-                console.print("[dim]Install with: pip install memory-tool[vector][/dim]")
-                sys.exit(1)
+                _search_failed(as_json, json_output.FEATURE_UNAVAILABLE, str(e), _VECTOR_HINT)
 
         except ImportError:
-            console.print("[red]ERROR[/red] Vector search not available")
-            console.print("[dim]Install with: pip install memory-tool[vector][/dim]")
-            sys.exit(1)
+            _search_failed(as_json, json_output.FEATURE_UNAVAILABLE, "Vector search not available", _VECTOR_HINT)
 
     searcher = MemorySearcher()
     scope = "all" if all else "local"
@@ -352,14 +461,13 @@ def search(
         if to_date:
             parsed_to = datetime.strptime(to_date, "%Y-%m-%d").date()
 
-        if parsed_from and parsed_to and parsed_from > parsed_to:
-            console.print("[red]ERROR[/red] --from date must be before --to date")
-            sys.exit(1)
-
     except ValueError as e:
-        console.print(f"[red]ERROR[/red] Invalid date format: {e}")
-        console.print("[dim]Use YYYY-MM-DD format (e.g., 2025-11-14)[/dim]")
-        sys.exit(1)
+        _search_failed(
+            as_json, json_output.INVALID_ARGUMENT, f"Invalid date format: {e}", "Use YYYY-MM-DD format (e.g., 2025-11-14)"
+        )
+
+    if parsed_from and parsed_to and parsed_from > parsed_to:
+        _search_failed(as_json, json_output.INVALID_ARGUMENT, "--from date must be before --to date")
 
     # If query is empty but tags are specified, use wildcard pattern
     search_query = query if query else "."
@@ -437,6 +545,18 @@ def search(
         if search_cache:
             search_cache.set(query, all_results, **cache_key_params)
 
+        if as_json:
+            notices = []
+            try:
+                from memory_tool.utils.suggestion_helper import document_health_notice
+                health = document_health_notice(get_base_path(), "search")
+                if health:
+                    notices.append(json_output.notice("document_health", health))
+            except Exception:
+                pass
+            _emit_results(query, mode, all_results, notices=notices)
+            return
+
         # Show tag search header if tag-only mode
         if tag_only_mode:
             tag_str = ", ".join(f"#{t}" for t in tag)
@@ -470,10 +590,11 @@ def search(
             pass
 
     except SearchError as e:
-        console.print(f"[red]ERROR[/red] {e}")
-        sys.exit(1)
+        _search_failed(as_json, json_output.FAILED, str(e))
 
     except Exception as e:
+        if as_json:
+            json_output.fail(json_output.FAILED, f"Unexpected error: {e}")
         console.print(f"[red]ERROR[/red] Unexpected error: {e}")
         import traceback
         console.print(f"[dim]{traceback.format_exc()}[/dim]")

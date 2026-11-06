@@ -136,6 +136,13 @@ def days_cli():
     app()
 
 
+def day_cli():
+    """Entry point for 'mday' command."""
+    import sys
+    sys.argv = ['memory_tool', 'day'] + sys.argv[1:]
+    app()
+
+
 def status_cli():
     """Entry point for 'mstatus' command."""
     import sys

@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import List, Dict, Optional, Tuple
 from datetime import datetime
 import re
+from memory_tool.core.timeline import date_from_timeline_path
 from memory_tool.utils.paths import get_base_path
 
 try:
@@ -220,13 +221,18 @@ class VectorSearcher:
 
     def _collect_timeline_entries(
         self,
-        force_reindex: bool = False
+        only_changed: bool = False
     ) -> List[Tuple[str, str, Path, int]]:
         """
-        Collect timeline entries (incremental indexing support).
+        Collect timeline entries.
+
+        A search must read every file: the embedding cache already spares the
+        work of embedding entries again, so skipping unchanged files here would
+        only drop their entries from the results. Pre-indexing alone skips
+        them, to avoid reading files whose entries are already embedded.
 
         Args:
-            force_reindex: If True, reindex all files regardless of modification time
+            only_changed: Leave out files indexed since they last changed
 
         Returns:
             List of (content, date, file_path, line_number) tuples
@@ -236,21 +242,12 @@ class VectorSearcher:
         if not self.timeline_path.exists():
             return entries
 
-        # Recursively find all .md files
         for md_file in sorted(self.timeline_path.rglob("*.md")):
-            # Skip files that haven't been modified (unless force_reindex)
-            if not force_reindex and self.cache.is_file_indexed(md_file):
+            if only_changed and self.cache.is_file_indexed(md_file):
                 continue
 
-            # Extract date from path (timeline/YYYY-MM/DD.md)
-            try:
-                parts = md_file.parts
-                timeline_idx = parts.index("timeline")
-                year_month = parts[timeline_idx + 1]
-                day_file = parts[timeline_idx + 2]
-                date_str = f"{year_month}-{day_file.replace('.md', '')}"
-            except (ValueError, IndexError):
-                date_str = "unknown"
+            day = date_from_timeline_path(md_file)
+            date_str = day.isoformat() if day else "unknown"
 
             # Read file and extract entries (streaming for memory efficiency)
             try:
@@ -261,9 +258,6 @@ class VectorSearcher:
                         if match:
                             content = match.group(1).strip()
                             entries.append((content, date_str, md_file, line_num))
-
-                # Mark file as indexed
-                self.cache.mark_file_indexed(md_file)
             except Exception:
                 continue
 
@@ -381,7 +375,8 @@ class VectorSearcher:
             query: Search query
             top_k: Number of results to return
             threshold: Minimum similarity threshold (0-1)
-            force_reindex: Force reindexing all files
+            force_reindex: Kept for existing callers. Every file is searched
+                anyway, and the embedding cache is keyed by content.
             batch_size: Batch size for embedding computation
 
         Returns:
@@ -390,8 +385,8 @@ class VectorSearcher:
         # Get query embedding
         query_embedding = self._get_embedding(query)
 
-        # Collect timeline entries (incremental indexing)
-        entries = self._collect_timeline_entries(force_reindex=force_reindex)
+        # Every entry. Only those not yet in the embedding cache get embedded.
+        entries = self._collect_timeline_entries()
 
         if not entries:
             return []
@@ -437,7 +432,7 @@ class VectorSearcher:
         Returns:
             Dict with indexing statistics
         """
-        entries = self._collect_timeline_entries(force_reindex=force)
+        entries = self._collect_timeline_entries(only_changed=not force)
 
         if not entries:
             return {
@@ -452,8 +447,12 @@ class VectorSearcher:
         # Batch embed all contents (this caches them)
         self._get_embeddings_batch(contents, batch_size=batch_size, show_progress=True)
 
-        # Get unique files
-        files_processed = len(set(file_path for _, _, file_path, _ in entries))
+        # Mark files only once their entries are embedded, so a failure
+        # part-way leaves them to be indexed next time.
+        files = set(file_path for _, _, file_path, _ in entries)
+        for file_path in files:
+            self.cache.mark_file_indexed(file_path)
+        files_processed = len(files)
 
         return {
             'entries_indexed': len(entries),

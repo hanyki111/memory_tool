@@ -1,13 +1,17 @@
 """Planning-related CLI commands (plan, summary)."""
 
+import io
 import sys
 from datetime import datetime, date
 from pathlib import Path
-from typing import List, Optional
+from typing import List, NoReturn, Optional
 
 import typer
+from rich.console import Console
 
+from memory_tool.commands import json_output
 from memory_tool.commands.common import app, console, opt_str, arg_str, resolve_module_name, print_llm_unavailable
+from memory_tool.commands.common import console as shared_console
 from memory_tool.core.doc_sections import SectionError, read_decisions_text
 from memory_tool.llm.client import LLMClient
 from memory_tool.summary import TimelineSummarizer, ModuleSummarizer
@@ -58,6 +62,21 @@ def _interactive_carryover(tasks: List[str], task_type: str = "task") -> List[st
     return selected
 
 
+class _CountingClient:
+    """Count the LLM calls a summary makes, to tell whether it came from the cache."""
+
+    def __init__(self, client):
+        self._client = client
+        self.calls = 0
+
+    def summarize(self, *args, **kwargs):
+        self.calls += 1
+        return self._client.summarize(*args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self._client, name)
+
+
 @app.command()
 def summary(
     scope: str = typer.Argument("today", help="Scope: 'today', 'week', date (YYYY-MM-DD), or date range (YYYY-MM-DD:YYYY-MM-DD)"),
@@ -66,24 +85,59 @@ def summary(
     decisions: bool = typer.Option(False, "--decisions", help="Summarize decisions.md only (requires --module)"),
     lang: Optional[str] = typer.Option(None, "--lang", "-l", help="Output language: 'ko' (Korean), 'en' (English), 'auto' (detect)"),
     force: bool = typer.Option(False, "--force", "-f", help="Force regeneration, bypassing cache"),
+    as_json: bool = typer.Option(False, "--json", help="Print the summary as one line of JSON (for editors and scripts)"),
 ):
     """Summarize timeline or module using LLM (msummary command)."""
+    # Everything below prints through `console`. In JSON mode only the result
+    # line may reach standard output.
+    console = Console(file=io.StringIO()) if as_json else shared_console
+
     scope = arg_str(scope)
     output = opt_str(output)
     module_name = opt_str(module_name)
     lang = opt_str(lang)
 
+    def failed(code: str, message: str, hint: Optional[str] = None, style: str = "[red]ERROR[/red]") -> NoReturn:
+        if as_json:
+            json_output.fail(code, message)
+        shared_console.print(f"{style} {message}")
+        if hint:
+            shared_console.print(f"[dim]{hint}[/dim]")
+        sys.exit(1)
+
+    def finished(summary_text: str, kind: str, target: str) -> None:
+        saved = None
+        if output:
+            Path(output).write_text(summary_text, encoding="utf-8")
+            saved = json_output.path_text(Path(output))
+
+        if as_json:
+            json_output.succeed(
+                kind=kind, scope=target, summary=summary_text,
+                cached=llm_client.calls == 0, saved_to=saved,
+            )
+            return
+
+        console.print("\n" + "="*80)
+        console.print(summary_text)
+        console.print("="*80)
+        if saved:
+            console.print(f"\n[green]OK[/green] Summary saved to: {output}")
+
     if not LLMClient.check_availability():
+        if as_json:
+            json_output.fail(json_output.LLM_UNAVAILABLE, json_output.llm_unavailable_message())
         print_llm_unavailable(console)
         sys.exit(1)
 
     if decisions and not module_name:
-        console.print("[red]ERROR[/red] --decisions flag requires --module to be specified")
-        console.print("[dim]Example: msummary --module project-management --decisions[/dim]")
-        sys.exit(1)
+        failed(
+            json_output.INVALID_ARGUMENT, "--decisions flag requires --module to be specified",
+            "Example: msummary --module project-management --decisions",
+        )
 
     try:
-        llm_client = LLMClient()
+        llm_client = _CountingClient(LLMClient())
 
         if module_name:
             resolved_module = resolve_module_name(module_name)
@@ -98,12 +152,10 @@ def summary(
                 try:
                     decisions_content = read_decisions_text(module_path)
                 except SectionError as e:
-                    console.print(f"[red]ERROR[/red] {e}")
-                    sys.exit(1)
+                    failed(json_output.FAILED, str(e))
 
                 if decisions_content is None:
-                    console.print(f"[red]ERROR[/red] No decisions found in module '{resolved_module}'")
-                    sys.exit(1)
+                    failed(json_output.NOT_FOUND, f"No decisions found in module '{resolved_module}'")
 
                 prompt = f"""Analyze and summarize the following decisions.md content from a software project module.
 
@@ -160,15 +212,7 @@ Provide a clear, structured summary in markdown format."""
                     module_path, force=force, output_language=lang
                 )
 
-            console.print("\n" + "="*80)
-            console.print(summary_text)
-            console.print("="*80)
-
-            if output:
-                output_path = Path(output)
-                output_path.write_text(summary_text, encoding="utf-8")
-                console.print(f"\n[green]OK[/green] Summary saved to: {output}")
-
+            finished(summary_text, "decisions" if decisions else "module", resolved_module)
             return
 
         summarizer = TimelineSummarizer(llm_client)
@@ -192,9 +236,10 @@ Provide a clear, structured summary in markdown format."""
                 summary_text = summarizer.summarize_range(start_date, end_date, output_language=lang, force=force)
 
             except ValueError as e:
-                console.print(f"[red]ERROR[/red] Invalid date range format: {scope}")
-                console.print("[dim]Use: YYYY-MM-DD:YYYY-MM-DD (e.g., 2025-11-01:2025-11-14)[/dim]")
-                sys.exit(1)
+                failed(
+                    json_output.INVALID_ARGUMENT, f"Invalid date range format: {scope}",
+                    "Use: YYYY-MM-DD:YYYY-MM-DD (e.g., 2025-11-01:2025-11-14)",
+                )
 
         else:
             try:
@@ -203,28 +248,22 @@ Provide a clear, structured summary in markdown format."""
                 summary_text = summarizer.summarize_date(target_date, output_language=lang, force=force)
 
             except ValueError:
-                console.print(f"[red]ERROR[/red] Invalid date format: {scope}")
-                console.print("[dim]Use YYYY-MM-DD format (e.g., 2025-11-14)[/dim]")
-                sys.exit(1)
+                failed(
+                    json_output.INVALID_ARGUMENT, f"Invalid date format: {scope}",
+                    "Use YYYY-MM-DD format (e.g., 2025-11-14)",
+                )
 
-        console.print("\n" + "="*80)
-        console.print(summary_text)
-        console.print("="*80)
-
-        if output:
-            output_path = Path(output)
-            output_path.write_text(summary_text, encoding="utf-8")
-            console.print(f"\n[green]OK[/green] Summary saved to: {output}")
+        finished(summary_text, "timeline", scope.lower())
 
     except FileNotFoundError as e:
-        console.print(f"[yellow]![/yellow] {e}")
-        sys.exit(1)
+        failed(json_output.NOT_FOUND, str(e), style="[yellow]![/yellow]")
 
     except ValueError as e:
-        console.print(f"[red]ERROR[/red] {e}")
-        sys.exit(1)
+        failed(json_output.FAILED, str(e))
 
     except Exception as e:
+        if as_json:
+            json_output.fail(json_output.LLM_FAILED, f"Unexpected error: {e}")
         console.print(f"[red]ERROR[/red] Unexpected error: {e}")
         import traceback
         console.print(f"[dim]{traceback.format_exc()}[/dim]")

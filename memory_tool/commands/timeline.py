@@ -8,6 +8,7 @@ import re
 
 import typer
 
+from memory_tool.commands import json_output
 from memory_tool.commands.common import app, console, sanitize_output, opt_str, arg_str
 from memory_tool.core.timeline import (
     ENTRY_PATTERN,
@@ -15,7 +16,8 @@ from memory_tool.core.timeline import (
     TimelineError,
     FutureTimeError,
     DistantPastWarning,
-    date_from_timeline_path,
+    parse_entry_lines,
+    split_tags,
 )
 from memory_tool.core.sort import TimelineSorter, SortError
 from memory_tool.context.builder import ContextBuilder
@@ -37,6 +39,7 @@ def record(
     time: Optional[str] = typer.Option(None, "--time", help="Time (HH:MM), defaults to current time"),
     force: bool = typer.Option(False, "--force", "-f", help="Force recording (skip warnings for old dates)"),
     tags: Optional[str] = typer.Option(None, "--tags", "-t", help="Comma-separated tags (e.g., bug,auth,urgent)"),
+    as_json: bool = typer.Option(False, "--json", help="Print the recorded entry and any notices as one line of JSON"),
 ):
     """Record a message to timeline (m command).
 
@@ -61,24 +64,9 @@ def record(
     time = opt_str(time)
     tags_str = opt_str(tags)
 
-    # 1. Parse bracket tags from start of message (e.g., "[버그][긴급] message")
-    # Supports Korean, alphanumeric, hyphens, underscores
-    bracket_tags: List[str] = []
-    bracket_tag_pattern = re.compile(r'^(\[[\w가-힣-]+\]\s*)+')
-    bracket_match = bracket_tag_pattern.match(message)
-    if bracket_match:
-        bracket_tags = re.findall(r'\[([\w가-힣-]+)\]', bracket_match.group(0))
-        message = message[bracket_match.end():].strip()
-
-    # 2. Parse hashtag tags from end of message (e.g., "message #tag1 #tag2")
-    # Supports Korean, alphanumeric, hyphens, underscores
-    inline_tags: List[str] = []
-    inline_tag_pattern = re.compile(r'(\s+#[\w가-힣-]+)+$')
-    match = inline_tag_pattern.search(message)
-    if match:
-        tag_portion = match.group(0)
-        inline_tags = re.findall(r'#([\w가-힣-]+)', tag_portion)
-        message = message[:match.start()].strip()
+    # 1-2. Bracket tags at the start ("[버그][긴급] message") and hashtags at the
+    # end ("message #tag1 #tag2"). The same rule reads them back for --json views.
+    message, bracket_tags, inline_tags = split_tags(message)
 
     # 3. Parse --tags option
     tag_list: List[str] = []
@@ -94,217 +82,262 @@ def record(
 
     try:
         dt, file_path = timeline.record(message, date, time, force=force, tags=all_tags)
-
-        time_str = dt.strftime("%H:%M")
-        date_str = dt.strftime("%Y-%m-%d")
-        rel_path = display_path(file_path)
-
-        console.print(f"[green]OK[/green] Recorded at {date_str} {time_str}")
-        console.print(f"[dim]-> {rel_path}[/dim]")
-
-        # Auto-update context if enabled
-        try:
-            config = Config()
-            if config.auto_update_enabled:
-                console.print("[dim]Auto-updating context...[/dim]")
-                builder = ContextBuilder()
-                context_path = builder.write_context()
-                rel_context = display_path(context_path)
-                console.print(f"[dim]-> {rel_context} updated[/dim]")
-        except Exception as e:
-            console.print(f"[yellow]Warning:[/yellow] Auto-update failed: {e}")
-
-        # Review notice, on the day's first entry only. It must never stop a record.
-        try:
-            if dt.date() == datetime.now().date() and _is_first_entry(file_path):
-                from memory_tool.review.notice import review_notice
-
-                notice = review_notice(get_base_path())
-                if notice:
-                    console.print(notice, markup=False, highlight=False)
-        except Exception:
-            pass
-
-        # Document health suggestion
-        try:
-            from memory_tool.utils.suggestion_helper import check_and_suggest_after_command
-
-            memory_dir = get_base_path()
-            check_and_suggest_after_command(memory_dir, "m", force=False)
-        except Exception:
-            pass
-
     except FutureTimeError as e:
+        if as_json:
+            json_output.fail(json_output.FUTURE_TIME, str(e))
         console.print(f"[red]ERROR[/red] {e}", style="bold")
         sys.exit(1)
-
     except DistantPastWarning as e:
+        if as_json:
+            json_output.fail(json_output.DISTANT_PAST, f"{e} Use --force to record anyway.")
         console.print(f"[yellow]WARNING[/yellow] {e}")
         console.print("[dim]Use --force to record anyway[/dim]")
         sys.exit(1)
-
     except ValueError as e:
+        if as_json:
+            json_output.fail(json_output.INVALID_ARGUMENT, str(e))
+        console.print(f"[red]ERROR[/red] {e}")
+        sys.exit(1)
+    except TimelineError as e:
+        if as_json:
+            json_output.fail(json_output.FAILED, str(e))
         console.print(f"[red]ERROR[/red] {e}")
         sys.exit(1)
 
-    except TimelineError as e:
-        console.print(f"[red]ERROR[/red] {e}")
+    if not as_json:
+        console.print(f"[green]OK[/green] Recorded at {dt:%Y-%m-%d} {dt:%H:%M}")
+        console.print(f"[dim]-> {display_path(file_path)}[/dim]")
+
+    notices = []
+
+    # Auto-update context if enabled
+    try:
+        config = Config()
+        if config.auto_update_enabled:
+            if not as_json:
+                console.print("[dim]Auto-updating context...[/dim]")
+            context_path = ContextBuilder().write_context()
+            if not as_json:
+                console.print(f"[dim]-> {display_path(context_path)} updated[/dim]")
+    except Exception as e:
+        if as_json:
+            notices.append(json_output.notice("context", f"Auto-update failed: {e}"))
+        else:
+            console.print(f"[yellow]Warning:[/yellow] Auto-update failed: {e}")
+
+    # Review notice, on the day's first entry only. It must never stop a record.
+    try:
+        if dt.date() == datetime.now().date() and _is_first_entry(file_path):
+            from memory_tool.review.notice import review_notice
+
+            notice = review_notice(get_base_path())
+            if notice and as_json:
+                notices.append(json_output.notice("review", notice))
+            elif notice:
+                console.print(notice, markup=False, highlight=False)
+    except Exception:
+        pass
+
+    # Document health suggestion
+    try:
+        from memory_tool.utils.suggestion_helper import check_and_suggest_after_command, document_health_notice
+
+        if as_json:
+            health = document_health_notice(get_base_path(), "m")
+            if health:
+                notices.append(json_output.notice("document_health", health))
+        else:
+            check_and_suggest_after_command(get_base_path(), "m", force=False)
+    except Exception:
+        pass
+
+    if as_json:
+        [entry] = parse_entry_lines(timeline.format_entry(dt, message, all_tags))
+        json_output.succeed(
+            entry=json_output.entry_dict(dt, entry),
+            path=json_output.path_text(file_path),
+            notices=notices,
+        )
+
+
+JSON_HELP = "Print the entries as one line of JSON (for editors and scripts)"
+
+
+def _print_days(title: str, days_found, empty_message: str, footer: Optional[str]) -> None:
+    """Print a period's timeline for a person."""
+    if not days_found:
+        console.print(f"[yellow]![/yellow] {empty_message}")
+        console.print(f"[dim]Use: m \"your message\" to start recording[/dim]")
+        return
+
+    console.print(f"[cyan]{title}:[/cyan]\n")
+    for day_date, _, content in days_found:
+        console.print(f"[bold]{day_date:%Y-%m-%d}[/bold]")
+        console.print(sanitize_output(content))
+        console.print("")
+
+    if footer:
+        console.print(f"[dim]{footer.format(count=len(days_found))}[/dim]")
+
+
+def _emit_days(start, end, days_found) -> None:
+    json_output.succeed(**json_output.days_payload(
+        start, end, [json_output.day_dict(day_date, path, content) for day_date, path, content in days_found],
+    ))
+
+
+def _show_period(start: datetime, end: datetime, as_json: bool, title: str, empty_message: str, footer: Optional[str]) -> None:
+    """Read a period and show it, for a person or as JSON."""
+    try:
+        days_found = Timeline().get_range(start, end)
+    except Exception as e:
+        if as_json:
+            json_output.fail(json_output.FAILED, f"Failed to read the timeline: {e}")
+        console.print(f"[red]ERROR[/red] Failed to read timeline: {e}")
+        sys.exit(1)
+
+    if as_json:
+        _emit_days(start, end, days_found)
+        return
+
+    _print_days(title, days_found, empty_message, footer)
+
+
+def _parse_day(value: str, option: str, as_json: bool) -> datetime:
+    try:
+        return datetime.strptime(value, "%Y-%m-%d")
+    except ValueError:
+        message = f"Invalid date for {option}: {value}. Use YYYY-MM-DD."
+        if as_json:
+            json_output.fail(json_output.INVALID_ARGUMENT, message)
+        console.print(f"[red]ERROR[/red] {message}")
         sys.exit(1)
 
 
 @app.command(
     epilog="For detailed help: [bold]mhelp today[/bold]"
 )
-def today():
+def today(
+    as_json: bool = typer.Option(False, "--json", help=JSON_HELP),
+):
     """Show today's timeline (mtoday command).
 
     Displays all timeline entries recorded today, sorted by time.
 
     Examples:
         mtoday               # Show today's entries
+        mtoday --json        # The same, as JSON
     """
-    timeline = Timeline()
+    now = datetime.now()
 
     try:
-        file_path, content = timeline.get_today()
-
-        if file_path is None:
-            console.print("[yellow]![/yellow] No timeline entries for today yet")
-            console.print(f"[dim]Use: m \"your message\" to start recording[/dim]")
-            return
-
-        today_str = datetime.now().strftime("%Y-%m-%d")
-        console.print(f"[cyan]{today_str} Timeline:[/cyan]\n")
-        console.print(sanitize_output(content))
-        console.print(f"\n[dim]File: {file_path}[/dim]")
-
+        file_path = Timeline().get_timeline_file(now, create=False)
+        content = file_path.read_text(encoding="utf-8") if file_path.exists() else None
     except Exception as e:
+        if as_json:
+            json_output.fail(json_output.FAILED, f"Failed to read the timeline: {e}")
         console.print(f"[red]ERROR[/red] Failed to read today's timeline: {e}")
         sys.exit(1)
+
+    if content is None and not as_json:
+        console.print("[yellow]![/yellow] No timeline entries for today yet")
+        console.print(f"[dim]Use: m \"your message\" to start recording[/dim]")
+        return
+
+    _show_one_day(now, file_path, content, as_json)
 
 
 @app.command(
     epilog="For detailed help: [bold]mhelp week[/bold]"
 )
-def week():
+def week(
+    as_json: bool = typer.Option(False, "--json", help=JSON_HELP),
+):
     """Show this week's timeline (mweek command).
 
     Displays timeline entries from Monday to today, grouped by date.
 
     Examples:
         mweek                # Show this week's entries
+        mweek --json         # The same, as JSON
     """
-    timeline = Timeline()
-
-    try:
-        week_files = timeline.get_week()
-
-        if not week_files:
-            console.print("[yellow]![/yellow] No timeline entries for this week yet")
-            console.print(f"[dim]Use: m \"your message\" to start recording[/dim]")
-            return
-
-        today_dt = datetime.now()
-        days_since_monday = today_dt.weekday()
-        monday = today_dt - timedelta(days=days_since_monday)
-
-        console.print(f"[cyan]Week of {monday.strftime('%Y-%m-%d')} Timeline:[/cyan]\n")
-
-        for file_path, content in week_files:
-            file_date = date_from_timeline_path(file_path)
-            date_str = file_date.strftime("%Y-%m-%d") if file_date else file_path.stem
-
-            console.print(f"[bold]{date_str}[/bold]")
-            console.print(sanitize_output(content))
-            console.print("")
-
-        total_days = len(week_files)
-        console.print(f"[dim]{total_days} day(s) with entries this week[/dim]")
-
-    except Exception as e:
-        console.print(f"[red]ERROR[/red] Failed to read week's timeline: {e}")
-        sys.exit(1)
+    now = datetime.now()
+    monday = now - timedelta(days=now.weekday())
+    _show_period(
+        monday, now, as_json,
+        title=f"Week of {monday:%Y-%m-%d} Timeline",
+        empty_message="No timeline entries for this week yet",
+        footer="{count} day(s) with entries this week",
+    )
 
 
 @app.command()
-def month():
+def month(
+    as_json: bool = typer.Option(False, "--json", help=JSON_HELP),
+):
     """Show this month's timeline (mmonth command)."""
-    timeline = Timeline()
-
-    try:
-        month_files = timeline.get_month()
-
-        if not month_files:
-            console.print("[yellow]![/yellow] No timeline entries for this month yet")
-            console.print(f"[dim]Use: m \"your message\" to start recording[/dim]")
-            return
-
-        today_dt = datetime.now()
-        month_name = today_dt.strftime('%Y-%m')
-
-        console.print(f"[cyan]{month_name} Timeline:[/cyan]\n")
-
-        for file_path, content in month_files:
-            file_date = date_from_timeline_path(file_path)
-            date_str = file_date.strftime("%Y-%m-%d") if file_date else file_path.stem
-
-            console.print(f"[bold]{date_str}[/bold]")
-            console.print(sanitize_output(content))
-            console.print("")
-
-        total_days = len(month_files)
-        console.print(f"[dim]{total_days} day(s) with entries this month[/dim]")
-
-    except Exception as e:
-        console.print(f"[red]ERROR[/red] Failed to read month's timeline: {e}")
-        sys.exit(1)
+    now = datetime.now()
+    _show_period(
+        now.replace(day=1), now, as_json,
+        title=f"{now:%Y-%m} Timeline",
+        empty_message="No timeline entries for this month yet",
+        footer="{count} day(s) with entries this month",
+    )
 
 
 @app.command()
 def days(
     num_days: int = typer.Argument(14, help="Number of days to show (default: 14)"),
+    from_date: Optional[str] = typer.Option(None, "--from", help="First date (YYYY-MM-DD). Takes the place of the number of days"),
+    to_date: Optional[str] = typer.Option(None, "--to", help="Last date (YYYY-MM-DD), default: today"),
+    as_json: bool = typer.Option(False, "--json", help=JSON_HELP),
 ):
-    """Show timeline for the last N days (mdays command).
+    """Show timeline for the last N days, or for a period (mdays command).
 
     Examples:
-        mdays        # Show last 14 days (default)
-        mdays 7      # Show last 7 days
-        mdays 30     # Show last 30 days
+        mdays                                   # Show last 14 days (default)
+        mdays 7                                 # Show last 7 days
+        mdays --from 2026-10-20 --to 2026-11-03 # Show a period
+        mdays --from 2026-10-20                 # From a date to today
+        mdays --to 2026-11-03                   # The 14 days up to a date
+        mdays --json                            # As JSON
     """
-    timeline = Timeline()
+    from_date = opt_str(from_date)
+    to_date = opt_str(to_date)
 
-    try:
-        days_files = timeline.get_days(num_days)
-
-        if not days_files:
-            console.print(f"[yellow]![/yellow] No timeline entries for the last {num_days} days")
-            console.print(f"[dim]Use: m \"your message\" to start recording[/dim]")
-            return
-
-        today_dt = datetime.now()
-        start_date = today_dt - timedelta(days=num_days - 1)
-
-        console.print(f"[cyan]Timeline: Last {num_days} days ({start_date.strftime('%Y-%m-%d')} ~ {today_dt.strftime('%Y-%m-%d')}):[/cyan]\n")
-
-        for file_path, content in days_files:
-            file_date = date_from_timeline_path(file_path)
-            date_str = file_date.strftime("%Y-%m-%d") if file_date else file_path.stem
-
-            console.print(f"[bold]{date_str}[/bold]")
-            console.print(sanitize_output(content))
-            console.print("")
-
-        total_days_with_entries = len(days_files)
-        console.print(f"[dim]{total_days_with_entries} day(s) with entries in the last {num_days} days[/dim]")
-
-    except Exception as e:
-        console.print(f"[red]ERROR[/red] Failed to read timeline: {e}")
+    if num_days < 1:
+        message = f"The number of days must be at least 1, not {num_days}."
+        if as_json:
+            json_output.fail(json_output.INVALID_ARGUMENT, message)
+        console.print(f"[red]ERROR[/red] {message}")
         sys.exit(1)
+
+    end = _parse_day(to_date, "--to", as_json) if to_date else datetime.now()
+    start = _parse_day(from_date, "--from", as_json) if from_date else end - timedelta(days=num_days - 1)
+
+    if start.date() > end.date():
+        message = f"--from ({start:%Y-%m-%d}) is later than --to ({end:%Y-%m-%d})."
+        if as_json:
+            json_output.fail(json_output.INVALID_ARGUMENT, message)
+        console.print(f"[red]ERROR[/red] {message}")
+        sys.exit(1)
+
+    if from_date or to_date:
+        title = f"Timeline: {start:%Y-%m-%d} ~ {end:%Y-%m-%d}"
+        empty = f"No timeline entries from {start:%Y-%m-%d} to {end:%Y-%m-%d}"
+        footer = "{count} day(s) with entries in this period"
+    else:
+        title = f"Timeline: Last {num_days} days ({start:%Y-%m-%d} ~ {end:%Y-%m-%d})"
+        empty = f"No timeline entries for the last {num_days} days"
+        footer = f"{{count}} day(s) with entries in the last {num_days} days"
+
+    _show_period(start, end, as_json, title=title, empty_message=empty, footer=footer)
 
 
 @app.command()
 def day(
     date_str: str = typer.Argument(..., help="Date: YYYY-MM-DD, MM-DD, or DD"),
+    as_json: bool = typer.Option(False, "--json", help=JSON_HELP),
 ):
     """Show timeline for a specific date (mday command).
 
@@ -317,31 +350,45 @@ def day(
         mday 2026-01-15      # Specific date
         mday 01-15           # January 15 (current year)
         mday 15              # 15th of current month
+        mday 15 --json       # As JSON
     """
     timeline = Timeline()
 
     try:
         file_path, content, parsed_date = timeline.get_date(date_str)
-
-        if parsed_date is None:
-            console.print(f"[red]ERROR[/red] Invalid date format: {date_str}")
-            console.print("[dim]Use: YYYY-MM-DD, MM-DD, or DD[/dim]")
-            sys.exit(1)
-
-        date_display = parsed_date.strftime("%Y-%m-%d")
-
-        if content is None:
-            console.print(f"[yellow]![/yellow] No timeline entries for {date_display}")
-            console.print(f"[dim]File would be at: {file_path}[/dim]")
-            return
-
-        console.print(f"[cyan]{date_display} Timeline:[/cyan]\n")
-        console.print(sanitize_output(content))
-        console.print(f"\n[dim]File: {file_path}[/dim]")
-
     except Exception as e:
+        if as_json:
+            json_output.fail(json_output.FAILED, f"Failed to read the timeline: {e}")
         console.print(f"[red]ERROR[/red] Failed to read timeline: {e}")
         sys.exit(1)
+
+    if parsed_date is None:
+        if as_json:
+            json_output.fail(json_output.INVALID_ARGUMENT, f"Invalid date: {date_str}. Use YYYY-MM-DD, MM-DD, or DD.")
+        console.print(f"[red]ERROR[/red] Invalid date format: {date_str}")
+        console.print("[dim]Use: YYYY-MM-DD, MM-DD, or DD[/dim]")
+        sys.exit(1)
+
+    _show_one_day(parsed_date, file_path, content, as_json)
+
+
+def _show_one_day(day_date: datetime, file_path: Path, content: Optional[str], as_json: bool) -> None:
+    if as_json:
+        found = [(day_date, file_path, content)] if content is not None else []
+        _emit_days(day_date, day_date, found)
+        return
+
+    date_display = day_date.strftime("%Y-%m-%d")
+
+    if content is None:
+        console.print(f"[yellow]![/yellow] No timeline entries for {date_display}")
+        console.print(f"[dim]File would be at: {file_path}[/dim]")
+        return
+
+    console.print(f"[cyan]{date_display} Timeline:[/cyan]\n")
+    console.print(sanitize_output(content))
+    console.print(f"\n[dim]File: {file_path}[/dim]")
+
 
 
 @app.command()

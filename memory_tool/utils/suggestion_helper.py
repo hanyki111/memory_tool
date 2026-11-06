@@ -1,7 +1,7 @@
 """Helper functions for showing document health suggestions."""
 
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 from rich.console import Console
 
@@ -31,29 +31,62 @@ def show_document_health_suggestion(
     Returns:
         True if suggestion was shown
     """
-    # Check if we should show suggestion (cooldown)
-    tracker = SuggestionTracker(memory_dir)
-    if not tracker.should_show_suggestion(f"document-health-{suggestion_type}", cooldown_hours, force):
+    found = _pending_health_issues(memory_dir, suggestion_type, cooldown_hours, force)
+    if found is None:
         return False
 
-    # Check for health issues
+    level, issues = found
+    if level == "critical":
+        _show_critical_suggestion(issues, context)
+    else:
+        _show_warning_suggestion(issues, context)
+    return True
+
+
+def _pending_health_issues(
+    memory_dir: Path, suggestion_type: str, cooldown_hours: int, force: bool
+) -> Optional[Tuple[str, list]]:
+    """Find the issues to suggest about now, and mark the suggestion as shown.
+
+    Returns:
+        ("critical" or "warning", issues), or None when there is nothing to say
+        or the cooldown has not passed.
+    """
+    tracker = SuggestionTracker(memory_dir)
+    key = f"document-health-{suggestion_type}"
+    if not tracker.should_show_suggestion(key, cooldown_hours, force):
+        return None
+
     checker = DocumentHealthChecker(memory_dir)
-    critical_issues = checker.get_critical_issues()
-    warning_issues = checker.get_warning_issues()
+    for level, issues in (("critical", checker.get_critical_issues()), ("warning", checker.get_warning_issues())):
+        if issues:
+            tracker.mark_suggestion_shown(key)
+            return level, issues
 
-    # Critical issues always show (ignoring cooldown for critical)
-    if critical_issues:
-        _show_critical_suggestion(critical_issues, context)
-        tracker.mark_suggestion_shown(f"document-health-{suggestion_type}")
-        return True
+    return None
 
-    # Warning issues respect cooldown
-    if warning_issues:
-        _show_warning_suggestion(warning_issues, context)
-        tracker.mark_suggestion_shown(f"document-health-{suggestion_type}")
-        return True
 
-    return False
+def document_health_notice(memory_dir: Path, command_name: str, force: bool = False) -> Optional[str]:
+    """The same suggestion as plain text, for --json results.
+
+    It follows the same cooldown as the printed suggestion and counts as shown.
+    """
+    found = _pending_health_issues(memory_dir, f"{command_name}-command", 24, force)
+    if found is None:
+        return None
+
+    level, issues = found
+    if level == "critical":
+        listed = ", ".join(f"{i.module_name}/{i.file_type}.md ({i.line_count} lines)" for i in issues[:3])
+        return f"Some documents are very large: {listed}. Run mcontext to see all issues."
+
+    if len(issues) == 1:
+        issue = issues[0]
+        return (
+            f"{issue.module_name}/{issue.file_type}.md is getting large ({issue.line_count} lines). "
+            f"Consider: marchive {issue.file_type} --module {issue.module_name} --suggest"
+        )
+    return f"{len(issues)} documents are getting large. Run mcontext to see them."
 
 
 def _show_critical_suggestion(issues, context: str):

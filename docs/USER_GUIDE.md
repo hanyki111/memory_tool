@@ -35,6 +35,7 @@
 - [LLM Integration](#llm-integration)
 - [Wiki-style Connections](#wiki-style-connections)
 - [Module Organization](#module-organization)
+- [JSON Output](#json-output)
 - [Performance Optimization](#performance-optimization)
 
 ### [Part 5: Configuration](#part-5-configuration)
@@ -849,11 +850,8 @@ mtoday
 
 **Options:**
 ```bash
-# Reverse order (oldest first)
-mtoday --reverse
-
-# Limit entries
-mtoday --limit 10
+# As JSON, for editors and scripts (see "JSON Output")
+mtoday --json
 ```
 
 ---
@@ -891,6 +889,23 @@ Wed 2025-11-12
 
 Total: 15 entries across 5 days
 ```
+
+---
+
+### `mday`, `mmonth`, `mdays` - View Another Day or a Period
+
+**Usage:**
+```bash
+mday 2026-11-05                          # One day (also 11-05, or 05 for this month)
+mmonth                                   # This month so far
+mdays                                    # The last 14 days
+mdays 7                                  # The last 7 days
+mdays --from 2026-10-20 --to 2026-11-03  # A period, both ends included
+mdays --from 2026-10-20                  # From a date to today
+mdays 7 --to 2026-11-03                  # The 7 days up to a date
+```
+
+Every view command (`mtoday`, `mday`, `mweek`, `mmonth`, `mdays`) takes `--json`.
 
 ---
 
@@ -3044,6 +3059,114 @@ python -m memory_tool module create email-service
 python -m memory_tool module archive email-verification
 python -m memory_tool module archive email-reset
 ```
+
+---
+
+## JSON Output
+
+Editors, scripts and other programs can call the CLI and read its result
+instead of the text meant for people. Add `--json` to:
+
+| Kind | Commands |
+|---|---|
+| Record | `m` |
+| View | `mtoday`, `mday`, `mweek`, `mmonth`, `mdays` |
+| Search | `ms` (keyword, `--semantic`, `--hybrid`) |
+| AI | `mask`, `msummary`, `mreview`, `mmodule suggest-links --ai`, `mmodule from-text` |
+
+### Rules
+
+- The result is **one line** of JSON on standard output, always UTF-8. Nothing
+  else is printed: no progress text, even for AI commands that take a while.
+- Success is `{"ok": true, ...}`. Failure is `{"ok": false, "code": "...", "error": "..."}`
+  with exit status 1. Decide on `code`; `error` is for a person.
+- Messages meant for a person, such as the review notice, come in `notices`
+  as `{"kind": "...", "message": "..."}`, in the language set by `help.language`.
+- Paths are absolute. Dates are `YYYY-MM-DD`.
+
+| `code` | Meaning |
+|---|---|
+| `not_initialized` | No knowledge base |
+| `invalid_argument` | A date, option or other input is wrong |
+| `not_found` | No such document, file or timeline |
+| `future_time` | `m` was asked to record in the future |
+| `distant_past` | `m` was asked to record over a year ago; `--force` records anyway |
+| `feature_unavailable` | An optional package is missing (vector search) |
+| `llm_unavailable` | No LLM provider can be used |
+| `llm_failed` | The LLM call or its answer failed |
+| `failed` | Anything else |
+
+### Entries
+
+Views and search results carry an entry the same way. `text` is the line as
+written; `tags` are the `[tag]`s at its start and the `#tag`s at its end.
+
+```json
+{"date": "2026-11-06", "time": "14:30", "text": "[bug] Fixed login #auth", "tags": ["bug", "auth"]}
+```
+
+### Results
+
+**View** (`mtoday --json`, `mdays --from 2026-11-01 --to 2026-11-06 --json`):
+
+```json
+{"ok": true, "from": "2026-11-01", "to": "2026-11-06",
+ "days": [{"date": "2026-11-06", "path": "...", "entries": [ ... ],
+           "content": "# 2026-11-06 Timeline\n- 14:30 | ..."}]}
+```
+
+Days without a file are left out; a period with none gives an empty `days`.
+`content` is the whole file, so lines that are not entries, such as notes written
+by hand, are not lost.
+
+**Record** (`m "message" --json`):
+
+```json
+{"ok": true, "entry": { ... }, "path": "...",
+ "notices": [{"kind": "review", "message": "..."}]}
+```
+
+Notice kinds are `review`, `document_health` and `context` (the context update failed).
+
+**Search** (`ms "port" --json`):
+
+```json
+{"ok": true, "query": "port", "mode": "keyword", "cached": false, "notices": [],
+ "results": [{"path": "...", "kind": "timeline", "line": 3, "text": "- 15:10 | ...",
+              "context": "...", "score": 1.0, "date": "2026-11-06", "source": null,
+              "project": null, "entry": { ... }}]}
+```
+
+`kind` is `timeline`, `module`, `review`, `plan` or `other`. Only timeline
+results have `entry`. `mode` is `keyword`, `semantic` or `hybrid`.
+
+**Summary** (`msummary week --json`):
+
+```json
+{"ok": true, "kind": "timeline", "scope": "week", "summary": "...", "cached": false, "saved_to": null}
+```
+
+`kind` is `timeline`, `module` or `decisions`. `cached` tells whether the summary
+came from the cache without calling the LLM.
+
+**Links** (`mmodule suggest-links work/api --ai --json`):
+
+```json
+{"ok": true, "module": "work/api", "notices": [],
+ "suggestions": [{"module": "work/auth", "path": "...", "reason": "...", "confidence": 0.8}]}
+```
+
+**From text** (`mmodule from-text --text-file notes.txt --json`):
+
+```json
+{"ok": true, "saved": true, "path": "...", "notices": [],
+ "document": {"name": "...", "type": "참고", "description": "...", "suggested_connections": []}}
+```
+
+With `--preview`, `saved` is false, `path` is null and `document` has `body`.
+
+`mask --json` and `mreview --json` keep their own fields, described with those
+commands, and follow the same rules.
 
 ---
 
