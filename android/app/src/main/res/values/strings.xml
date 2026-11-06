@@ -70,6 +70,9 @@
     <string name="timeline_more">Load the 7 days before</string>
     <string name="timeline_loaded_since">Loaded from %1$s</string>
     <string name="edit_title">Edit entry</string>
+    <string name="edit_hint">Touch and hold an entry to edit it</string>
+    <string name="queue_open">Show the entries not yet sent</string>
+    <string name="queue_close">Hide the entries not yet sent</string>
     <string name="edit_saved">Saved on the PC</string>
     <string name="edit_deleted">Deleted on the PC</string>
     <string name="edit_delete_confirm">Delete this entry from the timeline on the PC?</string>

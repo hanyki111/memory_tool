@@ -70,6 +70,9 @@
     <string name="timeline_more">이전 7일 더 불러오기</string>
     <string name="timeline_loaded_since">%1$s부터 불러왔습니다</string>
     <string name="edit_title">기록 고치기</string>
+    <string name="edit_hint">기록을 길게 누르면 고칠 수 있습니다</string>
+    <string name="queue_open">보내지 않은 기록 펼치기</string>
+    <string name="queue_close">보내지 않은 기록 접기</string>
     <string name="edit_saved">PC에 저장했습니다</string>
     <string name="edit_deleted">PC에서 삭제했습니다</string>
     <string name="edit_delete_confirm">PC 타임라인에서 이 기록을 삭제할까요?</string>

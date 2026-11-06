@@ -8,7 +8,18 @@ import android.speech.RecognizerIntent
 import android.text.format.DateFormat
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -67,6 +78,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import io.github.hanyki111.memorycapture.R
@@ -86,8 +98,8 @@ import java.util.Locale
 
 /**
  * The first screen: the PC's timeline, newest first, with a search field on
- * top, the phone's unsent entries above the timeline, and a field at the
- * bottom that sends at once.
+ * top and a field at the bottom that sends at once. The phone's unsent
+ * entries sit just above that field, where what was just sent is seen.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -95,6 +107,14 @@ fun TimelineScreen(model: TimelineModel, phoneEntries: List<Entry>, onSettings: 
     val snackbar = remember { SnackbarHostState() }
     var editing by remember { mutableStateOf<TimelineEntry?>(null) }
     val list = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    val hint = stringResource(R.string.edit_hint)
+    val showHint: () -> Unit = {
+        scope.launch {
+            snackbar.currentSnackbarData?.dismiss()
+            snackbar.showSnackbar(hint)
+        }
+    }
 
     LaunchedEffect(Unit) { model.start() }
     LaunchedEffect(model.message) {
@@ -119,9 +139,16 @@ fun TimelineScreen(model: TimelineModel, phoneEntries: List<Entry>, onSettings: 
         if (atEnd && model.autoLoad && model.results == null && model.error == null) model.loadOlder()
     }
 
+    // A new day on top (the first entry of today) is shown when the top was in view;
+    // the list would otherwise keep the day that was first in place, below it.
+    val newest = model.days.firstOrNull()?.date
+    LaunchedEffect(newest) {
+        if (list.firstVisibleItemIndex <= 1) list.scrollToItem(0)
+    }
+
     Scaffold(
         topBar = { SearchBar(model, onSettings) },
-        bottomBar = { InputBar() },
+        bottomBar = { BottomPanel(phoneEntries) },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { inner ->
         PullToRefreshBox(
@@ -130,11 +157,10 @@ fun TimelineScreen(model: TimelineModel, phoneEntries: List<Entry>, onSettings: 
             modifier = Modifier.fillMaxSize().padding(inner),
         ) {
             LazyColumn(Modifier.fillMaxSize(), state = list) {
-                queueItems(phoneEntries)
                 if (model.results != null || model.searching || model.searchError != null) {
-                    searchItems(model) { editing = it }
+                    searchItems(model, showHint) { editing = it }
                 } else {
-                    timelineItems(model) { editing = it }
+                    timelineItems(model, showHint) { editing = it }
                 }
             }
         }
@@ -175,6 +201,17 @@ private fun SearchBar(model: TimelineModel, onSettings: () -> Unit) {
     }
 }
 
+/** The phone's unsent entries, then the field; padded for the navigation bar and the keyboard. */
+@Composable
+private fun BottomPanel(phoneEntries: List<Entry>) {
+    Surface(tonalElevation = 2.dp) {
+        Column(Modifier.fillMaxWidth().navigationBarsPadding().imePadding()) {
+            QueueStrip(phoneEntries)
+            InputBar()
+        }
+    }
+}
+
 /** Write and send without opening anything; speech fills the field. */
 @Composable
 private fun InputBar() {
@@ -195,9 +232,9 @@ private fun InputBar() {
         text = ""
     }
 
-    Surface(tonalElevation = 2.dp) {
+    run {
         Row(
-            Modifier.fillMaxWidth().navigationBarsPadding().imePadding().padding(horizontal = 8.dp, vertical = 6.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             OutlinedTextField(
@@ -226,15 +263,17 @@ private fun InputBar() {
 
 // ---- the list -------------------------------------------------------------
 
-private fun LazyListScope.timelineItems(model: TimelineModel, onEdit: (TimelineEntry) -> Unit) {
+private fun LazyListScope.timelineItems(model: TimelineModel, onTap: () -> Unit, onEdit: (TimelineEntry) -> Unit) {
     for (day in model.days) {
         item(key = "day-${day.date}") { DayHeader(day.date) }
         val entries = Days.newestFirst(day)
         items(entries.size, key = { "e-${day.date}-$it" }) { i ->
-            EntryRow(entries[i], showDate = false, onClick = { onEdit(entries[i]) })
+            EntryRow(entries[i], showDate = false, onTap = onTap, onLongPress = { onEdit(entries[i]) })
         }
     }
-    item(key = "end") {
+    // No key: a keyed item here would stay in place while the first days load above it,
+    // and the list would open scrolled to its end.
+    item {
         Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
             when {
                 model.loading -> CircularProgressIndicator()
@@ -259,7 +298,7 @@ private fun LazyListScope.timelineItems(model: TimelineModel, onEdit: (TimelineE
     }
 }
 
-private fun LazyListScope.searchItems(model: TimelineModel, onEdit: (TimelineEntry) -> Unit) {
+private fun LazyListScope.searchItems(model: TimelineModel, onTap: () -> Unit, onEdit: (TimelineEntry) -> Unit) {
     val results = model.results
     item(key = "search-head") {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -276,7 +315,7 @@ private fun LazyListScope.searchItems(model: TimelineModel, onEdit: (TimelineEnt
     }
     if (results != null) {
         items(results.size, key = { "r-$it" }) { i ->
-            EntryRow(results[i], showDate = true, onClick = { onEdit(results[i]) })
+            EntryRow(results[i], showDate = true, onTap = onTap, onLongPress = { onEdit(results[i]) })
         }
     }
 }
@@ -291,10 +330,17 @@ private fun DayHeader(date: String) {
     )
 }
 
+/** Editing is rare, so it takes a long press; a tap says so. */
 @Composable
-private fun EntryRow(entry: TimelineEntry, showDate: Boolean, onClick: () -> Unit) {
+private fun EntryRow(entry: TimelineEntry, showDate: Boolean, onTap: () -> Unit, onLongPress: () -> Unit) {
+    val haptic = LocalHapticFeedback.current
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 8.dp),
+        Modifier.fillMaxWidth()
+            .combinedClickable(onClick = onTap, onLongClick = {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                onLongPress()
+            })
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
@@ -322,15 +368,55 @@ private fun shortDay(date: String): String {
 
 // ---- the phone's own entries --------------------------------------------------
 
-/** Entries not yet on the PC: those to check first, then those waiting. */
-private fun LazyListScope.queueItems(entries: List<Entry>) {
+/**
+ * Entries not yet on the PC, folded into one line above the field: the counts
+ * and the latest entry. Opened, those to check first, then those waiting.
+ */
+@Composable
+private fun QueueStrip(entries: List<Entry>) {
     val attention = entries.filter { it.state == State.ATTENTION }
     val pending = entries.filter { it.state == State.PENDING || it.state == State.CHECK }.sortedWith(compareBy({ it.date }, { it.time }))
+    var open by rememberSaveable { mutableStateOf(false) }
     if (attention.isEmpty() && pending.isEmpty()) return
 
-    item(key = "queue") {
-        val context = LocalContext.current
-        Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    val context = LocalContext.current
+    Column(Modifier.fillMaxWidth().animateContentSize()) {
+        Row(
+            Modifier.fillMaxWidth().combinedClickable(onClick = { open = !open })
+                .padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            val counts = listOfNotNull(
+                stringResource(R.string.main_attention, attention.size).takeIf { attention.isNotEmpty() },
+                stringResource(R.string.main_pending, pending.size).takeIf { pending.isNotEmpty() },
+            ).joinToString(" · ")
+            Column(Modifier.weight(1f)) {
+                Text(
+                    counts,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (attention.isNotEmpty()) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                )
+                if (!open) {
+                    val latest = pending.lastOrNull() ?: attention.last()
+                    Text(
+                        "${normalTime(latest.time)}  ${latest.text}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            Icon(
+                if (open) Icons.Filled.KeyboardArrowDown else Icons.Filled.KeyboardArrowUp,
+                contentDescription = stringResource(if (open) R.string.queue_close else R.string.queue_open),
+            )
+        }
+        if (open) Column(
+            Modifier.fillMaxWidth().heightIn(max = 320.dp).verticalScroll(rememberScrollState())
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
             if (attention.isNotEmpty()) {
                 Text(stringResource(R.string.main_attention, attention.size), style = MaterialTheme.typography.titleSmall)
                 attention.forEach { entry ->
@@ -377,8 +463,8 @@ private fun LazyListScope.queueItems(entries: List<Entry>) {
                 }
                 OutlinedButton(onClick = { Sender.schedule(context) }) { Text(stringResource(R.string.main_send_now)) }
             }
-            HorizontalDivider()
         }
+        HorizontalDivider()
     }
 }
 

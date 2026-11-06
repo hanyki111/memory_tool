@@ -10,13 +10,14 @@ Needs memory_tool 1.6.0 or later on the PC (`entry find/edit/delete`).
 ## The timeline
 
 The app opens on the PC's timeline, newest first, a week at a time; scroll to the end for the week before, pull down
-to refresh. Tap an entry to change its text, date or time, or to delete it (`entry edit`, `entry delete`). The
+to refresh. Touch and hold an entry to change its text, date or time, or to delete it (`entry edit`,
+`entry delete`); a tap only says so, since editing is rare. The
 entry is named by its date, time and text as listed; if it changed on the PC meanwhile, nothing changes and the day
 is loaded again. The search field finds timeline entries by keyword (`ms --type timeline`).
 
-The field at the bottom sends at once; the microphone fills it with speech. Entries not yet on the PC are listed
-above the timeline. The gear opens the settings, including the text size (80 to 150 percent of the phone's own; the
-home screen widget follows the phone's).
+The field at the bottom sends at once; the microphone fills it with speech. Entries not yet on the PC are folded
+into a line just above the field, with their count and the latest one; tap it to open them. The gear opens the
+settings, including the text size (70 to 200 percent of the phone's own; the home screen widget follows the phone's).
 
 ## The small capture window
 

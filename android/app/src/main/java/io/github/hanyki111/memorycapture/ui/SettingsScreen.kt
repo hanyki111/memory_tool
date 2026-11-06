@@ -111,8 +111,8 @@ fun SettingsScreen(resumed: Int, fontPercent: Int, onFontPercent: (Int) -> Unit,
                 Slider(
                     value = fontPercent.toFloat(),
                     onValueChange = { onFontPercent(((it / 10f).roundToInt() * 10)) },
-                    valueRange = 80f..150f,
-                    steps = 6,
+                    valueRange = Settings.FONT_MIN.toFloat()..Settings.FONT_MAX.toFloat(),
+                    steps = (Settings.FONT_MAX - Settings.FONT_MIN) / 10 - 1,
                     modifier = Modifier.weight(1f),
                 )
                 Text("$fontPercent%", modifier = Modifier.padding(start = 12.dp))
