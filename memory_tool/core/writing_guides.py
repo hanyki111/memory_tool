@@ -66,7 +66,22 @@ def read_guide(guide: Optional[str] = None, base_path: Optional[Path] = None) ->
     Raises:
         GuideError: If there is no such guide.
     """
-    stem = guide_file_name(guide)
+    return read_guide_file(guide_file_name(guide), base_path)
+
+
+def read_guide_file(stem: str, base_path: Optional[Path] = None) -> str:
+    """Read a guide file by name, preferring the user's own copy.
+
+    Args:
+        stem: File name without its suffix
+        base_path: The knowledge base folder, for the user's own guides
+
+    Returns:
+        The file's text.
+
+    Raises:
+        GuideError: If there is no such file.
+    """
     candidates = []
 
     if base_path is not None:

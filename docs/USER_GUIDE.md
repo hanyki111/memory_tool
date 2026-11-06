@@ -596,112 +596,69 @@ msort today --no-backup
 
 ---
 
-### `mreview` - Review System
+### `mreview` - Review
 
-**Purpose:** Create and manage weekly/monthly reviews for reflection and retrospective
+**Purpose:** Move what is worth keeping from the timeline into documents, and optionally reflect on the period
 
 **Usage:**
 ```bash
-mreview <type> [action] [identifier]
+mreview                       # Start or continue a review
+mreview --since 2026-10-01    # Start a review from a chosen date
+mreview --with codex          # Write with Codex, skipping the menu
+mreview list                  # Items waiting to be written
+mreview write 2               # Write item 2 now
+mreview write 2 --with solo   # The same, on your own
+mreview done 2                # Mark item 2 as written
 ```
 
-**Types:**
-- `weekly` - Weekly review (ISO week format: W47)
-- `monthly` - Monthly review (month number: 11)
+**What happens:**
 
-**Actions:**
-- (none) - Create/edit review (opens editor)
-- `show` - Display review content
+1. The entries since the last review go to the configured LLM provider, with document paths and descriptions but no document bodies. A first review reads the last 14 days. If no usable answer comes back, nothing is saved.
+2. Items put off earlier come first, followed by up to five new proposals, updates of existing documents first. Each proposal names the days its entries are from, and any citing a day without entries or a document that does not exist is discarded.
+3. For a proposal, choose **write now**, **write later** or **reject**. For an item put off earlier, choose **written**, **keep for later**, **drop** or **write now**.
+4. Finally, reflect on the period or skip it.
 
-**Examples:**
+**The limit:** while more than five items remain open, nothing can be put off. Reject, drop or write items until five remain. An item being written counts until it is marked written.
 
-#### Weekly Review
-```bash
-# Create/edit this week's review (opens editor)
-mreview weekly
+**Pausing:** every choice is saved as it is made. Pause with `p` or Ctrl+C and run `mreview` to continue. The proposals and the period stay the same, and no LLM is called. No new review starts until this one ends. Entries recorded in the meantime belong to the next review.
 
-# View this week's review
-mreview weekly show
+**Writing:** a menu lists the installed AI CLIs (Claude Code, Codex, Antigravity) and writing on your own.
 
-# View specific week
-mreview weekly show W47
+- With a CLI, it starts in the project with one short instruction: read a work file. The file holds the writing procedure, the task and its entries, and it is removed when you leave the CLI. Permission prompts stay as the CLI has them.
+- On your own, the document is created if it is new and opened in `EDITOR`.
 
-# Create without opening editor
-mreview weekly --no-editor
-```
+Choosing **write later** creates no file. A document is created when writing starts, so empty documents do not pile up. Items waiting can be written at any time with `mreview write`.
 
-#### Monthly Review
-```bash
-# Create/edit this month's review
-mreview monthly
+**Reflection:** on your own, the review file opens with fixed questions as comments. With a CLI, the AI reads the period's entries and asks during the conversation. Either way, you write the answers.
 
-# View this month's review
-mreview monthly show
-
-# View specific month
-mreview monthly show 11
-```
-
-**Generated Structure:**
+**Files:**
 ```
 .memory/reviews/
-├── weekly/
-│   └── 2025/
-│       ├── W46.md
-│       └── W47.md
-├── monthly/
-│   └── 2025/
-│       ├── 10.md
-│       └── 11.md
-└── templates/
-    ├── weekly.md
-    └── monthly.md
+├── 2026-11-05.md      # One file per review
+└── 2026-11-05-2.md    # A second review on the same day
 ```
 
-**Automatic Features:**
-- **Auto-links:** Daily Timeline links automatically generated
-- **Auto-statistics:** Entry counts, active days calculated
-- **Auto-template:** Structured review template applied
-- **Variable substitution:** Dates, weeks, months, stats auto-filled
-- **Editor integration:** Opens your preferred editor (EDITOR env var)
-- **Legacy compatible:** Works with both old and new Timeline structures
+The frontmatter is the record, and `## Moves` is rewritten from it. Text under the reflection heading is yours and is never rewritten. Files in `weekly/` and `monthly/` from earlier versions stay where they are, and are not counted as reviews.
 
-**Weekly Review Template:**
-```markdown
-# Week W47 Review (2025-11-18 ~ 2025-11-24)
+**Notice:** on the day's first entry and in `mcontext`, once 7 days have passed since the last review and 10 entries have gathered. It only counts entries.
 
-## Daily Timeline Links
-- [Mon 2025-11-18](../timeline/daily/2025-11/18.md) (5 entries)
-- [Tue 2025-11-19](../timeline/daily/2025-11/19.md) (3 entries)
-...
-
-## Summary
-Total entries: 25 | Active days: 5/7
-
-## Accomplishments
--
-
-## Challenges
--
-
-## Learnings
--
-
-## Next Week Goals
--
+**Settings (`config.yaml`):**
+```yaml
+review:
+  writer: codex              # The tool offered by default
+  reflection_questions:      # Fixed questions for writing on your own
+    - What changed?
+  notice:
+    enabled: true
+    min_days: 7
+    min_entries: 10
 ```
 
-**Editor Configuration:**
-- Windows: `notepad` (default)
-- Linux/Mac: `vi` (default)
-- Custom: Set `EDITOR` environment variable
+Without `review.writer`, the default is the CLI set as `llm.provider`, then the first one installed.
 
-**Relationship with Timeline and Plan:**
-```
-Timeline (facts) → Review (reflection) → Plan (action)
-     ↓                    ↓                   ↓
-  What happened      What it means      What to do next
-```
+**Your own guides:** `guides/review-proposals.md` replaces the criteria for proposals, and `guides/review-reflection.md` replaces the guide for reflecting with an AI.
+
+**For editors and scripts:** `mreview --json` starts or reads the review without asking anything. `mreview set <number> <write|later|reject|written>` and `mreview reflection <written|skipped>` choose without being asked. All of them print one line of JSON, and `mreview list --json` prints the waiting items.
 
 ---
 

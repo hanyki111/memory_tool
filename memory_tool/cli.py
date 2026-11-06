@@ -2,7 +2,8 @@
 
 This module serves as the entry point for the CLI. All commands are organized
 in the memory_tool.commands package:
-- timeline: record, today, week, month, days, sort, review
+- timeline: record, today, week, month, days, sort
+- review: review
 - modules: module, archive, browse
 - search: search, check, index
 - planning: plan, summary

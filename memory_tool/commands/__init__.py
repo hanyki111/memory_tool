@@ -1,7 +1,8 @@
 """CLI commands package for Memory Tool.
 
 This package contains modularized CLI commands organized by functionality:
-- timeline: record, today, week, month, days, sort, review
+- timeline: record, today, week, month, days, sort
+- review: review
 - modules: module, archive, browse
 - search: search, check, index
 - planning: plan, summary
@@ -17,6 +18,7 @@ from memory_tool.commands.common import app, console
 # Import all command modules to register them with the app
 # The order doesn't matter since all commands use @app.command()
 from memory_tool.commands import timeline
+from memory_tool.commands import review
 from memory_tool.commands import modules
 from memory_tool.commands import search
 from memory_tool.commands import planning
