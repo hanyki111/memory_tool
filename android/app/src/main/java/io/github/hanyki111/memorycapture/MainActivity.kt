@@ -7,6 +7,8 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
+import android.provider.Settings as AndroidSettings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -46,6 +48,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import io.github.hanyki111.memorycapture.core.CommandTemplate
 import io.github.hanyki111.memorycapture.core.Entry
 import io.github.hanyki111.memorycapture.core.Outcome
@@ -61,21 +64,33 @@ import io.github.hanyki111.memorycapture.ui.AppTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 /** Settings, the phone's key, the PC's fingerprint, and the entries kept on the phone. */
 class MainActivity : ComponentActivity() {
 
     private val askNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
+    /** Counts returns to the screen, so what is set elsewhere, like the battery setting, is read again. */
+    private val resumed = mutableIntStateOf(0)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (Build.VERSION.SDK_INT >= 33) askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
-        setContent { AppTheme { MainScreen() } }
+        setContent { AppTheme { MainScreen(resumed.intValue) } }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        resumed.intValue++
     }
 }
 
 @Composable
-private fun MainScreen() {
+private fun MainScreen(resumed: Int) {
     val context = LocalContext.current
     val settings = remember { Settings(context) }
     val scope = rememberCoroutineScope()
@@ -183,6 +198,8 @@ private fun MainScreen() {
                     }
                 }) { Text(stringResource(R.string.main_test)) }
             }
+            HorizontalDivider()
+            BatterySection(resumed)
             Spacer(Modifier.padding(24.dp))
         }
     }
@@ -251,7 +268,15 @@ private fun EntrySections(entries: List<Entry>, onSendNow: () -> Unit) {
     if (pending.isNotEmpty()) {
         Text(stringResource(R.string.main_pending, pending.size), style = MaterialTheme.typography.titleMedium)
         pending.sortedWith(compareBy({ it.date }, { it.time })).forEach {
-            Text("${it.date} ${it.time}  ${it.text}" + if (it.note.isNotEmpty()) "\n  ${it.note}" else "", style = MaterialTheme.typography.bodyMedium)
+            Column {
+                Text("${it.date} ${it.time}  ${it.text}", style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    if (it.attempts == 0) stringResource(R.string.main_not_tried)
+                    else stringResource(R.string.main_last_try, whenTried(it.changedAt), it.note),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
         OutlinedButton(onClick = onSendNow) { Text(stringResource(R.string.main_send_now)) }
     }
@@ -260,6 +285,34 @@ private fun EntrySections(entries: List<Entry>, onSendNow: () -> Unit) {
         Text(stringResource(R.string.main_sent), style = MaterialTheme.typography.titleMedium)
         sent.forEach { Text("${it.date} ${it.time}  ${it.text}", style = MaterialTheme.typography.bodySmall) }
     }
+}
+
+/**
+ * Android may hold back background sending to save battery, Samsung phones
+ * especially. Says whether the app is exempt, and opens the setting.
+ */
+@Composable
+private fun BatterySection(resumed: Int) {
+    val context = LocalContext.current
+    val unrestricted = remember(resumed) {
+        context.getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(context.packageName)
+    }
+    Text(stringResource(R.string.main_battery), style = MaterialTheme.typography.titleMedium)
+    Text(
+        stringResource(if (unrestricted) R.string.main_battery_unrestricted else R.string.main_battery_restricted),
+        style = MaterialTheme.typography.bodySmall,
+    )
+    OutlinedButton(onClick = {
+        val details = Intent(AndroidSettings.ACTION_APPLICATION_DETAILS_SETTINGS, "package:${context.packageName}".toUri())
+        context.startActivity(details)
+    }) { Text(stringResource(R.string.main_battery_open)) }
+}
+
+/** HH:mm today, or MM-dd HH:mm on another day. */
+private fun whenTried(millis: Long): String {
+    val at = Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault())
+    val pattern = if (at.toLocalDate() == LocalDate.now()) "HH:mm" else "MM-dd HH:mm"
+    return at.format(DateTimeFormatter.ofPattern(pattern))
 }
 
 /** Run `memory_tool --version` through the saved command, and say what came back. */

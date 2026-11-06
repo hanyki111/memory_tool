@@ -107,4 +107,13 @@ class QueueTest {
         assertEquals(entries, EntryJson.read(EntryJson.write(entries)))
         assertEquals(emptyList<Entry>(), EntryJson.read(""))
     }
+
+    @Test
+    fun `retry waits a fixed step longer each time, up to five minutes`() {
+        assertEquals(15L, Retry.delaySeconds(0))
+        assertEquals(15L, Retry.delaySeconds(1))
+        assertEquals(45L, Retry.delaySeconds(3))
+        assertEquals(300L, Retry.delaySeconds(20))
+        assertEquals(300L, Retry.delaySeconds(1000))
+    }
 }

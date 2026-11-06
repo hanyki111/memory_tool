@@ -60,8 +60,14 @@ Speech is shown for a few seconds before sending (set in the app); tap the text 
   double quotes apart and depends on code pages; Base64 passes through it unchanged.
 - Each entry is sent as `record --json --date <written> --time <written> -- <text>`, so a late entry keeps its time,
   and text starting with `-` stays text.
-- A send that certainly did not reach the PC (no network, PC off) waits and is retried by WorkManager. A send that
-  broke after the command went out is marked **to check**: open the app, look at the PC's timeline, and choose
+- While entries are waiting, the app asks Android to wake it when a validated network appears (a network callback
+  with a PendingIntent), so turning airplane mode off sends them without opening the app. Sending runs as expedited
+  work, which Android starts promptly in the background. Sends run one at a time, so no entry is sent twice at once.
+- A send that certainly did not reach the PC (no network, PC off) waits and is tried again after 15 seconds, then
+  30, 45 and so on, never more than 5 minutes apart. The list of waiting entries shows the last try and its reason.
+- Battery optimization, which Samsung phones apply strongly, can still hold background work back. The app's
+  **Battery** section says whether the app is exempt and opens its settings, where **Unrestricted** removes the limit.
+- A send that broke after the command went out is marked **to check**: open the app, look at the PC's timeline, and choose
   **It is recorded** or **Send again**. memory_tool refusals, such as `distant_past`, are also left to check.
 - The PC refusing the key, a changed fingerprint, or missing settings are reported once as a notification; waiting
   will not fix them.

@@ -19,6 +19,8 @@
     <string name="notify_uncertain">기록되었는지 확인이 필요합니다: %1$s</string>
     <string name="notify_unreadable">PC의 응답을 앱이 읽지 못했습니다.</string>
     <string name="channel_notices">memory_tool 안내</string>
+    <string name="notify_sending">기록을 보내는 중…</string>
+    <string name="channel_sending">전송 중</string>
     <string name="channel_attention">확인할 기록</string>
 
     <string name="main_new_entry">새 기록</string>
@@ -29,6 +31,12 @@
     <string name="main_pending">보낼 기록 (%1$d건)</string>
     <string name="main_send_now">지금 보내기</string>
     <string name="main_sent">최근 보낸 기록</string>
+    <string name="main_not_tried">아직 보내지 않았습니다. 네트워크가 연결되면 보냅니다.</string>
+    <string name="main_last_try">마지막 시도 %1$s: %2$s</string>
+    <string name="main_battery">배터리</string>
+    <string name="main_battery_unrestricted">제한 없음: 백그라운드에서도 바로 보냅니다.</string>
+    <string name="main_battery_restricted">배터리 최적화가 켜져 있어, 백그라운드 전송이 늦어질 수 있습니다. 앱 설정의 배터리에서 \'제한 없음\'을 골라 주세요.</string>
+    <string name="main_battery_open">앱 설정 열기</string>
     <string name="main_pc">PC</string>
     <string name="main_host">주소 (DDNS 이름 또는 IP)</string>
     <string name="main_port">포트</string>

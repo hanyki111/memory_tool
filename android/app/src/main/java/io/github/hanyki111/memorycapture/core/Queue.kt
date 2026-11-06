@@ -92,6 +92,19 @@ object Transitions {
         entries.filter { it.state == State.PENDING }.minWithOrNull(compareBy({ it.date }, { it.time }, { it.id }))
 }
 
+/** How long to wait before trying again when the PC could not be reached. */
+object Retry {
+    const val STEP_SECONDS = 15L
+    const val MAX_SECONDS = 300L
+
+    /**
+     * Grows by a fixed step and stops at a few minutes, so an entry is not left
+     * waiting for long once the PC is back. A returning network is not waited
+     * for at all; it wakes the app on its own.
+     */
+    fun delaySeconds(attempts: Int): Long = (STEP_SECONDS * attempts.coerceAtLeast(1)).coerceAtMost(MAX_SECONDS)
+}
+
 /** The stored form of the entries. */
 object EntryJson {
     fun write(entries: List<Entry>): String {
