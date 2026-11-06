@@ -1,0 +1,225 @@
+/* Colours come from the VS Code theme, so light, dark and high contrast all work. */
+
+:root {
+  --gap: 6px;
+}
+
+body {
+  margin: 0;
+  padding: 0 12px 24px;
+  color: var(--vscode-foreground);
+  background: var(--vscode-sideBar-background, var(--vscode-editor-background));
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+  line-height: 1.5;
+}
+
+header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 10px 0 8px;
+  background: inherit;
+  border-bottom: 1px solid var(--vscode-panel-border, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.row {
+  display: flex;
+  gap: var(--gap);
+  align-items: center;
+  min-width: 0;
+}
+
+.row.wrap {
+  flex-wrap: wrap;
+  padding-top: var(--gap);
+}
+
+.row > input {
+  flex: 1;
+  min-width: 0;
+}
+
+.tools {
+  justify-content: flex-end;
+}
+
+.tools .status {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.92em;
+}
+
+input {
+  box-sizing: border-box;
+  padding: 4px 6px;
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, transparent);
+  border-radius: 2px;
+  font: inherit;
+}
+
+input:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+label {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+
+button {
+  padding: 3px 8px;
+  color: var(--vscode-button-secondaryForeground);
+  background: var(--vscode-button-secondaryBackground);
+  border: none;
+  border-radius: 2px;
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+button:hover {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+
+button.primary {
+  color: var(--vscode-button-foreground);
+  background: var(--vscode-button-background);
+}
+
+button.primary:hover {
+  background: var(--vscode-button-hoverBackground);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+button:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 1px;
+}
+
+button.link {
+  padding: 0;
+  color: var(--vscode-textLink-foreground);
+  background: none;
+}
+
+button.link:hover {
+  text-decoration: underline;
+  background: none;
+}
+
+.period summary {
+  cursor: pointer;
+  color: var(--vscode-descriptionForeground);
+}
+
+.banner {
+  margin: 8px 0;
+  padding: 6px 8px;
+  color: var(--vscode-inputValidation-errorForeground, var(--vscode-foreground));
+  background: var(--vscode-inputValidation-errorBackground);
+  border: 1px solid var(--vscode-inputValidation-errorBorder);
+}
+
+.day h2 {
+  margin: 14px 0 4px;
+  font-size: 0.95em;
+  font-weight: 600;
+}
+
+.entry,
+.note {
+  display: flex;
+  gap: 8px;
+  padding: 2px 4px;
+  border-radius: 2px;
+  overflow-wrap: anywhere;
+}
+
+.entry .time {
+  flex: none;
+  color: var(--vscode-descriptionForeground);
+  font-variant-numeric: tabular-nums;
+}
+
+.note {
+  padding-left: 12px;
+  color: var(--vscode-descriptionForeground);
+  font-style: italic;
+}
+
+.tag {
+  color: var(--vscode-textLink-foreground);
+}
+
+.entry.highlight {
+  background: var(--vscode-editor-findMatchHighlightBackground, var(--vscode-list-activeSelectionBackground));
+  outline: 1px solid var(--vscode-focusBorder);
+}
+
+.hit {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  margin: 2px 0;
+  padding: 6px 4px;
+  text-align: left;
+  white-space: normal;
+  color: var(--vscode-foreground);
+  background: none;
+  overflow-wrap: anywhere;
+}
+
+.hit:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.hit .where {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.9em;
+}
+
+.back {
+  margin: 10px 0 4px;
+}
+
+.empty,
+.muted {
+  color: var(--vscode-descriptionForeground);
+}
+
+.empty .strong {
+  color: var(--vscode-foreground);
+  font-weight: 600;
+}
+
+.sentinel {
+  min-height: 1px;
+}
+
+/* Wide screens: the entries get more room between time and text. */
+@media (min-width: 560px) {
+  body {
+    padding: 0 24px 32px;
+  }
+
+  .entry {
+    gap: 14px;
+  }
+}
