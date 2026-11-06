@@ -33,6 +33,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Timeline/Review/Plan 시스템 전체 완료 (Phase 1-5)
 - README.md 및 design 문서 최종 업데이트
 
+## [1.4.0] - 2026-11-06
+
+### ✨ 추가
+
+- **JSON 출력:** 기록, 조회, 검색, AI 명령에 `--json`을 추가했습니다. 편집기와 스크립트가 터미널 출력을 해석하지 않고 결과를 받을 수 있습니다. 형식은 `docs/USER_GUIDE.md`의 "JSON Output"에 정리했습니다.
+  - 대상: `m`, `mtoday`, `mday`, `mweek`, `mmonth`, `mdays`, `ms`, `msummary`, `mmodule suggest-links --ai`, `mmodule from-text`
+  - 결과는 표준 출력에 UTF-8 JSON 한 줄로만 나옵니다. 실패에는 `code`가 붙고, 리뷰 알림 같은 안내는 `notices`에 담깁니다.
+  - 조회와 검색은 기록마다 시각, 원문, 태그를 담습니다. 조회는 파일 원문도 함께 담습니다.
+- **기간 조회:** `mdays --from 날짜 --to 날짜`로 원하는 기간의 기록을 봅니다.
+- **`mday` 명령 등록:** 도움말에 있었지만 실행 명령으로 등록되어 있지 않았습니다.
+
+### 🔧 변경
+
+- `mask --json`, `mreview --json`의 실패에 `code`를 추가했습니다. 기존 항목은 그대로입니다.
+
+### 🐛 수정
+
+- `mhelp days`가 기본값을 7일로 안내했지만 실제 기본값은 14일입니다.
+- `mhelp today`와 사용자 안내서에 있던, 실제로는 없는 옵션(`--yesterday`, `--reverse`, `--limit`)을 지웠습니다.
+
 ## [1.3.0] - 2026-11-05
 
 ### ⚠️ 호환 없이 바뀐 동작
