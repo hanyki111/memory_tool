@@ -50,6 +50,23 @@
 - 서명 키는 저장소 밖에 보관합니다. 업데이트할 때 같은 서명을 써야 앱 데이터가 유지됩니다.
 - 빌드 도구는 C 드라이브 여유 공간이 적어(2026-11-07 기준 약 95% 사용) E 드라이브에 설치합니다. 전역 환경 변수는 바꾸지 않고, `android/local.properties`(저장소에 넣지 않음)와 Gradle 설정으로 경로를 지정합니다.
 
+### 설치한 빌드 환경 (2026-11-07)
+
+모두 `E:\dev` 아래에 있으며, 전역 환경 변수와 PATH는 바꾸지 않았습니다. 내려받은 파일은 배포처의 체크섬과 대조했습니다.
+
+| 도구 | 위치 | 버전 | 확인 |
+|---|---|---|---|
+| JDK | `E:\dev\jdk-17` | Temurin 17.0.21+9 | Adoptium API의 SHA-256 |
+| 안드로이드 명령줄 도구 | `E:\devndroid-sdk\cmdline-tools\latest` | 23.0 | Google 저장소 목록의 SHA-1 |
+| SDK 플랫폼 | `E:\devndroid-sdk\platformsndroid-36` | API 36(Android 16) | sdkmanager가 확인 |
+| 빌드 도구 | `E:\devndroid-sdkuild-tools.1.0` | 36.1.0 | sdkmanager가 확인 |
+| platform-tools(`adb`) | `E:\devndroid-sdk\platform-tools` | 37.0.1 | sdkmanager가 확인 |
+| Gradle | `E:\dev\gradle-8.13` | 8.13 | services.gradle.org의 SHA-256 |
+
+- 이 버전의 `sdkmanager`는 사용 중단 예정이라는 경고를 내고, 패키지 이름을 `platforms/android-36`처럼 `/`로 표시합니다. Windows의 `.bat`는 `;`를 인수 구분자로 읽으므로, 설치할 때도 `/` 형식을 써야 합니다.
+- Android SDK 라이선스는 사용자가 설치를 요청하여 동의했습니다.
+- 내려받은 원본은 `E:\dev\downloads`에 있습니다. 필요 없으면 지워도 됩니다.
+
 ## 3. 0.1 구현 계획
 
 브랜치는 `feature/android-capture`입니다. 각 단계는 별도의 커밋으로 나누고, 순수 Kotlin 부분은 JVM 단위 테스트로 확인합니다. 기기 화면과 위젯, 타일은 사용자가 휴대폰에서 확인합니다.
