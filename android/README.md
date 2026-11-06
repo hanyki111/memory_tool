@@ -1,13 +1,25 @@
 # Memory Capture (Android)
 
-Record to the [memory_tool](https://github.com/hanyki111/memory_tool) timeline from an Android phone. The app sends
-each entry over SSH to the PC, where `python -m memory_tool record` writes it, so every entry goes through the same
+Record to the [memory_tool](https://github.com/hanyki111/memory_tool) timeline from an Android phone, and read,
+search and edit it. The app runs memory_tool on the PC over SSH for everything, so every entry goes through the same
 CLI as the PC's own `m`. Entries written without a connection wait on the phone and are sent later, at the time they
-were written.
+were written. Nothing of the PC's timeline is stored on the phone.
 
-## Opening the capture window
+Needs memory_tool 1.6.0 or later on the PC (`entry find/edit/delete`).
 
-- **App icon**, then **New entry**
+## The timeline
+
+The app opens on the PC's timeline, newest first, a week at a time; scroll to the end for the week before, pull down
+to refresh. Tap an entry to change its text, date or time, or to delete it (`entry edit`, `entry delete`). The
+entry is named by its date, time and text as listed; if it changed on the PC meanwhile, nothing changes and the day
+is loaded again. The search field finds timeline entries by keyword (`ms --type timeline`).
+
+The field at the bottom sends at once; the microphone fills it with speech. Entries not yet on the PC are listed
+above the timeline. The gear opens the settings, including the text size (80 to 150 percent of the phone's own; the
+home screen widget follows the phone's).
+
+## The small capture window
+
 - **Quick settings tile:** pull down the notification shade, edit the tiles, and add **Record**
 - **Home screen widget:** looks like a text field; the microphone starts speech input. It also shows entries waiting
   to be sent or to be checked. (Android widgets cannot hold a text field, so tapping it opens the window.)
@@ -69,9 +81,10 @@ Speech is shown for a few seconds before sending (set in the app); tap the text 
 - Battery optimization, which Samsung phones apply strongly, can still hold background work back. The app's
   **Battery** section says whether the app is exempt and opens its settings, where **Unrestricted** removes the limit.
 - A send that broke after the command went out, as when the phone moves from mobile data to Wi-Fi, may already be on
-  the PC. The app then runs `day --json -- <date>` on the PC and looks for the same time and text: found means sent,
-  absent means it is sent again, so nothing is recorded twice. Two identical entries written in the same minute would
-  look like one. Only when the answer cannot be read is the entry marked **to check**: look at the PC's timeline and
+  the PC. The app then asks the PC with `entry find`, which compares after writing tags as `record` does (it turns
+  `fix #bug` into `[bug] fix`): found means sent, absent means it is sent again, so nothing is recorded twice. Two
+  identical entries written in the same minute would look like one. An older memory_tool without `entry` leaves the
+  entry to check rather than sending it again. Only when the answer cannot be read is the entry marked **to check**: look at the PC's timeline and
   choose **It is recorded** or **Send again**. memory_tool refusals, such as `distant_past`, are also left to check.
 - The PC refusing the key, a changed fingerprint, or missing settings are reported once as a notification; waiting
   will not fix them.
@@ -109,4 +122,5 @@ install anyway.
 
 ## Not in this version
 
-Reading or editing the timeline (planned for 0.2), editing documents, several PCs, Play Store distribution.
+Reading the timeline without a connection, semantic search, editing documents, several PCs, Play Store
+distribution.

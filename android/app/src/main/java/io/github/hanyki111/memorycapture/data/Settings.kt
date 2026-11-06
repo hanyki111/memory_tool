@@ -39,6 +39,11 @@ class Settings(context: Context) {
         get() = prefs.getInt("voiceDelay", 3)
         set(value) = prefs.edit().putInt("voiceDelay", value.coerceIn(0, 30)).apply()
 
+    /** The app's text size, in percent of the phone's own; 80 to 150 in steps of 10 */
+    var fontPercent: Int
+        get() = prefs.getInt("fontPercent", 100)
+        set(value) = prefs.edit().putInt("fontPercent", (value.coerceIn(80, 150) / 10) * 10).apply()
+
     /** The PC's host key fingerprint the person confirmed, or empty */
     var fingerprint: String
         get() = prefs.getString("fingerprint", "").orEmpty()

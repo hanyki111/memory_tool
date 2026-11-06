@@ -37,7 +37,7 @@ import io.github.hanyki111.memorycapture.core.RecordReply
 import io.github.hanyki111.memorycapture.core.Retry
 import io.github.hanyki111.memorycapture.core.State
 import io.github.hanyki111.memorycapture.core.Transitions
-import io.github.hanyki111.memorycapture.core.dayArgs
+import io.github.hanyki111.memorycapture.core.PcArgs
 import io.github.hanyki111.memorycapture.core.recordArgs
 import io.github.hanyki111.memorycapture.data.EntryStore
 import io.github.hanyki111.memorycapture.data.PhoneKey
@@ -107,8 +107,8 @@ object Sender {
             val entry = Transitions.next(EntryStore.all(context)) ?: return false
 
             if (entry.state == State.CHECK) {
-                // It may be on the PC already: look before sending it again.
-                val outcome = run(dayArgs(entry.date))
+                // It may be on the PC already: ask before sending it again.
+                val outcome = run(PcArgs.find(entry.date, entry.time, entry.text))
                 val next = Transitions.applyCheck(entry, outcome, System.currentTimeMillis())
                 EntryStore.put(context, next)
                 when {

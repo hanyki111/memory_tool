@@ -64,33 +64,20 @@ class QueueTest {
 
     // ---- checking the PC ----------------------------------------------------
 
-    private val dayOutput =
-        """{"ok": true, "from": "2026-11-07", "to": "2026-11-07", "days": [{"date": "2026-11-07", "path": "x", "entries": [""" +
-            """{"date": "2026-11-07", "time": "09:05", "text": "기록 \"따옴표\" [tag]", "tags": ["tag"]}], "content": ""}]}"""
-
-    private val quoted = "기록 \"따옴표\" [tag]"
-
-    @Test
-    fun dayHasFindsTheEntryByTimeAndText() {
-        assertEquals(true, Replies.dayHas(dayOutput, "2026-11-07", "09:05", quoted))
-        assertEquals(true, Replies.dayHas("warning\n$dayOutput", "2026-11-07", "09:05", "기록\n\"따옴표\" [tag] "))
-        assertEquals(false, Replies.dayHas(dayOutput, "2026-11-07", "09:06", quoted))
-        assertEquals(false, Replies.dayHas(dayOutput, "2026-11-07", "09:05", "다른 기록"))
-        assertEquals(false, Replies.dayHas("""{"ok": true, "days": []}""", "2026-11-07", "09:05", "기록"))
-        assertNull(Replies.dayHas("""{"ok": false, "code": "not_initialized", "error": "No base"}""", "2026-11-07", "09:05", "기록"))
-        assertNull(Replies.dayHas("python: not found", "2026-11-07", "09:05", "기록"))
-    }
-
     @Test
     fun checkSettlesTheEntry() {
-        val checking = entry.copy(text = quoted, state = State.CHECK, maybeRecorded = true, note = "lost")
+        val checking = entry.copy(text = "기록 #tag", state = State.CHECK, maybeRecorded = true, note = "lost")
 
-        val found = Transitions.applyCheck(checking, Outcome.Ran(dayOutput, "", 0), 5)
+        val found = Transitions.applyCheck(checking, Outcome.Ran("""{"ok": true, "found": true, "entry": {}}""", "", 0), 5)
         assertEquals(State.SENT, found.state)
 
-        val absent = Transitions.applyCheck(checking.copy(time = "09:06"), Outcome.Ran(dayOutput, "", 0), 5)
+        val absent = Transitions.applyCheck(checking, Outcome.Ran("""{"ok": true, "found": false}""", "", 0), 5)
         assertEquals(State.PENDING, absent.state)
         assertFalse(absent.maybeRecorded)
+
+        val old = Transitions.applyCheck(checking, Outcome.Ran("", "Error: No such command 'entry'.", 2), 5)
+        assertEquals(State.ATTENTION, old.state)
+        assertTrue(old.note, "1.6.0" in old.note)
 
         val unreachable = Transitions.applyCheck(checking, Outcome.NotSent("No connection"), 5)
         assertEquals(State.CHECK, unreachable.state)
@@ -102,10 +89,6 @@ class QueueTest {
         assertEquals("python: not found", unreadable.note)
     }
 
-    @Test
-    fun dayArgsEndOptionsBeforeTheDate() {
-        assertEquals(listOf("day", "--json", "--", "2026-11-07"), dayArgs("2026-11-07"))
-    }
 
     @Test
     fun recordedIsSent() {

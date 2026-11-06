@@ -87,6 +87,3 @@ class CommandTemplate private constructor(val text: String) {
  */
 fun recordArgs(text: String, date: String, time: String): List<String> =
     listOf("record", "--json", "--date", date, "--time", time, "--", oneLine(text))
-
-/** memory_tool's arguments to read one day of the timeline as JSON. */
-fun dayArgs(date: String): List<String> = listOf("day", "--json", "--", date)

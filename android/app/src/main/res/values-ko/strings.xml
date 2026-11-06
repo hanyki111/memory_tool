@@ -60,6 +60,25 @@
     <string name="main_trust_body">PC에서 확인한 값과 비교해 주세요: ssh-keygen -lf C:\\ProgramData\\ssh\\ssh_host_ed25519_key.pub. 같을 때만 신뢰하세요.</string>
     <string name="main_trust">같습니다, 신뢰</string>
 
+    <string name="settings">설정</string>
+    <string name="back">뒤로</string>
+    <string name="retry">다시 시도</string>
+    <string name="search_hint">타임라인 검색</string>
+    <string name="search_clear">검색 지우기</string>
+    <string name="search_results">검색 결과 %1$d건</string>
+    <string name="search_none">찾은 기록이 없습니다</string>
+    <string name="timeline_more">이전 7일 더 불러오기</string>
+    <string name="timeline_loaded_since">%1$s부터 불러왔습니다</string>
+    <string name="edit_title">기록 고치기</string>
+    <string name="edit_saved">PC에 저장했습니다</string>
+    <string name="edit_deleted">PC에서 삭제했습니다</string>
+    <string name="edit_delete_confirm">PC 타임라인에서 이 기록을 삭제할까요?</string>
+    <string name="edit_changed_on_pc">PC에서 이 기록이 바뀌어 고치지 않았습니다. 다시 불러왔습니다.</string>
+    <string name="edit_unknown">연결이 끊겨 결과를 알 수 없습니다. 그날을 다시 불러왔습니다.</string>
+    <string name="font_size">글자 크기</string>
+    <string name="font_preview">미리보기: 오늘 있었던 일을 타임라인에 기록합니다.</string>
+    <string name="pc_setup_needed">먼저 설정에서 %1$s을(를) 입력해 주세요.</string>
+
     <string name="save">저장</string>
     <string name="copy">복사</string>
     <string name="share">공유</string>
