@@ -82,6 +82,28 @@ export function initial(today: string): ViewState {
   };
 }
 
+export type Quick = "thisWeek" | "lastWeek" | "thisMonth";
+
+/** The periods behind the quick buttons. Weeks start on Monday, as in mweek. */
+export function quickRange(which: Quick, today: string): Range {
+  const [y, m, d] = today.split("-").map(Number);
+  const weekday = (new Date(Date.UTC(y, m - 1, d)).getUTCDay() + 6) % 7; // Monday = 0
+  const monday = addDays(today, -weekday);
+
+  if (which === "thisWeek") {
+    return { from: monday, to: today };
+  }
+  if (which === "lastWeek") {
+    return { from: addDays(monday, -7), to: addDays(monday, -1) };
+  }
+  return { from: `${today.slice(0, 8)}01`, to: today };
+}
+
+/** Whether there may be entries older than what the screen has loaded. */
+export function hasOlder(state: ViewState, earliest: string | null): boolean {
+  return earliest !== null && state.loaded.from > earliest;
+}
+
 /** The range to ask for so the screen shows a chosen period. */
 export function jump(from: string, to: string, today: string): ViewState {
   if (!isDate(from) || !isDate(to)) {

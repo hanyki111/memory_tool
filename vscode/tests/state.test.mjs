@@ -130,3 +130,48 @@ describe("search", () => {
     assert.deepEqual(clearSearch(state), before);
   });
 });
+
+import { hasOlder, quickRange } from "../src/state.ts";
+import { earliestDate } from "../src/kb.ts";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+
+describe("quick periods", () => {
+  // 2026-11-06 is a Friday.
+  test("this week starts on Monday", () => {
+    assert.deepEqual(quickRange("thisWeek", "2026-11-06"), { from: "2026-11-02", to: "2026-11-06" });
+    assert.deepEqual(quickRange("thisWeek", "2026-11-02"), { from: "2026-11-02", to: "2026-11-02" });
+    assert.deepEqual(quickRange("thisWeek", "2026-11-08"), { from: "2026-11-02", to: "2026-11-08" });
+  });
+
+  test("last week is the Monday to Sunday before", () => {
+    assert.deepEqual(quickRange("lastWeek", "2026-11-06"), { from: "2026-10-26", to: "2026-11-01" });
+  });
+
+  test("this month", () => {
+    assert.deepEqual(quickRange("thisMonth", "2026-11-06"), { from: "2026-11-01", to: "2026-11-06" });
+  });
+});
+
+describe("the earliest entries", () => {
+  test("comes from the oldest month folder of either layout", () => {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), "mt-kb-"));
+    try {
+      assert.equal(earliestDate(base), null);
+      fs.mkdirSync(path.join(base, "timeline", "daily", "2026-03"), { recursive: true });
+      fs.mkdirSync(path.join(base, "timeline", "2025-11"), { recursive: true });
+      fs.mkdirSync(path.join(base, "timeline", "notes"), { recursive: true });
+      assert.equal(earliestDate(base), "2025-11-01");
+    } finally {
+      fs.rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  test("scrolling stops there", () => {
+    const state = initial("2025-11-05");
+    assert.equal(hasOlder(state, "2025-11-01"), false);
+    assert.equal(hasOlder(initial("2026-11-06"), "2025-11-01"), true);
+    assert.equal(hasOlder(state, null), false);
+  });
+});

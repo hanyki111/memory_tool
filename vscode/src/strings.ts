@@ -1,6 +1,7 @@
 /** Words on the screen, in English or Korean by VS Code's display language. */
 
 const en = {
+  tabTitle: "Timeline",
   recordPlaceholder: "Record to the timeline… ([tag] or #tag)",
   record: "Record",
   searchPlaceholder: "Search",
@@ -39,6 +40,7 @@ const en = {
 type Strings = typeof en;
 
 const ko: Strings = {
+  tabTitle: "타임라인",
   recordPlaceholder: "타임라인에 기록… ([태그] 또는 #태그)",
   record: "기록",
   searchPlaceholder: "검색",
