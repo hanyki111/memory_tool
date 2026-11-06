@@ -290,6 +290,12 @@ def _reflect(review: Review) -> bool:
         f"Reflection (optional): {review.entry_count} entries on {review.active_days} days.",
         f"돌아보기(선택 사항): 활동 {review.active_days}일, 기록 {review.entry_count}건입니다.",
     ))
+    _print(say(
+        "Write about how this period went, such as problems that repeated or what turned out "
+        "differently. You write the answers.",
+        "이 기간에 일한 방식을 되짚는 글을 씁니다. 예를 들면 반복된 문제나 예상과 달라진 일입니다. "
+        "답은 직접 씁니다.",
+    ))
 
     installed = writer.installed_tools()
     default = writer.default_tool(installed)
@@ -336,6 +342,15 @@ def _work_through(review: Review, tool: Optional[str]) -> None:
         _print(say(
             f"{review.dropped} more candidates were left out. Their entries stay in the timeline.",
             f"이 밖의 후보 {review.dropped}건은 제외했습니다. 원본은 타임라인에 남아 있습니다.",
+        ))
+
+    if review.undecided_items():
+        _print()
+        _print(say(
+            "Moves: the AI picked what is worth keeping in a document, to find again later. "
+            "For each, choose whether to write it now, later, or not at all.",
+            "옮기기: 기록 중에서 문서로 남겨 두면 나중에 다시 찾아볼 만한 내용을 AI가 골랐습니다. "
+            "항목마다 지금 쓸지, 나중에 쓸지, 쓰지 않을지 고르세요.",
         ))
 
     while True:

@@ -94,6 +94,14 @@ class TestChoosing:
         assert "Topic 1" in result.output
         assert "Write later" in result.output
 
+    def test_each_step_says_what_it_is_for(self, base):
+        FakeClient.answer = answer(1)
+
+        result = run(input="3\ns\n")
+
+        assert "Moves: the AI picked what is worth keeping" in result.output
+        assert "Write about how this period went" in result.output
+
     def test_invalid_answer_asks_again(self, base):
         FakeClient.answer = answer(1)
 
