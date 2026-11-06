@@ -232,7 +232,13 @@ def search(
     mode = "hybrid" if hybrid else "semantic" if semantic else "keyword"
 
     search_cache = None
+    try:
+        # The cache is shared by every knowledge base, so the key names this one.
+        searched_base = str(get_base_path().resolve())
+    except Exception:
+        searched_base = str(Path.cwd().resolve())
     cache_key_params = {
+        "base": searched_base,
         "with_kb": with_kb,
         "all": all,
         "case_sensitive": case_sensitive,
