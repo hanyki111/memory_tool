@@ -1,0 +1,7 @@
+{
+  "container.title": "Memory Tool",
+  "view.name": "타임라인",
+  "command.openTimeline": "Memory Tool: 편집기에서 타임라인 열기",
+  "command.refresh": "Memory Tool: 타임라인 새로 고침",
+  "config.python": "memory_tool이 설치된 Python입니다. 비워 두면 연 폴더의 `.venv`, 그다음 PATH의 `python`을 씁니다."
+}

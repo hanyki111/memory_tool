@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "module": "CommonJS",
+    "target": "ES2021",
+    "lib": ["ES2021"],
+    "strict": true,
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    // esbuild bundles; tsc only typechecks. Explicit .ts specifiers let the pure
+    // modules run under `node --test` (Node strips the types) without a build.
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    // Node's type stripping cannot run enums, namespaces or parameter properties.
+    "erasableSyntaxOnly": true
+  },
+  "include": ["src/**/*"]
+}

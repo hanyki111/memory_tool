@@ -1,0 +1,88 @@
+{
+  "name": "memory-tool-timeline",
+  "displayName": "Memory Tool Timeline",
+  "description": "Record to the memory_tool timeline, read back across days, and search, from inside VS Code.",
+  "version": "0.1.0",
+  "publisher": "hanyki111",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hanyki111/memory_tool"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "memoryTool",
+          "title": "%container.title%",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "memoryTool": [
+        {
+          "type": "webview",
+          "id": "memoryTool.timeline",
+          "name": "%view.name%"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "memoryTool.openTimeline",
+        "title": "%command.openTimeline%",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "memoryTool.refresh",
+        "title": "%command.refresh%",
+        "icon": "$(refresh)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "memoryTool.openTimeline",
+          "when": "view == memoryTool.timeline",
+          "group": "navigation"
+        },
+        {
+          "command": "memoryTool.refresh",
+          "when": "view == memoryTool.timeline",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Memory Tool",
+      "properties": {
+        "memoryTool.python": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "%config.python%"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test \"tests/*.test.mjs\"",
+    "package": "npm run typecheck && npm run build && npx --yes @vscode/vsce@3.2.1 package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/node": "^18.19.0",
+    "@types/vscode": "~1.85.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.9.3"
+  }
+}

@@ -318,6 +318,12 @@ Obsidian **설정 → Daily Notes**:
 
 ---
 
+## VS Code 확장
+
+VS Code 안에서 타임라인에 기록하고, 여러 날의 기록을 이어 보고, 검색할 수 있습니다.
+창에서 연 폴더의 지식 베이스를 쓰며, 리뷰 버튼은 화면에 보이는 기간으로 `mreview`를 실행합니다.
+설치와 사용법은 [vscode/README.md](vscode/README.md)에 있습니다.
+
 ## 튜토리얼
 
 Memory Tool의 상세한 사용법을 단계별로 학습할 수 있습니다.
