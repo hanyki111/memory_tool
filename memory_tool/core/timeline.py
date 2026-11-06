@@ -794,33 +794,73 @@ class Timeline:
         return file_path, entries, parsed_date
 
     def save_entries(self, file_path: Path, entries: List[dict], date: datetime) -> None:
-        """Save entries back to file.
+        """Save edited entries back to their file, changing nothing else.
+
+        The heading, lines before the first entry and lines written by hand stay
+        as they are. A hand-written line belongs to the entry above it and moves
+        with it when the entries are put in time order; when that entry is
+        deleted, the line goes to the entry before, so nothing written by hand
+        is lost. An entry whose time and message did not change keeps its line
+        exactly as written.
 
         Args:
             file_path: Path to timeline file
-            entries: List of entry dicts with 'time' and 'message'
+            entries: The entries to keep, as ``parse_entries`` gave them, with
+                'time' and 'message' possibly changed. 'index' says which entry
+                of the file each one is.
             date: Date for the timeline
         """
-        # Sort by time
-        sorted_entries = sorted(entries, key=lambda e: e['time'])
+        original = file_path.read_text(encoding="utf-8") if file_path.exists() else ""
 
-        # Build content
-        lines = []
-        date_str = date.strftime("%Y-%m-%d")
-        lines.append(f"# {date_str}\n")
+        head: List[str] = []
+        lines_of: dict = {}    # entry index -> its line as written
+        notes_of: dict = {}    # entry index -> hand-written lines under it
+        current = None
+        count = 0
+        for line in original.splitlines():
+            match = ENTRY_PATTERN.match(line)
+            if match:
+                current = count
+                lines_of[current] = (match.group(1), match.group(2).strip(), line)
+                notes_of[current] = []
+                count += 1
+            elif current is None:
+                head.append(line)
+            else:
+                notes_of[current].append(line)
 
-        for entry in sorted_entries:
-            time_str = entry['time']
-            # Normalize time format
-            if ":" in time_str:
-                parts = time_str.split(":")
-                time_str = f"{int(parts[0]):02d}:{parts[1]}"
-            lines.append(f"- {time_str} | {entry['message']}")
+        if not original:
+            head = [f"# {date.strftime('%Y-%m-%d')} Timeline"]
+
+        kept = {entry["index"] for entry in entries if "index" in entry}
+
+        # Hand-written lines of deleted entries go to the entry before them.
+        carry_to = None
+        for index in range(count):
+            if index in kept:
+                carry_to = index
+            elif notes_of.get(index):
+                (notes_of[carry_to] if carry_to is not None else head).extend(notes_of[index])
+
+        def normal(time_str: str) -> str:
+            hour, _, minute = time_str.partition(":")
+            return f"{int(hour):02d}:{minute}"
+
+        ordered = sorted(enumerate(entries), key=lambda item: (normal(item[1]["time"]), item[0]))
+
+        lines = list(head)
+        for _, entry in ordered:
+            index = entry.get("index")
+            written = lines_of.get(index)
+            if written and written[0] == entry["time"] and written[1] == entry["message"]:
+                lines.append(written[2])
+            else:
+                lines.append(f"- {normal(entry['time'])} | {entry['message']}")
+            lines.extend(notes_of.get(index, []))
 
         content = "\n".join(lines)
         if not content.endswith("\n"):
             content += "\n"
 
-        # Ensure parent directory exists
         file_path.parent.mkdir(parents=True, exist_ok=True)
         file_path.write_text(content, encoding="utf-8")
