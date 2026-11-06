@@ -33,6 +33,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Timeline/Review/Plan 시스템 전체 완료 (Phase 1-5)
 - README.md 및 design 문서 최종 업데이트
 
+## VS Code 확장 0.1.0 - 2026-11-06
+
+### ✨ 추가
+
+- **Memory Tool Timeline (`vscode/`):** VS Code에서 타임라인에 기록하고, 7일씩 이어 보고, 기간을 골라 보고, 검색합니다. 사이드바와 편집기 탭에 같은 화면을 띄우며, 어디서 기록하든 열린 화면이 모두 새로 고쳐집니다. 검색은 키워드가 기본이고 "의미로 찾기"를 누르면 혼합 검색을 합니다. 리뷰 버튼은 화면에 보이는 가장 오래된 날짜로 `mreview --since`를 터미널에서 실행합니다. memory_tool 1.4 이상이 필요합니다.
+
 ## [1.4.0] - 2026-11-06
 
 ### ✨ 추가
