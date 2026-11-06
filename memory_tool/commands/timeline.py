@@ -16,6 +16,7 @@ from memory_tool.core.timeline import (
     FutureTimeError,
     DistantPastWarning,
     date_from_timeline_path,
+    split_tags,
 )
 from memory_tool.core.sort import TimelineSorter, SortError
 from memory_tool.context.builder import ContextBuilder
@@ -61,24 +62,9 @@ def record(
     time = opt_str(time)
     tags_str = opt_str(tags)
 
-    # 1. Parse bracket tags from start of message (e.g., "[버그][긴급] message")
-    # Supports Korean, alphanumeric, hyphens, underscores
-    bracket_tags: List[str] = []
-    bracket_tag_pattern = re.compile(r'^(\[[\w가-힣-]+\]\s*)+')
-    bracket_match = bracket_tag_pattern.match(message)
-    if bracket_match:
-        bracket_tags = re.findall(r'\[([\w가-힣-]+)\]', bracket_match.group(0))
-        message = message[bracket_match.end():].strip()
-
-    # 2. Parse hashtag tags from end of message (e.g., "message #tag1 #tag2")
-    # Supports Korean, alphanumeric, hyphens, underscores
-    inline_tags: List[str] = []
-    inline_tag_pattern = re.compile(r'(\s+#[\w가-힣-]+)+$')
-    match = inline_tag_pattern.search(message)
-    if match:
-        tag_portion = match.group(0)
-        inline_tags = re.findall(r'#([\w가-힣-]+)', tag_portion)
-        message = message[:match.start()].strip()
+    # 1-2. Bracket tags at the start ("[버그][긴급] message") and hashtags at the
+    # end ("message #tag1 #tag2"). The same rule reads them back for --json views.
+    message, bracket_tags, inline_tags = split_tags(message)
 
     # 3. Parse --tags option
     tag_list: List[str] = []

@@ -35,6 +35,63 @@ _MONTH_DIR = re.compile(r"^(\d{4})-(\d{2})$")
 #: "- 14:30 | message"
 ENTRY_PATTERN = re.compile(r"^- (\d{1,2}:\d{2})\s*\|\s*(.+)$", re.MULTILINE)
 
+#: Tags written before a message: "[bug][urgent] message" or "[bug] [urgent] message"
+LEADING_TAGS = re.compile(r"^(\[[\w가-힣-]+\]\s*)+")
+#: Tags written after a message: "message #bug #auth"
+TRAILING_TAGS = re.compile(r"(\s+#[\w가-힣-]+)+$")
+_BRACKET_TAG = re.compile(r"\[([\w가-힣-]+)\]")
+_HASH_TAG = re.compile(r"#([\w가-힣-]+)")
+
+
+def split_tags(message: str) -> Tuple[str, List[str], List[str]]:
+    """Separate the tags written around a message.
+
+    Only tags at the start (in brackets) or at the end (as hashtags) count, so a
+    "#" or "[...]" in the middle of a sentence stays part of it.
+
+    Args:
+        message: An entry's text, or a message about to be recorded
+
+    Returns:
+        (message without those tags, leading tags, trailing tags)
+    """
+    leading: List[str] = []
+    trailing: List[str] = []
+
+    match = LEADING_TAGS.match(message)
+    if match:
+        leading = _BRACKET_TAG.findall(match.group(0))
+        message = message[match.end():].strip()
+
+    match = TRAILING_TAGS.search(message)
+    if match:
+        trailing = _HASH_TAG.findall(match.group(0))
+        message = message[:match.start()].strip()
+
+    return message, leading, trailing
+
+
+def entry_tags(text: str) -> List[str]:
+    """Return an entry's tags in order, without duplicates."""
+    _, leading, trailing = split_tags(text)
+    return list(dict.fromkeys(leading + trailing))
+
+
+def parse_entry_lines(content: str) -> List[dict]:
+    """Read the entries in a timeline file's content.
+
+    Lines that are not "- HH:MM | text" are not entries and are left out; callers
+    that must not lose them keep the content as well.
+
+    Returns:
+        Dicts with ``time``, ``text`` (as written) and ``tags``, in file order.
+    """
+    entries = []
+    for match in ENTRY_PATTERN.finditer(content):
+        text = match.group(2).strip()
+        entries.append({"time": match.group(1), "text": text, "tags": entry_tags(text)})
+    return entries
+
 
 def timeline_filename(target_date, layout: str = DEFAULT_FILENAME_LAYOUT) -> str:
     """Build the filename for a timeline date.
@@ -602,20 +659,28 @@ class Timeline:
             Empty list if no timeline files exist
         """
         today = datetime.now()
+        monday = today - timedelta(days=today.weekday())
+        return [(path, content) for _, path, content in self.get_range(monday, today)]
 
-        # Find Monday of current week
-        days_since_monday = today.weekday()  # 0=Monday, 6=Sunday
-        monday = today - timedelta(days=days_since_monday)
+    def get_range(self, start, end) -> List[Tuple[datetime, Path, str]]:
+        """Get the timeline files from one date to another, both included.
 
-        # Collect files from Monday to today
+        Args:
+            start: First date (date or datetime; the time is ignored)
+            end: Last date
+
+        Returns:
+            (date, file_path, content) for each day that has a file, oldest first.
+        """
+        current = datetime(start.year, start.month, start.day)
+        last = datetime(end.year, end.month, end.day)
+
         results = []
-        current_date = monday
-        while current_date <= today:
-            file_path = self.get_timeline_file(current_date, create=False)
-            if file_path.exists():
-                content = file_path.read_text(encoding="utf-8")
-                results.append((file_path, content))
-            current_date += timedelta(days=1)
+        while current <= last:
+            file_path = self.resolve_existing_file(self.timeline_path, current)
+            if file_path is not None:
+                results.append((current, file_path, file_path.read_text(encoding="utf-8")))
+            current += timedelta(days=1)
 
         return results
 
@@ -627,21 +692,7 @@ class Timeline:
             Empty list if no timeline files exist
         """
         today = datetime.now()
-
-        # First day of current month
-        first_day = today.replace(day=1)
-
-        # Collect files from 1st to today
-        results = []
-        current_date = first_day
-        while current_date <= today:
-            file_path = self.get_timeline_file(current_date, create=False)
-            if file_path.exists():
-                content = file_path.read_text(encoding="utf-8")
-                results.append((file_path, content))
-            current_date += timedelta(days=1)
-
-        return results
+        return [(path, content) for _, path, content in self.get_range(today.replace(day=1), today)]
 
     def get_days(self, days: int = 14) -> list[Tuple[Path, str]]:
         """Get timeline files for the last N days (including today).
@@ -654,21 +705,8 @@ class Timeline:
             Empty list if no timeline files exist
         """
         today = datetime.now()
-
-        # Start date is (days-1) days ago
         start_date = today - timedelta(days=days - 1)
-
-        # Collect files from start_date to today
-        results = []
-        current_date = start_date
-        while current_date <= today:
-            file_path = self.get_timeline_file(current_date, create=False)
-            if file_path.exists():
-                content = file_path.read_text(encoding="utf-8")
-                results.append((file_path, content))
-            current_date += timedelta(days=1)
-
-        return results
+        return [(path, content) for _, path, content in self.get_range(start_date, today)]
 
     def get_date(self, date_str: str) -> Tuple[Optional[Path], Optional[str], Optional[datetime]]:
         """Get timeline content for a specific date.

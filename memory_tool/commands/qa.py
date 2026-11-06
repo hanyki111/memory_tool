@@ -1,22 +1,17 @@
 """Q&A CLI commands for Memory Tool."""
 
-import json
 import sys
 from typing import Optional
 
 import typer
 
 from memory_tool.commands.common import app, console, opt_str
+from memory_tool.commands import json_output
 
 
 def _emit_json(payload: dict) -> None:
-    """Print a single-line JSON result for programmatic callers.
-
-    Uses print() rather than the rich console: rich hard-wraps at the terminal
-    width, which would corrupt the payload and, for plain text answers, inserts
-    line breaks mid-sentence that break Markdown rendering downstream.
-    """
-    print(json.dumps(payload, ensure_ascii=False))
+    """Print one line of JSON. See ``json_output.emit``."""
+    json_output.emit(payload)
 
 
 @app.command(name="ask")

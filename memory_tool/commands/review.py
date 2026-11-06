@@ -1,6 +1,5 @@
 """Review CLI: move what is worth keeping from the timeline into documents."""
 
-import json
 import sys
 from dataclasses import asdict
 from datetime import datetime
@@ -11,6 +10,7 @@ import click
 import typer
 
 from memory_tool.commands.common import app, console
+from memory_tool.commands import json_output
 from memory_tool.review import session, store, writer
 from memory_tool.review.store import Item, Review, ReviewError
 from memory_tool.review.text import say
@@ -366,8 +366,8 @@ def _work_through(review: Review, tool: Optional[str]) -> None:
 
 
 def _emit_json(payload: dict) -> None:
-    """Print one line of JSON. Rich would wrap it at the terminal's width."""
-    print(json.dumps(payload, ensure_ascii=False))
+    """Print one line of JSON. See ``json_output.emit``."""
+    json_output.emit(payload)
 
 
 def _json_failure(message: str) -> NoReturn:
