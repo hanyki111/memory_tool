@@ -406,6 +406,18 @@ def _looks_initialized(path: Path) -> bool:
     return (path / CONFIG_FILENAME).is_file() and (path / "timeline").is_dir()
 
 
+#: What a knowledge base holds. A ``.memory`` folder with none of these is not
+#: one -- notably ``~/.memory``, which the global search cache creates (see
+#: ``GLOBAL_CACHE_DIRNAME``). Taking it for a base sent every command run outside
+#: a project, ``m`` included, to ``~/.memory``.
+_KNOWLEDGE_MARKERS = (CONFIG_FILENAME, "timeline", "modules")
+
+
+def _holds_knowledge(path: Path) -> bool:
+    """Tell whether an unmarked folder is a knowledge base rather than a cache."""
+    return path.is_dir() and any((path / marker).exists() for marker in _KNOWLEDGE_MARKERS)
+
+
 def _is_nested_artifact(parent: Path, candidate: Path) -> bool:
     """Detect a nested duplicate base folder left by the old double-append bug.
 
@@ -522,7 +534,7 @@ def resolve_base(start: Optional[Path] = None) -> MemoryPaths:
 
         # Legacy: an unmarked .memory/ directory from before this was configurable.
         legacy = root / DEFAULT_BASE
-        if legacy.is_dir():
+        if _holds_knowledge(legacy):
             # Don't be hijacked by a nested duplicate left by the old
             # double-append bug -- prefer the real base folder that contains it.
             if _is_nested_artifact(root, legacy):

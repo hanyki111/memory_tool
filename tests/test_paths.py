@@ -254,7 +254,7 @@ def test_nearer_legacy_dir_wins_over_farther_pointer(tmp_path):
     (tmp_path / "memory").mkdir()
 
     inner = tmp_path / "inner"
-    (inner / DEFAULT_BASE).mkdir(parents=True)
+    (inner / DEFAULT_BASE / "timeline").mkdir(parents=True)
 
     paths = resolve_base(inner)
 
@@ -639,3 +639,39 @@ def test_normal_project_resolution_is_unaffected_by_the_guard(tmp_path):
     from_inside = resolve_base(base)
     assert from_inside.base == base.resolve()
     assert from_inside.root == tmp_path.resolve()
+
+
+# ---------------------------------------------------------------------------
+# A .memory folder that only holds a cache is not a knowledge base
+# ---------------------------------------------------------------------------
+
+
+def test_cache_only_memory_folder_is_not_a_base(tmp_path):
+    """~/.memory holds only the global search cache; a project below it must not use it."""
+    home = tmp_path / "home"
+    (home / DEFAULT_BASE / ".cache" / "search").mkdir(parents=True)
+    project = home / "code" / "project"
+    project.mkdir(parents=True)
+
+    paths = resolve_base(project)
+
+    assert paths.found is False
+    assert paths.source == "default"
+    assert paths.root == project.resolve()
+
+
+@pytest.mark.parametrize("marker", ["config.yaml", "timeline", "modules"])
+def test_legacy_base_needs_one_marker(tmp_path, marker):
+    base = tmp_path / DEFAULT_BASE
+    base.mkdir()
+    if marker == "config.yaml":
+        (base / marker).write_text("version: '1.0'", encoding="utf-8")
+    else:
+        (base / marker).mkdir()
+    sub = tmp_path / "sub"
+    sub.mkdir()
+
+    paths = resolve_base(sub)
+
+    assert paths.source == "legacy"
+    assert paths.base == base

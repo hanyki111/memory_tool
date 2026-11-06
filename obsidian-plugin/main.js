@@ -32,6 +32,50 @@ var import_obsidian8 = require("obsidian");
 
 // src/cli/memoryToolCli.ts
 var import_obsidian = require("obsidian");
+
+// src/cli/args.ts
+function commandParts(setting, exists = () => false) {
+  const value = (setting || "").trim() || "python";
+  const quoted = /^"([^"]+)"\s*(.*)$/.exec(value);
+  if (quoted) {
+    return [quoted[1], ...splitWords(quoted[2])];
+  }
+  if (exists(value)) {
+    return [value];
+  }
+  return splitWords(value);
+}
+function splitWords(text) {
+  return text.split(/\s+/).filter(Boolean);
+}
+function oneLine(text) {
+  return text.replace(/[\r\n]+/g, " ").trim();
+}
+function recordArgs(message) {
+  return ["record", "--", oneLine(message)];
+}
+function createModuleArgs(name, description = "", tags = "", docType = "") {
+  const args = ["module", "create"];
+  if (description)
+    args.push("--desc", oneLine(description));
+  if (tags)
+    args.push("--tags", oneLine(tags));
+  if (docType)
+    args.push("--type", oneLine(docType));
+  args.push("--", name);
+  return args;
+}
+function askArgs(question, opts = {}) {
+  const args = ["ask", "--json"];
+  if (opts.simple)
+    args.push("--simple");
+  if (opts.provider)
+    args.push("--provider", oneLine(opts.provider));
+  args.push("--", oneLine(question));
+  return args;
+}
+
+// src/cli/memoryToolCli.ts
 var execFn = null;
 var execResolved = false;
 function loadExec() {
@@ -43,14 +87,11 @@ function loadExec() {
     return null;
   }
   try {
-    execFn = require("child_process").exec;
+    execFn = require("child_process").execFile;
   } catch {
     execFn = null;
   }
   return execFn;
-}
-function escapeArg(value) {
-  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/[\r\n]+/g, " ").trim();
 }
 function parseLastJsonObject(output) {
   const lines = output.split("\n").map((l) => l.trim()).filter((l) => l.startsWith("{"));
@@ -84,7 +125,13 @@ var MemoryToolCli = class {
   isAvailable() {
     return loadExec() !== null;
   }
-  executeCommand(cmd, opts = {}) {
+  /**
+   * Run `python -m memory_tool <args>`.
+   *
+   * execFile with an argument array: no shell, so nothing needs escaping and
+   * nothing the person wrote can be read as shell syntax.
+   */
+  executeCommand(args, opts = {}) {
     return new Promise((resolve, reject) => {
       const exec = loadExec();
       if (!exec) {
@@ -95,30 +142,31 @@ var MemoryToolCli = class {
         );
         return;
       }
-      const fullCmd = `${this.pythonPath} -m memory_tool ${cmd}`;
+      const fs = require("fs");
+      const [program, ...programArgs] = commandParts(this.pythonPath, (path) => fs.existsSync(path));
       const options = {
         // memory_tool prints Korean; without this Windows uses cp949 and mangles it.
         env: { ...process.env, PYTHONIOENCODING: "utf-8" },
-        maxBuffer: opts.maxBuffer ?? 1024 * 1024 * 16
+        maxBuffer: opts.maxBuffer ?? 1024 * 1024 * 16,
+        windowsHide: true
       };
       if (this.cwd)
         options.cwd = this.cwd;
       if (opts.timeout)
         options.timeout = opts.timeout;
-      exec(fullCmd, options, (error, stdout, stderr) => {
+      exec(program, [...programArgs, "-m", "memory_tool", ...args], options, (error, stdout, stderr) => {
         if (error) {
-          const detail = (stderr || "").trim() || (stdout || "").trim();
+          const detail = String(stderr || "").trim() || String(stdout || "").trim();
           reject(new Error(detail || error.message));
         } else {
-          resolve(stdout.trim());
+          resolve(String(stdout).trim());
         }
       });
     });
   }
   /** Record a timeline entry (m "message") */
   async recordTimeline(message) {
-    const escapedMsg = message.replace(/"/g, '\\"');
-    return this.executeCommand(`record "${escapedMsg}"`);
+    return this.executeCommand(recordArgs(message));
   }
   /**
    * Create a new document (`mmodule create`).
@@ -126,22 +174,12 @@ var MemoryToolCli = class {
    * Requires memory_tool 1.2 or later, which added `--type`.
    */
   async createModule(name, description = "", tags = "", docType = "") {
-    let cmd = `module create "${name}"`;
-    if (description) {
-      cmd += ` --desc "${escapeArg(description)}"`;
-    }
-    if (tags) {
-      cmd += ` --tags "${escapeArg(tags)}"`;
-    }
-    if (docType) {
-      cmd += ` --type "${escapeArg(docType)}"`;
-    }
-    return this.executeCommand(cmd);
+    return this.executeCommand(createModuleArgs(name, description, tags, docType));
   }
   /** Get list of active modules */
   async listModules() {
     try {
-      const output = await this.executeCommand("module list");
+      const output = await this.executeCommand(["module", "list"]);
       const lines = output.split("\n");
       const modules = [];
       for (const line of lines) {
@@ -157,11 +195,11 @@ var MemoryToolCli = class {
   }
   /** Build AI Context (mcontext) */
   async buildContext() {
-    return this.executeCommand("context");
+    return this.executeCommand(["context"]);
   }
   /** Check module path health (mcheck) */
   async checkHealth() {
-    return this.executeCommand("check");
+    return this.executeCommand(["check"]);
   }
   /**
    * Bring the SQLite search index up to date.
@@ -172,7 +210,7 @@ var MemoryToolCli = class {
    * reconciliation cost far more than the writes it is catching up on.
    */
   async syncIndex() {
-    return this.executeCommand("index", { timeout: 12e4 });
+    return this.executeCommand(["index"], { timeout: 12e4 });
   }
   /**
    * Ask a natural-language question about the knowledge base (mask).
@@ -186,12 +224,7 @@ var MemoryToolCli = class {
    *             timeoutMs: how long to wait for the model
    */
   async ask(question, opts = {}) {
-    const parts = [`ask "${escapeArg(question)}"`, "--json"];
-    if (opts.simple)
-      parts.push("--simple");
-    if (opts.provider)
-      parts.push(`--provider "${escapeArg(opts.provider)}"`);
-    const output = await this.executeCommand(parts.join(" "), {
+    const output = await this.executeCommand(askArgs(question, opts), {
       timeout: opts.timeoutMs ?? 3e5
     });
     const data = parseLastJsonObject(output);
@@ -222,7 +255,7 @@ ${output}`);
    * whenever the vault is the base folder itself.
    */
   async getBaseInfo() {
-    const output = await this.executeCommand("base show --json");
+    const output = await this.executeCommand(["base", "show", "--json"]);
     const data = parseLastJsonObject(output);
     if (!data || typeof data.base !== "string" || typeof data.root !== "string") {
       throw new Error("memory_tool did not report a usable base folder");
