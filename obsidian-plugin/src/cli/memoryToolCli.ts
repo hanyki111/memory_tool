@@ -1,5 +1,7 @@
 import { Platform } from "obsidian";
 
+import { askArgs, commandParts, createModuleArgs, recordArgs } from "./args";
+
 /**
  * `child_process` is loaded lazily, never at module scope.
  *
@@ -10,7 +12,7 @@ import { Platform } from "obsidian";
  * need Python. Resolving it on first use keeps the failure local to the callers
  * that genuinely cannot work without it.
  */
-type ExecFn = typeof import("child_process").exec;
+type ExecFn = typeof import("child_process").execFile;
 
 let execFn: ExecFn | null = null;
 let execResolved = false;
@@ -25,26 +27,11 @@ function loadExec(): ExecFn | null {
   }
 
   try {
-    execFn = require("child_process").exec as ExecFn;
+    execFn = require("child_process").execFile as ExecFn;
   } catch {
     execFn = null;
   }
   return execFn;
-}
-
-/**
- * Escape a value for embedding in a double-quoted shell argument.
- *
- * Backslashes first, then quotes -- reversing the order would double-escape the
- * backslashes introduced by the quote replacement. Newlines are collapsed
- * because a raw newline would terminate the command.
- */
-function escapeArg(value: string): string {
-  return value
-    .replace(/\\/g, "\\\\")
-    .replace(/"/g, '\\"')
-    .replace(/[\r\n]+/g, " ")
-    .trim();
 }
 
 /**
@@ -131,7 +118,13 @@ export class MemoryToolCli {
     return loadExec() !== null;
   }
 
-  private executeCommand(cmd: string, opts: ExecOptions = {}): Promise<string> {
+  /**
+   * Run `python -m memory_tool <args>`.
+   *
+   * execFile with an argument array: no shell, so nothing needs escaping and
+   * nothing the person wrote can be read as shell syntax.
+   */
+  private executeCommand(args: string[], opts: ExecOptions = {}): Promise<string> {
     return new Promise((resolve, reject) => {
       const exec = loadExec();
       if (!exec) {
@@ -145,24 +138,26 @@ export class MemoryToolCli {
         return;
       }
 
-      const fullCmd = `${this.pythonPath} -m memory_tool ${cmd}`;
+      const fs = require("fs") as typeof import("fs");
+      const [program, ...programArgs] = commandParts(this.pythonPath, (path) => fs.existsSync(path));
 
       const options: Record<string, unknown> = {
         // memory_tool prints Korean; without this Windows uses cp949 and mangles it.
         env: { ...process.env, PYTHONIOENCODING: "utf-8" },
         maxBuffer: opts.maxBuffer ?? 1024 * 1024 * 16,
+        windowsHide: true,
       };
       if (this.cwd) options.cwd = this.cwd;
       if (opts.timeout) options.timeout = opts.timeout;
 
-      exec(fullCmd, options, (error, stdout, stderr) => {
+      exec(program, [...programArgs, "-m", "memory_tool", ...args], options, (error, stdout, stderr) => {
         if (error) {
           // A failing command may still have written a useful message to stdout
           // (the CLI reports errors there), so prefer whichever is non-empty.
-          const detail = (stderr || "").trim() || (stdout || "").trim();
+          const detail = String(stderr || "").trim() || String(stdout || "").trim();
           reject(new Error(detail || error.message));
         } else {
-          resolve(stdout.trim());
+          resolve(String(stdout).trim());
         }
       });
     });
@@ -170,8 +165,7 @@ export class MemoryToolCli {
 
   /** Record a timeline entry (m "message") */
   public async recordTimeline(message: string): Promise<string> {
-    const escapedMsg = message.replace(/"/g, '\\"');
-    return this.executeCommand(`record "${escapedMsg}"`);
+    return this.executeCommand(recordArgs(message));
   }
 
   /**
@@ -185,23 +179,13 @@ export class MemoryToolCli {
     tags: string = "",
     docType: string = ""
   ): Promise<string> {
-    let cmd = `module create "${name}"`;
-    if (description) {
-      cmd += ` --desc "${escapeArg(description)}"`;
-    }
-    if (tags) {
-      cmd += ` --tags "${escapeArg(tags)}"`;
-    }
-    if (docType) {
-      cmd += ` --type "${escapeArg(docType)}"`;
-    }
-    return this.executeCommand(cmd);
+    return this.executeCommand(createModuleArgs(name, description, tags, docType));
   }
 
   /** Get list of active modules */
   public async listModules(): Promise<string[]> {
     try {
-      const output = await this.executeCommand("module list");
+      const output = await this.executeCommand(["module", "list"]);
       const lines = output.split("\n");
       const modules: string[] = [];
 
@@ -219,12 +203,12 @@ export class MemoryToolCli {
 
   /** Build AI Context (mcontext) */
   public async buildContext(): Promise<string> {
-    return this.executeCommand("context");
+    return this.executeCommand(["context"]);
   }
 
   /** Check module path health (mcheck) */
   public async checkHealth(): Promise<string> {
-    return this.executeCommand("check");
+    return this.executeCommand(["check"]);
   }
 
   /**
@@ -236,7 +220,7 @@ export class MemoryToolCli {
    * reconciliation cost far more than the writes it is catching up on.
    */
   public async syncIndex(): Promise<string> {
-    return this.executeCommand("index", { timeout: 120000 });
+    return this.executeCommand(["index"], { timeout: 120000 });
   }
 
   /**
@@ -254,11 +238,7 @@ export class MemoryToolCli {
     question: string,
     opts: { simple?: boolean; provider?: string; timeoutMs?: number } = {}
   ): Promise<AskResult> {
-    const parts = [`ask "${escapeArg(question)}"`, "--json"];
-    if (opts.simple) parts.push("--simple");
-    if (opts.provider) parts.push(`--provider "${escapeArg(opts.provider)}"`);
-
-    const output = await this.executeCommand(parts.join(" "), {
+    const output = await this.executeCommand(askArgs(question, opts), {
       timeout: opts.timeoutMs ?? 300000,
     });
 
@@ -294,7 +274,7 @@ export class MemoryToolCli {
    * whenever the vault is the base folder itself.
    */
   public async getBaseInfo(): Promise<BaseInfo> {
-    const output = await this.executeCommand("base show --json");
+    const output = await this.executeCommand(["base", "show", "--json"]);
     const data = parseLastJsonObject(output);
 
     if (!data || typeof data.base !== "string" || typeof data.root !== "string") {

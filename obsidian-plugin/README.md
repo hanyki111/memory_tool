@@ -308,6 +308,9 @@ Select-String -Path "$pluginDir\main.js" -Pattern "documentTypes|갱신 계기" 
 | 가상환경 (venv) Windows | `E:\code_projects\memory_tool\venv\Scripts\python.exe` |
 | 가상환경 (venv) macOS/Linux | `/path/to/memory_tool/venv/bin/python` |
 | conda | `/opt/anaconda3/envs/myenv/bin/python` |
+| Python 런처 | `py -3` |
+
+1.2.1부터 플러그인은 셸을 거치지 않고 Python을 직접 실행합니다. 그래서 기록에 따옴표나 `%`, `$`가 들어가도 적은 그대로 저장됩니다. 경로에 공백이 있으면 그대로 적거나 큰따옴표로 감싸면 됩니다(예: `"C:\Program Files\Python313\python.exe"`).
 
 ---
 
