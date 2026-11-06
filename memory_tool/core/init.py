@@ -401,8 +401,8 @@ mcontext
 # Generate code structure map
 mmap src/
 
-# Build context with code map and update interfaces
-mcontext --with-map --update-interfaces
+# Build context with a code map
+mcontext --with-map
 
 # Verify Related Files paths
 mcheck

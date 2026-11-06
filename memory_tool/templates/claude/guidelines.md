@@ -159,7 +159,6 @@ Before starting AI session:
 ```bash
 mcontext                 # Build context
 mcontext --with-map      # Include code structure
-mcontext -i              # Update interface.md files
 ```
 
 Context file: `.claude/memory-context.md`
