@@ -1,7 +1,27 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+}
+
+/**
+ * The release signing key lives outside the repository. local.properties
+ * (not committed) names a properties file with storeFile, storePassword,
+ * keyAlias and keyPassword:
+ *
+ *     capture.signing=E:/dev/keys/memory-capture.properties
+ *
+ * Every update must be signed with the same key, or Android refuses to
+ * install it over the old one.
+ */
+val signing: Properties? = run {
+    val local = rootProject.file("local.properties")
+    if (!local.isFile) return@run null
+    val path = Properties().apply { local.inputStream().use { load(it) } }.getProperty("capture.signing") ?: return@run null
+    val file = file(path)
+    if (!file.isFile) null else Properties().apply { file.inputStream().use { load(it) } }
 }
 
 android {
@@ -16,9 +36,22 @@ android {
         versionName = "0.1.0"
     }
 
+    signingConfigs {
+        if (signing != null) {
+            create("release") {
+                storeFile = file(signing.getProperty("storeFile"))
+                storePassword = signing.getProperty("storePassword")
+                keyAlias = signing.getProperty("keyAlias")
+                keyPassword = signing.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            // JSch and Bouncy Castle load algorithms by class name; shrinking would drop them.
             isMinifyEnabled = false
+            if (signing != null) signingConfig = signingConfigs.getByName("release")
         }
     }
 
