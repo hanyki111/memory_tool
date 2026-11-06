@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.MemoryCapture" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!-- A floating window: no frame of its own, the Compose surface draws it. -->
+    <style name="Theme.MemoryCapture.Capture" parent="android:Theme.Material.Light.Dialog.NoActionBar">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowMinWidthMajor">92%</item>
+        <item name="android:windowMinWidthMinor">92%</item>
+        <item name="android:windowCloseOnTouchOutside">true</item>
+    </style>
+</resources>

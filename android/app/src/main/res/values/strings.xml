@@ -1,4 +1,58 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Memory Capture</string>
+    <string name="share_label">Record to timeline</string>
+    <string name="tile_label">Record</string>
+    <string name="widget_label">Record to timeline</string>
+    <string name="widget_hint">Record to timeline…</string>
+    <string name="widget_voice">Speak</string>
+    <string name="widget_pending">%1$d waiting</string>
+    <string name="widget_attention">%1$d to check</string>
+
+    <string name="capture_hint">What happened? ([tag] or #tag)</string>
+    <string name="capture_send">Send</string>
+    <string name="capture_voice">Speak</string>
+    <string name="capture_tap_to_edit">Sending soon. Tap the text to edit it.</string>
+
+    <string name="toast_recorded">Recorded at %1$s</string>
+    <string name="notify_setup_needed">Not sent yet: set %1$s in the app.</string>
+    <string name="notify_uncertain">Check whether this was recorded: %1$s</string>
+    <string name="notify_unreadable">The PC answered in a way the app could not read.</string>
+    <string name="channel_notices">Notices from memory_tool</string>
+    <string name="channel_attention">Entries to check</string>
+
+    <string name="main_new_entry">New entry</string>
+    <string name="main_attention">To check (%1$d)</string>
+    <string name="main_maybe_recorded">The connection broke after sending; it may already be on the PC. Check the timeline, then choose.</string>
+    <string name="main_mark_sent">It is recorded</string>
+    <string name="main_resend">Send again</string>
+    <string name="main_pending">Waiting to be sent (%1$d)</string>
+    <string name="main_send_now">Send now</string>
+    <string name="main_sent">Recently sent</string>
+    <string name="main_pc">PC</string>
+    <string name="main_host">Address (DDNS name or IP)</string>
+    <string name="main_port">Port</string>
+    <string name="main_user">User</string>
+    <string name="main_command">Command</string>
+    <string name="main_command_help">PowerShell on the PC runs this. {args} is where the app puts memory_tool\'s arguments.</string>
+    <string name="main_voice_delay">Seconds to show speech before sending</string>
+    <string name="main_saved">Saved</string>
+    <string name="main_key">This phone\'s key</string>
+    <string name="main_key_help">Add this line to C:\\ProgramData\\ssh\\administrators_authorized_keys on the PC (for an administrator account).</string>
+    <string name="main_fingerprint">The PC\'s fingerprint</string>
+    <string name="main_fingerprint_none">Not trusted yet. Save the PC, then get its fingerprint.</string>
+    <string name="main_get_fingerprint">Get fingerprint</string>
+    <string name="main_test">Test connection</string>
+    <string name="main_fill_pc">Fill in the address, port and user first.</string>
+    <string name="main_failed">Could not connect</string>
+    <string name="main_trust_title">Trust this PC?</string>
+    <string name="main_trust_body">Compare it with the PC: ssh-keygen -lf C:\\ProgramData\\ssh\\ssh_host_ed25519_key.pub. Trust it only if they are the same.</string>
+    <string name="main_trust">They match; trust</string>
+
+    <string name="save">Save</string>
+    <string name="copy">Copy</string>
+    <string name="share">Share</string>
+    <string name="delete">Delete</string>
+    <string name="cancel">Cancel</string>
+    <string name="ok">OK</string>
 </resources>

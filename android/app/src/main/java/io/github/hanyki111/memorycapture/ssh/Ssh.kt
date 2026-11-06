@@ -80,14 +80,14 @@ object Ssh {
             jsch.addIdentity("phone", key.privateKey, null, null)
             session = newSession(jsch, target, PinnedHostKeys(expected = fingerprint), timeoutMs)
         } catch (e: JSchException) {
-            return Outcome.NotSent("The phone's key could not be read: ${e.message}")
+            return Outcome.NotSent("The phone's key could not be read: ${e.message}", needsPerson = true)
         }
 
         try {
             try {
                 session.connect(timeoutMs)
             } catch (e: JSchException) {
-                return Outcome.NotSent(describe(e))
+                return Outcome.NotSent(describe(e), needsPerson = isSetupProblem(e))
             }
 
             val channel = session.openChannel("exec") as ChannelExec
@@ -130,6 +130,13 @@ object Ssh {
             timeout = timeoutMs
             serverAliveInterval = 15_000
         }
+    }
+
+    /** Failures that waiting for the network will not fix. */
+    fun isSetupProblem(e: JSchException): Boolean {
+        val message = e.message.orEmpty()
+        return listOf("reject HostKey", "HostKey has been changed", "Auth fail", "Auth cancel")
+            .any { message.contains(it, ignoreCase = true) }
     }
 
     /** A short reason for the person, from a failure before the command was sent. */

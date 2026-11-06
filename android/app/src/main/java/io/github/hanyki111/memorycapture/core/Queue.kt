@@ -39,8 +39,12 @@ data class Entry(
 
 /** What happened when an entry was sent. */
 sealed class Outcome {
-    /** The command never ran: no connection, refused, wrong key, wrong PC. Safe to send again. */
-    data class NotSent(val reason: String) : Outcome()
+    /**
+     * The command never ran, so it is safe to send again. `needsPerson` marks
+     * what waiting will not fix: the PC refused the key, its fingerprint
+     * changed, or the settings are incomplete.
+     */
+    data class NotSent(val reason: String, val needsPerson: Boolean = false) : Outcome()
 
     /** The connection broke after the command was sent; it may or may not have run. */
     data class Uncertain(val reason: String) : Outcome()

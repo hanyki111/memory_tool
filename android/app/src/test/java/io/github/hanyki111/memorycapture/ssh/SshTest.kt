@@ -82,6 +82,7 @@ class SshTest {
 
         assertTrue(outcome is Outcome.NotSent)
         assertEquals("The PC's fingerprint does not match the trusted one", (outcome as Outcome.NotSent).reason)
+        assertTrue(outcome.needsPerson)
         assertTrue(received.isEmpty())
     }
 
@@ -93,6 +94,7 @@ class SshTest {
         val outcome = Ssh.run(target(), stranger, fingerprint, "echo x")
 
         assertTrue(outcome.toString(), outcome is Outcome.NotSent && "registered" in outcome.reason)
+        assertTrue((outcome as Outcome.NotSent).needsPerson)
         assertTrue(received.isEmpty())
     }
 
@@ -103,6 +105,7 @@ class SshTest {
         val outcome = Ssh.run(Target("127.0.0.1", closedPort, "tester"), phone, "SHA256:x", "echo x", timeoutMs = 3_000)
 
         assertTrue(outcome.toString(), outcome is Outcome.NotSent)
+        assertTrue(!(outcome as Outcome.NotSent).needsPerson)
     }
 
     @Test
