@@ -235,3 +235,87 @@ class TestViews:
         assert result.exit_code == 0
         assert "2026-03-01 ~ 2026-03-02" in result.output
         assert "1 day(s) with entries in this period" in result.output
+
+
+# ---------------------------------------------------------------------------
+# Recording
+# ---------------------------------------------------------------------------
+
+
+def record(*args):
+    result = runner.invoke(app, ["record", *args, "--json"])
+    return result, last_json(result.output)
+
+
+class TestRecord:
+    def test_entry_path_and_tags(self, base):
+        result, data = record("[버그] 로그인 오류 수정 #auth", "--time", "00:00")
+
+        assert result.exit_code == 0
+        assert data["ok"] is True
+        assert data["entry"] == {
+            "date": f"{datetime.now():%Y-%m-%d}", "time": "00:00",
+            "text": "[버그] [auth] 로그인 오류 수정", "tags": ["버그", "auth"],
+        }
+        assert data["path"].endswith(".md")
+        assert "로그인 오류 수정" in open(data["path"], encoding="utf-8").read()
+        assert data["notices"] == []
+
+    def test_future_time(self, base):
+        tomorrow = datetime.now() + timedelta(days=1)
+
+        result, data = record("x", "--date", f"{tomorrow:%Y-%m-%d}")
+
+        assert result.exit_code == 1 and data["code"] == "future_time"
+
+    def test_distant_past_can_be_forced(self, base):
+        result, data = record("x", "--date", "2001-01-01")
+        assert result.exit_code == 1 and data["code"] == "distant_past"
+        assert "--force" in data["error"]
+
+        result, data = record("x", "--date", "2001-01-01", "--force")
+        assert data["ok"] is True and data["entry"]["date"] == "2001-01-01"
+
+    def test_bad_time_is_invalid_argument(self, base):
+        result, data = record("x", "--time", "25:99")
+
+        assert result.exit_code == 1 and data["code"] == "invalid_argument"
+
+    def test_review_notice_on_the_first_entry_of_the_day(self, base, monkeypatch):
+        monkeypatch.setattr("memory_tool.review.notice.review_notice", lambda *a, **k: "리뷰할 때입니다")
+
+        _, first = record("first", "--time", "00:00")
+        _, second = record("second", "--time", "00:00")
+
+        assert first["notices"] == [{"kind": "review", "message": "리뷰할 때입니다"}]
+        assert second["notices"] == []
+
+    def test_document_health_notice(self, base, monkeypatch):
+        monkeypatch.setattr(
+            "memory_tool.utils.suggestion_helper.document_health_notice", lambda *a, **k: "a.md is getting large"
+        )
+
+        _, data = record("x", "--time", "00:00")
+
+        assert {"kind": "document_health", "message": "a.md is getting large"} in data["notices"]
+
+
+class TestDocumentHealthNotice:
+    class Issue:
+        module_name, file_type, line_count = "work", "decisions", 900
+
+    def test_warning_text(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(
+            "memory_tool.utils.suggestion_helper._pending_health_issues", lambda *a: ("warning", [self.Issue()])
+        )
+        from memory_tool.utils.suggestion_helper import document_health_notice
+
+        assert document_health_notice(tmp_path, "m") == (
+            "work/decisions.md is getting large (900 lines). Consider: marchive decisions --module work --suggest"
+        )
+
+    def test_nothing_to_say(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("memory_tool.utils.suggestion_helper._pending_health_issues", lambda *a: None)
+        from memory_tool.utils.suggestion_helper import document_health_notice
+
+        assert document_health_notice(tmp_path, "m") is None

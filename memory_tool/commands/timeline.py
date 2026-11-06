@@ -16,6 +16,7 @@ from memory_tool.core.timeline import (
     TimelineError,
     FutureTimeError,
     DistantPastWarning,
+    parse_entry_lines,
     split_tags,
 )
 from memory_tool.core.sort import TimelineSorter, SortError
@@ -38,6 +39,7 @@ def record(
     time: Optional[str] = typer.Option(None, "--time", help="Time (HH:MM), defaults to current time"),
     force: bool = typer.Option(False, "--force", "-f", help="Force recording (skip warnings for old dates)"),
     tags: Optional[str] = typer.Option(None, "--tags", "-t", help="Comma-separated tags (e.g., bug,auth,urgent)"),
+    as_json: bool = typer.Option(False, "--json", help="Print the recorded entry and any notices as one line of JSON"),
 ):
     """Record a message to timeline (m command).
 
@@ -80,62 +82,82 @@ def record(
 
     try:
         dt, file_path = timeline.record(message, date, time, force=force, tags=all_tags)
-
-        time_str = dt.strftime("%H:%M")
-        date_str = dt.strftime("%Y-%m-%d")
-        rel_path = display_path(file_path)
-
-        console.print(f"[green]OK[/green] Recorded at {date_str} {time_str}")
-        console.print(f"[dim]-> {rel_path}[/dim]")
-
-        # Auto-update context if enabled
-        try:
-            config = Config()
-            if config.auto_update_enabled:
-                console.print("[dim]Auto-updating context...[/dim]")
-                builder = ContextBuilder()
-                context_path = builder.write_context()
-                rel_context = display_path(context_path)
-                console.print(f"[dim]-> {rel_context} updated[/dim]")
-        except Exception as e:
-            console.print(f"[yellow]Warning:[/yellow] Auto-update failed: {e}")
-
-        # Review notice, on the day's first entry only. It must never stop a record.
-        try:
-            if dt.date() == datetime.now().date() and _is_first_entry(file_path):
-                from memory_tool.review.notice import review_notice
-
-                notice = review_notice(get_base_path())
-                if notice:
-                    console.print(notice, markup=False, highlight=False)
-        except Exception:
-            pass
-
-        # Document health suggestion
-        try:
-            from memory_tool.utils.suggestion_helper import check_and_suggest_after_command
-
-            memory_dir = get_base_path()
-            check_and_suggest_after_command(memory_dir, "m", force=False)
-        except Exception:
-            pass
-
     except FutureTimeError as e:
+        if as_json:
+            json_output.fail(json_output.FUTURE_TIME, str(e))
         console.print(f"[red]ERROR[/red] {e}", style="bold")
         sys.exit(1)
-
     except DistantPastWarning as e:
+        if as_json:
+            json_output.fail(json_output.DISTANT_PAST, f"{e} Use --force to record anyway.")
         console.print(f"[yellow]WARNING[/yellow] {e}")
         console.print("[dim]Use --force to record anyway[/dim]")
         sys.exit(1)
-
     except ValueError as e:
+        if as_json:
+            json_output.fail(json_output.INVALID_ARGUMENT, str(e))
+        console.print(f"[red]ERROR[/red] {e}")
+        sys.exit(1)
+    except TimelineError as e:
+        if as_json:
+            json_output.fail(json_output.FAILED, str(e))
         console.print(f"[red]ERROR[/red] {e}")
         sys.exit(1)
 
-    except TimelineError as e:
-        console.print(f"[red]ERROR[/red] {e}")
-        sys.exit(1)
+    if not as_json:
+        console.print(f"[green]OK[/green] Recorded at {dt:%Y-%m-%d} {dt:%H:%M}")
+        console.print(f"[dim]-> {display_path(file_path)}[/dim]")
+
+    notices = []
+
+    # Auto-update context if enabled
+    try:
+        config = Config()
+        if config.auto_update_enabled:
+            if not as_json:
+                console.print("[dim]Auto-updating context...[/dim]")
+            context_path = ContextBuilder().write_context()
+            if not as_json:
+                console.print(f"[dim]-> {display_path(context_path)} updated[/dim]")
+    except Exception as e:
+        if as_json:
+            notices.append(json_output.notice("context", f"Auto-update failed: {e}"))
+        else:
+            console.print(f"[yellow]Warning:[/yellow] Auto-update failed: {e}")
+
+    # Review notice, on the day's first entry only. It must never stop a record.
+    try:
+        if dt.date() == datetime.now().date() and _is_first_entry(file_path):
+            from memory_tool.review.notice import review_notice
+
+            notice = review_notice(get_base_path())
+            if notice and as_json:
+                notices.append(json_output.notice("review", notice))
+            elif notice:
+                console.print(notice, markup=False, highlight=False)
+    except Exception:
+        pass
+
+    # Document health suggestion
+    try:
+        from memory_tool.utils.suggestion_helper import check_and_suggest_after_command, document_health_notice
+
+        if as_json:
+            health = document_health_notice(get_base_path(), "m")
+            if health:
+                notices.append(json_output.notice("document_health", health))
+        else:
+            check_and_suggest_after_command(get_base_path(), "m", force=False)
+    except Exception:
+        pass
+
+    if as_json:
+        [entry] = parse_entry_lines(timeline.format_entry(dt, message, all_tags))
+        json_output.succeed(
+            entry=json_output.entry_dict(dt, entry),
+            path=json_output.path_text(file_path),
+            notices=notices,
+        )
 
 
 JSON_HELP = "Print the entries as one line of JSON (for editors and scripts)"
