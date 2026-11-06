@@ -39,6 +39,11 @@ class Settings(context: Context) {
         get() = prefs.getInt("voiceDelay", 3)
         set(value) = prefs.edit().putInt("voiceDelay", value.coerceIn(0, 30)).apply()
 
+    /** The app's text size, in percent of the phone's own; [FONT_MIN] to [FONT_MAX] in steps of 10 */
+    var fontPercent: Int
+        get() = prefs.getInt("fontPercent", 100).coerceIn(FONT_MIN, FONT_MAX)
+        set(value) = prefs.edit().putInt("fontPercent", (value.coerceIn(FONT_MIN, FONT_MAX) / 10) * 10).apply()
+
     /** The PC's host key fingerprint the person confirmed, or empty */
     var fingerprint: String
         get() = prefs.getString("fingerprint", "").orEmpty()
@@ -53,6 +58,12 @@ class Settings(context: Context) {
         CommandTemplate.parse(template).isFailure -> "the command"
         fingerprint.isEmpty() -> "the PC's fingerprint"
         else -> null
+    }
+
+    companion object {
+        /** Android's own text size goes up to 200 percent as well */
+        const val FONT_MIN = 70
+        const val FONT_MAX = 200
     }
 }
 

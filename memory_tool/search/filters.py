@@ -181,19 +181,25 @@ class FileTypeFilter:
         if not patterns:
             return False
 
+        # The patterns are relative to the knowledge base folder. Callers pass
+        # either that folder or the project root above it (".memory/timeline/...").
+        from memory_tool.utils.paths import base_dir_for_root
+
+        roots = [Path(base_path)]
         try:
-            rel_path = file_path.relative_to(base_path)
-            rel_path_str = str(rel_path).replace("\\", "/")  # Unix-style
+            roots.append(base_dir_for_root(Path(base_path)))
+        except Exception:
+            pass
 
-            from fnmatch import fnmatch
+        for root in roots:
+            try:
+                rel_path_str = str(Path(file_path).relative_to(root)).replace("\\", "/")  # Unix-style
+            except ValueError:
+                continue
+            if any(fnmatch(rel_path_str, pattern) for pattern in patterns):
+                return True
 
-            for pattern in patterns:
-                if fnmatch(rel_path_str, pattern):
-                    return True
-
-            return False
-        except (ValueError, Exception):
-            return False
+        return False
 
     @staticmethod
     def filter_by_type(

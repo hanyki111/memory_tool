@@ -132,13 +132,47 @@ class CommandTest {
             val day = root.walkTopDown().first { it.name.endsWith(".md") && "2026-03" in it.path }
             assertTrue(day.readText(), day.readText().lines().contains("- 09:05 | $text"))
 
-            // Checking after a broken connection reads the same day back.
-            val check = ProcessBuilder(pwsh.path, "-NoProfile", "-NonInteractive", "-c",
-                PowerShell.forTransport(template.fill(dayArgs("2026-03-01")))).start()
-            val dayOut = check.inputStream.readBytes().toString(Charsets.UTF_8)
-            assertTrue("pwsh did not finish", check.waitFor(60, TimeUnit.SECONDS))
-            assertEquals(dayOut, true, Replies.dayHas(dayOut, "2026-03-01", "09:05", text))
-            assertEquals(dayOut, false, Replies.dayHas(dayOut, "2026-03-01", "09:06", text))
+            fun pc(args: List<String>): Pair<String, String> {
+                val p = ProcessBuilder(pwsh.path, "-NoProfile", "-NonInteractive", "-c", PowerShell.forTransport(template.fill(args))).start()
+                val out = p.inputStream.readBytes().toString(Charsets.UTF_8)
+                val err = p.errorStream.readBytes().toString(Charsets.UTF_8)
+                assertTrue("pwsh did not finish", p.waitFor(60, TimeUnit.SECONDS))
+                return out to err
+            }
+
+            // memory_tool rewrites tags as it records; the check after a broken connection still finds it.
+            val tagged = "끝 태그 #idea #work"
+            pc(recordArgs(tagged, "2026-03-01", "09:10"))
+            val (foundOut, foundErr) = pc(PcArgs.find("2026-03-01", "09:10", tagged))
+            assertEquals(foundOut + foundErr, PcReply.Ok(true), PcReplies.found(foundOut, foundErr))
+            val (absentOut, absentErr) = pc(PcArgs.find("2026-03-01", "09:11", tagged))
+            assertEquals(PcReply.Ok(false), PcReplies.found(absentOut, absentErr))
+
+            // Reading: the day and a search.
+            val (daysOut, daysErr) = pc(PcArgs.days("2026-02-27", "2026-03-01"))
+            val days = (PcReplies.days(daysOut, daysErr) as PcReply.Ok).value
+            assertEquals(listOf("2026-03-01"), days.map { it.date })
+            val listed = days.single().entries
+            assertEquals(listOf(text, "[idea] [work] 끝 태그"), listed.map { it.text })
+
+            val (searchOut, searchErr) = pc(PcArgs.search("따옴표"))
+            assertEquals(searchOut + searchErr, listOf(listed[0]), (PcReplies.search(searchOut, searchErr) as PcReply.Ok).value)
+
+            // Editing what was listed: move it to the day before, with text starting with a dash.
+            val (editOut, editErr) = pc(PcArgs.edit(listed[0], "2026-02-28", "23:50", "-고친 글 \"큰\" '작은' \$HOME"))
+            val (after, before) = (PcReplies.changed(editOut, editErr) as PcReply.Ok).value
+            assertEquals(TimelineEntry("2026-02-28", "23:50", "-고친 글 \"큰\" '작은' \$HOME"), after)
+            assertEquals(listed[0].copy(tags = emptyList()), before)
+
+            // The same edit again: the entry is no longer there.
+            val (againOut, againErr) = pc(PcArgs.edit(listed[0], "2026-02-28", "23:50", "x"))
+            assertEquals("not_found", (PcReplies.changed(againOut, againErr) as PcReply.Refused).code)
+
+            val (deleteOut, deleteErr) = pc(PcArgs.delete(listed[1]))
+            assertTrue(deleteOut + deleteErr, PcReplies.changed(deleteOut, deleteErr) is PcReply.Ok)
+            val (leftOut, leftErr) = pc(PcArgs.days("2026-02-27", "2026-03-01"))
+            val left = (PcReplies.days(leftOut, leftErr) as PcReply.Ok).value.flatMap { it.entries }
+            assertEquals(listOf("-고친 글 \"큰\" '작은' \$HOME"), left.map { it.text })
         } finally {
             root.deleteRecursively()
         }

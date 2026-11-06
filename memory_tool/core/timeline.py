@@ -265,6 +265,12 @@ class TimelineError(Exception):
     pass
 
 
+class EntryNotFound(TimelineError):
+    """No entry has the given date, time and text."""
+
+    pass
+
+
 class FutureTimeError(TimelineError):
     """Raised when trying to record future time."""
     pass
@@ -468,35 +474,36 @@ class Timeline:
             - bracket format: "- 14:30 | [tag1] [tag2] Message here"
             - hashtag format: "- 14:30 | Message here #tag1 #tag2"
         """
-        time_str = dt.strftime("%H:%M")
+        return f"- {dt.strftime('%H:%M')} | {self.format_text(message, tags)}"
 
-        if tags:
-            # Get storage format from config
-            try:
-                from ..utils.config import Config
-                config = Config()
-                storage_format = config.get("tag.storage_format", "bracket")
-            except Exception:
-                storage_format = "bracket"
+    def format_text(self, message: str, tags: Optional[List[str]] = None) -> str:
+        """The text of an entry: the message with its tags in the configured format."""
+        if not tags:
+            return message
 
-            if storage_format == "bracket":
-                # [tag1] [tag2] format (prepended to message)
-                tag_str = " ".join(f"[{t.strip().replace(' ', '-')}]" for t in tags if t.strip())
-                if tag_str:
-                    entry = f"- {time_str} | {tag_str} {message}"
-                else:
-                    entry = f"- {time_str} | {message}"
-            else:
-                # #tag1 #tag2 format (appended to message)
-                tag_str = " ".join(f"#{t.strip().replace(' ', '-')}" for t in tags if t.strip())
-                if tag_str:
-                    entry = f"- {time_str} | {message} {tag_str}"
-                else:
-                    entry = f"- {time_str} | {message}"
-        else:
-            entry = f"- {time_str} | {message}"
+        try:
+            from ..utils.config import Config
+            storage_format = Config().get("tag.storage_format", "bracket")
+        except Exception:
+            storage_format = "bracket"
 
-        return entry
+        if storage_format == "bracket":
+            tag_str = " ".join(f"[{t.strip().replace(' ', '-')}]" for t in tags if t.strip())
+            return f"{tag_str} {message}" if tag_str else message
+
+        tag_str = " ".join(f"#{t.strip().replace(' ', '-')}" for t in tags if t.strip())
+        return f"{message} {tag_str}" if tag_str else message
+
+    def normalize_text(self, text: str, extra_tags: Optional[List[str]] = None) -> str:
+        """The text ``record`` writes for what was typed.
+
+        Tags at the start or end are taken out and written back in the
+        configured format, so "fix #bug" and "[bug] fix" are the same entry.
+        Applying it to an entry's own text gives that text again.
+        """
+        message, leading, trailing = split_tags(re.sub(r"[\r\n]+", " ", text).strip())
+        tags = list(dict.fromkeys(leading + trailing + list(extra_tags or [])))
+        return self.format_text(message, tags or None)
 
     def read_timeline(self, file_path: Path) -> Tuple[str, list[str]]:
         """Read existing timeline file.
@@ -792,6 +799,155 @@ class Timeline:
             })
 
         return file_path, entries, parsed_date
+
+    # -- One entry, found by date, time and text ---------------------------
+    #
+    # Programs that list the timeline and change one entry later (the phone
+    # app) name it by what they saw. If the file changed since, the entry is
+    # not found and nothing is changed, so a newer edit is never overwritten.
+
+    @staticmethod
+    def _normal_time(time_str: str) -> str:
+        hour, _, minute = time_str.strip().partition(":")
+        return f"{int(hour):02d}:{minute}"
+
+    def _day_date(self, date_str: str) -> datetime:
+        if not re.match(r"^\d{4}-\d{2}-\d{2}$", date_str or ""):
+            raise ValueError(f"Invalid date format: {date_str}. Expected YYYY-MM-DD")
+        try:
+            return datetime.strptime(date_str, "%Y-%m-%d")
+        except ValueError as e:
+            raise ValueError(f"Invalid date: {date_str}") from e
+
+    def _check_time(self, time_str: str) -> str:
+        if not re.match(r"^\d{1,2}:\d{2}$", time_str or ""):
+            raise ValueError(f"Invalid time format: {time_str}. Expected HH:MM")
+        try:
+            datetime.strptime(time_str, "%H:%M")
+        except ValueError as e:
+            raise ValueError(f"Invalid time: {time_str}") from e
+        return self._normal_time(time_str)
+
+    def find_entry(self, date_str: str, time_str: str, text: str) -> Tuple[Optional[Path], List[dict], Optional[int]]:
+        """Find an entry by its date, time and text.
+
+        The text may be as typed or as written: both are compared after
+        :meth:`normalize_text`. When two entries are the same, the first is
+        taken; changing either gives the same file.
+
+        Returns:
+            (file, the day's entries as ``parse_entries`` gives them, position
+            of the entry among them or None)
+        """
+        day = self._day_date(date_str)
+        wanted_time = self._check_time(time_str)
+        wanted_text = self.normalize_text(text)
+
+        file_path = self.resolve_existing_file(self.timeline_path, day)
+        if file_path is None:
+            return None, [], None
+
+        _, entries, _ = self.parse_entries(day.strftime("%Y-%m-%d"))
+        for position, entry in enumerate(entries):
+            if self._normal_time(entry["time"]) != wanted_time:
+                continue
+            if entry["message"] == wanted_text or self.normalize_text(entry["message"]) == wanted_text:
+                return file_path, entries, position
+        return file_path, entries, None
+
+    def edit_entry(
+        self,
+        date_str: str,
+        time_str: str,
+        text: str,
+        new_date: Optional[str] = None,
+        new_time: Optional[str] = None,
+        new_text: Optional[str] = None,
+        force: bool = False,
+    ) -> Tuple[dict, dict]:
+        """Change an entry's date, time or text.
+
+        A new date or time is checked as ``record`` checks it; ``force`` allows
+        one more than a year ago. A new text is written as ``record`` writes
+        it. Moving to another day adds the entry there first and removes it
+        here after, so a failure in between leaves it in both, never in neither.
+
+        Returns:
+            (the entry before, the entry after), each with date, time and text
+
+        Raises:
+            EntryNotFound, ValueError, FutureTimeError, DistantPastWarning
+        """
+        file_path, entries, position = self.find_entry(date_str, time_str, text)
+        if position is None:
+            raise EntryNotFound(f"No entry at {date_str} {time_str} with that text. It may have been changed or deleted.")
+
+        entry = entries[position]
+        before = {"date": date_str, "time": self._normal_time(entry["time"]), "text": entry["message"]}
+
+        target_date = new_date if new_date is not None else date_str
+        target_time = self._check_time(new_time) if new_time is not None else before["time"]
+        if new_text is not None:
+            target_text = self.normalize_text(new_text)
+            if not split_tags(target_text)[0]:
+                raise ValueError("The new text is empty (tags alone are not an entry).")
+        else:
+            target_text = entry["message"]
+
+        moved = target_date != date_str
+        if moved or target_time != before["time"]:
+            try:
+                self.parse_time(target_date, target_time)
+            except DistantPastWarning:
+                if not force:
+                    raise
+
+        after = {"date": target_date, "time": target_time, "text": target_text}
+        if after == before:
+            return before, after
+
+        if moved:
+            target_day = self._day_date(target_date)
+            target_file = self.resolve_existing_file(self.timeline_path, target_day) or self.get_timeline_file(target_day)
+            _, target_entries, _ = self.parse_entries(target_date) if target_file.exists() else (None, [], None)
+            self.save_entries(target_file, target_entries + [{"time": target_time, "message": target_text}], target_day)
+            self.save_entries(file_path, [e for i, e in enumerate(entries) if i != position], self._day_date(date_str))
+            self._reindex(target_file, file_path)
+        else:
+            entries[position] = {**entry, "time": target_time, "message": target_text}
+            self.save_entries(file_path, entries, self._day_date(date_str))
+            self._reindex(file_path)
+
+        return before, after
+
+    def delete_entry(self, date_str: str, time_str: str, text: str) -> dict:
+        """Delete an entry. Lines written by hand under it are kept.
+
+        Returns:
+            The deleted entry, with date, time and text
+
+        Raises:
+            EntryNotFound, ValueError
+        """
+        file_path, entries, position = self.find_entry(date_str, time_str, text)
+        if position is None:
+            raise EntryNotFound(f"No entry at {date_str} {time_str} with that text. It may have been changed or deleted.")
+
+        entry = entries[position]
+        self.save_entries(file_path, [e for i, e in enumerate(entries) if i != position], self._day_date(date_str))
+        self._reindex(file_path)
+        return {"date": date_str, "time": self._normal_time(entry["time"]), "text": entry["message"]}
+
+    def _reindex(self, *paths: Path) -> None:
+        """Update the search index for changed files; it is optional, so failures are ignored."""
+        if not (INDEXING_AVAILABLE and IndexManager.available()):
+            return
+        try:
+            indexer = IndexManager(self.memory_path)
+            for path in paths:
+                indexer.index_file(path)
+        except Exception:
+            pass
 
     def save_entries(self, file_path: Path, entries: List[dict], date: datetime) -> None:
         """Save edited entries back to their file, changing nothing else.

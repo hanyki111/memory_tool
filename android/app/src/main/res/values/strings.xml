@@ -60,6 +60,28 @@
     <string name="main_trust_body">Compare it with the PC: ssh-keygen -lf C:\\ProgramData\\ssh\\ssh_host_ed25519_key.pub. Trust it only if they are the same.</string>
     <string name="main_trust">They match; trust</string>
 
+    <string name="settings">Settings</string>
+    <string name="back">Back</string>
+    <string name="retry">Try again</string>
+    <string name="search_hint">Search the timeline</string>
+    <string name="search_clear">Clear the search</string>
+    <string name="search_results">%1$d found</string>
+    <string name="search_none">Nothing found</string>
+    <string name="timeline_more">Load the 7 days before</string>
+    <string name="timeline_loaded_since">Loaded from %1$s</string>
+    <string name="edit_title">Edit entry</string>
+    <string name="edit_hint">Touch and hold an entry to edit it</string>
+    <string name="queue_open">Show the entries not yet sent</string>
+    <string name="queue_close">Hide the entries not yet sent</string>
+    <string name="edit_saved">Saved on the PC</string>
+    <string name="edit_deleted">Deleted on the PC</string>
+    <string name="edit_delete_confirm">Delete this entry from the timeline on the PC?</string>
+    <string name="edit_changed_on_pc">This entry changed on the PC, so nothing was changed. Loaded it again.</string>
+    <string name="edit_unknown">The connection broke, so the result is unknown. Loaded the day again.</string>
+    <string name="font_size">Text size</string>
+    <string name="font_preview">Preview: what happened today goes on the timeline.</string>
+    <string name="pc_setup_needed">Set %1$s in the settings first.</string>
+
     <string name="save">Save</string>
     <string name="copy">Copy</string>
     <string name="share">Share</string>

@@ -16,8 +16,8 @@ enum class State {
 
     /**
      * Sent, but the connection broke before the answer came back, so it may be
-     * on the PC already. The app reads the PC's timeline for that day before
-     * sending it again.
+     * on the PC already. The app asks the PC (`entry find`) before sending it
+     * again. memory_tool rewrites tags as it records, so only the PC can say.
      */
     CHECK,
 
@@ -86,7 +86,7 @@ object Transitions {
     }
 
     /**
-     * What reading the PC's timeline told about an entry in [State.CHECK]:
+     * What `entry find` on the PC told about an entry in [State.CHECK]:
      * found means sent, absent means send it again, and an answer the app
      * cannot read is left to the person. When the PC could not be asked,
      * the entry keeps waiting to be checked.
@@ -96,16 +96,12 @@ object Transitions {
         return when (outcome) {
             is Outcome.NotSent -> tried.copy(note = outcome.reason)
             is Outcome.Uncertain -> tried.copy(note = outcome.reason)
-            is Outcome.Ran -> when (Replies.dayHas(outcome.stdout, entry.date, entry.time, entry.text)) {
-                true -> tried.copy(state = State.SENT, note = "", maybeRecorded = false)
-                false -> tried.copy(state = State.PENDING, note = "", maybeRecorded = false)
-                null -> tried.copy(state = State.ATTENTION, note = Replies.parse(outcome.stdout, outcome.stderr, outcome.exitStatus).let {
-                    when (it) {
-                        is RecordReply.Refused -> it.message.ifEmpty { it.code }
-                        is RecordReply.Unreadable -> it.firstLine
-                        is RecordReply.Recorded -> ""
-                    }
-                })
+            is Outcome.Ran -> when (val found = PcReplies.found(outcome.stdout, outcome.stderr)) {
+                is PcReply.Ok ->
+                    if (found.value) tried.copy(state = State.SENT, note = "", maybeRecorded = false)
+                    else tried.copy(state = State.PENDING, note = "", maybeRecorded = false)
+                is PcReply.Refused -> tried.copy(state = State.ATTENTION, note = found.message.ifEmpty { found.code })
+                is PcReply.Unreadable -> tried.copy(state = State.ATTENTION, note = found.firstLine)
             }
         }
     }
