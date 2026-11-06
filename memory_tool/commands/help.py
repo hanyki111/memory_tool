@@ -729,29 +729,37 @@ Entries are grouped by date.
             "name": "mdays / days",
             "summary": "Show last N days timeline",
             "description": """
-Displays timeline entries for the last N days.
-Default is 7 days if not specified.
+Displays timeline entries for the last N days, or for a period.
+Default is 14 days if not specified.
             """,
             "examples": [
-                "mdays                      # Show last 7 days",
+                "mdays                      # Show last 14 days",
                 "mdays 3                    # Show last 3 days",
-                "mdays 30                   # Show last 30 days",
+                "mdays --from 2026-10-20 --to 2026-11-03   # Show a period",
+                "mdays --from 2026-10-20    # From a date to today",
             ],
-            "options": [],
+            "options": [
+                ("--from DATE", "First date (YYYY-MM-DD), in place of the number of days"),
+                ("--to DATE", "Last date (YYYY-MM-DD), default: today"),
+            ],
         },
         "ko": {
             "name": "mdays / days (일수)",
             "summary": "최근 N일 타임라인 보기",
             "description": """
-최근 N일간의 타임라인 항목을 표시합니다.
-지정하지 않으면 기본값은 7일입니다.
+최근 N일이나 지정한 기간의 타임라인 항목을 표시합니다.
+일수를 지정하지 않으면 기본값은 14일입니다.
             """,
             "examples": [
-                "mdays                      # 최근 7일 보기",
+                "mdays                      # 최근 14일 보기",
                 "mdays 3                    # 최근 3일 보기",
-                "mdays 30                   # 최근 30일 보기",
+                "mdays --from 2026-10-20 --to 2026-11-03   # 기간 보기",
+                "mdays --from 2026-10-20    # 그 날짜부터 오늘까지",
             ],
-            "options": [],
+            "options": [
+                ("--from DATE", "시작일(YYYY-MM-DD). 일수 대신 씁니다"),
+                ("--to DATE", "마지막 날(YYYY-MM-DD). 기본값은 오늘"),
+            ],
         },
     },
 

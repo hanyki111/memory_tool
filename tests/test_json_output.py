@@ -147,3 +147,91 @@ class TestEmit:
         assert day["entries"] == [{"date": "2026-03-01", "time": "10:00", "text": "[a] entry", "tags": ["a"]}]
         assert "hand-written note" in day["content"]
         assert day["path"] == str((tmp_path / "01.md").resolve())
+
+
+# ---------------------------------------------------------------------------
+# Views
+# ---------------------------------------------------------------------------
+
+
+def view(*args):
+    result = runner.invoke(app, list(args))
+    return result, last_json(result.output)
+
+
+class TestViews:
+    def test_today(self, base):
+        now = datetime.now()
+        write_day(base, now, "- 08:00 | [작업] 아침 기록\n손으로 적은 메모\n")
+
+        result, data = view("today", "--json")
+
+        assert result.exit_code == 0
+        assert data["ok"] is True
+        assert data["from"] == data["to"] == f"{now:%Y-%m-%d}"
+        [day] = data["days"]
+        assert day["entries"] == [{"date": f"{now:%Y-%m-%d}", "time": "08:00", "text": "[작업] 아침 기록", "tags": ["작업"]}]
+        assert "손으로 적은 메모" in day["content"]
+
+    def test_today_without_entries_is_an_empty_list(self, base):
+        result, data = view("today", "--json")
+
+        assert result.exit_code == 0
+        assert data["ok"] is True and data["days"] == []
+
+    def test_period_reads_both_layouts(self, base):
+        write_day(base, date(2026, 3, 1), "- 10:00 | a\n", layout="day")
+        write_day(base, date(2026, 3, 3), "- 10:00 | b\n", layout="date")
+        write_day(base, date(2026, 3, 4), "- 10:00 | outside\n")
+
+        _, data = view("days", "--from", "2026-03-01", "--to", "2026-03-03", "--json")
+
+        assert (data["from"], data["to"]) == ("2026-03-01", "2026-03-03")
+        assert [day["date"] for day in data["days"]] == ["2026-03-01", "2026-03-03"]
+
+    def test_to_alone_counts_back_the_number_of_days(self, base):
+        _, data = view("days", "3", "--to", "2026-03-10", "--json")
+
+        assert (data["from"], data["to"]) == ("2026-03-08", "2026-03-10")
+
+    @pytest.mark.parametrize("args", [
+        ("--from", "2026-03-05", "--to", "2026-03-01"),
+        ("--from", "03-05"),
+        ("0",),
+    ])
+    def test_bad_period_is_invalid_argument(self, base, args):
+        result, data = view("days", *args, "--json")
+
+        assert result.exit_code == 1
+        assert data["ok"] is False and data["code"] == "invalid_argument"
+
+    def test_day(self, base):
+        write_day(base, date(2026, 3, 1), "- 10:00 | a #태그\n", layout="day")
+
+        _, data = view("day", "2026-03-01", "--json")
+
+        assert data["days"][0]["entries"][0]["tags"] == ["태그"]
+
+    def test_day_with_a_bad_date(self, base):
+        result, data = view("day", "nonsense", "--json")
+
+        assert result.exit_code == 1 and data["code"] == "invalid_argument"
+
+    @pytest.mark.parametrize("command", ["week", "month"])
+    def test_week_and_month(self, base, command):
+        now = datetime.now()
+        write_day(base, now, "- 08:00 | 기록\n")
+
+        _, data = view(command, "--json")
+
+        assert data["to"] == f"{now:%Y-%m-%d}"
+        assert [day["date"] for day in data["days"]] == [f"{now:%Y-%m-%d}"]
+
+    def test_people_still_get_text(self, base):
+        write_day(base, date(2026, 3, 1), "- 10:00 | a\n")
+
+        result = runner.invoke(app, ["days", "--from", "2026-03-01", "--to", "2026-03-02"])
+
+        assert result.exit_code == 0
+        assert "2026-03-01 ~ 2026-03-02" in result.output
+        assert "1 day(s) with entries in this period" in result.output
