@@ -237,7 +237,7 @@ private fun MainScreen(resumed: Int) {
 private fun EntrySections(entries: List<Entry>, onSendNow: () -> Unit) {
     val context = LocalContext.current
     val attention = entries.filter { it.state == State.ATTENTION }
-    val pending = entries.filter { it.state == State.PENDING }
+    val pending = entries.filter { it.state == State.PENDING || it.state == State.CHECK }
     val sent = entries.filter { it.state == State.SENT }.sortedByDescending { it.changedAt }.take(10)
 
     if (attention.isNotEmpty()) {
@@ -246,10 +246,14 @@ private fun EntrySections(entries: List<Entry>, onSendNow: () -> Unit) {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("${entry.date} ${entry.time}  ${entry.text}")
-                    Text(
-                        if (entry.maybeRecorded) stringResource(R.string.main_maybe_recorded) else entry.note,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
+                    if (entry.maybeRecorded) Text(stringResource(R.string.main_maybe_recorded), style = MaterialTheme.typography.bodySmall)
+                    if (entry.note.isNotEmpty()) {
+                        Text(
+                            stringResource(R.string.main_reason, entry.note),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         TextButton(onClick = { EntryStore.put(context, Transitions.markSent(entry, System.currentTimeMillis())) }) {
                             Text(stringResource(R.string.main_mark_sent))
@@ -271,8 +275,11 @@ private fun EntrySections(entries: List<Entry>, onSendNow: () -> Unit) {
             Column {
                 Text("${it.date} ${it.time}  ${it.text}", style = MaterialTheme.typography.bodyMedium)
                 Text(
-                    if (it.attempts == 0) stringResource(R.string.main_not_tried)
-                    else stringResource(R.string.main_last_try, whenTried(it.changedAt), it.note),
+                    when {
+                        it.state == State.CHECK -> stringResource(R.string.main_checking, it.note)
+                        it.attempts == 0 -> stringResource(R.string.main_not_tried)
+                        else -> stringResource(R.string.main_last_try, whenTried(it.changedAt), it.note)
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

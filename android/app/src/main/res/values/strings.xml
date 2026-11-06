@@ -16,7 +16,8 @@
 
     <string name="toast_recorded">Recorded at %1$s</string>
     <string name="notify_setup_needed">Not sent yet: set %1$s in the app.</string>
-    <string name="notify_uncertain">Check whether this was recorded: %1$s</string>
+    <string name="notify_check_failed">Could not tell whether this was recorded; check the PC\'s timeline: %1$s</string>
+    <string name="toast_already_recorded">Already on the PC (%1$s)</string>
     <string name="notify_unreadable">The PC answered in a way the app could not read.</string>
     <string name="channel_notices">Notices from memory_tool</string>
     <string name="notify_sending">Sending entries…</string>
@@ -26,6 +27,8 @@
     <string name="main_new_entry">New entry</string>
     <string name="main_attention">To check (%1$d)</string>
     <string name="main_maybe_recorded">The connection broke after sending; it may already be on the PC. Check the timeline, then choose.</string>
+    <string name="main_reason">Reason: %1$s</string>
+    <string name="main_checking">The connection broke after sending (%1$s). Checking the PC\'s timeline before sending again.</string>
     <string name="main_mark_sent">It is recorded</string>
     <string name="main_resend">Send again</string>
     <string name="main_pending">Waiting to be sent (%1$d)</string>

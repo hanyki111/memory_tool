@@ -131,6 +131,14 @@ class CommandTest {
 
             val day = root.walkTopDown().first { it.name.endsWith(".md") && "2026-03" in it.path }
             assertTrue(day.readText(), day.readText().lines().contains("- 09:05 | $text"))
+
+            // Checking after a broken connection reads the same day back.
+            val check = ProcessBuilder(pwsh.path, "-NoProfile", "-NonInteractive", "-c",
+                PowerShell.forTransport(template.fill(dayArgs("2026-03-01")))).start()
+            val dayOut = check.inputStream.readBytes().toString(Charsets.UTF_8)
+            assertTrue("pwsh did not finish", check.waitFor(60, TimeUnit.SECONDS))
+            assertEquals(dayOut, true, Replies.dayHas(dayOut, "2026-03-01", "09:05", text))
+            assertEquals(dayOut, false, Replies.dayHas(dayOut, "2026-03-01", "09:06", text))
         } finally {
             root.deleteRecursively()
         }

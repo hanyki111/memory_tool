@@ -35,7 +35,9 @@ import io.github.hanyki111.memorycapture.core.Outcome
 import io.github.hanyki111.memorycapture.core.PowerShell
 import io.github.hanyki111.memorycapture.core.RecordReply
 import io.github.hanyki111.memorycapture.core.Retry
+import io.github.hanyki111.memorycapture.core.State
 import io.github.hanyki111.memorycapture.core.Transitions
+import io.github.hanyki111.memorycapture.core.dayArgs
 import io.github.hanyki111.memorycapture.core.recordArgs
 import io.github.hanyki111.memorycapture.data.EntryStore
 import io.github.hanyki111.memorycapture.data.PhoneKey
@@ -99,10 +101,31 @@ object Sender {
         val template = CommandTemplate.parse(settings.template).getOrThrow()
         val key = PhoneKey(context).get()
 
+        fun run(args: List<String>) = runPatiently { Ssh.run(target, key, settings.fingerprint, PowerShell.forTransport(template.fill(args))) }
+
         while (true) {
             val entry = Transitions.next(EntryStore.all(context)) ?: return false
-            val command = PowerShell.forTransport(template.fill(recordArgs(entry.text, entry.date, entry.time)))
-            val outcome = Ssh.run(target, key, settings.fingerprint, command)
+
+            if (entry.state == State.CHECK) {
+                // It may be on the PC already: look before sending it again.
+                val outcome = run(dayArgs(entry.date))
+                val next = Transitions.applyCheck(entry, outcome, System.currentTimeMillis())
+                EntryStore.put(context, next)
+                when {
+                    outcome is Outcome.NotSent && outcome.needsPerson -> {
+                        Notifier.attention(context, outcome.reason)
+                        return false
+                    }
+                    outcome !is Outcome.Ran -> return true
+                    next.state == State.SENT -> Notifier.toast(context, context.getString(R.string.toast_already_recorded, entry.time))
+                    next.state == State.ATTENTION ->
+                        Notifier.attention(context, context.getString(R.string.notify_check_failed, entry.text.take(40)))
+                }
+                // Not on the PC: the loop sends it next.
+                continue
+            }
+
+            val outcome = run(recordArgs(entry.text, entry.date, entry.time))
             val (next, reply) = Transitions.applyOutcome(entry, outcome, System.currentTimeMillis())
             EntryStore.put(context, next)
 
@@ -112,15 +135,28 @@ object Sender {
                     return false
                 }
                 outcome is Outcome.NotSent -> return true
-                outcome is Outcome.Uncertain -> Notifier.attention(context, context.getString(R.string.notify_uncertain, entry.text.take(40)))
+                // Uncertain: the entry is now checked, which the loop does next.
+                outcome is Outcome.Uncertain -> Unit
                 reply is RecordReply.Recorded -> {
                     Notifier.toast(context, context.getString(R.string.toast_recorded, reply.time ?: entry.time))
                     reply.notices.forEach { Notifier.notice(context, it) }
                 }
                 reply is RecordReply.Refused -> Notifier.attention(context, reply.message.ifEmpty { reply.code })
-                reply is RecordReply.Unreadable -> Notifier.attention(context, reply.firstLine.ifEmpty { context.getString(R.string.notify_unreadable) })
+                reply is RecordReply.Unreadable && next.state == State.ATTENTION ->
+                    Notifier.attention(context, reply.firstLine.ifEmpty { context.getString(R.string.notify_unreadable) })
             }
         }
+    }
+
+    /** Try again a few times, shortly, while the PC certainly was not reached. */
+    private fun runPatiently(send: () -> Outcome): Outcome {
+        var outcome = send()
+        for (wait in Retry.QUICK_WAITS) {
+            if (outcome !is Outcome.NotSent || outcome.needsPerson) return outcome
+            Thread.sleep(wait * 1000)
+            outcome = send()
+        }
+        return outcome
     }
 }
 

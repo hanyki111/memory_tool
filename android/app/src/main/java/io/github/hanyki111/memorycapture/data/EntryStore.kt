@@ -50,7 +50,7 @@ object EntryStore {
 
     fun counts(context: Context): Pair<Int, Int> {
         val entries = all(context)
-        return entries.count { it.state == State.PENDING } to entries.count { it.state == State.ATTENTION }
+        return entries.count { it.state == State.PENDING || it.state == State.CHECK } to entries.count { it.state == State.ATTENTION }
     }
 
     @Synchronized

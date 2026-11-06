@@ -49,10 +49,62 @@ class QueueTest {
     }
 
     @Test
-    fun uncertainNeedsThePerson() {
+    fun uncertainIsCheckedBeforeSendingAgain() {
         val (next, _) = Transitions.applyOutcome(entry, Outcome.Uncertain("Connection lost after sending"), 10)
-        assertEquals(State.ATTENTION, next.state)
+        assertEquals(State.CHECK, next.state)
         assertTrue(next.maybeRecorded)
+        assertEquals("1", Transitions.next(listOf(next))?.id)
+    }
+
+    @Test
+    fun unreadableAnswerIsCheckedOnlyWhenTheCommandSucceeded() {
+        assertEquals(State.CHECK, Transitions.applyOutcome(entry, Outcome.Ran("odd", "", 0), 1).first.state)
+        assertEquals(State.ATTENTION, Transitions.applyOutcome(entry, Outcome.Ran("", "not found", 1), 1).first.state)
+    }
+
+    // ---- checking the PC ----------------------------------------------------
+
+    private val dayOutput =
+        """{"ok": true, "from": "2026-11-07", "to": "2026-11-07", "days": [{"date": "2026-11-07", "path": "x", "entries": [""" +
+            """{"date": "2026-11-07", "time": "09:05", "text": "기록 \"따옴표\" [tag]", "tags": ["tag"]}], "content": ""}]}"""
+
+    private val quoted = "기록 \"따옴표\" [tag]"
+
+    @Test
+    fun dayHasFindsTheEntryByTimeAndText() {
+        assertEquals(true, Replies.dayHas(dayOutput, "2026-11-07", "09:05", quoted))
+        assertEquals(true, Replies.dayHas("warning\n$dayOutput", "2026-11-07", "09:05", "기록\n\"따옴표\" [tag] "))
+        assertEquals(false, Replies.dayHas(dayOutput, "2026-11-07", "09:06", quoted))
+        assertEquals(false, Replies.dayHas(dayOutput, "2026-11-07", "09:05", "다른 기록"))
+        assertEquals(false, Replies.dayHas("""{"ok": true, "days": []}""", "2026-11-07", "09:05", "기록"))
+        assertNull(Replies.dayHas("""{"ok": false, "code": "not_initialized", "error": "No base"}""", "2026-11-07", "09:05", "기록"))
+        assertNull(Replies.dayHas("python: not found", "2026-11-07", "09:05", "기록"))
+    }
+
+    @Test
+    fun checkSettlesTheEntry() {
+        val checking = entry.copy(text = quoted, state = State.CHECK, maybeRecorded = true, note = "lost")
+
+        val found = Transitions.applyCheck(checking, Outcome.Ran(dayOutput, "", 0), 5)
+        assertEquals(State.SENT, found.state)
+
+        val absent = Transitions.applyCheck(checking.copy(time = "09:06"), Outcome.Ran(dayOutput, "", 0), 5)
+        assertEquals(State.PENDING, absent.state)
+        assertFalse(absent.maybeRecorded)
+
+        val unreachable = Transitions.applyCheck(checking, Outcome.NotSent("No connection"), 5)
+        assertEquals(State.CHECK, unreachable.state)
+        assertEquals("No connection", unreachable.note)
+
+        val unreadable = Transitions.applyCheck(checking, Outcome.Ran("", "python: not found", 1), 5)
+        assertEquals(State.ATTENTION, unreadable.state)
+        assertTrue(unreadable.maybeRecorded)
+        assertEquals("python: not found", unreadable.note)
+    }
+
+    @Test
+    fun dayArgsEndOptionsBeforeTheDate() {
+        assertEquals(listOf("day", "--json", "--", "2026-11-07"), dayArgs("2026-11-07"))
     }
 
     @Test

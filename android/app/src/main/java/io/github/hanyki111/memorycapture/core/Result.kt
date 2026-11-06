@@ -37,6 +37,39 @@ object Replies {
         return RecordReply.Unreadable(shown.take(300), exitStatus)
     }
 
+    /**
+     * Whether `day --json` output holds the entry, by date, time and text.
+     * Null when the output is not a successful answer.
+     */
+    fun dayHas(stdout: String, date: String, time: String, text: String): Boolean? {
+        val json = lastJson(stdout) ?: return null
+        if (!json.optBoolean("ok", false)) return null
+        val days = json.optJSONArray("days") ?: return null
+        val wanted = oneLine(text)
+        for (d in 0 until days.length()) {
+            val entries = days.optJSONObject(d)?.optJSONArray("entries") ?: continue
+            for (e in 0 until entries.length()) {
+                val found = entries.optJSONObject(e) ?: continue
+                if (found.optString("date") == date && found.optString("time") == time && found.optString("text").trim() == wanted) {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
+    private fun lastJson(stdout: String): JSONObject? {
+        for (line in stdout.lines().map { it.trim() }.asReversed()) {
+            if (!line.startsWith("{")) continue
+            return try {
+                JSONObject(line)
+            } catch (e: Exception) {
+                continue
+            }
+        }
+        return null
+    }
+
     private fun fromJson(json: JSONObject): RecordReply {
         if (!json.optBoolean("ok", false)) {
             return RecordReply.Refused(json.optString("code", "failed"), json.optString("error", ""))
