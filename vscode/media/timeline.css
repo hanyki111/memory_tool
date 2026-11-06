@@ -199,6 +199,20 @@ button.link:hover {
   margin: 10px 0 4px;
 }
 
+h2.group {
+  margin: 14px 0 2px;
+  font-size: 0.95em;
+  font-weight: 600;
+}
+
+.sentinel {
+  padding: 12px 0;
+}
+
+button.more {
+  width: 100%;
+}
+
 .empty,
 .muted {
   color: var(--vscode-descriptionForeground);
@@ -209,9 +223,6 @@ button.link:hover {
   font-weight: 600;
 }
 
-.sentinel {
-  min-height: 1px;
-}
 
 /* Wide screens: the entries get more room between time and text. */
 @media (min-width: 560px) {

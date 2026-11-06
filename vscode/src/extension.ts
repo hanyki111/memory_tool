@@ -105,6 +105,7 @@ class Extension {
     return page({
       cspSource: webview.cspSource,
       scriptUri: webview.asWebviewUri(vscode.Uri.joinPath(media, "timeline.js")).toString(),
+      logicUri: webview.asWebviewUri(vscode.Uri.joinPath(media, "logic.js")).toString(),
       styleUri: webview.asWebviewUri(vscode.Uri.joinPath(media, "timeline.css")).toString(),
       nonce: newNonce(),
       strings: this.strings,

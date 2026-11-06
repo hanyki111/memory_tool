@@ -13,6 +13,7 @@ test("the page allows only its own script and style", () => {
   const html = page({
     cspSource: "vscode-resource:",
     scriptUri: "vscode-resource:/timeline.js",
+    logicUri: "vscode-resource:/logic.js",
     styleUri: "vscode-resource:/timeline.css",
     nonce: "abc",
     strings: stringsFor("en"),
@@ -28,7 +29,7 @@ test("the page allows only its own script and style", () => {
 
 test("the strings go in escaped", () => {
   const strings = { ...stringsFor("en"), record: `"><script>alert(1)</script>` };
-  const html = page({ cspSource: "x", scriptUri: "s", styleUri: "c", nonce: "n", strings, inEditor: true, language: "en" });
+  const html = page({ cspSource: "x", scriptUri: "s", logicUri: "l", styleUri: "c", nonce: "n", strings, inEditor: true, language: "en" });
 
   assert.doesNotMatch(html, /<script>alert/);
   const config = /data-config="([^"]*)"/.exec(html)[1];

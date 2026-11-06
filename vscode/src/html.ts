@@ -6,6 +6,8 @@ export interface PageParts {
   /** webview.cspSource */
   cspSource: string;
   scriptUri: string;
+  /** media/logic.js, which the screen script uses */
+  logicUri: string;
   styleUri: string;
   nonce: string;
   strings: Strings;
@@ -56,6 +58,7 @@ export function page(parts: PageParts): string {
 </head>
 <body data-config="${config}">
 <div id="app"></div>
+<script nonce="${parts.nonce}" src="${escapeHtml(parts.logicUri)}"></script>
 <script nonce="${parts.nonce}" src="${escapeHtml(parts.scriptUri)}"></script>
 </body>
 </html>`;

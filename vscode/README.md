@@ -8,12 +8,15 @@ found by the same rules as the CLI.
 
 - **Record:** type in the box at the top and press Enter. Tags go in the text as `[tag]` at the start or `#tag`
   at the end, as with `m`. Notices such as the review reminder appear as VS Code notifications.
-- **Read across days:** the timeline opens on the last seven days; scroll down for the week before, and so on
-  back to the first entries. Lines written into a timeline file by hand are shown in place, in italics.
+- **Read across days:** the timeline opens on the last seven days, newest first, and within a day too. Scroll to
+  the end, or press the button there, for the seven days before, and so on back to the first entries. The screen
+  never goes back on its own, so a quiet week shows as a quiet week. Lines written into a timeline file by hand
+  are shown in italics under the entry they follow.
 - **Choose a period:** under **Period**, pick dates, or use This week, Last week, This month. The screen shows the
   period from its last day and keeps going back as you scroll. **Latest** returns to today.
 - **Search:** Enter searches by keyword (about two seconds). **Search by meaning** runs hybrid search, which also
-  finds related wording but loads a model on every search (about ten seconds). A timeline hit opens its week with
+  finds related wording but loads a model on every search (about ten seconds). Timeline hits come first, newest
+  first, then documents. A timeline hit opens its week with
   the entry marked; a document hit opens the file at that line. **Back to the timeline** returns to where you
   were.
 - **Review:** the review button opens a terminal and runs `mreview --since <first day on screen>`, so you can

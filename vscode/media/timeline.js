@@ -9,7 +9,7 @@
   const vscode = acquireVsCodeApi();
   const config = JSON.parse(document.body.dataset.config);
   const t = config.strings;
-  const ENTRY = /^- (\d{1,2}:\d{2})\s*\|\s*(.+)$/;
+  const { dayItems, groupHits } = window.TimelineLogic;
 
   const fill = (template, values) =>
     template.replace(/\{(\w+)\}/g, (whole, name) => (name in values ? String(values[name]) : whole));
@@ -201,18 +201,13 @@
       )
     );
 
-    // Walk the file so hand-written lines keep their place among the entries.
-    const entries = day.entries.slice();
-    for (const line of day.content.split(/\r?\n/)) {
-      const trimmed = line.trim();
-      if (!trimmed || /^#\s/.test(trimmed)) continue;
-
-      const match = ENTRY.exec(trimmed);
-      if (match && entries.length) {
-        const entry = entries.shift();
+    // Newest entry first; hand-written lines stay under the entry they follow.
+    for (const item of dayItems(day)) {
+      if (item.kind === "entry") {
+        const entry = item.entry;
         block.append(entryRow(entry, `${day.date} ${entry.time} ${entry.text}`));
       } else {
-        block.append(el("div", { class: "note", text: trimmed }));
+        block.append(el("div", { class: "note", text: item.text }));
       }
     }
     return block;
@@ -262,7 +257,16 @@
       const { query, results } = model.search;
       status.textContent = busyText || fill(results.length ? t.resultsFor : t.noResults, { query, count: results.length });
       list.append(el("button", { class: "link back", text: `← ${t.clearSearch}`, onclick: clearSearch }));
-      results.forEach((hit, index) => list.append(hitRow(hit, index)));
+      // Timeline entries first, newest first; then documents.
+      const { timeline, documents } = groupHits(results);
+      if (timeline.length) {
+        list.append(el("h2", { class: "group", text: fill(t.timelineHits, { count: timeline.length }) }));
+        for (const item of timeline) list.append(hitRow(item.hit, item.index));
+      }
+      if (documents.length) {
+        list.append(el("h2", { class: "group", text: fill(t.documentHits, { count: documents.length }) }));
+        for (const item of documents) list.append(hitRow(item.hit, item.index));
+      }
       return;
     }
 
@@ -270,7 +274,19 @@
     for (const day of model.days) list.append(dayBlock(day));
     if (!model.days.length && !model.busy) list.append(el("p", { class: "empty", text: t.noEntries }));
 
-    sentinel.append(el("p", { class: "muted", text: model.hasOlder ? t.loadingOlder : t.noOlder }));
+    if (model.busy === "loading" && model.days.length) {
+      sentinel.append(el("p", { class: "muted", text: t.loadingOlder }));
+    } else if (model.hasOlder) {
+      sentinel.append(
+        el("button", {
+          class: "more",
+          text: fill(t.loadOlder, { date: model.loaded.from }),
+          onclick: () => vscode.postMessage({ type: "older" }),
+        })
+      );
+    } else {
+      sentinel.append(el("p", { class: "muted", text: t.noOlder }));
+    }
   }
 
   function afterRender(previous) {
@@ -286,20 +302,24 @@
       if (target) target.scrollIntoView({ block: "center" });
     }
     lastHighlight = model.highlight;
-    maybeLoadOlder();
   }
 
   // ---- loading older days -----------------------------------------------
+  //
+  // Only when the person scrolls to the end, or presses the button there. The
+  // screen never loads older days on its own: a quiet week would otherwise
+  // make it run back until something filled the screen.
 
-  function maybeLoadOlder() {
-    if (model.search || model.busy || !model.hasOlder) return;
-    const rect = sentinel.getBoundingClientRect();
-    if (rect.top < window.innerHeight + 200) {
-      vscode.postMessage({ type: "older" });
-    }
-  }
-
-  new IntersectionObserver(() => maybeLoadOlder(), { rootMargin: "200px" }).observe(sentinel);
+  window.addEventListener(
+    "scroll",
+    () => {
+      if (model.search || model.busy || !model.hasOlder) return;
+      if (sentinel.getBoundingClientRect().top < window.innerHeight + 80) {
+        vscode.postMessage({ type: "older" });
+      }
+    },
+    { passive: true }
+  );
 
   // ---- messages -----------------------------------------------------------
 
