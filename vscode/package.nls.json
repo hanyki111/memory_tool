@@ -1,0 +1,7 @@
+{
+  "container.title": "Memory Tool",
+  "view.name": "Timeline",
+  "command.openTimeline": "Memory Tool: Open Timeline in Editor",
+  "command.refresh": "Memory Tool: Refresh Timeline",
+  "config.python": "Python that has memory_tool installed. Empty: the folder's `.venv`, then `python` on PATH."
+}

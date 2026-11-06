@@ -74,3 +74,7 @@ memory_tool*utils/
 # main.js is the built bundle, tracked on purpose: Obsidian loads it directly,
 # so users install the plugin by copying it without running a build.
 obsidian-plugin/node_modules/
+
+# VS Code extension: dependencies and packaged builds (dist/ is ignored above)
+vscode/node_modules/
+vscode/*.vsix
