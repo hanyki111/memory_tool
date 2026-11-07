@@ -51,10 +51,11 @@ def deduplicate_results(
                 continue
 
             last = merged[-1]
-            # Check if this result overlaps with the last one
-            # Two results overlap if their line numbers are within 2*context_lines+1
-            threshold = 2 * context_lines + 1
-            if result.line_number - last.line_number <= threshold:
+            # A match is dropped only when it is shown anyway, as a context line
+            # of the one before. (Up to 1.6.1 matches up to 2*context_lines+1
+            # apart were merged, and those beyond the context were never shown:
+            # neighbouring timeline entries were lost.)
+            if result.line_number - last.line_number <= context_lines:
                 # Merge: keep the one with better score, or first one if equal
                 if result.score > last.score:
                     merged[-1] = result

@@ -112,6 +112,23 @@ def _result_dict(result, memory_path: Path) -> dict:
     return item
 
 
+def _distinct(results):
+    """Drop exact repeats of one line, keeping the order.
+
+    Unlike deduplicate_results this keeps neighbouring lines apart: in a
+    timeline each line is its own entry, and a program reading --json needs
+    every one of them.
+    """
+    seen = set()
+    kept = []
+    for result in results:
+        key = (str(result.file_path), result.line_number)
+        if key not in seen:
+            seen.add(key)
+            kept.append(result)
+    return kept
+
+
 def _emit_results(query: str, mode: str, results, cached: bool = False, notices=None) -> None:
     memory_path = get_base_path()
     json_output.succeed(
@@ -275,9 +292,12 @@ def search(
 
         cached_results = search_cache.get(query, **cache_key_params)
         if cached_results:
+            # Cached before merging, so --json still gets every entry.
             if as_json:
-                _emit_results(query, mode, cached_results, cached=True)
+                distinct = _distinct(cached_results)
+                _emit_results(query, mode, distinct[:max_results] if max_results else distinct, cached=True)
                 return
+            cached_results = deduplicate_results(cached_results, context_lines=1)
             console.print("[dim]Using cached results...[/dim]\n")
             if show_score or summary or not no_context:
                 from memory_tool.search import ResultFormatter
@@ -392,11 +412,12 @@ def search(
                     )
                     all_results = ranker.rank(query, all_results)
 
-                # Deduplicate overlapping results
-                all_results = deduplicate_results(all_results, context_lines=1)
-
                 if search_cache:
                     search_cache.set(query, all_results, **cache_key_params)
+
+                # Merge neighbouring matches for the screen, which shows their
+                # context; --json keeps each entry.
+                all_results = _distinct(all_results) if as_json else deduplicate_results(all_results, context_lines=1)
 
                 if as_json:
                     _emit_results(query, mode, all_results[:max_results] if max_results else all_results)
@@ -552,8 +573,9 @@ def search(
 
             all_results = ranker.rank(query, all_results)
 
-        # Deduplicate overlapping results (from context lines)
-        all_results = deduplicate_results(all_results, context_lines=1)
+        # Merge neighbouring matches for the screen, which shows their context;
+        # --json keeps each entry, as each timeline line is one.
+        all_results = _distinct(all_results) if as_json else deduplicate_results(all_results, context_lines=1)
 
         if max_results and len(all_results) > max_results:
             all_results = all_results[:max_results]
