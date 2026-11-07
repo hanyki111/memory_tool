@@ -13,7 +13,9 @@ import android.service.quicksettings.TileService
 import android.text.format.DateFormat
 import android.view.View
 import android.widget.RemoteViews
+import io.github.hanyki111.memorycapture.Widgets.paint
 import io.github.hanyki111.memorycapture.core.DayName
+import io.github.hanyki111.memorycapture.core.Mode
 import io.github.hanyki111.memorycapture.core.Neutrals
 import io.github.hanyki111.memorycapture.core.Recents
 import io.github.hanyki111.memorycapture.core.TimelineEntry
@@ -78,8 +80,8 @@ class SmallWidget : AppWidgetProvider() {
         private fun views(context: Context): RemoteViews {
             val look = Widgets.look(context)
             return RemoteViews(context.packageName, R.layout.widget_small).apply {
-                setInt(R.id.widget_root, "setBackgroundResource", if (look.dark) R.drawable.widget_round_dark else R.drawable.widget_round)
-                setInt(R.id.widget_icon, "setColorFilter", look.accent.toInt())
+                setInt(R.id.widget_root, "setBackgroundResource", look.background(R.drawable.widget_round, R.drawable.widget_round_light, R.drawable.widget_round_dark))
+                paint(R.id.widget_icon, "setColorFilter", look) { it.accent }
                 setOnClickPendingIntent(R.id.widget_root, Widgets.capture(context, voice = false))
             }
         }
@@ -128,15 +130,16 @@ class LargeWidget : AppWidgetProvider() {
                 PendingIntent.FLAG_IMMUTABLE,
             )
             return Widgets.field(context, R.layout.widget_large).apply {
-                setInt(R.id.widget_divider, "setBackgroundColor", look.neutrals.line.toInt())
+                paint(R.id.widget_divider, "setBackgroundColor", look) { it.neutrals.line }
                 ROWS.forEachIndexed { i, (row, whenId, textId) ->
                     val entry = entries.getOrNull(i)
                     setViewVisibility(row, if (entry == null) View.GONE else View.VISIBLE)
                     if (entry != null) {
                         setTextViewText(whenId, whenLabel(context, entry))
                         setTextViewText(textId, entry.text)
-                        setTextColor(whenId, look.neutrals.muted.toInt())
-                        setTextColor(textId, look.neutrals.text.toInt())
+                        // The times in the accent, as the app marks the newest entry with it.
+                        paint(whenId, "setTextColor", look) { it.accent }
+                        paint(textId, "setTextColor", look) { it.neutrals.text }
                     }
                     setOnClickPendingIntent(row, timeline)
                 }
@@ -146,7 +149,7 @@ class LargeWidget : AppWidgetProvider() {
                     else -> context.getString(R.string.widget_updated, clock(recent.fetchedAt))
                 }
                 setTextViewText(R.id.widget_updated, note)
-                setTextColor(R.id.widget_updated, look.neutrals.muted.toInt())
+                paint(R.id.widget_updated, "setTextColor", look) { it.neutrals.muted }
                 setOnClickPendingIntent(R.id.widget_updated, timeline)
             }
         }
@@ -174,13 +177,42 @@ class LargeWidget : AppWidgetProvider() {
 
 /** What the widgets share: their look, the field, and opening the capture window. */
 internal object Widgets {
-    class Look(val dark: Boolean, val neutrals: Neutrals, val accent: Long)
+    /** The colours of one side, light or dark. */
+    class Side(val neutrals: Neutrals, val accent: Long)
+
+    /**
+     * The app's look for a widget. Set to follow the phone, the widget carries
+     * both sides and the launcher picks one each time it draws (Android 12 and
+     * later), so it turns dark with the phone even while the app is closed.
+     */
+    class Look(val follows: Boolean, val dark: Boolean, val light: Side, val darkSide: Side) {
+        val now get() = if (dark) darkSide else light
+
+        fun background(follow: Int, light: Int, dark: Int) = when {
+            follows -> follow
+            this.dark -> dark
+            else -> light
+        }
+    }
 
     fun look(context: Context): Look {
         val settings = Settings(context)
         val systemDark = (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
-        val dark = settings.mode.isDark(systemDark)
-        return Look(dark, Neutrals.of(dark), accentColor(context, dark, settings.accent))
+        return Look(
+            follows = settings.mode == Mode.SYSTEM && Build.VERSION.SDK_INT >= 31,
+            dark = settings.mode.isDark(systemDark),
+            light = Side(Neutrals.LIGHT, accentColor(context, false, settings.accent)),
+            darkSide = Side(Neutrals.DARK, accentColor(context, true, settings.accent)),
+        )
+    }
+
+    /** Call [method] with [pick]'s colour: both sides when the look follows the phone, else the current one. */
+    fun RemoteViews.paint(id: Int, method: String, look: Look, pick: (Side) -> Long) {
+        if (look.follows && Build.VERSION.SDK_INT >= 31) {
+            setColorInt(id, method, pick(look.light).toInt(), pick(look.darkSide).toInt())
+        } else {
+            setInt(id, method, pick(look.now).toInt())
+        }
     }
 
     fun ids(context: Context, provider: Class<*>): IntArray =
@@ -209,13 +241,13 @@ internal object Widgets {
             if (pending > 0) context.getString(R.string.widget_pending, pending) else null,
             if (attention > 0) context.getString(R.string.widget_attention, attention) else null,
         ).joinToString(" · ")
-        val statusColor = if (attention > 0) (if (look.dark) 0xFFF2B8B5 else 0xFFB3261E) else look.accent
-
         return RemoteViews(context.packageName, layout).apply {
-            setInt(R.id.widget_root, "setBackgroundResource", if (look.dark) R.drawable.widget_background_dark else R.drawable.widget_background)
-            setTextColor(R.id.widget_hint, look.neutrals.muted.toInt())
-            setTextColor(R.id.widget_status, statusColor.toInt())
-            setInt(R.id.widget_voice, "setColorFilter", look.neutrals.muted.toInt())
+            setInt(R.id.widget_root, "setBackgroundResource", look.background(R.drawable.widget_background, R.drawable.widget_background_light, R.drawable.widget_background_dark))
+            paint(R.id.widget_hint, "setTextColor", look) { it.neutrals.muted }
+            paint(R.id.widget_status, "setTextColor", look) { side ->
+                if (attention == 0) side.accent else if (side === look.darkSide) 0xFFF2B8B5 else 0xFFB3261E
+            }
+            paint(R.id.widget_voice, "setColorFilter", look) { it.accent }
             setOnClickPendingIntent(R.id.widget_field, capture(context, voice = false))
             setOnClickPendingIntent(R.id.widget_voice, capture(context, voice = true))
             setTextViewText(R.id.widget_status, status)

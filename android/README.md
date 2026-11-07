@@ -31,7 +31,7 @@ and the accent; the widget's text size follows the phone's.
   - **Record (small)**, 1x1: a round button that opens the window.
   - **Record**, 4x1: looks like a text field; the microphone starts speech input. It also shows entries waiting to be
     sent or to be checked. (Android widgets cannot hold a text field, so tapping it opens the window.)
-  - **Record and latest entries**, 4x2: the same field with the PC's three latest entries below it; tapping them
+  - **Record and latest entries**, 4x2: the PC's three latest entries with the same field below them; tapping them
     opens the timeline. They are fetched every 30 minutes (with a network), when the app loads the timeline and
     after an entry reaches the PC; the widget says when. These few entries are the only part of the PC's timeline
     kept on the phone, only while such a widget is on the home screen, and never in a backup.
