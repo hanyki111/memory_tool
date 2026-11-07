@@ -12,14 +12,11 @@ import java.time.LocalDate
 data class Recent(val entries: List<TimelineEntry>, val fetchedAt: Long)
 
 object Recents {
-    /** How many entries the large widget shows */
-    const val COUNT = 3
-
-    /** How many days are asked for, to find [COUNT] entries after a quiet day or two */
-    const val DAYS = 7
+    /** How many days are asked for, to fill the widget after a few quiet days */
+    const val DAYS = 30
 
     /** The newest [count] entries of these days, newest first. */
-    fun latest(days: List<Day>, count: Int = COUNT): List<TimelineEntry> =
+    fun latest(days: List<Day>, count: Int): List<TimelineEntry> =
         days.sortedByDescending { it.date }.asSequence().flatMap { Days.newestFirst(it).asSequence() }.take(count).toList()
 
     fun toJson(recent: Recent): String = JSONObject()

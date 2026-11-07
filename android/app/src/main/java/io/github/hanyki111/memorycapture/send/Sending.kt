@@ -31,7 +31,6 @@ import androidx.work.WorkerParameters
 import io.github.hanyki111.memorycapture.MainActivity
 import io.github.hanyki111.memorycapture.R
 import io.github.hanyki111.memorycapture.core.Outcome
-import io.github.hanyki111.memorycapture.core.PowerShell
 import io.github.hanyki111.memorycapture.core.RecordReply
 import io.github.hanyki111.memorycapture.core.Retry
 import io.github.hanyki111.memorycapture.core.State
@@ -101,7 +100,7 @@ object Sender {
         val template = settings.command()!!
         val key = PhoneKey(context).get()
 
-        fun run(args: List<String>) = runPatiently { Ssh.run(target, key, settings.fingerprint, PowerShell.forTransport(template.fill(args))) }
+        fun run(args: List<String>) = runPatiently { Ssh.run(target, key, settings.fingerprint, template.line(args)) }
 
         while (true) {
             val entry = Transitions.next(EntryStore.all(context)) ?: return false

@@ -12,12 +12,13 @@ import android.os.Build
 import android.service.quicksettings.TileService
 import android.text.format.DateFormat
 import android.view.View
+import android.net.Uri
 import android.widget.RemoteViews
+import android.widget.RemoteViewsService
 import io.github.hanyki111.memorycapture.Widgets.paint
 import io.github.hanyki111.memorycapture.core.DayName
 import io.github.hanyki111.memorycapture.core.Mode
 import io.github.hanyki111.memorycapture.core.Neutrals
-import io.github.hanyki111.memorycapture.core.Recents
 import io.github.hanyki111.memorycapture.core.TimelineEntry
 import io.github.hanyki111.memorycapture.core.normalTime
 import io.github.hanyki111.memorycapture.data.EntryStore
@@ -111,51 +112,64 @@ class LargeWidget : AppWidgetProvider() {
     }
 
     companion object {
-        private val ROWS = listOf(
-            Triple(R.id.recent_1, R.id.recent_1_when, R.id.recent_1_text),
-            Triple(R.id.recent_2, R.id.recent_2_when, R.id.recent_2_text),
-            Triple(R.id.recent_3, R.id.recent_3_when, R.id.recent_3_text),
-        )
-
         fun present(context: Context): Boolean = Widgets.ids(context, LargeWidget::class.java).isNotEmpty()
 
-        fun refresh(context: Context) = Widgets.update(context, LargeWidget::class.java) { views(context) }
+        /** Redraw the widget and its list, as after new entries or a changed setting. */
+        fun refresh(context: Context) {
+            Widgets.update(context, LargeWidget::class.java) { views(context) }
+            val ids = Widgets.ids(context, LargeWidget::class.java)
+            @Suppress("DEPRECATION")
+            if (ids.isNotEmpty()) AppWidgetManager.getInstance(context).notifyAppWidgetViewDataChanged(ids, R.id.recent_list)
+        }
 
         private fun views(context: Context): RemoteViews {
             val look = Widgets.look(context)
             val recent = RecentStore.load(context)
-            val entries = recent?.entries.orEmpty().take(Recents.COUNT)
             val timeline = PendingIntent.getActivity(
                 context, 3, Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                 PendingIntent.FLAG_IMMUTABLE,
             )
+            // A list's rows add nothing to the intent, but Android 12 wants a template it may fill in.
+            val rowTemplate = PendingIntent.getActivity(
+                context, 4, Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+            val list = Intent(context, RecentWidgetService::class.java).let { it.setData(Uri.parse(it.toUri(Intent.URI_INTENT_SCHEME))) }
             return Widgets.field(context, R.layout.widget_large).apply {
                 paint(R.id.widget_divider, "setBackgroundColor", look) { it.neutrals.line }
-                ROWS.forEachIndexed { i, (row, whenId, textId) ->
-                    val entry = entries.getOrNull(i)
-                    setViewVisibility(row, if (entry == null) View.GONE else View.VISIBLE)
-                    if (entry != null) {
-                        setTextViewText(whenId, whenLabel(context, entry))
-                        setTextViewText(textId, entry.text)
-                        // The times in the accent, as the app marks the newest entry with it.
-                        paint(whenId, "setTextColor", look) { it.accent }
-                        paint(textId, "setTextColor", look) { it.neutrals.text }
-                    }
-                    setOnClickPendingIntent(row, timeline)
-                }
-                val note = when {
-                    recent == null -> context.getString(R.string.widget_fetching)
-                    entries.isEmpty() -> context.getString(R.string.widget_no_entries)
-                    else -> context.getString(R.string.widget_updated, clock(recent.fetchedAt))
-                }
-                setTextViewText(R.id.widget_updated, note)
+                @Suppress("DEPRECATION")
+                setRemoteAdapter(R.id.recent_list, list)
+                setPendingIntentTemplate(R.id.recent_list, rowTemplate)
+                setEmptyView(R.id.recent_list, R.id.recent_empty)
+                setTextViewText(
+                    R.id.recent_empty,
+                    context.getString(if (recent == null) R.string.widget_fetching else R.string.widget_no_entries),
+                )
+                paint(R.id.recent_empty, "setTextColor", look) { it.neutrals.muted }
+                setOnClickPendingIntent(R.id.recent_empty, timeline)
+                setTextViewText(
+                    R.id.widget_updated,
+                    if (recent == null) context.getString(R.string.widget_recent)
+                    else context.getString(R.string.widget_header, clock(recent.fetchedAt)),
+                )
                 paint(R.id.widget_updated, "setTextColor", look) { it.neutrals.muted }
                 setOnClickPendingIntent(R.id.widget_updated, timeline)
             }
         }
 
+        /** One row of the list: the time in the accent, then the entry, cut to a line or whole. */
+        internal fun row(context: Context, entry: TimelineEntry, look: Widgets.Look, wrap: Boolean): RemoteViews =
+            RemoteViews(context.packageName, if (wrap) R.layout.widget_recent_row_wrap else R.layout.widget_recent_row).apply {
+                setTextViewText(R.id.recent_when, whenLabel(context, entry))
+                setTextViewText(R.id.recent_text, entry.text)
+                // The times in the accent, as the app marks the newest entry with it.
+                paint(R.id.recent_when, "setTextColor", look) { it.accent }
+                paint(R.id.recent_text, "setTextColor", look) { it.neutrals.text }
+                setOnClickFillInIntent(R.id.recent_row, Intent())
+            }
+
         /** "14:30", "어제 14:30" or "11. 5. 14:30". */
-        private fun whenLabel(context: Context, entry: TimelineEntry): String {
+        fun whenLabel(context: Context, entry: TimelineEntry): String {
             val time = normalTime(entry.time)
             return when (val day = DayName.of(entry.date, LocalDate.now())) {
                 DayName.Today, null -> time
@@ -172,6 +186,35 @@ class LargeWidget : AppWidgetProvider() {
             val pattern = if (at.toLocalDate() == LocalDate.now()) "HH:mm" else "M/d HH:mm"
             return at.format(DateTimeFormatter.ofPattern(pattern))
         }
+    }
+}
+
+/** Gives the large widget's list its rows, from the entries kept on the phone. */
+class RecentWidgetService : RemoteViewsService() {
+    override fun onGetViewFactory(intent: Intent): RemoteViewsFactory = Rows(applicationContext)
+
+    private class Rows(private val context: Context) : RemoteViewsFactory {
+        private var entries: List<TimelineEntry> = emptyList()
+        private var look: Widgets.Look? = null
+        private var wrap = false
+
+        override fun onCreate() {}
+        override fun onDestroy() {}
+
+        override fun onDataSetChanged() {
+            val settings = Settings(context)
+            entries = RecentStore.load(context)?.entries.orEmpty().take(settings.widgetCount)
+            look = Widgets.look(context)
+            wrap = settings.widgetWrap
+        }
+
+        override fun getCount() = entries.size
+        override fun getViewAt(position: Int): RemoteViews? =
+            entries.getOrNull(position)?.let { LargeWidget.row(context, it, look ?: Widgets.look(context), wrap) }
+        override fun getLoadingView(): RemoteViews? = null
+        override fun getViewTypeCount() = 2 // one line, or wrapped
+        override fun getItemId(position: Int) = position.toLong()
+        override fun hasStableIds() = false
     }
 }
 

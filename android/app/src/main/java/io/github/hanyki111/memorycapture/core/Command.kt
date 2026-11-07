@@ -46,6 +46,29 @@ object PowerShell {
     }
 }
 
+/**
+ * A macOS or Linux PC: its SSH login shell is sh, bash or zsh, which all read
+ * single quotes the same way. Nothing is expanded inside them; a quote itself
+ * is closed, escaped and opened again: it's → 'it'\''s'.
+ */
+object Sh {
+    fun quote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
+}
+
+/** The PC's system, which decides the shell the command is written for. */
+enum class PcKind(val key: String) {
+    WINDOWS("windows"), POSIX("posix");
+
+    fun quote(value: String) = if (this == WINDOWS) PowerShell.quote(value) else Sh.quote(value)
+
+    /** The line sent over SSH. PowerShell gets it in Base64 (see [PowerShell.forTransport]); sh as it is. */
+    fun transport(command: String) = if (this == WINDOWS) PowerShell.forTransport(command) else command
+
+    companion object {
+        fun of(key: String?) = entries.firstOrNull { it.key == key } ?: WINDOWS
+    }
+}
+
 /** A timeline entry is one line: line breaks become spaces. */
 fun oneLine(text: String): String = text.replace(Regex("[\\r\\n]+"), " ").trim()
 
@@ -55,24 +78,27 @@ fun oneLine(text: String): String = text.replace(Regex("[\\r\\n]+"), " ").trim()
  *
  *     Set-Location 'E:\notes'; python -m memory_tool {args}
  */
-class CommandTemplate private constructor(val text: String) {
+class CommandTemplate private constructor(val text: String, val kind: PcKind) {
 
-    /** The full command line for these arguments, each quoted for PowerShell. */
+    /** The full command line for these arguments, each quoted for the PC's shell. */
     fun fill(args: List<String>): String =
-        text.replace(PLACEHOLDER, args.joinToString(" ") { PowerShell.quote(it) })
+        text.replace(PLACEHOLDER, args.joinToString(" ") { kind.quote(it) })
+
+    /** What is sent over SSH for these arguments. */
+    fun line(args: List<String>): String = kind.transport(fill(args))
 
     companion object {
         const val PLACEHOLDER = "{args}"
 
         /** Check a template; it must hold `{args}` exactly once. */
-        fun parse(text: String): Result<CommandTemplate> {
+        fun parse(text: String, kind: PcKind = PcKind.WINDOWS): Result<CommandTemplate> {
             val trimmed = text.trim()
             val count = trimmed.windowed(PLACEHOLDER.length).count { it == PLACEHOLDER }
             return when {
                 trimmed.isEmpty() -> Result.failure(IllegalArgumentException("The command is empty"))
                 count == 0 -> Result.failure(IllegalArgumentException("The command needs $PLACEHOLDER where the arguments go"))
                 count > 1 -> Result.failure(IllegalArgumentException("The command may hold $PLACEHOLDER only once"))
-                else -> Result.success(CommandTemplate(trimmed))
+                else -> Result.success(CommandTemplate(trimmed, kind))
             }
         }
     }
@@ -88,6 +114,7 @@ class CommandTemplate private constructor(val text: String) {
  */
 object KnowledgeBase {
     const val RUN = "python -m memory_tool"
+    const val RUN_POSIX = "python3 -m memory_tool"
 
     /** Why this folder cannot be used, or null when it can. */
     fun problem(path: String): String? = when {
@@ -97,12 +124,19 @@ object KnowledgeBase {
         else -> null
     }
 
-    /** The command that runs memory_tool in this folder; [run] starts memory_tool. */
-    fun command(path: String, run: String = RUN): CommandTemplate {
+    /**
+     * The command that runs memory_tool in this folder; [run] starts memory_tool.
+     * On macOS and Linux `&&` stops at a wrong folder, and Python is told to
+     * write UTF-8 whatever the session's locale.
+     */
+    fun command(path: String, kind: PcKind = PcKind.WINDOWS, run: String? = null): CommandTemplate {
         problem(path)?.let { throw IllegalArgumentException(it) }
-        return CommandTemplate.parse(
-            "Set-Location -LiteralPath ${PowerShell.quote(path.trim())} -ErrorAction Stop; $run ${CommandTemplate.PLACEHOLDER}"
-        ).getOrThrow()
+        val folder = kind.quote(path.trim())
+        val text = when (kind) {
+            PcKind.WINDOWS -> "Set-Location -LiteralPath $folder -ErrorAction Stop; ${run ?: RUN} ${CommandTemplate.PLACEHOLDER}"
+            PcKind.POSIX -> "cd -- $folder && export PYTHONIOENCODING=utf-8 && exec ${run ?: RUN_POSIX} ${CommandTemplate.PLACEHOLDER}"
+        }
+        return CommandTemplate.parse(text, kind).getOrThrow()
     }
 
     private val SAVED = Regex(

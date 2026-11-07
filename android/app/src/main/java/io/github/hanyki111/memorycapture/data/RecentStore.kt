@@ -40,7 +40,7 @@ object RecentStore {
     /** Keep the latest entries of these days, when a large widget shows them, and redraw it. */
     fun keep(context: Context, days: List<Day>) {
         if (!LargeWidget.present(context)) return
-        val recent = Recent(Recents.latest(days), System.currentTimeMillis())
+        val recent = Recent(Recents.latest(days, Settings(context).widgetCount), System.currentTimeMillis())
         runCatching { file(context).writeText(Recents.toJson(recent)) }
         LargeWidget.refresh(context)
     }

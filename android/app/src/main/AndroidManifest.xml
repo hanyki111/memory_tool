@@ -102,6 +102,11 @@
                 android:resource="@xml/widget_large_info" />
         </receiver>
 
+        <service
+            android:name=".RecentWidgetService"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
+
         <!-- Woken by Android when a working network appears while entries wait. -->
         <receiver
             android:name=".send.NetworkReceiver"

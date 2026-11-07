@@ -10,114 +10,39 @@
     android:paddingEnd="8dp"
     android:paddingTop="12dp">
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:layout_marginEnd="8dp"
-        android:orientation="vertical">
-
-        <LinearLayout
-            android:id="@+id/recent_1"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:paddingTop="3dp"
-            android:paddingBottom="3dp"
-            android:visibility="gone">
-
-            <TextView
-                android:id="@+id/recent_1_when"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginEnd="10dp"
-                android:fontFeatureSettings="tnum"
-                android:maxLines="1"
-                android:textColor="#FF62625D"
-                android:textSize="13sp" />
-
-            <TextView
-                android:id="@+id/recent_1_text"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:ellipsize="end"
-                android:maxLines="1"
-                android:textColor="#FF1A1A1A"
-                android:textSize="14sp" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/recent_2"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:paddingTop="3dp"
-            android:paddingBottom="3dp"
-            android:visibility="gone">
-
-            <TextView
-                android:id="@+id/recent_2_when"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginEnd="10dp"
-                android:fontFeatureSettings="tnum"
-                android:maxLines="1"
-                android:textColor="#FF62625D"
-                android:textSize="13sp" />
-
-            <TextView
-                android:id="@+id/recent_2_text"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:ellipsize="end"
-                android:maxLines="1"
-                android:textColor="#FF1A1A1A"
-                android:textSize="14sp" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/recent_3"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:paddingTop="3dp"
-            android:paddingBottom="3dp"
-            android:visibility="gone">
-
-            <TextView
-                android:id="@+id/recent_3_when"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginEnd="10dp"
-                android:fontFeatureSettings="tnum"
-                android:maxLines="1"
-                android:textColor="#FF62625D"
-                android:textSize="13sp" />
-
-            <TextView
-                android:id="@+id/recent_3_text"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:ellipsize="end"
-                android:maxLines="1"
-                android:textColor="#FF1A1A1A"
-                android:textSize="14sp" />
-        </LinearLayout>
-    </LinearLayout>
-
     <TextView
         android:id="@+id/widget_updated"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginEnd="8dp"
-        android:gravity="end"
-        android:layout_marginTop="2dp"
+        android:layout_marginBottom="2dp"
         android:maxLines="1"
         android:textColor="#FF62625D"
         android:textSize="11sp" />
+
+    <!-- As many entries as the widget's height holds; the rest scroll. -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginEnd="8dp">
+
+        <ListView
+            android:id="@+id/recent_list"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:divider="@null"
+            android:scrollbars="none" />
+
+        <TextView
+            android:id="@+id/recent_empty"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:textColor="#FF62625D"
+            android:textSize="13sp" />
+    </FrameLayout>
+
     <!-- A plain View cannot be in a widget; a FrameLayout can. -->
     <FrameLayout
         android:id="@+id/widget_divider"

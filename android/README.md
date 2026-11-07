@@ -31,10 +31,12 @@ and the accent; the widget's text size follows the phone's.
   - **Record (small)**, 1x1: a round button that opens the window.
   - **Record**, 4x1: looks like a text field; the microphone starts speech input. It also shows entries waiting to be
     sent or to be checked. (Android widgets cannot hold a text field, so tapping it opens the window.)
-  - **Record and latest entries**, 4x2: the PC's three latest entries with the same field below them; tapping them
-    opens the timeline. They are fetched every 30 minutes (with a network), when the app loads the timeline and
-    after an entry reaches the PC; the widget says when. These few entries are the only part of the PC's timeline
-    kept on the phone, only while such a widget is on the home screen, and never in a backup.
+  - **Record and latest entries**, 4x2 or larger: the PC's latest entries, as many as its height holds (the rest
+    scroll), with the same field below them; tapping them opens the timeline. Settings › Widget chooses how many
+    are kept (5, 10, 20 or 30) and whether a long entry is cut to one line or shown whole. They come from the last
+    30 days, fetched every 30 minutes (with a network), when the app loads the timeline and after an entry reaches
+    the PC; the widget says when. These entries are the only part of the PC's timeline kept on the phone, only
+    while such a widget is on the home screen, and never in a backup.
 - **Share:** choose **Record to timeline** in another app's share sheet
 - **App shortcuts:** touch and hold the app icon for **Record** and **Record by voice**. Samsung's Modes and Routines
   lists them as app actions, so a routine can open the window, or open it listening.
@@ -62,6 +64,31 @@ Speech is shown for a few seconds before sending (set in the app); tap the text 
    ```powershell
    ssh-keygen -lf C:\ProgramData\ssh\ssh_host_ed25519_key.pub
    ```
+
+### On the PC (macOS or Linux, OpenSSH server)
+
+1. Turn on the SSH server: on macOS, System Settings › General › Sharing › **Remote Login**; on Linux, install and
+   start `openssh-server` (for example `sudo apt install openssh-server`). Make it reachable as for Windows.
+2. Add the phone's public key to `~/.ssh/authorized_keys` of the user the app logs in as:
+
+   ```sh
+   mkdir -p ~/.ssh && chmod 700 ~/.ssh
+   echo "ssh-ed25519 AAAA... memory-capture@phone" >> ~/.ssh/authorized_keys
+   chmod 600 ~/.ssh/authorized_keys
+   ```
+
+3. Note the host key fingerprint: `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`.
+4. memory_tool must run as `python3 -m memory_tool` in an SSH session (`ssh user@pc python3 -m memory_tool
+   --version`). The user's login shell must be sh, bash or zsh, the defaults; fish reads quotes differently and
+   is not supported.
+
+In the app, set **PC** to **macOS · Linux**. The app then runs
+
+```text
+cd -- '/home/me/notes' && export PYTHONIOENCODING=utf-8 && exec python3 -m memory_tool <arguments>
+```
+
+with every argument in single quotes, so nothing in an entry is expanded, and a wrong folder stops at `cd`.
 
 ### In the app
 

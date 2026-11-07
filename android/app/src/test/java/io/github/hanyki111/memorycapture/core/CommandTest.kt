@@ -241,6 +241,73 @@ class CommandTest {
         )
     }
 
+    @Test
+    fun shQuotesAnythingAsWritten() {
+        assertEquals("'plain'", Sh.quote("plain"))
+        assertEquals("'it'\\''s'", Sh.quote("it's"))
+        assertEquals("'\$HOME `x` \"q\" \\ ; & |'", Sh.quote("\$HOME `x` \"q\" \\ ; & |"))
+        assertEquals("''", Sh.quote(""))
+    }
+
+    @Test
+    fun aMacOrLinuxPcGetsAnShCommand() {
+        val template = KnowledgeBase.command("/home/me/it's", PcKind.POSIX)
+        assertEquals(
+            "cd -- '/home/me/it'\\''s' && export PYTHONIOENCODING=utf-8 && exec python3 -m memory_tool 'record' '--' 'a'\\''b'",
+            template.fill(listOf("record", "--", "a'b")),
+        )
+        // Sent as it is: no PowerShell wrapping.
+        assertEquals(template.fill(listOf("x")), template.line(listOf("x")))
+        assertTrue(KnowledgeBase.command("E:\\notes").line(listOf("x")).startsWith("iex "))
+    }
+
+    /**
+     * The sh command through a real POSIX shell (Git Bash on this PC): the text
+     * reaches Python unchanged, it runs in the folder, and a wrong folder stops
+     * it. Runs only where bash and python exist.
+     */
+    @Test
+    fun shPassesTheTextAndStopsAtAWrongFolder() {
+        val bash = listOf(System.getenv("GIT_BASH"), "C:\\Program Files\\Git\\bin\\bash.exe")
+            .mapNotNull { it?.let(::File) }.firstOrNull { it.isFile }
+            ?: findOnPath("bash")?.takeIf { !it.path.contains("System32", ignoreCase = true) }
+        val python = findOnPath("python")
+        assumeTrue("bash and python are needed", bash != null && python != null)
+
+        val root = Files.createTempDirectory("kb").toFile()
+        val folder = File(root, "it's here").apply { mkdirs() }
+        val script = File(root, "echo.py").apply {
+            writeText(
+                "import os, sys, json\n" +
+                    "sys.stdout.buffer.write((json.dumps([os.getcwd()] + sys.argv[1:], ensure_ascii=False) + '\\n').encode('utf-8'))\n"
+            )
+        }
+        val run = "${Sh.quote(python!!.path)} ${Sh.quote(script.path)}"
+        fun runIn(path: String, args: List<String>): Pair<Int, String> {
+            val line = KnowledgeBase.command(path, PcKind.POSIX, run).line(args)
+            // On stdin, as SSH hands it over: Java on Windows drops quotes inside an argument.
+            val process = ProcessBuilder(bash!!.path, "-s").redirectErrorStream(true).start()
+            process.outputStream.use { it.write((line + "\n").toByteArray(Charsets.UTF_8)) }
+            val output = process.inputStream.readBytes().toString(Charsets.UTF_8)
+            assertTrue("bash did not finish", process.waitFor(60, TimeUnit.SECONDS))
+            return process.exitValue() to output
+        }
+        try {
+            val texts = listOf("따옴표 \"큰\" '작은' \$HOME `date` ; & | > \\ 끝", "-starts with a dash", "")
+            val (exit, output) = runIn(folder.path, listOf("--") + texts)
+            assertEquals(output, 0, exit)
+            val received = JSONArray(output.trim().lines().last())
+            assertEquals(folder.canonicalPath, File(received.getString(0)).canonicalPath)
+            assertEquals(listOf("--") + texts, (1 until received.length()).map { received.getString(it) })
+
+            val (badExit, badOutput) = runIn(File(root, "missing").path, listOf("x"))
+            assertTrue("a wrong folder must fail", badExit != 0)
+            assertTrue("memory_tool must not run: $badOutput", !badOutput.contains("\"x\""))
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
     private fun findOnPath(name: String): File? {
         val exts = if (System.getProperty("os.name").startsWith("Windows")) listOf(".exe", "") else listOf("")
         return System.getenv("PATH").orEmpty().split(File.pathSeparator)

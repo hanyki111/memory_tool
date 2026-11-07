@@ -32,8 +32,8 @@ android {
         applicationId = "io.github.hanyki111.memorycapture"
         minSdk = 29
         targetSdk = 36
-        versionCode = 10
-        versionName = "0.4.2"
+        versionCode = 11
+        versionName = "0.5.0"
     }
 
     signingConfigs {

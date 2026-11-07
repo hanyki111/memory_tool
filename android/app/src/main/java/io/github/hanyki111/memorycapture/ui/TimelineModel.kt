@@ -134,10 +134,12 @@ class TimelineModel(private val context: Context, private val scope: CoroutineSc
         }
     }
 
-    /** The large widget shows the latest entries; what is loaded always starts from today. */
+    /**
+     * The large widget lists the latest entries of the last month, more than
+     * the app may have loaded, so it fetches them itself, in the background.
+     */
     private fun keepRecent() {
-        val loaded = days
-        scope.launch(Dispatchers.IO) { RecentStore.keep(context, loaded) }
+        RecentStore.fetchSoon(context)
     }
 
     fun search() {
