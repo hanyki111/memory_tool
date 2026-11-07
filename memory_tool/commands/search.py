@@ -153,7 +153,7 @@ def search(
     from_date: Optional[str] = typer.Option(None, "--from", help="Start date (YYYY-MM-DD)"),
     to_date: Optional[str] = typer.Option(None, "--to", help="End date (YYYY-MM-DD)"),
     semantic: bool = typer.Option(False, "--semantic", "-s", help="Semantic search using embeddings"),
-    threshold: Optional[float] = typer.Option(None, "--threshold", "-t", help="Similarity threshold (0-1, default from config: 0.5)"),
+    threshold: Optional[float] = typer.Option(None, "--threshold", "-t", help="Similarity threshold (0-1, default from config: 0.35)"),
     no_index: bool = typer.Option(False, "--no-index", help="Force file-based search (skip SQLite index)"),
     rank: Optional[str] = typer.Option(None, "--rank", help="Ranking algorithm: bm25 (default: none)"),
     boost_recent: bool = typer.Option(False, "--boost-recent", help="Boost recent results"),
@@ -244,7 +244,7 @@ def search(
     if semantic_weight is None:
         semantic_weight = config.get("search.semantic_weight", 0.3)
     if threshold is None:
-        threshold = config.get("search.semantic_threshold", 0.5)
+        threshold = config.get("search.semantic_threshold", 0.35)
 
     mode = "hybrid" if hybrid else "semantic" if semantic else "keyword"
 
@@ -668,10 +668,8 @@ def check(
             if not quiet:
                 if legacy:
                     if not result.has_related_files:
-                        console.print(f"[yellow]![/yellow] {module_name}")
-                        console.print("  No Related Files section found")
-                        if result.related_files.format_type == "legacy":
-                            console.print("  [dim](using legacy Key Files format)[/dim]")
+                        console.print(f"[green]OK[/green] {module_name}")
+                        console.print("  [dim]No paths named[/dim]")
                     else:
                         console.print(f"{result.status_icon} {module_name}")
                         for path_result in result.path_results:
@@ -686,13 +684,6 @@ def check(
                     for path_result in result.path_results:
                         if not path_result.exists:
                             console.print(f"[red]{path_result.format_error()}[/red]", emoji=False, highlight=False)
-                    if not result.has_related_files:
-                        source_file = result.source_file or module_name
-                        console.print(
-                            f"[yellow]{source_file}:1: warning: No Related Files section found[/yellow]",
-                            emoji=False,
-                            highlight=False,
-                        )
                     console.print(f"\n[dim]Checked: {result.valid_count} valid, {result.missing_count} missing[/dim]")
 
             if result.has_issues:

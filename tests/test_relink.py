@@ -94,17 +94,24 @@ def test_no_broken_links_is_an_empty_plan(base):
     assert build_plan(manager_for(base)).is_empty
 
 
-def test_moved_module_is_detected_by_suffix(base):
-    # "core" used to live at the top level and now sits under "tools".
+def test_link_by_name_is_not_broken(base):
+    # Obsidian reads [[core]] as the document called core wherever it is, so a
+    # module moved under "tools" is still linked and needs no rewrite.
     write_module(base, "tools/core")
     write_module(base, "docs", "See [[core]].")
 
+    assert build_plan(manager_for(base)).is_empty
+
+
+def test_link_by_name_shared_by_two_modules_is_ambiguous(base):
+    write_module(base, "x/shared")
+    write_module(base, "y/shared")
+    write_module(base, "docs", "See [[shared]].")
+
     plan = build_plan(manager_for(base))
 
-    assert len(plan.proposals) == 1
-    assert plan.proposals[0].old == "core"
-    assert plan.proposals[0].new == "tools/core"
-    assert plan.unresolved == []
+    assert plan.proposals == []
+    assert plan.unresolved[0].candidates == ["x/shared", "y/shared"]
 
 
 def test_reparented_module_is_detected_by_basename(base):
@@ -153,7 +160,7 @@ def test_exact_match_wins_over_basename(base):
 
 def test_korean_module_move_is_detected(base):
     write_module(base, "게임 분석/니케")
-    write_module(base, "docs", "See [[니케]].")
+    write_module(base, "docs", "See [[이전/니케]].")
 
     plan = build_plan(manager_for(base))
 
@@ -172,19 +179,19 @@ def docs_text(base) -> str:
 
 def test_apply_rewrites_the_link(base):
     write_module(base, "tools/core")
-    write_module(base, "docs", "See [[core]] for details.")
+    write_module(base, "docs", "See [[old/core]] for details.")
 
     plan = build_plan(manager_for(base))
     changed = apply_plan(plan)
 
     assert changed == 1
     assert "[[tools/core]]" in docs_text(base)
-    assert "[[core]]" not in docs_text(base)
+    assert "[[old/core]]" not in docs_text(base)
 
 
 def test_dry_run_writes_nothing(base):
     write_module(base, "tools/core")
-    write_module(base, "docs", "See [[core]].")
+    write_module(base, "docs", "See [[old/core]].")
     before = docs_text(base)
 
     plan = build_plan(manager_for(base))
@@ -197,7 +204,7 @@ def test_dry_run_writes_nothing(base):
 def test_alias_survives_the_rewrite(base):
     # Losing the alias would quietly change what the sentence reads like.
     write_module(base, "tools/core")
-    write_module(base, "docs", "See [[core|the core module]].")
+    write_module(base, "docs", "See [[old/core|the core module]].")
 
     apply_plan(build_plan(manager_for(base)))
 
@@ -206,7 +213,7 @@ def test_alias_survives_the_rewrite(base):
 
 def test_section_reference_survives_the_rewrite(base):
     write_module(base, "tools/core")
-    write_module(base, "docs", "See [[core#Design]].")
+    write_module(base, "docs", "See [[old/core#Design]].")
 
     apply_plan(build_plan(manager_for(base)))
 
@@ -215,7 +222,7 @@ def test_section_reference_survives_the_rewrite(base):
 
 def test_every_occurrence_in_a_file_is_rewritten(base):
     write_module(base, "tools/core")
-    write_module(base, "docs", "[[core]] and again [[core]] and [[core|x]].")
+    write_module(base, "docs", "[[old/core]] and again [[old/core]] and [[old/core|x]].")
 
     apply_plan(build_plan(manager_for(base)))
 
@@ -226,7 +233,7 @@ def test_every_occurrence_in_a_file_is_rewritten(base):
 def test_multiple_moves_in_one_file(base):
     write_module(base, "tools/core")
     write_module(base, "tools/search")
-    write_module(base, "docs", "[[core]] and [[search]].")
+    write_module(base, "docs", "[[old/core]] and [[old/search]].")
 
     changed = apply_plan(build_plan(manager_for(base)))
 
@@ -247,7 +254,7 @@ def test_unresolved_links_are_left_untouched(base):
 
 def test_unrelated_text_is_not_touched(base):
     write_module(base, "tools/core")
-    write_module(base, "docs", "The word core appears bare, and [[core]] linked.")
+    write_module(base, "docs", "The word core appears bare, and [[old/core]] linked.")
 
     apply_plan(build_plan(manager_for(base)))
 
@@ -289,11 +296,11 @@ def test_format_plan_lists_both_sections(base):
     write_module(base, "tools/core")
     write_module(base, "x/shared")
     write_module(base, "y/shared")
-    write_module(base, "docs", "[[core]] and [[old/shared]].")
+    write_module(base, "docs", "[[old/core]] and [[old/shared]].")
 
     report = format_plan(build_plan(manager_for(base)), dry_run=True)
 
     assert "Would repair" in report
-    assert "[[core]] -> [[tools/core]]" in report
+    assert "[[old/core]] -> [[tools/core]]" in report
     assert "Needs a decision" in report
     assert "ambiguous" in report

@@ -670,20 +670,48 @@ def module(
         elif action.lower() == "check-links":
             from memory_tool.core.connections import ConnectionGraph
 
+            from rich.markup import escape
+
             graph = ConnectionGraph()
             console.print("[cyan]Checking module links...[/cyan]\n")
 
-            broken = graph.check_broken_links()
+            # Read the documents as they are now. The graph is otherwise only
+            # as current as the last rebuild, and reported links from
+            # documents deleted since.
+            try:
+                graph.rebuild_from_modules()
+            except Exception as e:
+                console.print(f"[red]ERROR[/red] Could not read the modules: {e}")
+                sys.exit(1)
+
+            broken, ambiguous = graph.find_unresolved_links()
 
             if broken:
                 console.print(f"[yellow]Found {len(broken)} module(s) with broken links:[/yellow]\n")
                 for source, targets in sorted(broken.items()):
-                    console.print(f"  {source}:")
+                    console.print(f"  {escape(source)}:")
                     for target in targets:
-                        console.print(f"    [red]x[/red] \\[\\[{target}]] -> module not found")
+                        # Older templates left this example as a live link.
+                        reason = (
+                            "template placeholder: fill in or delete"
+                            if target == "모듈명"
+                            else "module not found"
+                        )
+                        console.print(f"    [red]x[/red] {escape(f'[[{target}]]')} -> {reason}")
                 console.print()
             else:
                 console.print("[green]OK[/green] No broken links found\n")
+
+            if ambiguous:
+                console.print(f"[yellow]Found {len(ambiguous)} module(s) with ambiguous links:[/yellow]\n")
+                for source, entries in sorted(ambiguous.items()):
+                    console.print(f"  {escape(source)}:")
+                    for target, candidates in entries:
+                        console.print(
+                            f"    [yellow]?[/yellow] {escape(f'[[{target}]]')} -> "
+                            f"{escape(', '.join(candidates))}"
+                        )
+                console.print("[dim]Write enough of the path to pick one.[/dim]\n")
 
             orphaned = graph.get_orphaned_modules()
 

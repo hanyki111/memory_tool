@@ -279,7 +279,7 @@ def test_organizer_measures_a_single_document(tmp_path):
     assert set(found) == {"flat", "topic"}
     assert found["topic"].line_count == 400
     assert found["flat"].line_count == 10
-    assert "line" in found["topic"].content_preview
+    assert "line" in found["topic"].body
 
 
 def test_organizer_uses_forward_slashes_in_names(tmp_path):

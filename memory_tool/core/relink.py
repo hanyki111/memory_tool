@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from memory_tool.core.connections import ConnectionParser
+from memory_tool.core.connections import ConnectionParser, LinkResolver
 from memory_tool.core.module import ModuleManager
 
 
@@ -167,7 +167,7 @@ def scan_links(manager: Optional[ModuleManager] = None) -> List[LinkRef]:
             except (OSError, UnicodeDecodeError):
                 continue
 
-            for line_no, line in enumerate(content.split("\n"), 1):
+            for line_no, line in ConnectionParser.linkable_lines(content):
                 for match in ConnectionParser.LINK_PATTERN.finditer(line):
                     target = match.group(1).strip()
                     if target:
@@ -205,11 +205,13 @@ def build_plan(manager: Optional[ModuleManager] = None) -> RelinkPlan:
     """Work out which links are broken and what they should point at."""
     manager = manager or ModuleManager()
     existing = module_files(manager)
-    known = {_normalize(name) for name in existing}
+    # A link that names a module the way Obsidian reads it -- [[b]] for a/b --
+    # is not broken, and rewriting it to the full path would be churn.
+    resolver = LinkResolver(existing)
 
     broken: Dict[str, List[LinkRef]] = {}
     for ref in scan_links(manager):
-        if _normalize(ref.target) not in known:
+        if resolver.resolve(ref.target, ref.module) is None:
             broken.setdefault(_normalize(ref.target), []).append(ref)
 
     plan = RelinkPlan()

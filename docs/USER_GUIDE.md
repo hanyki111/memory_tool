@@ -1201,6 +1201,19 @@ Auto-snapshot created (version 4)
 python -m memory_tool module check-links
 ```
 
+The documents are read as they are now, so there is no need to run
+`rebuild-graph` first, and a deleted document is not reported.
+
+A link is resolved the way Obsidian resolves it:
+
+1. The full module path: `[[principles/core-principles]]`
+2. A path from the linking module: `[[./core-principles]]`, `[[../tools/core]]`
+3. The end of a module path: `[[core-principles]]` finds `principles/core-principles`.
+   If several modules end that way, the one nearest the linking module wins; if
+   two are equally near, the link is reported as ambiguous.
+
+Links inside code and HTML comments are not links, as in Obsidian.
+
 **Output:**
 ```
 Checking module links...
@@ -1208,8 +1221,14 @@ Checking module links...
 Found 2 module(s) with broken links:
 
   auth-system:
-    × [[old-api]] -> module not found
-    × [[email-v1]] -> module not found
+    x [[old-api]] -> module not found
+    x [[모듈명]] -> template placeholder: fill in or delete
+
+Found 1 module(s) with ambiguous links:
+
+  docs/intro:
+    ? [[shared]] -> a/shared, b/shared
+Write enough of the path to pick one.
 
 OK No orphaned modules
 ```
@@ -2591,7 +2610,7 @@ pip install sentence-transformers[gpu]
 # .memory/config.yaml
 search:
   default_mode: hybrid        # text | semantic | hybrid
-  semantic_model: all-MiniLM-L6-v2
+  semantic_model: paraphrase-multilingual-MiniLM-L12-v2
   cache_embeddings: true
   device: cuda                # cuda | cpu
 ```
@@ -3429,7 +3448,8 @@ search:
   cache_results: true          # Cache search results
   cache_ttl: 3600             # Cache TTL (seconds)
   cache_embeddings: true       # Cache vector embeddings
-  semantic_model: all-MiniLM-L6-v2
+  semantic_model: paraphrase-multilingual-MiniLM-L12-v2
+  semantic_threshold: 0.35     # Minimum similarity for semantic search
   device: auto                 # auto | cuda | cpu
   text_weight: 0.5            # Hybrid: text weight
   semantic_weight: 0.5         # Hybrid: semantic weight

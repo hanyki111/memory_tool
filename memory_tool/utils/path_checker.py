@@ -86,8 +86,6 @@ class ModuleCheckResult:
     @property
     def status_icon(self) -> str:
         """Get overall status icon."""
-        if not self.has_related_files:
-            return "[!]"
         if self.missing_count == 0:
             return "[OK]"
         return "[X]"
@@ -120,7 +118,7 @@ class CheckSummary:
 
     @property
     def modules_without_related_files(self) -> int:
-        """Number of modules without Related Files section."""
+        """Number of modules that name no paths. Informational, not an issue."""
         return sum(1 for r in self.results if not r.has_related_files)
 
     @property
@@ -135,8 +133,13 @@ class CheckSummary:
 
     @property
     def has_issues(self) -> bool:
-        """Check if any module has issues."""
-        return self.total_missing > 0 or self.modules_without_related_files > 0
+        """Check if any named path is missing.
+
+        A document with no Related Files section is not an issue: paths go in
+        the ``sources`` frontmatter now, and only documents resting on code or
+        other material have any.
+        """
+        return self.total_missing > 0
 
     def to_dict(self) -> dict:
         """Convert to dictionary for caching."""
@@ -155,7 +158,7 @@ class CheckSummary:
                     "missing_paths": r.get_missing_paths(),
                 }
                 for r in self.results
-                if r.has_issues or not r.has_related_files
+                if r.has_issues
             ],
         }
 
@@ -380,7 +383,9 @@ class PathChecker:
         cache = self.load_cache()
         if cache is None:
             return False
-        return cache.get("has_issues", False)
+        # Read the count rather than "has_issues": a cache written before a
+        # missing section stopped counting still says True for it.
+        return cache.get("total_missing", 0) > 0
 
     def get_cached_summary(self) -> Optional[str]:
         """Get a brief summary from cache for display.
@@ -392,20 +397,9 @@ class PathChecker:
         if cache is None:
             return None
 
-        if not cache.get("has_issues"):
-            return None
-
-        parts = []
         missing = cache.get("total_missing", 0)
-        no_section = cache.get("modules_without_related_files", 0)
-
         if missing > 0:
-            parts.append(f"{missing} missing path(s)")
-        if no_section > 0:
-            parts.append(f"{no_section} module(s) without Related Files")
-
-        if parts:
-            return ", ".join(parts)
+            return f"{missing} missing path(s)"
         return None
 
 
@@ -429,16 +423,9 @@ def format_check_result(
     if standard_format:
         # Standard compiler-style error format
         for result in sorted(summary.results, key=lambda r: r.module_name):
-            if result.has_related_files:
-                for path_result in result.path_results:
-                    if not path_result.exists:
-                        lines.append(path_result.format_error())
-            else:
-                # No Related Files section - also report as warning. The path
-                # comes from the document that was actually read; a consolidated
-                # module has no current.md to point at.
-                source_file = result.source_file or result.module_name
-                lines.append(f"{source_file}:1: warning: No Related Files section found")
+            for path_result in result.path_results:
+                if not path_result.exists:
+                    lines.append(path_result.format_error())
 
         # Summary at the end
         if lines:
@@ -448,26 +435,18 @@ def format_check_result(
     else:
         # Original grouped format
         for result in sorted(summary.results, key=lambda r: r.module_name):
-            # Module header
-            if result.has_related_files:
-                if verbose or result.has_issues:
-                    lines.append(f"\n{result.status_icon} {result.module_name}")
+            # A document naming no paths has nothing to show.
+            if result.has_related_files and (verbose or result.has_issues):
+                lines.append(f"\n{result.status_icon} {result.module_name}")
 
-                    # Show paths
-                    for path_result in result.path_results:
-                        if verbose or not path_result.exists:
-                            type_indicator = ""
-                            if path_result.exists:
-                                type_indicator = " (dir)" if path_result.is_directory else " (file)"
-                            lines.append(
-                                f"  {path_result.status_icon} {path_result.path}{type_indicator}"
-                            )
-            else:
-                # No Related Files section
-                lines.append(f"\n[!] {result.module_name}")
-                lines.append("  No Related Files section found")
-                if result.related_files.format_type == "legacy":
-                    lines.append("  (using legacy Key Files format)")
+                for path_result in result.path_results:
+                    if verbose or not path_result.exists:
+                        type_indicator = ""
+                        if path_result.exists:
+                            type_indicator = " (dir)" if path_result.is_directory else " (file)"
+                        lines.append(
+                            f"  {path_result.status_icon} {path_result.path}{type_indicator}"
+                        )
 
         # Summary
         lines.append("")
@@ -478,10 +457,5 @@ def format_check_result(
 
         if summary.total_missing > 0:
             lines.append(f"  Missing paths: {summary.total_missing}")
-
-        if summary.modules_without_related_files > 0:
-            lines.append(
-                f"  Modules without Related Files: {summary.modules_without_related_files}"
-            )
 
     return "\n".join(lines)
