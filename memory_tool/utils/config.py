@@ -48,7 +48,7 @@ class Config:
             "hybrid": False,  # Enable hybrid search by default
             "text_weight": 0.7,  # Keyword search weight (0-1)
             "semantic_weight": 0.3,  # Semantic search weight (0-1)
-            "semantic_threshold": 0.5,  # Minimum similarity for semantic search (0-1)
+            "semantic_threshold": 0.35,  # Minimum similarity for semantic search (0-1)
         },
         "tag": {
             "storage_format": "bracket",  # "bracket" ([태그]) or "hashtag" (#태그)

@@ -13,13 +13,26 @@ from pathlib import Path
 from typing import List, Dict, Optional, Tuple
 from datetime import datetime, timedelta
 
+#: The embedding model every feature uses.
+#:
+#: Multilingual, because the documents often are not English. The English
+#: model it replaces read Korean poorly enough that unrelated documents came
+#: out over 90% similar. It reads at most 128 tokens of a text, so long text
+#: has to be embedded in pieces (see ``module_audit``).
+DEFAULT_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+
+
+def model_slug(model_name: str) -> str:
+    """A folder name for a model, so each model's vectors are kept apart."""
+    return model_name.rsplit("/", 1)[-1]
+
 
 class EmbeddingModelManager:
     """Singleton manager for sentence-transformers model."""
 
     _instance = None
     _model = None
-    _model_name = "sentence-transformers/all-MiniLM-L6-v2"
+    _model_name = DEFAULT_MODEL
 
     def __new__(cls):
         if cls._instance is None:
@@ -40,6 +53,10 @@ class EmbeddingModelManager:
                 return None
         return self._model
 
+    @property
+    def model_name(self) -> str:
+        return self._model_name
+
     def is_available(self) -> bool:
         """Check if sentence-transformers is available."""
         try:
@@ -52,15 +69,24 @@ class EmbeddingModelManager:
 class EmbeddingCache:
     """File-based embedding cache with TTL support."""
 
-    def __init__(self, cache_dir: Path, ttl_hours: int = 168):  # 7 days default
+    def __init__(
+        self,
+        cache_dir: Path,
+        ttl_hours: int = 168,  # 7 days default
+        model_name: str = DEFAULT_MODEL,
+    ):
         """Initialize embedding cache.
 
         Args:
             cache_dir: Directory for cache files
             ttl_hours: Time-to-live in hours (default 7 days)
+            model_name: The model the vectors come from. It is part of the key:
+                two models can share a vector size, and a vector from another
+                model would be compared without any error.
         """
         self.cache_dir = cache_dir
         self.ttl_hours = ttl_hours
+        self.model_name = model_name
         self.cache_file = cache_dir / "embeddings_cache.json"
         self._cache: Dict = {}
         self._load_cache()
@@ -84,8 +110,8 @@ class EmbeddingCache:
             pass
 
     def _content_hash(self, content: str) -> str:
-        """Generate hash for content."""
-        return hashlib.md5(content.encode("utf-8")).hexdigest()
+        """Generate hash for content and the model embedding it."""
+        return hashlib.md5(f"{self.model_name}|{content}".encode("utf-8")).hexdigest()
 
     def _is_valid(self, entry: Dict) -> bool:
         """Check if cache entry is still valid."""
@@ -110,12 +136,13 @@ class EmbeddingCache:
                 return entry.get("embedding")
         return None
 
-    def set(self, content: str, embedding: List[float]):
+    def set(self, content: str, embedding: List[float], save: bool = True):
         """Cache embedding for content.
 
         Args:
             content: Text content
             embedding: Embedding vector
+            save: Write the file now. A batch saves once at the end instead.
         """
         content_hash = self._content_hash(content)
         self._cache[content_hash] = {
@@ -123,7 +150,8 @@ class EmbeddingCache:
             "cached_at": datetime.now().isoformat(),
             "content_preview": content[:100]
         }
-        self._save_cache()
+        if save:
+            self._save_cache()
 
     def get_or_compute(self, content: str, model) -> Optional[List[float]]:
         """Get cached embedding or compute and cache it.
@@ -182,7 +210,8 @@ class EmbeddingCache:
                 for i, (idx, content) in enumerate(zip(to_compute_indices, to_compute)):
                     embedding = computed[i].tolist()
                     embeddings[idx] = embedding
-                    self.set(content, embedding)
+                    self.set(content, embedding, save=False)
+                self._save_cache()
             except Exception:
                 pass
 
@@ -304,7 +333,7 @@ def get_model_manager() -> EmbeddingModelManager:
     return _model_manager
 
 
-def get_embedding_cache(cache_dir: Path) -> EmbeddingCache:
+def get_embedding_cache(cache_dir: Path, model_name: str = DEFAULT_MODEL) -> EmbeddingCache:
     """Get or create embedding cache for the given directory.
 
     Args:
@@ -314,6 +343,10 @@ def get_embedding_cache(cache_dir: Path) -> EmbeddingCache:
         EmbeddingCache instance
     """
     global _embedding_cache
-    if _embedding_cache is None or _embedding_cache.cache_dir != cache_dir:
-        _embedding_cache = EmbeddingCache(cache_dir)
+    if (
+        _embedding_cache is None
+        or _embedding_cache.cache_dir != cache_dir
+        or _embedding_cache.model_name != model_name
+    ):
+        _embedding_cache = EmbeddingCache(cache_dir, model_name=model_name)
     return _embedding_cache

@@ -120,3 +120,18 @@ class TestPreindex:
             broken.preindex_timeline()
 
         assert searcher(base).preindex_timeline()["files_processed"] == 3
+
+
+def test_each_model_keeps_its_own_cache(tmp_path, monkeypatch):
+    # The cache never expires, so after a model change a shared folder would
+    # compare the new model's query against the old model's vectors.
+    import memory_tool.core.vector_search as vector_search
+
+    monkeypatch.setattr(vector_search, "VECTOR_SEARCH_AVAILABLE", True)
+    monkeypatch.setattr(vector_search, "SentenceTransformer", lambda name: FakeModel(), raising=False)
+
+    old = VectorSearcher(tmp_path, model_name="org/old-model")
+    new = VectorSearcher(tmp_path, model_name="org/new-model")
+
+    assert old.cache_dir == tmp_path / ".embeddings" / "old-model"
+    assert new.cache_dir == tmp_path / ".embeddings" / "new-model"

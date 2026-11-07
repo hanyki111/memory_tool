@@ -270,3 +270,111 @@ def test_suggester_leaves_decision_logs_out_of_a_legacy_module(modules):
 
     assert "state" in content
     assert "decision log" not in content
+
+
+# --- what is compared ----------------------------------------------------------
+
+from memory_tool.core.embedding_cache import EmbeddingCache
+from memory_tool.core.module_audit import (
+    Boilerplate,
+    comparable_text,
+    mean_vector,
+    split_into_chunks,
+    template_boilerplate,
+)
+from memory_tool.core.module_templates import build_module_document
+
+
+@pytest.mark.parametrize("kind", ["knowledge", "implementation", "intent"])
+def test_an_unfilled_template_has_nothing_to_compare(modules, kind):
+    doc = build_module_document(name="AI/basics", kind=kind)
+
+    assert comparable_text(doc, template_boilerplate(modules.parent)) == ""
+
+
+def test_written_text_survives_and_template_wording_does_not(modules):
+    doc = build_module_document(name="basics", kind="knowledge")
+    doc = doc.replace("## 1.", "신경망은 역전파로 가중치를 학습합니다.\n\n## 1.", 1)
+
+    text = comparable_text(doc, template_boilerplate(modules.parent))
+
+    assert text == "신경망은 역전파로 가중치를 학습합니다."
+
+
+def test_wording_of_older_templates_is_left_out():
+    doc = "# t\n\n- [[모듈명]] — 무엇을 가져다 쓰는가\n- **전제:** \n- **제외** —\n\n본문\n"
+
+    assert comparable_text(doc, Boilerplate()) == "t\n\n본문"
+
+
+def test_lines_shared_by_several_modules_are_left_out(modules):
+    shared = "이 문서는 팀 공용 양식을 따릅니다.\n\n"
+    for name, own in [("a", "가"), ("b", "나"), ("c", "다")]:
+        write(modules, f"{name}.md", shared + own + "\n")
+
+    bodies = {m.name: m.body for m in ModuleAnalyzer(modules).discover_all_modules()}
+
+    assert bodies == {"a": "가", "b": "나", "c": "다"}
+
+
+def test_a_line_said_twice_in_a_module_counts_once(modules):
+    write(modules, "topic.md", "설명 문장\n\n본문\n\n설명 문장\n")
+
+    [info] = ModuleAnalyzer(modules).discover_all_modules()
+
+    assert info.body.count("설명 문장") == 1
+
+
+def test_long_text_is_split_into_pieces_the_model_reads_whole():
+    text = ("가나다 " * 100) + "\n\n" + "짧은 문단"
+
+    chunks = split_into_chunks(text, size=50)
+
+    assert all(len(c) <= 50 for c in chunks)
+    assert chunks[-1] == "짧은 문단"
+    assert "".join(chunks).replace(" ", "") == text.replace(" ", "").replace("\n", "")
+
+
+def test_mean_vector_skips_missing_and_weights_by_length():
+    assert mean_vector([None], [1]) is None
+    assert mean_vector([[1.0, 0.0], None, [0.0, 2.0]], [3, 5, 1]) == [3.0, 1.0]
+
+
+class _FakeModel:
+    """Maps a text to a direction by its first character."""
+
+    def encode(self, texts, convert_to_tensor=False):
+        import numpy as np
+
+        axes = {"가": [1.0, 0.0], "나": [0.0, 1.0]}
+        return np.array([axes.get(t[0], [0.7, 0.7]) for t in texts])
+
+
+def test_similarity_reads_the_whole_document(modules, monkeypatch):
+    # Both start alike; only what follows the first piece tells them apart.
+    write(modules, "a.md", "가" * 10 + "\n\n" + "\n\n".join("가 내용 " + str(i) for i in range(5)))
+    write(modules, "b.md", "가" * 10 + "\n\n" + "\n\n".join("나 내용 " + str(i) for i in range(5)))
+    analyzer = ModuleAnalyzer(modules, cache_dir=modules.parent / ".cache")
+    monkeypatch.setattr(analyzer, "can_measure_similarity", lambda: True)
+    monkeypatch.setattr(analyzer._model_manager, "get_model", lambda: _FakeModel())
+
+    pairs = analyzer.find_similar_modules(analyzer.discover_all_modules(), threshold=0.0)
+
+    assert len(pairs) == 1 and pairs[0][2] < 0.65
+
+
+def test_an_empty_module_is_not_compared(modules, monkeypatch):
+    write(modules, "a.md", "가 내용\n")
+    write(modules, "empty.md", "---\ntype: concept\n---\n")
+    analyzer = ModuleAnalyzer(modules, cache_dir=modules.parent / ".cache")
+    monkeypatch.setattr(analyzer, "can_measure_similarity", lambda: True)
+    monkeypatch.setattr(analyzer._model_manager, "get_model", lambda: _FakeModel())
+
+    assert analyzer.find_similar_modules(analyzer.discover_all_modules(), threshold=-1) == []
+
+
+def test_the_cache_keeps_each_models_vectors_apart(tmp_path):
+    EmbeddingCache(tmp_path, model_name="old").set("text", [1.0])
+
+    assert EmbeddingCache(tmp_path, model_name="old").get("text") == [1.0]
+    assert EmbeddingCache(tmp_path, model_name="new").get("text") is None

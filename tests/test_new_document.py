@@ -270,6 +270,42 @@ def test_check_links_names_the_broken_target(project, modules):
     assert "missing-target" in result.output
 
 
+def test_check_links_finds_a_sibling_by_file_name(project, modules):
+    write(modules, "principles/core-principles.md")
+    write(modules, "principles/fp.md", "[[core-principles]]\n")
+
+    result = runner.invoke(app, ["module", "check-links"])
+
+    assert "No broken links found" in result.output
+    targets = {c.target for c in ConnectionGraph().get_outgoing_connections("principles/fp")}
+    assert targets == {"principles/core-principles"}
+
+
+def test_check_links_reads_documents_without_a_rebuild(project, modules):
+    # The graph still holds the deleted document's links; the check must not.
+    write(modules, "kept.md")
+    deleted = write(modules, "deleted.md", "[[gone]]\n")
+    runner.invoke(app, ["module", "rebuild-graph"])
+    deleted.unlink()
+    write(modules, "kept.md", "[[new-missing]]\n")
+
+    result = runner.invoke(app, ["module", "check-links"])
+
+    assert "gone" not in result.output
+    assert "new-missing" in result.output
+
+
+def test_check_links_reports_an_ambiguous_name(project, modules):
+    write(modules, "x/shared.md")
+    write(modules, "y/shared.md")
+    write(modules, "z/doc.md", "[[shared]]\n")
+
+    result = runner.invoke(app, ["module", "check-links"])
+
+    assert "ambiguous" in result.output
+    assert "x/shared" in result.output and "y/shared" in result.output
+
+
 # --- archive -----------------------------------------------------------------
 
 
@@ -474,3 +510,40 @@ def test_publishing_a_subject_carries_children_but_not_plan_md(modules, publishe
     assert result["success"], result["message"]
     assert sorted(result["files_published"]) == ["child.md", "topic.md"]
     assert not list(kb.rglob("PLAN.md"))
+
+
+def test_links_in_code_and_comments_are_not_links(project, modules):
+    write(
+        modules,
+        "topic.md",
+        "<!-- [[in-comment]] -->\n"
+        "`[[in-code]]` and [[real]]\n"
+        "```\n[[in-fence]]\n```\n"
+        "<!-- starts\n[[in-long-comment]]\nends -->\n",
+    )
+
+    ConnectionGraph().rebuild_from_modules(modules)
+
+    targets = {c.target for c in ConnectionGraph().get_outgoing_connections("topic")}
+    assert targets == {"real"}
+
+
+@pytest.mark.parametrize("kind", ["knowledge", "implementation", "intent"])
+def test_a_new_document_has_no_broken_links(project, manager, kind):
+    manager.create("topic", kind=kind)
+
+    result = runner.invoke(app, ["module", "check-links"])
+
+    assert "No broken links found" in result.output
+
+
+def test_mcheck_accepts_a_document_without_related_files(project, modules):
+    write(modules, "topic.md", "---\ntype: concept\n---\n\n# topic\n\nNo paths here.\n")
+
+    whole = runner.invoke(app, ["check"])
+    single = runner.invoke(app, ["check", "--module", "topic"])
+
+    for result in (whole, single):
+        assert result.exit_code == 0, result.output
+        assert "Related Files" not in result.output
+        assert "warning" not in result.output

@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import List, Dict, Optional, Tuple
 from datetime import datetime
 import re
+from memory_tool.core.embedding_cache import DEFAULT_MODEL, model_slug
 from memory_tool.core.timeline import date_from_timeline_path
 from memory_tool.utils.paths import get_base_path
 
@@ -185,7 +186,7 @@ class VectorSearcher:
     def __init__(
         self,
         base_path: Optional[Path] = None,
-        model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
+        model_name: str = DEFAULT_MODEL
     ):
         """
         Initialize vector searcher.
@@ -205,7 +206,10 @@ class VectorSearcher:
 
         self.base_path = base_path or self._find_memory_root()
         self.timeline_path = self.base_path / "timeline"
-        self.cache_dir = self.base_path / ".embeddings"
+        # One folder per model. Vectors from different models cannot be
+        # compared, and this cache never expires, so a shared folder would
+        # mix them for good after a model change.
+        self.cache_dir = self.base_path / ".embeddings" / model_slug(model_name)
 
         # Initialize model and cache
         self.model = SentenceTransformer(model_name)

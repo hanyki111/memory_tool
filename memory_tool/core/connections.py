@@ -5,6 +5,7 @@ and builds a connection graph stored in SQLite.
 """
 
 import os
+import posixpath
 import re
 import sqlite3
 from pathlib import Path
@@ -19,6 +20,77 @@ from memory_tool.utils.paths import get_base_path
 class ConnectionError(Exception):
     """Base exception for connection operations."""
     pass
+
+
+class LinkResolver:
+    """Find the module a wiki link names, the way Obsidian does.
+
+    Obsidian does not require a full path: ``[[core-principles]]`` names the
+    document called core-principles wherever it is, and ``[[principles/core-
+    principles]]`` narrows that down. Comparing links against full module paths
+    only reported every such link as broken.
+
+    Rules, in order:
+      1. the full module path
+      2. a ``./`` or ``../`` path, read from the linking module's folder
+      3. a module whose path ends with the target -- "b" or "a/b" for "x/a/b".
+         When several do, the one nearest the linking module wins; a tie is
+         ambiguous and resolves to nothing.
+    """
+
+    def __init__(self, module_paths):
+        self.modules = {self.normalize(str(m)) for m in module_paths}
+
+    @staticmethod
+    def normalize(target: str) -> str:
+        """Forward slashes, no surrounding slashes or spaces, no ``.md``."""
+        target = target.replace("\\", "/").strip().strip("/")
+        if target.lower().endswith(".md"):
+            target = target[:-3]
+        return target
+
+    def candidates(self, target: str, source: Optional[str] = None) -> List[str]:
+        """Every module the link could name, best first; one entry if certain."""
+        wanted = self.normalize(target)
+        if not wanted:
+            return []
+
+        if wanted in self.modules:
+            return [wanted]
+
+        if source is not None and wanted.startswith(("./", "../")):
+            # A module is a folder holding its document, or a document beside
+            # its siblings, so "here" is either the module or its parent.
+            source = self.normalize(source)
+            for folder in (source, posixpath.dirname(source)):
+                relative = posixpath.normpath(posixpath.join(folder, wanted))
+                if relative in self.modules:
+                    return [relative]
+            return []
+
+        matches = [m for m in self.modules if m.endswith("/" + wanted)]
+        if len(matches) <= 1 or source is None:
+            return sorted(matches)
+
+        source_parts = self.normalize(source).split("/")
+
+        def shared(module: str) -> int:
+            count = 0
+            for mine, theirs in zip(source_parts, module.split("/")[:-1]):
+                if mine != theirs:
+                    break
+                count += 1
+            return count
+
+        matches.sort(key=lambda m: (-shared(m), m))
+        best = shared(matches[0])
+        nearest = [m for m in matches if shared(m) == best]
+        return nearest if len(nearest) > 1 else [matches[0]]
+
+    def resolve(self, target: str, source: Optional[str] = None) -> Optional[str]:
+        """The module the link names, or None if missing or ambiguous."""
+        found = self.candidates(target, source)
+        return found[0] if len(found) == 1 else None
 
 
 class Connection:
@@ -115,9 +187,8 @@ class ConnectionParser:
 
         try:
             content = file_path.read_text(encoding="utf-8")
-            lines = content.split('\n')
 
-            for line_num, line in enumerate(lines, 1):
+            for line_num, line in cls.linkable_lines(content):
                 targets = [match.group(1) for match in cls.LINK_PATTERN.finditer(line)]
 
                 if modules_root is not None:
@@ -139,6 +210,50 @@ class ConnectionParser:
             pass
 
         return connections
+
+    _INLINE_CODE = re.compile(r"(`+).*?\1")
+
+    @classmethod
+    def linkable_lines(cls, content: str):
+        """Yield (line number, line) with code and HTML comments removed.
+
+        Obsidian does not follow a link written inside code or a comment, so an
+        example such as ``[[module-name]]`` there is not a link. Line numbers
+        stay those of the file.
+        """
+        in_fence = False
+        in_comment = False
+
+        for line_num, line in enumerate(content.split("\n"), 1):
+            if line.lstrip().startswith(("```", "~~~")):
+                in_fence = not in_fence
+                yield line_num, ""
+                continue
+            if in_fence:
+                yield line_num, ""
+                continue
+
+            kept = []
+            rest = line
+            while rest:
+                if in_comment:
+                    end = rest.find("-->")
+                    if end < 0:
+                        rest = ""
+                    else:
+                        rest = rest[end + 3:]
+                        in_comment = False
+                else:
+                    start = rest.find("<!--")
+                    if start < 0:
+                        kept.append(rest)
+                        rest = ""
+                    else:
+                        kept.append(rest[:start])
+                        rest = rest[start + 4:]
+                        in_comment = True
+
+            yield line_num, cls._INLINE_CODE.sub("", "".join(kept))
 
     @staticmethod
     def _markdown_target(link: str, file_path: Path, modules_root: Path) -> Optional[str]:
@@ -472,14 +587,20 @@ class ConnectionGraph:
         manager = ModuleManager()
         all_modules = manager.discover_all_modules()
 
-        # Parse connections from each module
+        # Parse connections from each module. A target is stored as the module
+        # it resolves to, so [[core-principles]] and [[a/core-principles]] are
+        # one edge; a target that resolves to nothing is kept as written.
+        resolver = LinkResolver(all_modules)
         all_connections = []
         for module_path in all_modules:
             module_dir = modules_path / module_path
             module_path_str = str(module_path).replace('\\', '/')  # Normalize to forward slashes
 
-            connections = ConnectionParser.parse_module(module_dir, module_path_str)
-            all_connections.extend(connections)
+            for connection in ConnectionParser.parse_module(module_dir, module_path_str):
+                resolved = resolver.resolve(connection.target, module_path_str)
+                if resolved is not None:
+                    connection.target = resolved
+                all_connections.append(connection)
 
         # Add all connections to database
         self.add_connections(all_connections)
@@ -584,43 +705,53 @@ class ConnectionGraph:
         finally:
             conn.close()
 
-    def check_broken_links(self) -> Dict[str, List[str]]:
-        """Check for broken links (links to non-existent modules).
+    def find_unresolved_links(
+        self,
+    ) -> Tuple[Dict[str, List[str]], Dict[str, List[Tuple[str, List[str]]]]]:
+        """Links that name no module, and links that could name several.
+
+        Read from the graph, so it is only as current as the last rebuild;
+        ``mmodule check-links`` rebuilds first. Links from a module that no
+        longer exists are left out: a deleted document has no link to fix.
 
         Returns:
-            Dictionary mapping source modules to list of broken target modules
+            (broken, ambiguous). ``broken`` maps a source module to targets
+            that match nothing; ``ambiguous`` maps it to (target, candidates).
         """
         from memory_tool.core.module import ModuleManager
 
-        # Get all existing modules
-        manager = ModuleManager()
-        existing_modules = {str(m).replace('\\', '/') for m in manager.discover_all_modules()}
+        existing_modules = {
+            str(m).replace('\\', '/') for m in ModuleManager().discover_all_modules()
+        }
+        resolver = LinkResolver(existing_modules)
 
-        # Get all connections
         conn = sqlite3.connect(self.db_path)
         try:
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT DISTINCT source_module, target_module
-                FROM connections
-            """)
-
-            rows = cursor.fetchall()
-
-            broken = {}
-            for source, target in rows:
-                # Normalize paths
-                target_normalized = target.replace('\\', '/')
-
-                if target_normalized not in existing_modules:
-                    if source not in broken:
-                        broken[source] = []
-                    broken[source].append(target)
-
-            return broken
-
+            rows = conn.execute(
+                "SELECT DISTINCT source_module, target_module FROM connections"
+            ).fetchall()
         finally:
             conn.close()
+
+        broken: Dict[str, List[str]] = {}
+        ambiguous: Dict[str, List[Tuple[str, List[str]]]] = {}
+        for source, target in sorted(rows):
+            if source not in existing_modules:
+                continue
+            found = resolver.candidates(target, source)
+            if not found:
+                broken.setdefault(source, []).append(target)
+            elif len(found) > 1:
+                ambiguous.setdefault(source, []).append((target, found))
+
+        return broken, ambiguous
+
+    def check_broken_links(self) -> Dict[str, List[str]]:
+        """Links that name no module, by source module.
+
+        See :meth:`find_unresolved_links`, which also reports ambiguous links.
+        """
+        return self.find_unresolved_links()[0]
 
     def get_orphaned_modules(self) -> Set[str]:
         """Get modules with no connections (neither incoming nor outgoing).
