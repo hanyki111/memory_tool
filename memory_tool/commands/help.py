@@ -206,7 +206,9 @@ Cache locations:
   - Search: ~/.memory/.cache/search/
   - Notion: ~/.memory/.cache/notion/ (page IDs, etc.)
 
-Default search TTL: 3600 seconds (1 hour)
+Only hybrid search (--hybrid) is cached, for 3600 seconds (1 hour) by
+default, and any change to the knowledge base's Markdown files makes the
+next search fresh. Keyword search is never cached.
             """,
             "examples": [
                 'mcache                    # Show cache summary',
@@ -234,7 +236,9 @@ Default search TTL: 3600 seconds (1 hour)
   - 검색: ~/.memory/.cache/search/
   - Notion: ~/.memory/.cache/notion/ (페이지 ID 등)
 
-검색 캐시 기본 TTL: 3600초 (1시간)
+검색 캐시는 혼합 검색(--hybrid)에만 쓰이며 기본 TTL은 3600초(1시간)입니다.
+지식 베이스의 마크다운 파일이 하나라도 바뀌면 다음 검색은 새로 계산합니다.
+키워드 검색은 캐시를 쓰지 않습니다.
             """,
             "examples": [
                 'mcache                    # 캐시 요약 표시',

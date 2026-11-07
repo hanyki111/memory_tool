@@ -196,3 +196,28 @@ class SearchCache:
             "oldest": datetime.fromtimestamp(min(timestamps)).isoformat() if timestamps else None,
             "newest": datetime.fromtimestamp(max(timestamps)).isoformat() if timestamps else None,
         }
+
+
+def content_stamp(roots) -> str:
+    """A short fingerprint of the Markdown files under ``roots``.
+
+    It changes when a file is added, removed, renamed or written, by memory_tool
+    or by hand (an editor, Obsidian), so a cache keyed by it never returns
+    results from before the change. Only file metadata is read, never content.
+    Files whose metadata cannot be read are skipped.
+    """
+    import os
+
+    digest = hashlib.sha256()
+    for root in sorted(str(r) for r in roots):
+        for folder, _dirs, files in os.walk(root):
+            for name in sorted(files):
+                if not name.endswith(".md"):
+                    continue
+                path = os.path.join(folder, name)
+                try:
+                    info = os.stat(path)
+                except OSError:
+                    continue
+                digest.update(f"{path}|{info.st_size}|{info.st_mtime_ns}\n".encode("utf-8", "surrogatepass"))
+    return digest.hexdigest()[:16]

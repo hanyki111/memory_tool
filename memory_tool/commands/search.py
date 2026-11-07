@@ -151,7 +151,7 @@ def search(
     hybrid: Optional[bool] = typer.Option(None, "--hybrid/--no-hybrid", help="Hybrid search (keyword + semantic combined). Default from config."),
     text_weight: Optional[float] = typer.Option(None, "--text-weight", help="Keyword weight for hybrid (default from config: 0.7)"),
     semantic_weight: Optional[float] = typer.Option(None, "--semantic-weight", help="Semantic weight for hybrid (default from config: 0.3)"),
-    no_cache: bool = typer.Option(False, "--no-cache", help="Disable result caching"),
+    no_cache: bool = typer.Option(False, "--no-cache", help="Disable result caching (hybrid search; keyword search is never cached)"),
     cache_ttl: int = typer.Option(3600, "--cache-ttl", help="Cache TTL in seconds (default: 3600)"),
     as_json: bool = typer.Option(False, "--json", help="Print the results as one line of JSON (for editors and scripts)"),
 ):
@@ -256,8 +256,18 @@ def search(
         "semantic_weight": semantic_weight if hybrid else None,
     }
 
-    if not no_cache:
+    # Only hybrid search is cached: keyword search reads the index in a tenth of
+    # a second, so a cache would only risk results from before the latest edit.
+    # The key holds the files' state, so any change (memory_tool's or by hand)
+    # makes the next search fresh.
+    if hybrid and not no_cache:
         from memory_tool.search import SearchCache
+        from memory_tool.search.cache import content_stamp
+        try:
+            roots = MemorySearcher().get_search_paths("all" if all else "local", with_kb)
+            cache_key_params["state"] = content_stamp(roots)
+        except Exception:
+            cache_key_params["state"] = f"unknown-{datetime.now().timestamp()}"  # never matches
         # Global, cross-project cache in the user's home directory. Deliberately
         # not the per-project base folder, so renaming a base never touches it.
         cache_dir = Path.home() / GLOBAL_CACHE_DIRNAME / ".cache" / "search"
