@@ -76,6 +76,8 @@
     <string name="main_base_help">The folder on the PC where you run m, such as E:\\notes</string>
     <string name="input_hint">What happened?</string>
     <string name="today">Today</string>
+    <string name="shortcut_record">Record</string>
+    <string name="shortcut_record_voice">Record by voice</string>
     <string name="settings">Settings</string>
     <string name="back">Back</string>
     <string name="retry">Try again</string>
