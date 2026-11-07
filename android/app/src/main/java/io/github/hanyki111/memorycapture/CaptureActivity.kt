@@ -45,8 +45,9 @@ import java.util.Locale
 
 /**
  * The small window that takes one entry: from the app icon, the tile, the
- * widget, or text shared from another app. With [EXTRA_VOICE] it starts with
- * speech input.
+ * widget, the icon's shortcuts (which Samsung's routines can run too), or text
+ * shared from another app. With [EXTRA_VOICE] or [ACTION_RECORD_VOICE] it
+ * starts with speech input.
  *
  * Sending only keeps the entry and asks for it to be sent; the window closes
  * at once and the result arrives as a short message or a notification.
@@ -75,9 +76,7 @@ class CaptureActivity : ComponentActivity() {
                 intent.getStringExtra(Intent.EXTRA_TEXT),
             ).joinToString(" ").trim()
         }
-        if (savedInstanceState == null && intent?.getBooleanExtra(EXTRA_VOICE, false) == true) {
-            listen()
-        }
+        if (savedInstanceState == null && wantsVoice(intent)) listen()
 
         setContent {
             AppTheme {
@@ -94,6 +93,16 @@ class CaptureActivity : ComponentActivity() {
             }
         }
     }
+
+    /** Asked again while the window is open, as by a routine: listen if asked to. */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (wantsVoice(intent) && !countingDown) listen()
+    }
+
+    private fun wantsVoice(intent: Intent?) =
+        intent?.getBooleanExtra(EXTRA_VOICE, false) == true || intent?.action == ACTION_RECORD_VOICE
 
     private fun listen() {
         val request = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
@@ -112,6 +121,8 @@ class CaptureActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_VOICE = "voice"
+        /** The icon's shortcut that opens the window listening; matches res/xml/shortcuts.xml */
+        const val ACTION_RECORD_VOICE = "io.github.hanyki111.memorycapture.RECORD_VOICE"
     }
 }
 

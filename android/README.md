@@ -29,6 +29,8 @@ and the accent; the widget's text size follows the phone's.
 - **Home screen widget:** looks like a text field; the microphone starts speech input. It also shows entries waiting
   to be sent or to be checked. (Android widgets cannot hold a text field, so tapping it opens the window.)
 - **Share:** choose **Record to timeline** in another app's share sheet
+- **App shortcuts:** touch and hold the app icon for **Record** and **Record by voice**. Samsung's Modes and Routines
+  lists them as app actions, so a routine can open the window, or open it listening.
 
 Speech is shown for a few seconds before sending (set in the app); tap the text to edit it instead.
 

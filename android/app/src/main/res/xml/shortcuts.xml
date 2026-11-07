@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The app icon's menu. Samsung's Modes and Routines lists these as app actions,
+  so a routine can open the capture window, or open it listening.
+-->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="record"
+        android:enabled="true"
+        android:icon="@drawable/ic_capture"
+        android:shortcutShortLabel="@string/shortcut_record"
+        android:shortcutLongLabel="@string/shortcut_record">
+        <intent
+            android:action="io.github.hanyki111.memorycapture.RECORD"
+            android:targetPackage="io.github.hanyki111.memorycapture"
+            android:targetClass="io.github.hanyki111.memorycapture.CaptureActivity" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="record_voice"
+        android:enabled="true"
+        android:icon="@drawable/ic_mic"
+        android:shortcutShortLabel="@string/shortcut_record_voice"
+        android:shortcutLongLabel="@string/shortcut_record_voice">
+        <intent
+            android:action="io.github.hanyki111.memorycapture.RECORD_VOICE"
+            android:targetPackage="io.github.hanyki111.memorycapture"
+            android:targetClass="io.github.hanyki111.memorycapture.CaptureActivity" />
+    </shortcut>
+</shortcuts>
