@@ -77,7 +77,32 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.em
+import androidx.compose.ui.unit.sp
+import io.github.hanyki111.memorycapture.core.leadingTags
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -172,16 +197,17 @@ fun TimelineScreen(model: TimelineModel, phoneEntries: List<Entry>, onSettings: 
 @Composable
 private fun SearchBar(model: TimelineModel, onSettings: () -> Unit) {
     val focus = LocalFocusManager.current
-    Surface(tonalElevation = 2.dp) {
+    Surface(color = MaterialTheme.colorScheme.background) {
         Row(
-            Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 8.dp, vertical = 6.dp),
+            Modifier.fillMaxWidth().statusBarsPadding().padding(start = 4.dp, end = 4.dp, top = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            OutlinedTextField(
+            TextField(
                 value = model.query,
                 onValueChange = { model.query = it },
                 placeholder = { Text(stringResource(R.string.search_hint)) },
                 leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                colors = plainField(),
                 trailingIcon = {
                     if (model.query.isNotEmpty() || model.results != null) {
                         IconButton(onClick = { model.clearSearch(); focus.clearFocus() }) {
@@ -195,7 +221,7 @@ private fun SearchBar(model: TimelineModel, onSettings: () -> Unit) {
                 modifier = Modifier.weight(1f),
             )
             IconButton(onClick = onSettings) {
-                Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.settings))
+                Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.settings), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -204,8 +230,9 @@ private fun SearchBar(model: TimelineModel, onSettings: () -> Unit) {
 /** The phone's unsent entries, then the field; padded for the navigation bar and the keyboard. */
 @Composable
 private fun BottomPanel(phoneEntries: List<Entry>) {
-    Surface(tonalElevation = 2.dp) {
+    Surface(color = MaterialTheme.colorScheme.background) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding().imePadding()) {
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             QueueStrip(phoneEntries)
             InputBar()
         }
@@ -234,13 +261,15 @@ private fun InputBar() {
 
     run {
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
+            Modifier.fillMaxWidth().padding(start = 4.dp, end = 12.dp, top = 2.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            OutlinedTextField(
+            TextField(
                 value = text,
                 onValueChange = { text = it },
-                placeholder = { Text(stringResource(R.string.capture_hint)) },
+                placeholder = { Text(stringResource(R.string.input_hint)) },
+                colors = plainField(),
+                textStyle = MaterialTheme.typography.bodyLarge,
                 maxLines = 4,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                 keyboardActions = KeyboardActions(onSend = { send() }),
@@ -252,10 +281,20 @@ private fun InputBar() {
                     .putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
                 runCatching { speech.launch(request) }
             }) {
-                Icon(painterResource(R.drawable.ic_mic), contentDescription = stringResource(R.string.capture_voice))
+                Icon(painterResource(R.drawable.ic_mic), contentDescription = stringResource(R.string.capture_voice),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            IconButton(onClick = ::send, enabled = text.isNotBlank()) {
-                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(R.string.capture_send))
+            FilledIconButton(
+                onClick = ::send,
+                enabled = text.isNotBlank(),
+                shape = CircleShape,
+                colors = IconButtonDefaults.filledIconButtonColors(
+                    disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                ),
+                modifier = Modifier.size(44.dp),
+            ) {
+                Icon(painterResource(R.drawable.ic_arrow_up), contentDescription = stringResource(R.string.capture_send))
             }
         }
     }
@@ -268,7 +307,7 @@ private fun LazyListScope.timelineItems(model: TimelineModel, onTap: () -> Unit,
         item(key = "day-${day.date}") { DayHeader(day.date) }
         val entries = Days.newestFirst(day)
         items(entries.size, key = { "e-${day.date}-$it" }) { i ->
-            EntryRow(entries[i], showDate = false, onTap = onTap, onLongPress = { onEdit(entries[i]) })
+            EntryRow(entries[i], first = i == 0, last = i == entries.lastIndex, onTap = onTap, onLongPress = { onEdit(entries[i]) })
         }
     }
     // No key: a keyed item here would stay in place while the first days load above it,
@@ -276,7 +315,7 @@ private fun LazyListScope.timelineItems(model: TimelineModel, onTap: () -> Unit,
     item {
         Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
             when {
-                model.loading -> CircularProgressIndicator()
+                model.loading -> CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 2.5.dp)
                 model.error != null -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(model.error.orEmpty(), style = MaterialTheme.typography.bodyMedium)
                     TextButton(onClick = { model.loadOlder() }) { Text(stringResource(R.string.retry)) }
@@ -301,13 +340,14 @@ private fun LazyListScope.timelineItems(model: TimelineModel, onTap: () -> Unit,
 private fun LazyListScope.searchItems(model: TimelineModel, onTap: () -> Unit, onEdit: (TimelineEntry) -> Unit) {
     val results = model.results
     item(key = "search-head") {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             when {
-                model.searching -> CircularProgressIndicator(Modifier.padding(end = 12.dp))
+                model.searching -> CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.5.dp)
                 model.searchError != null -> Text(model.searchError.orEmpty(), style = MaterialTheme.typography.bodyMedium)
                 results != null -> Text(
                     if (results.isEmpty()) stringResource(R.string.search_none) else stringResource(R.string.search_results, results.size),
-                    style = MaterialTheme.typography.titleSmall,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             if (model.searchError != null) TextButton(onClick = { model.search() }) { Text(stringResource(R.string.retry)) }
@@ -315,42 +355,177 @@ private fun LazyListScope.searchItems(model: TimelineModel, onTap: () -> Unit, o
     }
     if (results != null) {
         items(results.size, key = { "r-$it" }) { i ->
-            EntryRow(results[i], showDate = true, onTap = onTap, onLongPress = { onEdit(results[i]) })
+            ResultRow(results[i], onTap = onTap, onLongPress = { onEdit(results[i]) })
         }
     }
 }
 
+/** The date large, the weekday beside it: "11월 7일  토요일 · 오늘". */
 @Composable
 private fun DayHeader(date: String) {
-    Text(
-        dayLabel(date),
-        style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp),
-    )
+    val day = runCatching { LocalDate.parse(date) }.getOrNull()
+    Row(
+        Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 24.dp, bottom = 10.dp),
+        verticalAlignment = Alignment.Bottom,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            if (day == null) date else formatDay(day, if (day.year == LocalDate.now().year) "MMMMd" else "yMMMMd"),
+            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold, letterSpacing = (-0.3).sp),
+        )
+        if (day != null) {
+            val weekday = formatDay(day, "EEEE")
+            Text(
+                if (day == LocalDate.now()) "$weekday · ${stringResource(R.string.today)}" else weekday,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 3.dp),
+            )
+        }
+    }
 }
 
-/** Editing is rare, so it takes a long press; a tap says so. */
+private val TIME_WIDTH = 48.dp
+private val RAIL_WIDTH = 22.dp
+
+/**
+ * One entry on the day's line: the time, a dot on the line, the text. The
+ * newest of the day has the accent's dot; the line starts at the first dot
+ * and ends at the last. Editing is rare, so it takes a long press; a tap says so.
+ */
 @Composable
-private fun EntryRow(entry: TimelineEntry, showDate: Boolean, onTap: () -> Unit, onLongPress: () -> Unit) {
+private fun EntryRow(entry: TimelineEntry, first: Boolean, last: Boolean, onTap: () -> Unit, onLongPress: () -> Unit) {
     val haptic = LocalHapticFeedback.current
+    val colors = MaterialTheme.colorScheme
+    val density = LocalDensity.current
+    var dotY by remember { mutableFloatStateOf(with(density) { 13.dp.toPx() }) }
     Row(
         Modifier.fillMaxWidth()
             .combinedClickable(onClick = onTap, onLongClick = {
                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                 onLongPress()
             })
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+            .drawBehind {
+                val x = 20.dp.toPx() + TIME_WIDTH.toPx() + 5.dp.toPx()
+                val y = 6.dp.toPx() + dotY
+                val stroke = 1.dp.toPx()
+                drawLine(colors.outlineVariant, Offset(x, if (first) y else 0f), Offset(x, if (last) y else size.height), stroke)
+                val r = 4.5.dp.toPx()
+                if (first) {
+                    drawCircle(colors.primary, r, Offset(x, y))
+                } else {
+                    drawCircle(colors.background, r, Offset(x, y))
+                    drawCircle(colors.outline, r - 0.75.dp.toPx(), Offset(x, y), style = Stroke(1.5.dp.toPx()))
+                }
+            }
+            .padding(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 12.dp),
     ) {
         Text(
-            if (showDate) "${shortDay(entry.date)}\n${normalTime(entry.time)}" else normalTime(entry.time),
-            style = MaterialTheme.typography.labelLarge.copy(fontFamily = FontFamily.Monospace),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            normalTime(entry.time),
+            style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum"),
+            color = colors.onSurfaceVariant,
+            modifier = Modifier.width(TIME_WIDTH).padding(top = 3.dp),
         )
-        Text(entry.text, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+        Spacer(Modifier.width(RAIL_WIDTH))
+        TaggedText(entry.text, Modifier.weight(1f), onFirstLine = { dotY = it })
     }
 }
+
+/** A search result: the day and time over the text, without the line. */
+@Composable
+private fun ResultRow(entry: TimelineEntry, onTap: () -> Unit, onLongPress: () -> Unit) {
+    val haptic = LocalHapticFeedback.current
+    Column(
+        Modifier.fillMaxWidth()
+            .combinedClickable(onClick = onTap, onLongClick = {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                onLongPress()
+            })
+            .padding(horizontal = 20.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text(
+            "${dayLabel(entry.date)}  ${normalTime(entry.time)}",
+            style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        TaggedText(entry.text, Modifier.fillMaxWidth())
+    }
+}
+
+/**
+ * The entry's text with its leading `[tags]` as tinted chips. The chips are
+ * drawn behind the tag's letters, so they wrap with the text like words.
+ *
+ * @param onFirstLine the middle of the first line, in px from the top
+ */
+@Composable
+private fun TaggedText(text: String, modifier: Modifier, onFirstLine: (Float) -> Unit = {}) {
+    val colors = MaterialTheme.colorScheme
+    val (tags, rest) = remember(text) { leadingTags(text) }
+    val ranges = mutableListOf<IntRange>()
+    val shown: AnnotatedString = remember(text) {
+        buildAnnotatedString {
+            tags.forEach { tag ->
+                val from = length
+                // No-break spaces pad the chip and keep it whole.
+                withStyle(SpanStyle(fontSize = 0.8.em, fontWeight = FontWeight.Medium)) { append("\u00A0$tag\u00A0") }
+                ranges += from until length
+                append(" ")
+            }
+            append(rest)
+        }
+    }
+    val tagRanges = remember(text) { ranges.toList() }
+    val styled = remember(shown, colors.onPrimaryContainer) {
+        AnnotatedString.Builder(shown).apply {
+            tagRanges.forEach { addStyle(SpanStyle(color = colors.onPrimaryContainer), it.first, it.last + 1) }
+        }.toAnnotatedString()
+    }
+    var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
+    Text(
+        styled,
+        style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 1.55.em),
+        modifier = modifier.drawBehind {
+            val l = layout ?: return@drawBehind
+            tagRanges.forEach { r ->
+                val line = l.getLineForOffset(r.first)
+                if (l.getLineForOffset(r.last) != line) return@forEach
+                val left = l.getHorizontalPosition(r.first, true)
+                val right = l.getHorizontalPosition(r.last + 1, true)
+                val middle = (l.getLineTop(line) + l.getLineBottom(line)) / 2
+                val h = 20.sp.toPx().coerceAtMost(l.getLineBottom(line) - l.getLineTop(line))
+                drawRoundRect(
+                    colors.primaryContainer,
+                    topLeft = Offset(minOf(left, right), middle - h / 2),
+                    size = Size(kotlin.math.abs(right - left), h),
+                    cornerRadius = CornerRadius(6.dp.toPx()),
+                )
+            }
+        },
+        onTextLayout = {
+            layout = it
+            if (it.lineCount > 0) onFirstLine((it.getLineTop(0) + it.getLineBottom(0)) / 2)
+        },
+    )
+}
+
+@Composable
+private fun plainField() = TextFieldDefaults.colors(
+    focusedContainerColor = Color.Transparent,
+    unfocusedContainerColor = Color.Transparent,
+    disabledContainerColor = Color.Transparent,
+    focusedIndicatorColor = Color.Transparent,
+    unfocusedIndicatorColor = Color.Transparent,
+    disabledIndicatorColor = Color.Transparent,
+    unfocusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
+    focusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
+    unfocusedLeadingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+    focusedLeadingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+)
+
+private fun formatDay(day: LocalDate, skeleton: String): String =
+    day.format(DateTimeFormatter.ofPattern(DateFormat.getBestDateTimePattern(Locale.getDefault(), skeleton), Locale.getDefault()))
 
 /** "11월 7일 (토)" in the phone's language; with the year when it is not this year. */
 private fun dayLabel(date: String): String {
@@ -360,11 +535,6 @@ private fun dayLabel(date: String): String {
     return day.format(DateTimeFormatter.ofPattern(pattern, Locale.getDefault()))
 }
 
-private fun shortDay(date: String): String {
-    val day = runCatching { LocalDate.parse(date) }.getOrNull() ?: return date
-    val skeleton = if (day.year == LocalDate.now().year) "Md" else "yyMd"
-    return day.format(DateTimeFormatter.ofPattern(DateFormat.getBestDateTimePattern(Locale.getDefault(), skeleton), Locale.getDefault()))
-}
 
 // ---- the phone's own entries --------------------------------------------------
 
@@ -383,9 +553,16 @@ private fun QueueStrip(entries: List<Entry>) {
     Column(Modifier.fillMaxWidth().animateContentSize()) {
         Row(
             Modifier.fillMaxWidth().combinedClickable(onClick = { open = !open })
-                .padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 2.dp),
+                .padding(start = 20.dp, end = 12.dp, top = 8.dp, bottom = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            Box(
+                Modifier.size(7.dp).background(
+                    if (attention.isNotEmpty()) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                    CircleShape,
+                )
+            )
             val counts = listOfNotNull(
                 stringResource(R.string.main_attention, attention.size).takeIf { attention.isNotEmpty() },
                 stringResource(R.string.main_pending, pending.size).takeIf { pending.isNotEmpty() },
@@ -464,7 +641,6 @@ private fun QueueStrip(entries: List<Entry>) {
                 OutlinedButton(onClick = { Sender.schedule(context) }) { Text(stringResource(R.string.main_send_now)) }
             }
         }
-        HorizontalDivider()
     }
 }
 

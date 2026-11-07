@@ -4,7 +4,10 @@ import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import io.github.hanyki111.memorycapture.core.Accent
 import io.github.hanyki111.memorycapture.core.CommandTemplate
+import io.github.hanyki111.memorycapture.core.KnowledgeBase
+import io.github.hanyki111.memorycapture.core.Mode
 import io.github.hanyki111.memorycapture.ssh.KeyMaterial
 import io.github.hanyki111.memorycapture.ssh.Ssh
 import io.github.hanyki111.memorycapture.ssh.Target
@@ -14,7 +17,7 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-/** What the person sets: the PC, the command, the voice delay, and the trusted fingerprint. */
+/** What the person sets: the PC, the knowledge base, the voice delay, the trusted fingerprint and the look. */
 class Settings(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("settings", Context.MODE_PRIVATE)
 
@@ -30,9 +33,24 @@ class Settings(context: Context) {
         get() = prefs.getString("user", "").orEmpty()
         set(value) = prefs.edit().putString("user", value.trim()).apply()
 
-    var template: String
-        get() = prefs.getString("template", CommandTemplate.DEFAULT).orEmpty()
-        set(value) = prefs.edit().putString("template", value.trim()).apply()
+    /**
+     * The knowledge base folder on the PC. Up to 0.2 the person wrote the whole
+     * command; its folder is taken from it until a folder is saved.
+     */
+    var basePath: String
+        get() = prefs.getString("basePath", null) ?: KnowledgeBase.pathFrom(prefs.getString("template", null)).orEmpty()
+        set(value) = prefs.edit().putString("basePath", value.trim()).remove("template").apply()
+
+    /** How memory_tool is run, or null while the folder cannot be used */
+    fun command(): CommandTemplate? = basePath.takeIf { KnowledgeBase.problem(it) == null }?.let { KnowledgeBase.command(it) }
+
+    var mode: Mode
+        get() = Mode.of(prefs.getString("mode", null))
+        set(value) = prefs.edit().putString("mode", value.key).apply()
+
+    var accent: Accent
+        get() = Accent.of(prefs.getString("accent", null))
+        set(value) = prefs.edit().putString("accent", value.key).apply()
 
     /** Seconds a voice entry is shown before it is sent */
     var voiceDelaySeconds: Int
@@ -55,7 +73,7 @@ class Settings(context: Context) {
     /** What is still missing before anything can be sent, or null when ready. */
     fun missing(): String? = when {
         target() == null -> "PC address, port and user"
-        CommandTemplate.parse(template).isFailure -> "the command"
+        command() == null -> "the knowledge base folder"
         fingerprint.isEmpty() -> "the PC's fingerprint"
         else -> null
     }

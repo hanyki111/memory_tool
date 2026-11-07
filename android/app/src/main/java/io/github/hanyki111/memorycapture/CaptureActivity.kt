@@ -141,7 +141,7 @@ private fun CaptureWindow(
     }
     LaunchedEffect(Unit) { if (!countingDown) runCatching { focus.requestFocus() } }
 
-    Surface(shape = MaterialTheme.shapes.large, tonalElevation = 6.dp) {
+    Surface(shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceContainer, shadowElevation = 6.dp) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (countingDown) {
                 Text(

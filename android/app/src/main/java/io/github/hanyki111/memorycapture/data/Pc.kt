@@ -2,7 +2,6 @@ package io.github.hanyki111.memorycapture.data
 
 import android.content.Context
 import io.github.hanyki111.memorycapture.R
-import io.github.hanyki111.memorycapture.core.CommandTemplate
 import io.github.hanyki111.memorycapture.core.Outcome
 import io.github.hanyki111.memorycapture.core.PcReply
 import io.github.hanyki111.memorycapture.core.PowerShell
@@ -27,7 +26,7 @@ object Pc {
     fun <T> call(context: Context, args: List<String>, read: (String, String) -> PcReply<T>): Call<T> {
         val settings = Settings(context)
         settings.missing()?.let { return Call.Failed(context.getString(R.string.pc_setup_needed, it)) }
-        val template = CommandTemplate.parse(settings.template).getOrElse { return Call.Failed(it.message ?: "") }
+        val template = settings.command()!!
         val command = PowerShell.forTransport(template.fill(args))
         return when (val outcome = Ssh.run(settings.target()!!, PhoneKey(context).get(), settings.fingerprint, command)) {
             is Outcome.NotSent -> Call.Failed(outcome.reason)

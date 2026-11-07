@@ -15,9 +15,13 @@ to refresh. Touch and hold an entry to change its text, date or time, or to dele
 entry is named by its date, time and text as listed; if it changed on the PC meanwhile, nothing changes and the day
 is loaded again. The search field finds timeline entries by keyword (`ms --type timeline`).
 
-The field at the bottom sends at once; the microphone fills it with speech. Entries not yet on the PC are folded
+Each day is a line with a dot per entry; the newest of the day has the accent's dot. Tags written before the text
+(`[idea] …`) show as chips; the entry itself is not changed. The field at the bottom sends at once; the microphone
+fills it with speech. Entries not yet on the PC are folded
 into a line just above the field, with their count and the latest one; tap it to open them. The gear opens the
-settings, including the text size (70 to 200 percent of the phone's own; the home screen widget follows the phone's).
+settings. **Look:** light, dark or as the phone; the accent, from the wallpaper (Android 12 and later) or one of six;
+the text size, 70 to 200 percent of the phone's own. The widget and the small capture window follow the light or dark
+and the accent; the widget's text size follows the phone's.
 
 ## The small capture window
 
@@ -52,18 +56,18 @@ Speech is shown for a few seconds before sending (set in the app); tap the text 
 
 ### In the app
 
-1. **PC:** address (DDNS name or IP), port and user. Save.
-2. **Command:** how PowerShell on the PC runs memory_tool, with `{args}` where the app puts the arguments. For
-   example:
+1. **PC:** address (DDNS name or IP), port and user.
+2. **Knowledge base folder:** the folder where you run `m` on the PC, such as `E:\notes`. Save. The app runs
 
    ```text
-   Set-Location 'E:\code_projects\memory_notion'; python -m memory_tool {args}
+   Set-Location -LiteralPath 'E:\notes' -ErrorAction Stop; python -m memory_tool <arguments>
    ```
 
-   `Set-Location` chooses the knowledge base. Use the full path of Python if `python` is not on the PC's PATH.
+   A wrong folder stops there, so memory_tool never runs in the SSH session's home folder instead. `python` must be
+   on the PATH of the PC's SSH sessions. A command saved by 0.2 or earlier gives its folder to this field.
 3. **Get fingerprint**, compare it with the PC's, and trust it only if they match. A PC with any other fingerprint is
    refused before anything is sent.
-4. **Test connection** runs `memory_tool --version` through the command.
+4. **Test connection** runs `memory_tool --version` and `base show` in that folder.
 
 ## How sending works
 

@@ -64,8 +64,6 @@ class CommandTemplate private constructor(val text: String) {
     companion object {
         const val PLACEHOLDER = "{args}"
 
-        const val DEFAULT = "Set-Location 'E:\\code_projects\\memory_notion'; python -m memory_tool {args}"
-
         /** Check a template; it must hold `{args}` exactly once. */
         fun parse(text: String): Result<CommandTemplate> {
             val trimmed = text.trim()
@@ -77,6 +75,50 @@ class CommandTemplate private constructor(val text: String) {
                 else -> Result.success(CommandTemplate(trimmed))
             }
         }
+    }
+}
+
+/**
+ * The knowledge base on the PC: the person sets only its folder, and the app
+ * runs memory_tool there.
+ *
+ * Set-Location stops the command when the folder is wrong. Without
+ * `-ErrorAction Stop` PowerShell would report the error and go on, and
+ * memory_tool would run in the SSH session's home folder instead.
+ */
+object KnowledgeBase {
+    const val RUN = "python -m memory_tool"
+
+    /** Why this folder cannot be used, or null when it can. */
+    fun problem(path: String): String? = when {
+        path.isBlank() -> "The folder is empty"
+        path.any { it == '\n' || it == '\r' } -> "The folder must be one line"
+        CommandTemplate.PLACEHOLDER in path -> "The folder may not hold ${CommandTemplate.PLACEHOLDER}"
+        else -> null
+    }
+
+    /** The command that runs memory_tool in this folder; [run] starts memory_tool. */
+    fun command(path: String, run: String = RUN): CommandTemplate {
+        problem(path)?.let { throw IllegalArgumentException(it) }
+        return CommandTemplate.parse(
+            "Set-Location -LiteralPath ${PowerShell.quote(path.trim())} -ErrorAction Stop; $run ${CommandTemplate.PLACEHOLDER}"
+        ).getOrThrow()
+    }
+
+    private val SAVED = Regex(
+        """^Set-Location\s+(?:-(?:Literal)?Path\s+)?(?:'((?:[^']|'')*)'|"([^"]*)"|(\S+))(?:\s+-ErrorAction\s+Stop)?\s*;\s*python\s+-m\s+memory_tool\s+\{args\}$""",
+        RegexOption.IGNORE_CASE,
+    )
+
+    /** The folder in a command saved by 0.2 or earlier, or null when it is not one this app made. */
+    fun pathFrom(command: String?): String? {
+        val match = SAVED.matchEntire(command?.trim() ?: return null) ?: return null
+        val (single, double, bare) = match.destructured
+        return when {
+            single.isNotEmpty() -> single.replace("''", "'")
+            double.isNotEmpty() -> double
+            else -> bare
+        }.takeIf { problem(it) == null }
     }
 }
 

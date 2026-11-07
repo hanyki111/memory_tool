@@ -10,7 +10,11 @@ import android.content.Intent
 import android.os.Build
 import android.service.quicksettings.TileService
 import android.widget.RemoteViews
+import android.content.res.Configuration
+import io.github.hanyki111.memorycapture.core.Neutrals
 import io.github.hanyki111.memorycapture.data.EntryStore
+import io.github.hanyki111.memorycapture.data.Settings
+import io.github.hanyki111.memorycapture.ui.accentColor
 
 /** The quick settings tile: one tap opens the capture window over whatever is on screen. */
 class CaptureTile : TileService() {
@@ -32,7 +36,8 @@ class CaptureTile : TileService() {
 /**
  * The home screen widget. Android widgets cannot hold a text field, so it
  * looks like one and opens the capture window; the microphone opens it
- * listening. It also shows what is waiting to be sent.
+ * listening. It also shows what is waiting to be sent. Light or dark and the
+ * accent follow the app's settings; its text size follows the phone's.
  */
 class CaptureWidget : AppWidgetProvider() {
     override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
@@ -66,7 +71,17 @@ class CaptureWidget : AppWidgetProvider() {
                 if (attention > 0) context.getString(R.string.widget_attention, attention) else null,
             ).joinToString(" · ")
 
+            val settings = Settings(context)
+            val systemDark = (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+            val dark = settings.mode.isDark(systemDark)
+            val neutrals = Neutrals.of(dark)
+            val statusColor = if (attention > 0) (if (dark) 0xFFF2B8B5 else 0xFFB3261E) else accentColor(context, dark, settings.accent)
+
             return RemoteViews(context.packageName, R.layout.widget_capture).apply {
+                setInt(R.id.widget_root, "setBackgroundResource", if (dark) R.drawable.widget_background_dark else R.drawable.widget_background)
+                setTextColor(R.id.widget_hint, neutrals.muted.toInt())
+                setTextColor(R.id.widget_status, statusColor.toInt())
+                setInt(R.id.widget_voice, "setColorFilter", neutrals.muted.toInt())
                 setOnClickPendingIntent(R.id.widget_field, open)
                 setOnClickPendingIntent(R.id.widget_voice, voice)
                 setTextViewText(R.id.widget_status, status)

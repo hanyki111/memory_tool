@@ -4,12 +4,15 @@ import android.Manifest
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -20,6 +23,7 @@ import androidx.compose.ui.platform.LocalContext
 import io.github.hanyki111.memorycapture.data.EntryStore
 import io.github.hanyki111.memorycapture.data.Settings
 import io.github.hanyki111.memorycapture.ui.AppTheme
+import io.github.hanyki111.memorycapture.ui.isAppDark
 import io.github.hanyki111.memorycapture.ui.SettingsScreen
 import io.github.hanyki111.memorycapture.ui.TimelineModel
 import io.github.hanyki111.memorycapture.ui.TimelineScreen
@@ -38,7 +42,7 @@ class MainActivity : ComponentActivity() {
         // the screens pad for the bars and the keyboard themselves.
         enableEdgeToEdge()
         if (Build.VERSION.SDK_INT >= 33) askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
-        setContent { App(resumed.intValue) }
+        setContent { App(this, resumed.intValue) }
     }
 
     override fun onResume() {
@@ -48,11 +52,21 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun App(resumed: Int) {
+private fun App(activity: ComponentActivity, resumed: Int) {
     val context = LocalContext.current
     val settings = remember { Settings(context) }
     var fontPercent by remember { mutableIntStateOf(settings.fontPercent) }
-    var inSettings by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+    var mode by remember { mutableStateOf(settings.mode) }
+    var accent by remember { mutableStateOf(settings.accent) }
+    var inSettings by rememberSaveable { mutableStateOf(false) }
+
+    // The status and navigation bar icons follow the app's light or dark, not only the phone's.
+    val dark = isAppDark(mode)
+    LaunchedEffect(dark) {
+        val bars = if (dark) SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
+        else SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT)
+        activity.enableEdgeToEdge(statusBarStyle = bars, navigationBarStyle = bars)
+    }
 
     // The phone's own entries, redrawn whenever they change.
     var version by remember { mutableIntStateOf(0) }
@@ -66,13 +80,17 @@ private fun App(resumed: Int) {
     val scope = rememberCoroutineScope()
     val model = remember { TimelineModel(context.applicationContext, scope) }
 
-    AppTheme(fontPercent) {
+    AppTheme(fontPercent, mode, accent) {
         if (inSettings) {
             BackHandler { inSettings = false; model.refresh() }
             SettingsScreen(
                 resumed = resumed,
                 fontPercent = fontPercent,
                 onFontPercent = { fontPercent = it; settings.fontPercent = it },
+                mode = mode,
+                onMode = { mode = it; settings.mode = it; CaptureWidget.refresh(context) },
+                accent = accent,
+                onAccent = { accent = it; settings.accent = it; CaptureWidget.refresh(context) },
                 onBack = { inSettings = false; model.refresh() },
             )
         } else {
