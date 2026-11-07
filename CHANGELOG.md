@@ -7,32 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### ✨ Added
-- **Primary-Secondary Multi-Backend Notion Sync** - 다중 Notion 워크스페이스 동기화 지원
-  - Primary 백엔드: 기존과 동일한 양방향 sync (Local ↔ Notion A)
-  - Secondary 백엔드: push-only 미러 (Local → Notion B, C, ...)
-  - `additional-backends` config 섹션으로 추가 백엔드 설정
-  - `nsync --backend <name>`: 특정 백엔드만 동기화
-  - `nsync --secondary-only`: secondary 백엔드만 push
-  - `nwatch --no-secondary`: secondary push 비활성화
-  - 백엔드별 독립 state/cache 파일 (`notion_sync_state_{name}.json`)
-  - Secondary 실패 시 primary에 영향 없음 (실패 격리)
-  - 기존 단일 백엔드 config 100% 하위 호환
-- **Plan-Timeline Integration (Phase 4)** - Plan 완료 시 Timeline 자동 기록
-  - `mplan daily/weekly/monthly done` 실행 시 Timeline에 자동 기록
-  - 양방향 참조 (Plan ↔ Timeline)
-  - 작업 유형 표시 (Daily Plan / Weekly Plan / Monthly Plan)
-- **mcontext improvements** - Current Plans 섹션 추가
-  - 오늘/이번 주/이번 달 Plan 진행률 표시
-  - Pending Tasks/Goals 표시 (최대 3개)
-- **mstatus improvements** - Plans 통계 추가
-  - Daily/Weekly/Monthly Plans 수 표시
-  - 오늘/이번 주 진행률 표시
-
-### 📝 Changed
-- Timeline/Review/Plan 시스템 전체 완료 (Phase 1-5)
-- README.md 및 design 문서 최종 업데이트
-
 ## [1.6.2] - 2026-11-07
 
 ### 🐛 수정
@@ -281,6 +255,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `mcontext -i`는 단일 문서 모듈에서 동작하지 않습니다.
 - 플러그인 1.2.0은 빌드와 단위 테스트만 거쳤고, Obsidian 안에서 화면을 직접 확인하지 않았습니다.
 
+## [1.1.0] - 2026-02-25
+
+### ✨ 추가
+
+- **Primary-Secondary 다중 Notion 동기화:** Notion 워크스페이스 여러 곳에 동기화합니다.
+  - Primary 백엔드는 지금까지처럼 양방향으로 동기화합니다(Local ↔ Notion A).
+  - Secondary 백엔드는 내보내기만 하는 사본입니다(Local → Notion B, C, …).
+  - config의 `additional-backends` 절에 추가 백엔드를 적습니다.
+  - `nsync --backend <name>`은 그 백엔드만, `nsync --secondary-only`는 secondary 백엔드만 동기화합니다. `nwatch --no-secondary`는 secondary로 내보내지 않습니다.
+  - 백엔드마다 state와 cache 파일을 따로 둡니다(`notion_sync_state_{name}.json`).
+  - Secondary가 실패해도 primary에는 영향이 없습니다.
+  - 백엔드가 하나인 기존 config는 그대로 동작합니다.
+
+### 🐛 수정
+
+- `mupdate`가 PEP 668(externally-managed-environment) 환경에서 실패하던 문제
+- `mupdate` 별칭이 등록되지 않던 문제
+- editable 설치에서 버전을 `pyproject.toml`에서 읽도록 수정
+
+## [1.0.0] - 2026-02-10
+
+1.0.0-alpha 이후 커밋 187개(기능 76개, 수정 34개)의 기록에서 정리한 절입니다. 커밋 메시지를 바탕으로 영역별로 묶었으며, 기능을 하나씩 다시 실행해 확인한 것은 아닙니다.
+
+### ✨ 추가
+
+- **Timeline, Review, Plan 체계(Phase 1~5):** 타임라인 구조를 정리하고, 리뷰와 계획(daily, weekly, monthly)을 더했습니다.
+  - `mplan daily/weekly/monthly done`을 실행하면 타임라인에 자동으로 기록하고, 계획과 타임라인이 서로를 가리킵니다. 기록에는 작업 유형(Daily Plan, Weekly Plan, Monthly Plan)이 표시됩니다.
+  - `mplan done`은 할 일을 비슷한 이름으로도 찾고, 진행률을 자동으로 갱신합니다. `mplan daily`는 `recurring.md`도 보여 줍니다.
+  - `mcontext`에 Current Plans 절이 생겨서, 오늘·이번 주·이번 달 계획의 진행률과 남은 할 일·목표(최대 3개)를 보여 줍니다.
+  - `mstatus`에 계획 통계가 생겨서, Daily·Weekly·Monthly 계획 수와 오늘·이번 주 진행률을 보여 줍니다.
+- **타임라인 보기와 편집:** `mday`, `mmonth`, `mdays`로 날짜별 타임라인을 봅니다. `medit`은 기록을 화면에서 고치는 편집기이며, 시각도 바꿀 수 있습니다.
+- **태그:** `record --tags`와 글 안의 태그(`[tag]`, `#tag`)를 인식합니다. 태그의 대소문자를 보존하고, 괄호 태그 안의 공백을 허용합니다. `mtags`(`mtag`)는 사용 횟수와 최근 31일 활동을 보여 주고, 태그 바꾸기·지우기·찾기 명령이 있습니다.
+- **보관(archive):** 날짜 기준 보관(`marchive --older-than`), 보관 제안(`--suggest`), 대화형 선택을 지원합니다.
+- **요약과 문서 상태:** `msummary`가 결과를 캐시하고, `--decisions`로 결정 사항을 분석합니다. 문서 상태 점검이 `mcontext`에 들어갔습니다.
+- **모듈:** 모듈 그래프의 JSON 출력과 부모·자식 관계, 모듈 이름 바꾸기, 유니코드 경로, Feature 기반과 Topic 기반 구조를 지원합니다. `ai-organize`와 글에서 모듈을 만드는 AI 기능이 생겼습니다.
+- **Context Graph와 codemap:** `mcheck`(경로 확인, 보관 모듈 제외)와 `mcontext --structure`, `--update-interfaces`, Python 코드 구조를 분석하는 codemap(`mmap`)을 더했습니다.
+- **Notion 연동:** 타임라인 미러링, 검색과 캐시, 모듈의 양방향 동기화, `nsync --discover`, 파일 변경을 따라가는 `nwatch`, 프록시와 PAT 모드, 할 일을 더하는 `np`, 한국어 별칭(노, 노검 등)을 지원합니다. `nwatch`는 중복 실행을 막고 캐시를 스스로 복구합니다.
+- **Knowledge Federation:** 프로젝트 사이에서 모듈을 공유하고, `mimport --preview`로 KB 모듈의 내용을 미리 봅니다.
+- **검색:** `mcache`로 검색 캐시와 Notion 캐시를 관리합니다. 겹치는 검색 결과를 합칩니다(1.6.2에서 고친 문제가 여기서 시작되었습니다).
+- **도움말과 설정:** 이중 언어 도움말(`mhelp --guide`), 튜토리얼, `mconfig`와 config 안내, USAGE.md를 더했습니다. `minit`은 `.claude/` 구조와 모듈 구성 문서를 만들고, `--update-docs`와 `--update-all`로 갱신합니다. 별칭은 Linux 셸(Bash, Zsh)에서도 동작합니다.
+- **버전 관리:** `m --version`과 `mupdate`를 더했습니다.
+
+### 🐛 수정
+
+- Typer 0.12 이상에서 선택 인수(`Optional`)를 다루는 문제
+- `pyproject.toml`이 하위 패키지를 모두 포함하지 않던 문제
+- Notion 동기화의 중복 페이지·중복 기록 생성, 시각 순서, 잠자기 뒤의 중복 기록
+- 그 밖에 경로 정규화, 문서 상태의 줄 수 계산, AI 응답 해석 등
+
 ## [1.0.0-alpha] - 2025-11-15
 
 ### 🎉 Initial Alpha Release
@@ -399,16 +422,3 @@ This is an alpha release. The software has been extensively dogfooded during dev
 
 This project practices what it preaches - it was built using its own system for knowledge management. All development is recorded in `.memory/timeline/` and decisions in module-specific `decisions.md` files.
 
----
-
-## [Unreleased]
-
-### Planned
-- Automated test coverage
-- Performance benchmarks
-- PyPI release (pending community feedback)
-- Additional language support
-
----
-
-**Note:** This is an alpha release. APIs may change before v1.0.0 stable.
