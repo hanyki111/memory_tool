@@ -56,6 +56,11 @@ class Settings(context: Context) {
         get() = prefs.getInt("widgetCount", 10).let { n -> WIDGET_COUNTS.firstOrNull { it >= n } ?: WIDGET_COUNTS.last() }
         set(value) = prefs.edit().putInt("widgetCount", value).apply()
 
+    /** Speech inside the app, through the phone's default speech service, rather than Google's speech window */
+    var voiceInApp: Boolean
+        get() = prefs.getBoolean("voiceInApp", false)
+        set(value) = prefs.edit().putBoolean("voiceInApp", value).apply()
+
     /** Whether the large widget shows a long entry whole, on several lines, rather than cut to one */
     var widgetWrap: Boolean
         get() = prefs.getBoolean("widgetWrap", false)

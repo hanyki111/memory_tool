@@ -173,7 +173,7 @@ fun TimelineScreen(model: TimelineModel, phoneEntries: List<Entry>, onSettings: 
 
     Scaffold(
         topBar = { SearchBar(model, onSettings) },
-        bottomBar = { BottomPanel(phoneEntries) },
+        bottomBar = { BottomPanel(phoneEntries, model) },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { inner ->
         PullToRefreshBox(
@@ -229,26 +229,28 @@ private fun SearchBar(model: TimelineModel, onSettings: () -> Unit) {
 
 /** The phone's unsent entries, then the field; padded for the navigation bar and the keyboard. */
 @Composable
-private fun BottomPanel(phoneEntries: List<Entry>) {
+private fun BottomPanel(phoneEntries: List<Entry>, model: TimelineModel) {
     Surface(color = MaterialTheme.colorScheme.background) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding().imePadding()) {
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             QueueStrip(phoneEntries)
-            InputBar()
+            InputBar(model)
         }
     }
 }
 
-/** Write and send without opening anything; speech fills the field. */
+/** Write and send without opening anything; speech fills the field and offers recent tags. */
 @Composable
-private fun InputBar() {
+private fun InputBar(model: TimelineModel) {
     val context = LocalContext.current
     var text by remember { mutableStateOf("") }
-    val speech = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        val heard = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
-        if (result.resultCode == Activity.RESULT_OK && !heard.isNullOrBlank()) {
-            text = if (text.isBlank()) heard else "${text.trimEnd()} $heard"
-        }
+    var spoken by remember { mutableStateOf(false) }
+    val voice = rememberVoiceInput { heard ->
+        text = if (text.isBlank()) heard else "${text.trimEnd()} $heard"
+        spoken = true
+    }
+    val tags = remember(spoken, model.days) {
+        if (spoken) recentTags(context, model.days.flatMap { day -> Days.newestFirst(day).map { it.text } }) else emptyList()
     }
 
     fun send() {
@@ -257,6 +259,21 @@ private fun InputBar() {
         EntryStore.add(context, entry)
         Sender.schedule(context)
         text = ""
+        spoken = false
+    }
+
+    if (voice.listening || (spoken && tags.isNotEmpty()) || voice.missed) {
+        Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            when {
+                voice.listening -> Text(
+                    voice.partial.ifEmpty { stringResource(R.string.voice_listening) },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                voice.missed && !spoken -> Text(stringResource(R.string.voice_missed), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                else -> TagChips(tags, text, { text = it })
+            }
+        }
     }
 
     run {
@@ -266,7 +283,7 @@ private fun InputBar() {
         ) {
             TextField(
                 value = text,
-                onValueChange = { text = it },
+                onValueChange = { text = it; if (it.isBlank()) spoken = false },
                 placeholder = { Text(stringResource(R.string.input_hint)) },
                 colors = plainField(),
                 textStyle = MaterialTheme.typography.bodyLarge,
@@ -275,14 +292,10 @@ private fun InputBar() {
                 keyboardActions = KeyboardActions(onSend = { send() }),
                 modifier = Modifier.weight(1f),
             )
-            IconButton(onClick = {
-                val request = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
-                    .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                    .putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
-                runCatching { speech.launch(request) }
-            }) {
-                Icon(painterResource(R.drawable.ic_mic), contentDescription = stringResource(R.string.capture_voice),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            IconButton(onClick = voice::start) {
+                Icon(painterResource(R.drawable.ic_mic),
+                    contentDescription = stringResource(if (voice.listening) R.string.voice_stop else R.string.capture_voice),
+                    tint = if (voice.listening) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
             }
             FilledIconButton(
                 onClick = ::send,

@@ -6,11 +6,17 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Android 11 and older run expedited sending as a short foreground service. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- Only for speech inside the app (Settings > Voice); asked the first time it is used. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
-    <!-- Android 11+ hides other apps unless declared; this finds the speech recognizer. -->
+    <!-- Android 11+ hides other apps unless declared: the speech window, and the speech
+         services that in-app recognition uses. -->
     <queries>
         <intent>
             <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
+        </intent>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
         </intent>
     </queries>
 

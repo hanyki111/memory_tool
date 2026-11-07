@@ -10,7 +10,12 @@ import android.content.Intent
 import android.content.res.Configuration
 import android.os.Build
 import android.service.quicksettings.TileService
+import android.text.SpannableStringBuilder
+import android.text.Spanned
 import android.text.format.DateFormat
+import android.text.style.BackgroundColorSpan
+import android.text.style.ForegroundColorSpan
+import android.text.style.RelativeSizeSpan
 import android.view.View
 import android.net.Uri
 import android.widget.RemoteViews
@@ -20,6 +25,8 @@ import io.github.hanyki111.memorycapture.core.DayName
 import io.github.hanyki111.memorycapture.core.Mode
 import io.github.hanyki111.memorycapture.core.Neutrals
 import io.github.hanyki111.memorycapture.core.TimelineEntry
+import io.github.hanyki111.memorycapture.core.blend
+import io.github.hanyki111.memorycapture.core.leadingTags
 import io.github.hanyki111.memorycapture.core.normalTime
 import io.github.hanyki111.memorycapture.data.EntryStore
 import io.github.hanyki111.memorycapture.data.RecentStore
@@ -161,12 +168,41 @@ class LargeWidget : AppWidgetProvider() {
         internal fun row(context: Context, entry: TimelineEntry, look: Widgets.Look, wrap: Boolean): RemoteViews =
             RemoteViews(context.packageName, if (wrap) R.layout.widget_recent_row_wrap else R.layout.widget_recent_row).apply {
                 setTextViewText(R.id.recent_when, whenLabel(context, entry))
-                setTextViewText(R.id.recent_text, entry.text)
+                setTextViewText(R.id.recent_text, tagged(entry.text, look))
                 // The times in the accent, as the app marks the newest entry with it.
                 paint(R.id.recent_when, "setTextColor", look) { it.accent }
                 paint(R.id.recent_text, "setTextColor", look) { it.neutrals.text }
                 setOnClickFillInIntent(R.id.recent_row, Intent())
             }
+
+        /**
+         * The entry with its leading `[tags]` as tinted chips, as in the app. A
+         * widget's text cannot have round corners, so the chips are square,
+         * padded with no-break spaces. Following the phone, the widget swaps its
+         * own colours when the phone turns dark, but not a span's, so the chip
+         * is a see-through accent that reads on both and keeps the text colour.
+         */
+        private fun tagged(text: String, look: Widgets.Look): CharSequence {
+            val (tags, rest) = leadingTags(text)
+            if (tags.isEmpty()) return text
+            val side = look.now
+            val (tint, ink) = if (look.follows) {
+                (side.accent and 0x00FFFFFF or 0x38000000) to null
+            } else {
+                blend(side.neutrals.background, side.accent, if (look.dark) 0.22 else 0.12) to side.accent
+            }
+            val out = SpannableStringBuilder()
+            tags.forEach { tag ->
+                val from = out.length
+                out.append("\u00A0").append(tag).append("\u00A0")
+                val flags = Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                out.setSpan(BackgroundColorSpan(tint.toInt()), from, out.length, flags)
+                out.setSpan(RelativeSizeSpan(0.85f), from, out.length, flags)
+                if (ink != null) out.setSpan(ForegroundColorSpan(ink.toInt()), from, out.length, flags)
+                out.append(" ")
+            }
+            return out.append(rest)
+        }
 
         /** "14:30", "어제 14:30" or "11. 5. 14:30". */
         fun whenLabel(context: Context, entry: TimelineEntry): String {

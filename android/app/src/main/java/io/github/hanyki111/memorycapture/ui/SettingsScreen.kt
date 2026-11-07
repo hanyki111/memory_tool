@@ -243,6 +243,13 @@ fun SettingsScreen(
             }
 
             Group(stringResource(R.string.section_voice)) {
+                Label(stringResource(R.string.voice_way))
+                var inApp by remember { mutableStateOf(settings.voiceInApp) }
+                Choice(
+                    listOf(false to stringResource(R.string.voice_window), true to stringResource(R.string.voice_in_app)),
+                    inApp,
+                ) { inApp = it; settings.voiceInApp = it }
+                Text(stringResource(R.string.voice_way_help), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 OutlinedTextField(delay, { delay = it; delay.toIntOrNull()?.let { s -> settings.voiceDelaySeconds = s } },
                     label = { Text(stringResource(R.string.main_voice_delay)) }, singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())

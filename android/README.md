@@ -41,7 +41,12 @@ and the accent; the widget's text size follows the phone's.
 - **App shortcuts:** touch and hold the app icon for **Record** and **Record by voice**. Samsung's Modes and Routines
   lists them as app actions, so a routine can open the window, or open it listening.
 
-Speech is shown for a few seconds before sending (set in the app); tap the text to edit it instead.
+Speech is shown for a few seconds before sending (set in the app); tap the text to edit it instead. After speech,
+in this window and in the app's field, the tags used lately show as chips: a chip puts its tag before the text, or
+takes it away. Settings › Voice chooses Google's speech window or speech inside the app, which uses the phone's
+default speech service (Samsung's, where the phone offers it and it is chosen), shows what it hears, and asks for
+the microphone once; it falls back to the window when it fails. Samsung Keyboard's own microphone cannot be started
+by an app, nor tell an app that it is done.
 
 ## Setting up
 
