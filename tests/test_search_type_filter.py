@@ -80,5 +80,6 @@ def test_cache_does_not_mix_knowledge_bases(tmp_path, monkeypatch):
     first, second = make("a", "첫째"), make("b", "둘째")
     assert search(first) == (False, ["공통어 첫째"])
     assert search(second) == (False, ["공통어 둘째"])
-    assert search(first) == (True, ["공통어 첫째"])
+    # Keyword search is never cached (1.6.1), so nothing can come from the other base.
+    assert search(first) == (False, ["공통어 첫째"])
     clear_cache()
