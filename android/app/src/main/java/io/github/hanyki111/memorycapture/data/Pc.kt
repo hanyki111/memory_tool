@@ -4,7 +4,6 @@ import android.content.Context
 import io.github.hanyki111.memorycapture.R
 import io.github.hanyki111.memorycapture.core.Outcome
 import io.github.hanyki111.memorycapture.core.PcReply
-import io.github.hanyki111.memorycapture.core.PowerShell
 import io.github.hanyki111.memorycapture.ssh.Ssh
 
 /** What came of asking the PC something. */
@@ -27,7 +26,7 @@ object Pc {
         val settings = Settings(context)
         settings.missing()?.let { return Call.Failed(context.getString(R.string.pc_setup_needed, it)) }
         val template = settings.command()!!
-        val command = PowerShell.forTransport(template.fill(args))
+        val command = template.line(args)
         return when (val outcome = Ssh.run(settings.target()!!, PhoneKey(context).get(), settings.fingerprint, command)) {
             is Outcome.NotSent -> Call.Failed(outcome.reason)
             is Outcome.Uncertain -> Call.Failed(outcome.reason, mayHaveRun = true)

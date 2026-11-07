@@ -13,6 +13,7 @@ import io.github.hanyki111.memorycapture.core.TimelineEntry
 import io.github.hanyki111.memorycapture.core.newestFirst
 import io.github.hanyki111.memorycapture.data.Call
 import io.github.hanyki111.memorycapture.data.Pc
+import io.github.hanyki111.memorycapture.data.RecentStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -91,6 +92,7 @@ class TimelineModel(private val context: Context, private val scope: CoroutineSc
             if (call is Call.Done) {
                 days = Days.merge(days, from.toString(), to.toString(), call.value)
                 oldest = from
+                keepRecent()
                 autoLoad = call.value.any { it.entries.isNotEmpty() }
             } else {
                 error = failure(call)
@@ -110,6 +112,7 @@ class TimelineModel(private val context: Context, private val scope: CoroutineSc
             if (call is Call.Done) {
                 days = Days.merge(days, from.toString(), to.toString(), call.value)
                 error = null
+                keepRecent()
             } else {
                 message = failure(call)
             }
@@ -127,7 +130,16 @@ class TimelineModel(private val context: Context, private val scope: CoroutineSc
                 val call = pc(PcArgs.days(date, date), PcReplies::days)
                 if (call is Call.Done) days = Days.merge(days, date, date, call.value)
             }
+            keepRecent()
         }
+    }
+
+    /**
+     * The large widget lists the latest entries of the last month, more than
+     * the app may have loaded, so it fetches them itself, in the background.
+     */
+    private fun keepRecent() {
+        RecentStore.fetchSoon(context)
     }
 
     fun search() {

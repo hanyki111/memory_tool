@@ -8,6 +8,7 @@ import io.github.hanyki111.memorycapture.core.Accent
 import io.github.hanyki111.memorycapture.core.CommandTemplate
 import io.github.hanyki111.memorycapture.core.KnowledgeBase
 import io.github.hanyki111.memorycapture.core.Mode
+import io.github.hanyki111.memorycapture.core.PcKind
 import io.github.hanyki111.memorycapture.ssh.KeyMaterial
 import io.github.hanyki111.memorycapture.ssh.Ssh
 import io.github.hanyki111.memorycapture.ssh.Target
@@ -42,7 +43,23 @@ class Settings(context: Context) {
         set(value) = prefs.edit().putString("basePath", value.trim()).remove("template").apply()
 
     /** How memory_tool is run, or null while the folder cannot be used */
-    fun command(): CommandTemplate? = basePath.takeIf { KnowledgeBase.problem(it) == null }?.let { KnowledgeBase.command(it) }
+    fun command(): CommandTemplate? =
+        basePath.takeIf { KnowledgeBase.problem(it) == null }?.let { KnowledgeBase.command(it, pcKind) }
+
+    /** Windows (PowerShell) or macOS and Linux (sh) */
+    var pcKind: PcKind
+        get() = PcKind.of(prefs.getString("pcKind", null))
+        set(value) = prefs.edit().putString("pcKind", value.key).apply()
+
+    /** How many of the PC's latest entries the large widget lists */
+    var widgetCount: Int
+        get() = prefs.getInt("widgetCount", 10).let { n -> WIDGET_COUNTS.firstOrNull { it >= n } ?: WIDGET_COUNTS.last() }
+        set(value) = prefs.edit().putInt("widgetCount", value).apply()
+
+    /** Whether the large widget shows a long entry whole, on several lines, rather than cut to one */
+    var widgetWrap: Boolean
+        get() = prefs.getBoolean("widgetWrap", false)
+        set(value) = prefs.edit().putBoolean("widgetWrap", value).apply()
 
     var mode: Mode
         get() = Mode.of(prefs.getString("mode", null))
@@ -82,6 +99,8 @@ class Settings(context: Context) {
         /** Android's own text size goes up to 200 percent as well */
         const val FONT_MIN = 70
         const val FONT_MAX = 200
+
+        val WIDGET_COUNTS = listOf(5, 10, 20, 30)
     }
 }
 

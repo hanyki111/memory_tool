@@ -76,7 +76,9 @@ import io.github.hanyki111.memorycapture.core.Accent
 import io.github.hanyki111.memorycapture.core.KnowledgeBase
 import io.github.hanyki111.memorycapture.core.Mode
 import io.github.hanyki111.memorycapture.core.Outcome
-import io.github.hanyki111.memorycapture.core.PowerShell
+import io.github.hanyki111.memorycapture.core.PcKind
+import io.github.hanyki111.memorycapture.LargeWidget
+import io.github.hanyki111.memorycapture.data.RecentStore
 import io.github.hanyki111.memorycapture.data.PhoneKey
 import io.github.hanyki111.memorycapture.data.Settings
 import io.github.hanyki111.memorycapture.ssh.Ssh
@@ -105,6 +107,10 @@ fun SettingsScreen(
     var port by remember { mutableStateOf(settings.port.toString()) }
     var user by remember { mutableStateOf(settings.user) }
     var basePath by remember { mutableStateOf(settings.basePath) }
+    var pcKind by remember { mutableStateOf(settings.pcKind) }
+    var widgetCount by remember { mutableStateOf(settings.widgetCount) }
+    var widgetWrap by remember { mutableStateOf(settings.widgetWrap) }
+    val posix = pcKind == PcKind.POSIX
     var delay by remember { mutableStateOf(settings.voiceDelaySeconds.toString()) }
     var fingerprint by remember { mutableStateOf(settings.fingerprint) }
     var publicKey by remember { mutableStateOf("") }
@@ -123,6 +129,7 @@ fun SettingsScreen(
         settings.port = port.toIntOrNull() ?: 22
         settings.user = user
         if (baseProblem == null) settings.basePath = basePath
+        settings.pcKind = pcKind
         settings.voiceDelaySeconds = delay.toIntOrNull() ?: 3
     }
 
@@ -159,6 +166,11 @@ fun SettingsScreen(
             }
 
             Group(stringResource(R.string.main_pc)) {
+                Label(stringResource(R.string.pc_kind))
+                Choice(
+                    listOf(PcKind.WINDOWS to stringResource(R.string.pc_windows), PcKind.POSIX to stringResource(R.string.pc_posix)),
+                    pcKind,
+                ) { pcKind = it }
                 OutlinedTextField(host, { host = it }, label = { Text(stringResource(R.string.main_host)) }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(port, { port = it }, label = { Text(stringResource(R.string.main_port)) }, modifier = Modifier.weight(1f), singleLine = true,
@@ -168,8 +180,13 @@ fun SettingsScreen(
                 OutlinedTextField(
                     basePath, { basePath = it },
                     label = { Text(stringResource(R.string.main_base)) },
-                    placeholder = { Text("E:\\notes") },
-                    supportingText = { Text(if (basePath.isEmpty() || baseProblem == null) stringResource(R.string.main_base_help) else baseProblem) },
+                    placeholder = { Text(if (posix) "/home/me/notes" else "E:\\notes") },
+                    supportingText = {
+                        Text(
+                            if (basePath.isNotEmpty() && baseProblem != null) baseProblem
+                            else stringResource(if (posix) R.string.main_base_help_posix else R.string.main_base_help)
+                        )
+                    },
                     isError = basePath.isNotEmpty() && baseProblem != null,
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
@@ -205,6 +222,26 @@ fun SettingsScreen(
                 }
             }
 
+            Group(stringResource(R.string.section_widget)) {
+                Label(stringResource(R.string.widget_count))
+                Choice(Settings.WIDGET_COUNTS.map { it to "$it" }, widgetCount) { n ->
+                    val more = n > widgetCount
+                    widgetCount = n
+                    settings.widgetCount = n
+                    // More than were kept: ask the PC; fewer: the list just shows fewer.
+                    if (more) RecentStore.fetchSoon(context) else LargeWidget.refresh(context)
+                }
+                Label(stringResource(R.string.widget_long))
+                Choice(
+                    listOf(false to stringResource(R.string.widget_long_cut), true to stringResource(R.string.widget_long_wrap)),
+                    widgetWrap,
+                ) {
+                    widgetWrap = it
+                    settings.widgetWrap = it
+                    LargeWidget.refresh(context)
+                }
+            }
+
             Group(stringResource(R.string.section_voice)) {
                 OutlinedTextField(delay, { delay = it; delay.toIntOrNull()?.let { s -> settings.voiceDelaySeconds = s } },
                     label = { Text(stringResource(R.string.main_voice_delay)) }, singleLine = true,
@@ -212,7 +249,7 @@ fun SettingsScreen(
             }
 
             Group(stringResource(R.string.main_key)) {
-                Text(stringResource(R.string.main_key_help), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(if (posix) R.string.main_key_help_posix else R.string.main_key_help), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 SelectionContainer { Text(publicKey, style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace)) }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = { copy(context, publicKey) }) { Text(stringResource(R.string.copy)) }
@@ -231,7 +268,7 @@ fun SettingsScreen(
             title = { Text(stringResource(R.string.main_trust_title)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(stringResource(R.string.main_trust_body))
+                    Text(stringResource(if (posix) R.string.main_trust_body_posix else R.string.main_trust_body))
                     SelectionContainer { Text("SHA256:$offered", fontFamily = FontFamily.Monospace) }
                 }
             },
@@ -277,6 +314,21 @@ private fun Group(title: String, content: @Composable ColumnScope.() -> Unit) {
 @Composable
 private fun Label(text: String) {
     Text(text, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
+/** One of a few values, as a row of segments. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun <T> Choice(options: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit) {
+    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+        options.forEachIndexed { i, (value, label) ->
+            SegmentedButton(
+                selected = value == selected,
+                onClick = { onSelect(value) },
+                shape = SegmentedButtonDefaults.itemShape(i, options.size),
+            ) { Text(label, maxLines = 1) }
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -367,7 +419,7 @@ private fun testConnection(context: Context): String {
     val template = settings.command() ?: return KnowledgeBase.problem(settings.basePath) ?: ""
     val key = PhoneKey(context).get()
     fun run(args: List<String>): Pair<Boolean, String> =
-        when (val outcome = Ssh.run(target, key, settings.fingerprint, PowerShell.forTransport(template.fill(args)))) {
+        when (val outcome = Ssh.run(target, key, settings.fingerprint, template.line(args))) {
             is Outcome.NotSent -> false to outcome.reason
             is Outcome.Uncertain -> false to outcome.reason
             is Outcome.Ran -> (outcome.exitStatus == 0) to (outcome.stdout + outcome.stderr).trim().ifEmpty { "exit ${outcome.exitStatus}" }
