@@ -30,7 +30,6 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import io.github.hanyki111.memorycapture.MainActivity
 import io.github.hanyki111.memorycapture.R
-import io.github.hanyki111.memorycapture.core.CommandTemplate
 import io.github.hanyki111.memorycapture.core.Outcome
 import io.github.hanyki111.memorycapture.core.PowerShell
 import io.github.hanyki111.memorycapture.core.RecordReply
@@ -98,7 +97,7 @@ object Sender {
         }
 
         val target = settings.target()!!
-        val template = CommandTemplate.parse(settings.template).getOrThrow()
+        val template = settings.command()!!
         val key = PhoneKey(context).get()
 
         fun run(args: List<String>) = runPatiently { Ssh.run(target, key, settings.fingerprint, PowerShell.forTransport(template.fill(args))) }

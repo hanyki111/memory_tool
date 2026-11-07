@@ -178,6 +178,69 @@ class CommandTest {
         }
     }
 
+    /**
+     * The knowledge base folder: the command runs there, and a wrong folder
+     * stops it instead of running memory_tool somewhere else.
+     */
+    @Test
+    fun theCommandRunsInTheFolderAndAWrongFolderStopsIt() {
+        val pwsh = findOnPath("pwsh")
+        val python = findOnPath("python")
+        assumeTrue("pwsh and python are needed", pwsh != null && python != null)
+
+        val root = Files.createTempDirectory("kb").toFile()
+        val folder = File(root, "it's here").apply { mkdirs() }
+        val script = File(root, "cwd.py").apply {
+            writeText("import os, sys\nsys.stdout.buffer.write(('CWD=' + os.getcwd() + '\\n').encode('utf-8'))\n")
+        }
+        fun runIn(path: String): Pair<Int, String> {
+            val template = KnowledgeBase.command(path, run = "& '${python!!.path}' '${script.path}'")
+            val process = ProcessBuilder(pwsh!!.path, "-NoProfile", "-NonInteractive", "-c", PowerShell.forTransport(template.fill(listOf("x"))))
+                .redirectErrorStream(true).start()
+            val output = process.inputStream.readBytes().toString(Charsets.UTF_8)
+            assertTrue("pwsh did not finish", process.waitFor(60, TimeUnit.SECONDS))
+            return process.exitValue() to output
+        }
+        try {
+            val (okExit, okOutput) = runIn(folder.path)
+            assertEquals(0, okExit)
+            assertTrue(okOutput, okOutput.contains("CWD=${folder.canonicalPath}"))
+
+            val (badExit, badOutput) = runIn(File(root, "missing").path)
+            assertTrue("a wrong folder must fail", badExit != 0)
+            assertTrue("memory_tool must not run: $badOutput", !badOutput.contains("CWD="))
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun theFolderComesFromCommandsSavedBefore() {
+        assertEquals("E:\\notes", KnowledgeBase.pathFrom("Set-Location 'E:\\notes'; python -m memory_tool {args}"))
+        assertEquals("E:\\it's", KnowledgeBase.pathFrom("Set-Location 'E:\\it''s'; python -m memory_tool {args}"))
+        assertEquals("E:\\a b", KnowledgeBase.pathFrom("set-location -LiteralPath \"E:\\a b\" -ErrorAction Stop ;  python -m memory_tool {args}"))
+        assertEquals("E:\\notes", KnowledgeBase.pathFrom("Set-Location E:\\notes; python -m memory_tool {args}"))
+        // Not one the app made: left for the person to fill in.
+        assertEquals(null, KnowledgeBase.pathFrom("Set-Location 'E:\\notes'; & C:\\py\\python.exe -m memory_tool {args}"))
+        assertEquals(null, KnowledgeBase.pathFrom("python -m memory_tool {args}"))
+        assertEquals(null, KnowledgeBase.pathFrom(null))
+        // What the app builds, it reads back.
+        val path = "E:\\it's {here}"
+        assertEquals(path, KnowledgeBase.pathFrom(KnowledgeBase.command(path).text))
+    }
+
+    @Test
+    fun aFolderMustBeOneLineAndNotEmpty() {
+        assertTrue(KnowledgeBase.problem("E:\\notes") == null)
+        assertTrue(KnowledgeBase.problem("  ") != null)
+        assertTrue(KnowledgeBase.problem("E:\\a\nb") != null)
+        assertTrue(KnowledgeBase.problem("E:\\{args}") != null)
+        assertEquals(
+            "Set-Location -LiteralPath 'E:\\it''s' -ErrorAction Stop; python -m memory_tool 'record'",
+            KnowledgeBase.command(" E:\\it's ").fill(listOf("record")),
+        )
+    }
+
     private fun findOnPath(name: String): File? {
         val exts = if (System.getProperty("os.name").startsWith("Windows")) listOf(".exe", "") else listOf("")
         return System.getenv("PATH").orEmpty().split(File.pathSeparator)

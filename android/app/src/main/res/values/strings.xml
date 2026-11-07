@@ -44,8 +44,6 @@
     <string name="main_host">Address (DDNS name or IP)</string>
     <string name="main_port">Port</string>
     <string name="main_user">User</string>
-    <string name="main_command">Command</string>
-    <string name="main_command_help">PowerShell on the PC runs this. {args} is where the app puts memory_tool\'s arguments.</string>
     <string name="main_voice_delay">Seconds to show speech before sending</string>
     <string name="main_saved">Saved</string>
     <string name="main_key">This phone\'s key</string>
@@ -60,6 +58,24 @@
     <string name="main_trust_body">Compare it with the PC: ssh-keygen -lf C:\\ProgramData\\ssh\\ssh_host_ed25519_key.pub. Trust it only if they are the same.</string>
     <string name="main_trust">They match; trust</string>
 
+    <string name="section_look">Look</string>
+    <string name="section_voice">Voice</string>
+    <string name="mode_title">Light or dark</string>
+    <string name="mode_system">As the phone</string>
+    <string name="mode_light">Light</string>
+    <string name="mode_dark">Dark</string>
+    <string name="accent_title">Accent colour</string>
+    <string name="accent_dynamic">From the wallpaper</string>
+    <string name="accent_indigo">Indigo</string>
+    <string name="accent_teal">Teal</string>
+    <string name="accent_green">Green</string>
+    <string name="accent_amber">Amber</string>
+    <string name="accent_rose">Rose</string>
+    <string name="accent_ink">Ink</string>
+    <string name="main_base">Knowledge base folder</string>
+    <string name="main_base_help">The folder on the PC where you run m, such as E:\\notes</string>
+    <string name="input_hint">What happened?</string>
+    <string name="today">Today</string>
     <string name="settings">Settings</string>
     <string name="back">Back</string>
     <string name="retry">Try again</string>

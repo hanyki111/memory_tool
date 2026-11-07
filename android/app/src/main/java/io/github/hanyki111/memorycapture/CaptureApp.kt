@@ -1,6 +1,7 @@
 package io.github.hanyki111.memorycapture
 
 import android.app.Application
+import android.content.res.Configuration
 import io.github.hanyki111.memorycapture.data.EntryStore
 import io.github.hanyki111.memorycapture.send.NetworkWatch
 import io.github.hanyki111.memorycapture.send.Notifier
@@ -19,5 +20,11 @@ class CaptureApp : Application() {
         // Anything left from before, such as entries written while offline.
         Sender.schedule(this)
         NetworkWatch.update(this)
+    }
+
+    /** The phone turned light or dark: the widget follows when the app is set to. */
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        CaptureWidget.refresh(this)
     }
 }

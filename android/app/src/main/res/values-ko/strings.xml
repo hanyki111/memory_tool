@@ -44,8 +44,6 @@
     <string name="main_host">주소 (DDNS 이름 또는 IP)</string>
     <string name="main_port">포트</string>
     <string name="main_user">사용자</string>
-    <string name="main_command">명령</string>
-    <string name="main_command_help">PC의 PowerShell이 실행합니다. {args} 자리에 앱이 memory_tool의 인수를 넣습니다.</string>
     <string name="main_voice_delay">말한 내용을 보여 주는 시간(초)</string>
     <string name="main_saved">저장했습니다</string>
     <string name="main_key">이 휴대폰의 키</string>
@@ -60,6 +58,24 @@
     <string name="main_trust_body">PC에서 확인한 값과 비교해 주세요: ssh-keygen -lf C:\\ProgramData\\ssh\\ssh_host_ed25519_key.pub. 같을 때만 신뢰하세요.</string>
     <string name="main_trust">같습니다, 신뢰</string>
 
+    <string name="section_look">모양</string>
+    <string name="section_voice">음성</string>
+    <string name="mode_title">화면 모드</string>
+    <string name="mode_system">휴대폰 설정</string>
+    <string name="mode_light">라이트</string>
+    <string name="mode_dark">다크</string>
+    <string name="accent_title">강조색</string>
+    <string name="accent_dynamic">배경화면 색</string>
+    <string name="accent_indigo">남색</string>
+    <string name="accent_teal">청록</string>
+    <string name="accent_green">초록</string>
+    <string name="accent_amber">호박색</string>
+    <string name="accent_rose">장밋빛</string>
+    <string name="accent_ink">먹색</string>
+    <string name="main_base">지식 베이스 폴더</string>
+    <string name="main_base_help">PC에서 m을 실행하는 폴더입니다. 예: E:\\notes</string>
+    <string name="input_hint">무슨 일이 있었나요?</string>
+    <string name="today">오늘</string>
     <string name="settings">설정</string>
     <string name="back">뒤로</string>
     <string name="retry">다시 시도</string>
