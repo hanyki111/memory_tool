@@ -78,6 +78,12 @@
     <string name="today">Today</string>
     <string name="shortcut_record">Record</string>
     <string name="shortcut_record_voice">Record by voice</string>
+    <string name="widget_small_label">Record (small)</string>
+    <string name="widget_large_label">Record and latest entries</string>
+    <string name="widget_yesterday">Yesterday</string>
+    <string name="widget_updated">Updated %1$s</string>
+    <string name="widget_fetching">Getting the latest entries…</string>
+    <string name="widget_no_entries">No entries in the last 7 days</string>
     <string name="settings">Settings</string>
     <string name="back">Back</string>
     <string name="retry">Try again</string>

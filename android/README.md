@@ -3,7 +3,8 @@
 Record to the [memory_tool](https://github.com/hanyki111/memory_tool) timeline from an Android phone, and read,
 search and edit it. The app runs memory_tool on the PC over SSH for everything, so every entry goes through the same
 CLI as the PC's own `m`. Entries written without a connection wait on the phone and are sent later, at the time they
-were written. Nothing of the PC's timeline is stored on the phone.
+were written. Nothing of the PC's timeline is stored on the phone, except the three latest entries while the large widget
+shows them.
 
 Needs memory_tool 1.6.0 or later on the PC (`entry find/edit/delete`).
 
@@ -26,8 +27,14 @@ and the accent; the widget's text size follows the phone's.
 ## The small capture window
 
 - **Quick settings tile:** pull down the notification shade, edit the tiles, and add **Record**
-- **Home screen widget:** looks like a text field; the microphone starts speech input. It also shows entries waiting
-  to be sent or to be checked. (Android widgets cannot hold a text field, so tapping it opens the window.)
+- **Home screen widgets**, three to choose from:
+  - **Record (small)**, 1x1: a round button that opens the window.
+  - **Record**, 4x1: looks like a text field; the microphone starts speech input. It also shows entries waiting to be
+    sent or to be checked. (Android widgets cannot hold a text field, so tapping it opens the window.)
+  - **Record and latest entries**, 4x2: the same field with the PC's three latest entries below it; tapping them
+    opens the timeline. They are fetched every 30 minutes (with a network), when the app loads the timeline and
+    after an entry reaches the PC; the widget says when. These few entries are the only part of the PC's timeline
+    kept on the phone, only while such a widget is on the home screen, and never in a backup.
 - **Share:** choose **Record to timeline** in another app's share sheet
 - **App shortcuts:** touch and hold the app icon for **Record** and **Record by voice**. Samsung's Modes and Routines
   lists them as app actions, so a routine can open the window, or open it listening.

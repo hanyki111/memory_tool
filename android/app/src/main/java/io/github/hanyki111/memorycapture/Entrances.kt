@@ -7,14 +7,26 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
 import android.os.Build
 import android.service.quicksettings.TileService
+import android.text.format.DateFormat
+import android.view.View
 import android.widget.RemoteViews
-import android.content.res.Configuration
+import io.github.hanyki111.memorycapture.core.DayName
 import io.github.hanyki111.memorycapture.core.Neutrals
+import io.github.hanyki111.memorycapture.core.Recents
+import io.github.hanyki111.memorycapture.core.TimelineEntry
+import io.github.hanyki111.memorycapture.core.normalTime
 import io.github.hanyki111.memorycapture.data.EntryStore
+import io.github.hanyki111.memorycapture.data.RecentStore
 import io.github.hanyki111.memorycapture.data.Settings
 import io.github.hanyki111.memorycapture.ui.accentColor
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 /** The quick settings tile: one tap opens the capture window over whatever is on screen. */
 class CaptureTile : TileService() {
@@ -41,52 +53,173 @@ class CaptureTile : TileService() {
  */
 class CaptureWidget : AppWidgetProvider() {
     override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
+        ids.forEach { manager.updateAppWidget(it, Widgets.field(context, R.layout.widget_capture)) }
+    }
+
+    companion object {
+        /** Redraw every widget of the app, as after the entries or the look changed. */
+        fun refresh(context: Context) {
+            Widgets.update(context, CaptureWidget::class.java) { Widgets.field(context, R.layout.widget_capture) }
+            SmallWidget.refresh(context)
+            LargeWidget.refresh(context)
+        }
+    }
+}
+
+/** One round button that opens the capture window. */
+class SmallWidget : AppWidgetProvider() {
+    override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
         ids.forEach { manager.updateAppWidget(it, views(context)) }
     }
 
     companion object {
-        /** Redraw every widget, as after the entries changed. */
-        fun refresh(context: Context) {
-            val manager = AppWidgetManager.getInstance(context)
-            val ids = manager.getAppWidgetIds(ComponentName(context, CaptureWidget::class.java))
-            if (ids.isNotEmpty()) ids.forEach { manager.updateAppWidget(it, views(context)) }
-        }
+        fun refresh(context: Context) = Widgets.update(context, SmallWidget::class.java) { views(context) }
 
         private fun views(context: Context): RemoteViews {
-            val open = PendingIntent.getActivity(
-                context, 1, Intent(context, CaptureActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                PendingIntent.FLAG_IMMUTABLE,
-            )
-            val voice = PendingIntent.getActivity(
-                context, 2,
-                Intent(context, CaptureActivity::class.java)
-                    .putExtra(CaptureActivity.EXTRA_VOICE, true)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                PendingIntent.FLAG_IMMUTABLE,
-            )
-
-            val (pending, attention) = EntryStore.counts(context)
-            val status = listOfNotNull(
-                if (pending > 0) context.getString(R.string.widget_pending, pending) else null,
-                if (attention > 0) context.getString(R.string.widget_attention, attention) else null,
-            ).joinToString(" · ")
-
-            val settings = Settings(context)
-            val systemDark = (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
-            val dark = settings.mode.isDark(systemDark)
-            val neutrals = Neutrals.of(dark)
-            val statusColor = if (attention > 0) (if (dark) 0xFFF2B8B5 else 0xFFB3261E) else accentColor(context, dark, settings.accent)
-
-            return RemoteViews(context.packageName, R.layout.widget_capture).apply {
-                setInt(R.id.widget_root, "setBackgroundResource", if (dark) R.drawable.widget_background_dark else R.drawable.widget_background)
-                setTextColor(R.id.widget_hint, neutrals.muted.toInt())
-                setTextColor(R.id.widget_status, statusColor.toInt())
-                setInt(R.id.widget_voice, "setColorFilter", neutrals.muted.toInt())
-                setOnClickPendingIntent(R.id.widget_field, open)
-                setOnClickPendingIntent(R.id.widget_voice, voice)
-                setTextViewText(R.id.widget_status, status)
-                setViewVisibility(R.id.widget_status, if (status.isEmpty()) android.view.View.GONE else android.view.View.VISIBLE)
+            val look = Widgets.look(context)
+            return RemoteViews(context.packageName, R.layout.widget_small).apply {
+                setInt(R.id.widget_root, "setBackgroundResource", if (look.dark) R.drawable.widget_round_dark else R.drawable.widget_round)
+                setInt(R.id.widget_icon, "setColorFilter", look.accent.toInt())
+                setOnClickPendingIntent(R.id.widget_root, Widgets.capture(context, voice = false))
             }
+        }
+    }
+}
+
+/**
+ * The field of [CaptureWidget] with the PC's latest entries below it. They are
+ * fetched every 30 minutes, when the app loads the timeline, and after an
+ * entry reaches the PC, and kept on the phone only while such a widget is on
+ * the home screen.
+ */
+class LargeWidget : AppWidgetProvider() {
+    override fun onEnabled(context: Context) {
+        RecentStore.startPeriodic(context)
+    }
+
+    override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
+        ids.forEach { manager.updateAppWidget(it, views(context)) }
+        // Also after a reboot or an update of the app, which may have dropped the work.
+        RecentStore.startPeriodic(context)
+        if (RecentStore.load(context) == null) RecentStore.fetchSoon(context)
+    }
+
+    override fun onDisabled(context: Context) {
+        RecentStore.stop(context)
+    }
+
+    companion object {
+        private val ROWS = listOf(
+            Triple(R.id.recent_1, R.id.recent_1_when, R.id.recent_1_text),
+            Triple(R.id.recent_2, R.id.recent_2_when, R.id.recent_2_text),
+            Triple(R.id.recent_3, R.id.recent_3_when, R.id.recent_3_text),
+        )
+
+        fun present(context: Context): Boolean = Widgets.ids(context, LargeWidget::class.java).isNotEmpty()
+
+        fun refresh(context: Context) = Widgets.update(context, LargeWidget::class.java) { views(context) }
+
+        private fun views(context: Context): RemoteViews {
+            val look = Widgets.look(context)
+            val recent = RecentStore.load(context)
+            val entries = recent?.entries.orEmpty().take(Recents.COUNT)
+            val timeline = PendingIntent.getActivity(
+                context, 3, Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                PendingIntent.FLAG_IMMUTABLE,
+            )
+            return Widgets.field(context, R.layout.widget_large).apply {
+                setInt(R.id.widget_divider, "setBackgroundColor", look.neutrals.line.toInt())
+                ROWS.forEachIndexed { i, (row, whenId, textId) ->
+                    val entry = entries.getOrNull(i)
+                    setViewVisibility(row, if (entry == null) View.GONE else View.VISIBLE)
+                    if (entry != null) {
+                        setTextViewText(whenId, whenLabel(context, entry))
+                        setTextViewText(textId, entry.text)
+                        setTextColor(whenId, look.neutrals.muted.toInt())
+                        setTextColor(textId, look.neutrals.text.toInt())
+                    }
+                    setOnClickPendingIntent(row, timeline)
+                }
+                val note = when {
+                    recent == null -> context.getString(R.string.widget_fetching)
+                    entries.isEmpty() -> context.getString(R.string.widget_no_entries)
+                    else -> context.getString(R.string.widget_updated, clock(recent.fetchedAt))
+                }
+                setTextViewText(R.id.widget_updated, note)
+                setTextColor(R.id.widget_updated, look.neutrals.muted.toInt())
+                setOnClickPendingIntent(R.id.widget_updated, timeline)
+            }
+        }
+
+        /** "14:30", "어제 14:30" or "11. 5. 14:30". */
+        private fun whenLabel(context: Context, entry: TimelineEntry): String {
+            val time = normalTime(entry.time)
+            return when (val day = DayName.of(entry.date, LocalDate.now())) {
+                DayName.Today, null -> time
+                DayName.Yesterday -> "${context.getString(R.string.widget_yesterday)} $time"
+                is DayName.Other -> {
+                    val pattern = DateFormat.getBestDateTimePattern(Locale.getDefault(), "Md")
+                    "${day.day.format(DateTimeFormatter.ofPattern(pattern, Locale.getDefault()))} $time"
+                }
+            }
+        }
+
+        private fun clock(millis: Long): String {
+            val at = Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault())
+            val pattern = if (at.toLocalDate() == LocalDate.now()) "HH:mm" else "M/d HH:mm"
+            return at.format(DateTimeFormatter.ofPattern(pattern))
+        }
+    }
+}
+
+/** What the widgets share: their look, the field, and opening the capture window. */
+internal object Widgets {
+    class Look(val dark: Boolean, val neutrals: Neutrals, val accent: Long)
+
+    fun look(context: Context): Look {
+        val settings = Settings(context)
+        val systemDark = (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+        val dark = settings.mode.isDark(systemDark)
+        return Look(dark, Neutrals.of(dark), accentColor(context, dark, settings.accent))
+    }
+
+    fun ids(context: Context, provider: Class<*>): IntArray =
+        AppWidgetManager.getInstance(context).getAppWidgetIds(ComponentName(context, provider))
+
+    fun update(context: Context, provider: Class<*>, views: () -> RemoteViews) {
+        val ids = ids(context, provider)
+        if (ids.isEmpty()) return
+        val manager = AppWidgetManager.getInstance(context)
+        ids.forEach { manager.updateAppWidget(it, views()) }
+    }
+
+    fun capture(context: Context, voice: Boolean): PendingIntent = PendingIntent.getActivity(
+        context, if (voice) 2 else 1,
+        Intent(context, CaptureActivity::class.java)
+            .putExtra(CaptureActivity.EXTRA_VOICE, voice)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        PendingIntent.FLAG_IMMUTABLE,
+    )
+
+    /** The field-like row with the microphone and what is waiting; [layout] holds it. */
+    fun field(context: Context, layout: Int): RemoteViews {
+        val look = look(context)
+        val (pending, attention) = EntryStore.counts(context)
+        val status = listOfNotNull(
+            if (pending > 0) context.getString(R.string.widget_pending, pending) else null,
+            if (attention > 0) context.getString(R.string.widget_attention, attention) else null,
+        ).joinToString(" · ")
+        val statusColor = if (attention > 0) (if (look.dark) 0xFFF2B8B5 else 0xFFB3261E) else look.accent
+
+        return RemoteViews(context.packageName, layout).apply {
+            setInt(R.id.widget_root, "setBackgroundResource", if (look.dark) R.drawable.widget_background_dark else R.drawable.widget_background)
+            setTextColor(R.id.widget_hint, look.neutrals.muted.toInt())
+            setTextColor(R.id.widget_status, statusColor.toInt())
+            setInt(R.id.widget_voice, "setColorFilter", look.neutrals.muted.toInt())
+            setOnClickPendingIntent(R.id.widget_field, capture(context, voice = false))
+            setOnClickPendingIntent(R.id.widget_voice, capture(context, voice = true))
+            setTextViewText(R.id.widget_status, status)
+            setViewVisibility(R.id.widget_status, if (status.isEmpty()) View.GONE else View.VISIBLE)
         }
     }
 }

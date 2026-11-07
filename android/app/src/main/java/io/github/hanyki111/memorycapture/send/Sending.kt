@@ -40,6 +40,7 @@ import io.github.hanyki111.memorycapture.core.PcArgs
 import io.github.hanyki111.memorycapture.core.recordArgs
 import io.github.hanyki111.memorycapture.data.EntryStore
 import io.github.hanyki111.memorycapture.data.PhoneKey
+import io.github.hanyki111.memorycapture.data.RecentStore
 import io.github.hanyki111.memorycapture.data.Settings
 import io.github.hanyki111.memorycapture.ssh.Ssh
 import kotlinx.coroutines.Dispatchers
@@ -116,7 +117,10 @@ object Sender {
                         return false
                     }
                     outcome !is Outcome.Ran -> return true
-                    next.state == State.SENT -> Notifier.toast(context, context.getString(R.string.toast_already_recorded, entry.time))
+                    next.state == State.SENT -> {
+                        Notifier.toast(context, context.getString(R.string.toast_already_recorded, entry.time))
+                        RecentStore.fetchSoon(context)
+                    }
                     next.state == State.ATTENTION ->
                         Notifier.attention(context, context.getString(R.string.notify_check_failed, entry.text.take(40)))
                 }
@@ -139,6 +143,7 @@ object Sender {
                 reply is RecordReply.Recorded -> {
                     Notifier.toast(context, context.getString(R.string.toast_recorded, reply.time ?: entry.time))
                     reply.notices.forEach { Notifier.notice(context, it) }
+                    RecentStore.fetchSoon(context)
                 }
                 reply is RecordReply.Refused -> Notifier.attention(context, reply.message.ifEmpty { reply.code })
                 reply is RecordReply.Unreadable && next.state == State.ATTENTION ->

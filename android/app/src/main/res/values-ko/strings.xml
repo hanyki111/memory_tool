@@ -78,6 +78,12 @@
     <string name="today">오늘</string>
     <string name="shortcut_record">기록하기</string>
     <string name="shortcut_record_voice">음성으로 기록하기</string>
+    <string name="widget_small_label">기록 (작게)</string>
+    <string name="widget_large_label">기록과 최근 타임라인</string>
+    <string name="widget_yesterday">어제</string>
+    <string name="widget_updated">%1$s 갱신</string>
+    <string name="widget_fetching">최근 기록을 받아 오는 중…</string>
+    <string name="widget_no_entries">최근 7일 동안 기록이 없습니다</string>
     <string name="settings">설정</string>
     <string name="back">뒤로</string>
     <string name="retry">다시 시도</string>
