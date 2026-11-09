@@ -66,7 +66,12 @@
   const fromInput = el("input", { type: "date", "aria-label": t.from });
   const toInput = el("input", { type: "date", "aria-label": t.to });
 
-  const reviewButton = el("button", { onclick: () => vscode.postMessage({ type: "review" }) });
+  const reviewButton = el("button", {
+    text: t.review,
+    title: t.reviewTitle,
+    onclick: () => vscode.postMessage({ type: "review" }),
+  });
+  const reviewFromButton = el("button", { onclick: () => vscode.postMessage({ type: "reviewFrom" }) });
   const widenButton = config.inEditor
     ? null
     : el("button", { text: t.widen, onclick: () => vscode.postMessage({ type: "widen" }) });
@@ -84,7 +89,8 @@
       el("button", { text: t.thisWeek, onclick: () => quick("thisWeek") }),
       el("button", { text: t.lastWeek, onclick: () => quick("lastWeek") }),
       el("button", { text: t.thisMonth, onclick: () => quick("thisMonth") }),
-      el("button", { text: t.latest, onclick: () => vscode.postMessage({ type: "latest" }) })
+      el("button", { text: t.latest, onclick: () => vscode.postMessage({ type: "latest" }) }),
+      reviewFromButton
     )
   );
 
@@ -241,13 +247,15 @@
       list.append(empty);
       status.textContent = "";
       reviewButton.hidden = true;
+      reviewFromButton.hidden = true;
       return;
     }
 
     reviewButton.hidden = false;
+    reviewFromButton.hidden = !model.loaded;
     if (model.loaded) {
-      reviewButton.textContent = fill(t.review, { date: model.loaded.from });
-      reviewButton.title = fill(t.reviewTitle, { date: model.loaded.from });
+      reviewFromButton.textContent = fill(t.reviewFrom, { date: model.loaded.from });
+      reviewFromButton.title = fill(t.reviewFromTitle, { date: model.loaded.from });
     }
 
     const busyText = { loading: t.loading, searching: t.searching, recording: t.recording }[model.busy];

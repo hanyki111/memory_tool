@@ -11,7 +11,7 @@ import typer
 
 from memory_tool.commands.common import app, console
 from memory_tool.commands import json_output
-from memory_tool.review import session, store, writer
+from memory_tool.review import collector, session, store, writer
 from memory_tool.review.store import Item, Review, ReviewError
 from memory_tool.review.text import say
 from memory_tool.utils.paths import display_path, get_base_path, get_project_root
@@ -488,6 +488,17 @@ def review(
             _print(say(
                 f"Review {current.name} is in progress, so --since is ignored.",
                 f"리뷰 {current.name}이(가) 진행 중이므로 --since를 무시합니다.",
+            ))
+
+        if (
+            since_date and current and current.is_done
+            and since_date > collector.parse_time(current.end)
+        ):
+            _print(say(
+                f"Entries between {current.end} and {since} will not be reviewed: "
+                "the next review starts where this one ends.",
+                f"{current.end}부터 {since} 사이의 기록은 리뷰되지 않습니다. "
+                "다음 리뷰는 이번 리뷰가 끝난 곳부터 시작합니다.",
             ))
 
         if not (current and not current.is_done):

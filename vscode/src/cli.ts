@@ -239,8 +239,14 @@ export class MemoryToolCli {
     return (await this.run(["search", mode, "--no-cache", "--json", "--", query], timeout)) as unknown as SearchResult;
   }
 
-  /** The command line that starts a review from a date, for a terminal. */
-  reviewCommand(since: string): string[] {
-    return [this.python, "-m", "memory_tool", "review", "--since", since];
+  /**
+   * The command line that starts a review, for a terminal.
+   *
+   * Without a date the review covers what the last one did not, which is the
+   * only way to neither skip entries nor repeat them.
+   */
+  reviewCommand(since: string | null = null): string[] {
+    const command = [this.python, "-m", "memory_tool", "review"];
+    return since ? [...command, "--since", since] : command;
   }
 }

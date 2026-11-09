@@ -47,5 +47,6 @@ Use `--by` when creating the document, or edit the field when taking over an exi
 
 - Copy a guide's questions into the document as headings.
 - Add empty sections or TODO markers.
-- Rewrite the user's sentences unasked. Point at the problem and let them fix it.
+- Rewrite sentences the user wrote in the document unasked. Point at the problem and let them fix it.
+- Paste what the user said in chat into the document as is. Chat is not yet writing: tidy spoken endings and repetition, adding and removing nothing, show the result, and write it after they confirm.
 - Change a judgment document's conclusion after the fact. A new judgment gets its own document, linked to the old one.

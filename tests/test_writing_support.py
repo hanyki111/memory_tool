@@ -13,6 +13,7 @@ from memory_tool.core.writing_guides import (
     guide_file_name,
     read_all_guides,
     read_guide,
+    read_guide_file,
 )
 from memory_tool.llm.client import LLMClient
 from memory_tool.utils.frontmatter import Frontmatter
@@ -314,3 +315,12 @@ def test_module_help_text_describes_one_document():
 
     assert "mmodule edit" not in text
     assert "mmodule guide" in text
+
+
+@pytest.mark.parametrize("guide", ["common", "review-reflection"])
+def test_guides_do_not_paste_chat_answers(guide):
+    text = read_guide_file(guide)
+
+    assert "그대로 붙여 넣지 않습니다" in text
+    assert "내용을 더하거나 빼지 않" in text
+    assert "사용자의 문장 그대로" not in text

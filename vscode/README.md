@@ -19,8 +19,9 @@ found by the same rules as the CLI.
   first, then documents. A timeline hit opens its week with
   the entry marked; a document hit opens the file at that line. **Back to the timeline** returns to where you
   were.
-- **Review:** the review button opens a terminal and runs `mreview --since <first day on screen>`, so you can
-  review exactly what you have scrolled through.
+- **Review:** the **Review** button opens a terminal and runs `mreview`, which covers the entries since the last
+  review. To review from another date, open **Period** and use **Review from <date>**. It runs
+  `mreview --since <first day on screen>`, from that day until now.
 - **Side bar and editor tab:** the Memory Tool icon in the activity bar opens the side bar view; **Open wide** (or
   **Memory Tool: Open Timeline in Editor**) opens the same screen as an editor tab. Both stay in step: an entry
   recorded in one, in a terminal with `m`, or by an agent appears in all of them.

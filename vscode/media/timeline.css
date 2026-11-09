@@ -2,13 +2,14 @@
 
 :root {
   --gap: 6px;
+  --surface: var(--vscode-sideBar-background, var(--vscode-editor-background));
 }
 
 body {
   margin: 0;
   padding: 0 12px 24px;
   color: var(--vscode-foreground);
-  background: var(--vscode-sideBar-background, var(--vscode-editor-background));
+  background: var(--surface);
   font-family: var(--vscode-font-family);
   font-size: var(--vscode-font-size);
   line-height: 1.5;
@@ -19,7 +20,8 @@ header {
   top: 0;
   z-index: 1;
   padding: 10px 0 8px;
-  background: inherit;
+  /* Not "inherit": its parent is transparent, and entries would show through. */
+  background: var(--surface);
   border-bottom: 1px solid var(--vscode-panel-border, transparent);
   display: flex;
   flex-direction: column;

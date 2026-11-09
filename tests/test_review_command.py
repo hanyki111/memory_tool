@@ -615,3 +615,31 @@ class TestReflection:
         store.save_review(store.load_review(review.path))
 
         assert "Keep me." in review.path.read_text(encoding="utf-8")
+
+
+class TestSinceAfterLastReview:
+    GAP_WARNINGS = ("will not be reviewed", "리뷰되지 않습니다")
+
+    def warned(self, result):
+        output = " ".join(result.output.split())
+        return any(warning in output for warning in self.GAP_WARNINGS)
+
+    def finish_a_review(self, base, end):
+        review = store.start_review(base, "2026-10-01", "2026-09-01T00:00", end, [])
+        review.status = store.STATUS_DONE
+        store.save_review(review)
+
+    def test_a_later_date_warns_about_the_gap(self, base):
+        self.finish_a_review(base, "2026-10-01T12:00")
+
+        assert self.warned(run("--since", "2030-01-01"))
+
+    def test_an_earlier_date_leaves_nothing_out_and_does_not_warn(self, base):
+        self.finish_a_review(base, "2026-10-01T12:00")
+
+        assert not self.warned(run("--since", "2026-09-15"))
+
+    def test_no_date_does_not_warn(self, base):
+        self.finish_a_review(base, "2026-10-01T12:00")
+
+        assert not self.warned(run())

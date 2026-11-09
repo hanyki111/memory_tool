@@ -31,7 +31,7 @@ export interface ScreenHost {
   post(message: unknown): void;
   openFile(path: string, line: number): void;
   notify(notices: Notice[]): void;
-  review(since: string): void;
+  review(since: string | null): void;
   widen(): void;
   /** Tell the other screens that the timeline changed */
   recorded(): void;
@@ -111,6 +111,9 @@ export class Screen {
         this.host.openFile(String(message.path), Number(message.line) || 1);
         return;
       case "review":
+        this.host.review(null);
+        return;
+      case "reviewFrom":
         this.host.review(reviewSince(this.state));
         return;
       case "widen":
