@@ -1,12 +1,9 @@
 package io.github.hanyki111.memorycapture
 
-import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
-import android.speech.RecognizerIntent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -27,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -40,8 +38,10 @@ import io.github.hanyki111.memorycapture.data.EntryStore
 import io.github.hanyki111.memorycapture.data.Settings
 import io.github.hanyki111.memorycapture.send.Sender
 import io.github.hanyki111.memorycapture.ui.AppTheme
+import io.github.hanyki111.memorycapture.ui.TagChips
+import io.github.hanyki111.memorycapture.ui.recentTags
+import io.github.hanyki111.memorycapture.ui.rememberVoiceInput
 import kotlinx.coroutines.delay
-import java.util.Locale
 
 /**
  * The small window that takes one entry: from the app icon, the tile, the
@@ -58,13 +58,20 @@ class CaptureActivity : ComponentActivity() {
     /** Set while a spoken entry is shown before it is sent */
     private var countingDown by mutableStateOf(false)
 
-    private val speech = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        val heard = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
-        if (result.resultCode == Activity.RESULT_OK && !heard.isNullOrBlank()) {
-            text = heard
-            countingDown = Settings(this).voiceDelaySeconds > 0
-            if (!countingDown) send()
-        }
+    /** Counts requests to listen, from the intent; the window starts listening on each. */
+    private var voiceRequests by mutableIntStateOf(0)
+
+    /** The text came from speech: recent tags are offered */
+    private var spoken by mutableStateOf(false)
+
+    /** Restarts the countdown, as after a tag was added */
+    private var restart by mutableIntStateOf(0)
+
+    private fun heard(words: String) {
+        text = words
+        spoken = true
+        countingDown = Settings(this).voiceDelaySeconds > 0
+        if (!countingDown) send()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -76,19 +83,28 @@ class CaptureActivity : ComponentActivity() {
                 intent.getStringExtra(Intent.EXTRA_TEXT),
             ).joinToString(" ").trim()
         }
-        if (savedInstanceState == null && wantsVoice(intent)) listen()
+        if (savedInstanceState == null && wantsVoice(intent)) voiceRequests++
+        val tags = recentTags(this)
 
         setContent {
             AppTheme {
+                val voice = rememberVoiceInput(::heard)
+                LaunchedEffect(voiceRequests) { if (voiceRequests > 0) voice.start() }
                 CaptureWindow(
                     text = text,
                     onText = { text = it; countingDown = false },
                     countingDown = countingDown,
+                    restart = restart,
                     delaySeconds = Settings(this).voiceDelaySeconds,
                     onStopCountdown = { countingDown = false },
+                    tags = if (spoken) tags else emptyList(),
+                    onTag = { text = it; if (countingDown) restart++ },
+                    listening = voice.listening,
+                    partial = voice.partial,
+                    missed = voice.missed,
                     onSend = ::send,
-                    onVoice = ::listen,
-                    onCancel = ::finish,
+                    onVoice = voice::start,
+                    onCancel = { voice.stop(); finish() },
                 )
             }
         }
@@ -98,18 +114,11 @@ class CaptureActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        if (wantsVoice(intent) && !countingDown) listen()
+        if (wantsVoice(intent) && !countingDown) voiceRequests++
     }
 
     private fun wantsVoice(intent: Intent?) =
         intent?.getBooleanExtra(EXTRA_VOICE, false) == true || intent?.action == ACTION_RECORD_VOICE
-
-    private fun listen() {
-        val request = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
-            .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            .putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
-        runCatching { speech.launch(request) }
-    }
 
     private fun send() {
         val entry = text.trim()
@@ -131,8 +140,14 @@ private fun CaptureWindow(
     text: String,
     onText: (String) -> Unit,
     countingDown: Boolean,
+    restart: Int,
     delaySeconds: Int,
     onStopCountdown: () -> Unit,
+    tags: List<String>,
+    onTag: (String) -> Unit,
+    listening: Boolean,
+    partial: String,
+    missed: Boolean,
     onSend: () -> Unit,
     onVoice: () -> Unit,
     onCancel: () -> Unit,
@@ -141,7 +156,7 @@ private fun CaptureWindow(
     var progress by remember { mutableFloatStateOf(0f) }
 
     // A spoken entry is shown for a moment, then sent unless the person touches it.
-    LaunchedEffect(countingDown) {
+    LaunchedEffect(countingDown, restart) {
         if (!countingDown) return@LaunchedEffect
         val steps = delaySeconds * 20
         for (step in 0..steps) {
@@ -154,7 +169,16 @@ private fun CaptureWindow(
 
     Surface(shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceContainer, shadowElevation = 6.dp) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (countingDown) {
+            if (listening) {
+                // In-app speech: what is heard so far.
+                Text(
+                    partial.ifEmpty { stringResource(R.string.voice_listening) },
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (partial.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            } else if (countingDown) {
                 Text(
                     text,
                     style = MaterialTheme.typography.bodyLarge,
@@ -162,6 +186,7 @@ private fun CaptureWindow(
                 )
                 LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
                 Text(stringResource(R.string.capture_tap_to_edit), style = MaterialTheme.typography.bodySmall)
+                TagChips(tags, text, onTag)
             } else {
                 OutlinedTextField(
                     value = text,
@@ -172,9 +197,11 @@ private fun CaptureWindow(
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                     keyboardActions = KeyboardActions(onSend = { onSend() }),
                 )
+                TagChips(tags, text, onText)
+                if (missed) Text(stringResource(R.string.voice_missed), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick = onVoice) { Text(stringResource(R.string.capture_voice)) }
+                TextButton(onClick = onVoice) { Text(stringResource(if (listening) R.string.voice_stop else R.string.capture_voice)) }
                 Spacer(Modifier.weight(1f))
                 TextButton(onClick = onCancel) { Text(stringResource(R.string.cancel)) }
                 Button(onClick = onSend, enabled = text.isNotBlank()) { Text(stringResource(R.string.capture_send)) }

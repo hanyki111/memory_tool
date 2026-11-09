@@ -96,6 +96,13 @@
     <string name="main_key_help_posix">Add this line to ~/.ssh/authorized_keys of that user on the PC.</string>
     <string name="main_trust_body_posix">Compare it with the PC: ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub. Trust it only if they are the same.</string>
     <string name="main_base_help_posix">The folder on the PC where you run m, such as /home/me/notes. python3 must be on the PATH.</string>
+    <string name="voice_listening">Listening…</string>
+    <string name="voice_missed">Nothing was heard. Tap Speak to try again.</string>
+    <string name="voice_stop">Stop</string>
+    <string name="voice_way">Speech input</string>
+    <string name="voice_window">Google\'s window</string>
+    <string name="voice_in_app">Inside the app</string>
+    <string name="voice_way_help">Inside the app, the phone\'s default speech service listens (Samsung\'s, where the phone offers it and it is chosen in the phone\'s settings) and shows what it hears. It asks for the microphone once. Google\'s window is used when it fails.</string>
     <string name="settings">Settings</string>
     <string name="back">Back</string>
     <string name="retry">Try again</string>
