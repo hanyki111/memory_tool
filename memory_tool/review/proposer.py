@@ -7,7 +7,7 @@ with no entries, or a document that does not exist, is discarded.
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple, Sequence
 
 from memory_tool.core.writing_guides import DOCUMENT_TYPES, GuideError, read_guide_file
 from memory_tool.review.collector import Entry
@@ -87,6 +87,7 @@ def build_prompt(
     entries: List[Entry],
     documents: List[Tuple[str, str]],
     rejected: List[str],
+    reflection: str = "",
 ) -> str:
     """Build the user message for the LLM."""
     document_lines = [
@@ -98,6 +99,8 @@ def build_prompt(
         "<rejected_topics>\n" + ("\n".join(f"- {title}" for title in rejected) or "(none)") + "\n</rejected_topics>",
         "<entries>\n" + format_entries(entries) + "\n</entries>",
     ]
+    if reflection:
+        sections.append("<reflection>\n" + reflection + "\n</reflection>")
     return "\n\n".join(sections)
 
 
@@ -227,19 +230,11 @@ def add_split_notes(base: Path, items: List[Item]) -> None:
             item.split_note = {"lines": info.line_count, "sections": info.section_count}
 
 
-def propose(base: Path, entries: List[Entry], client: Any = None) -> Tuple[List[Item], int]:
-    """Ask for proposals.
-
-    Args:
-        base: The knowledge base folder
-        entries: The entries to judge
-        client: An LLM client. Defaults to the configured provider.
-
-    Returns:
-        The proposals, and how many further candidates were left out.
+def check_size(entries: List[Entry]) -> None:
+    """Refuse a period too long to send.
 
     Raises:
-        ReviewError: If the period is too long, or no usable answer came back.
+        ReviewError: If the period is too long.
     """
     if len(format_entries(entries).encode("utf-8")) > MAX_ENTRY_BYTES:
         raise ReviewError(
@@ -250,8 +245,33 @@ def propose(base: Path, entries: List[Entry], client: Any = None) -> Tuple[List[
             code="invalid_argument",
         )
 
+
+def propose(
+    base: Path,
+    entries: List[Entry],
+    client: Any = None,
+    reflection: str = "",
+    exclude: Sequence[str] = (),
+) -> Tuple[List[Item], int]:
+    """Ask for proposals.
+
+    Args:
+        base: The knowledge base folder
+        entries: The entries to judge
+        client: An LLM client. Defaults to the configured provider.
+        reflection: What the user wrote about the period
+        exclude: Titles already settled in this review
+
+    Returns:
+        The proposals, and how many further candidates were left out.
+
+    Raises:
+        ReviewError: If the period is too long, or no usable answer came back.
+    """
+    check_size(entries)
+
     documents = document_list(base)
-    rejected = rejected_titles(base)
+    rejected = [*rejected_titles(base), *exclude]
 
     try:
         criteria = read_guide_file(CRITERIA_GUIDE, base)
@@ -261,15 +281,15 @@ def propose(base: Path, entries: List[Entry], client: Any = None) -> Tuple[List[
             client = LLMClient()
 
         answer = client.generate(
-            build_prompt(entries, documents, rejected),
+            build_prompt(entries, documents, rejected, reflection),
             system_prompt=f"{criteria}\n\n{_ANSWER_FORMAT}",
         )
         items, left_out = parse_proposals(answer, entries, documents, rejected)
     except (GuideError, RuntimeError, ValueError, ImportError, OSError) as e:
         raise ReviewError(
             say(
-                f"Could not get proposals, so the review did not start: {e}",
-                f"제안을 받지 못해 리뷰를 시작하지 않았습니다: {e}",
+                f"Could not get proposals: {e}",
+                f"후보를 받지 못했습니다: {e}",
             ),
             code="llm_failed",
         )

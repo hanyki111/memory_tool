@@ -25,6 +25,17 @@ from memory_tool.utils.module_docs import resolve_module_document
 SOLO = "solo"
 REFLECTION_GUIDE = "review-reflection"
 
+ADD_ITEM_HELP = """# Adding something to keep
+
+Run one command per item, after the user has confirmed it. If mreview is not found,
+use: python -m memory_tool review add
+
+    mreview add "<what to keep>" --why "<why>" --evidence YYYY-MM-DD --type <참고|이해|방법|판단>
+    mreview add "<what to keep>" --target "<document>" --why "<why>" --evidence YYYY-MM-DD
+    mreview add "<the question>" --target "<document>" --heading "열린 질문" --evidence YYYY-MM-DD
+
+To find a document: mmodule list, or ms "<topic>". Without --target it is a new document."""
+
 WRITE_PROCEDURE = Path(__file__).parent.parent / "templates" / "skills" / "mt-write" / "SKILL.md"
 
 
@@ -153,6 +164,8 @@ def _task_text(base: Path, item: Item) -> str:
         document = resolve_module_document(Path(base) / "modules" / str(item.target))
         lines.append(f"Update this existing document: {document or item.target}")
         lines.append("Do not create a new document.")
+        if item.heading:
+            lines.append(f'Write it under the heading "{item.heading}", adding the heading if it is missing.')
     else:
         lines.append(f"This is a new document. Settle its path with the user, then run: mmodule create \"<path>\" --type {item.doc_type or '<type>'} --desc \"<one sentence>\"")
 
@@ -235,6 +248,7 @@ def reflect_with_tool(tool: WritingTool, base: Path, root: Path, review: Review)
     content = "\n\n".join([
         "# Your instructions\n\nFollow the guide below to help the user reflect on this period.",
         read_guide_file(REFLECTION_GUIDE, base),
+        ADD_ITEM_HELP,
         "# The period\n\n"
         f"From {review.start} to {review.end}.\n"
         f"Write the user's answers in {_shown_path(review.path, root)}, under its last heading.",

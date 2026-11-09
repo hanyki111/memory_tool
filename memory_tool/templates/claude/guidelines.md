@@ -174,7 +174,7 @@ Context file: `.claude/memory-context.md`
 
 ### Periodic Check
 ```bash
-mreview                  # Move what is worth keeping into documents, and reflect
+mreview                  # Reflect on recent entries and settle what to keep
 mweek                    # Read the week's timeline
 mcheck                   # Verify paths in documents
 mmodule audit            # Split and merge candidates

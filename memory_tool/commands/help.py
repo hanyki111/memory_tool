@@ -339,13 +339,10 @@ AI를 사용하여 메모리 내용에 대한 질문에 답변합니다.
     "review": {
         "en": {
             "name": "mreview / review",
-            "summary": "Go over recent entries: moves into documents, and an optional reflection",
-            "description": """A review goes over the entries since the last one, in two steps:
+            "summary": "Reflect on recent entries and settle what to keep in documents",
+            "description": """A review is a reflection on the entries since the last one. Settling what to keep is the reflection.
 
-- Moves: the AI proposes what is worth finding again later. The result goes into documents. This is about what you know.
-- Reflection (optional): you write about how the period went. The result stays in the review file. This is about how you worked.
-
-Reads the entries since the last review and proposes up to five things to move into documents, updates of existing documents first.
+First choose how to reflect: in conversation with an AI CLI, on your own in the review file, or by only seeing the AI's candidates. In conversation, the AI adds what you confirm. On your own, the AI reads what you wrote and the entries, and proposes up to five things to keep, updates of existing documents first.
 
 For each proposal choose: write now, write later, or reject. While more than five items remain open, nothing can be put off. Writing opens a menu of the installed AI CLIs (Claude Code, Codex, Antigravity) and writing on your own. At the end you may reflect on the period, or skip it.
 
@@ -362,6 +359,7 @@ Reviews are saved as reviews/YYYY-MM-DD.md. A notice appears on the day's first 
                 "mreview --json                # For editors and scripts",
                 "mreview set 2 later           # Choose without being asked (prints JSON)",
                 "mreview reflection skipped    # Settle the reflection (prints JSON)",
+                "mreview add \"Topic\" --why \"Why\"  # Add something to keep",
             ],
             "options": [
                 ("--since DATE", "Start of the period, for a new review (first review: last 14 days)"),
@@ -369,20 +367,17 @@ Reviews are saved as reviews/YYYY-MM-DD.md. A notice appears on the day's first 
                 ("--json", "Print as JSON without asking anything"),
                 ("config: review.notice", "enabled, min_days (7), min_entries (10)"),
                 ("config: review.writer", "The tool offered by default"),
-                ("config: review.reflection_questions", "Fixed questions for writing on your own"),
+                ("config: review.reflection_questions", "Fixed questions for reflecting on your own"),
                 ("guides/review-proposals.md", "Your own criteria for proposals"),
                 ("guides/review-reflection.md", "Your own guide for reflecting with an AI"),
             ],
         },
         "ko": {
             "name": "mreview / review",
-            "summary": "최근 기록 살펴보기: 문서로 옮기기와 선택 사항인 돌아보기",
-            "description": """리뷰는 지난 리뷰 이후의 기록을 두 단계로 살펴보는 일입니다.
+            "summary": "최근 기록을 회고하고 문서로 남길 것을 정리",
+            "description": """리뷰는 지난 리뷰 이후의 기록을 회고하는 일입니다. 남길 것을 정리하는 일이 곧 회고입니다.
 
-- 옮기기: 나중에 다시 찾아볼 내용을 AI가 제안합니다. 결과는 문서에 남습니다. 무엇을 알게 되었는지를 다룹니다.
-- 돌아보기(선택): 이 기간에 어떻게 일했는지 직접 씁니다. 결과는 리뷰 파일에 남습니다. 어떻게 일했는지를 다룹니다.
-
-지난 리뷰 이후의 기록을 읽고, 문서로 옮길 내용을 다섯 건까지 제안합니다. 기존 문서 갱신을 먼저 제안합니다.
+먼저 회고 방법을 고릅니다. AI CLI와 대화하거나, 리뷰 파일에 혼자 쓰거나, AI 후보만 볼 수 있습니다. 대화에서는 사용자가 확인한 것을 AI가 추가합니다. 혼자 쓰면 AI가 글과 기록을 읽고 남길 것을 다섯 건까지 제안하며, 기존 문서 갱신을 먼저 제안합니다.
 
 제안마다 지금 쓰기, 나중에 쓰기, 거절 중에서 고릅니다. 남은 항목이 다섯 건을 넘는 동안에는 미룰 수 없습니다. 쓰기를 고르면 설치된 AI CLI(Claude Code, Codex, Antigravity)와 혼자 쓰기를 메뉴로 보여 줍니다. 마지막으로 그 기간을 돌아보거나 건너뜁니다.
 
@@ -398,7 +393,8 @@ Reviews are saved as reviews/YYYY-MM-DD.md. A notice appears on the day's first 
                 "mreview done 2                # 2번 항목을 썼음으로 표시",
                 "mreview --json                # 편집기와 스크립트용",
                 "mreview set 2 later           # 묻지 않고 선택 (JSON 출력)",
-                "mreview reflection skipped    # 돌아보기 처리 (JSON 출력)",
+                "mreview reflection skipped    # 회고 처리 (JSON 출력)",
+                "mreview add \"주제\" --why \"이유\"  # 남길 것 추가",
             ],
             "options": [
                 ("--since 날짜", "새 리뷰의 시작일 (첫 리뷰는 최근 14일)"),
@@ -406,9 +402,9 @@ Reviews are saved as reviews/YYYY-MM-DD.md. A notice appears on the day's first 
                 ("--json", "묻지 않고 JSON으로 출력"),
                 ("설정: review.notice", "enabled, min_days (7), min_entries (10)"),
                 ("설정: review.writer", "기본으로 제시할 도구"),
-                ("설정: review.reflection_questions", "혼자 쓸 때의 고정 질문"),
+                ("설정: review.reflection_questions", "혼자 회고할 때의 고정 질문"),
                 ("guides/review-proposals.md", "제안 기준을 직접 정할 때"),
-                ("guides/review-reflection.md", "AI와 돌아볼 때의 가이드를 직접 정할 때"),
+                ("guides/review-reflection.md", "AI와 회고할 때의 가이드를 직접 정할 때"),
             ],
         },
     },

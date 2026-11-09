@@ -44,7 +44,7 @@ REFLECTION_WRITTEN = "written"
 REFLECTION_SKIPPED = "skipped"
 
 #: Either may head the section, whichever language wrote the file.
-REFLECTION_HEADINGS = ("## 돌아보기", "## Reflection")
+REFLECTION_HEADINGS = ("## 회고", "## 돌아보기", "## Reflection")
 
 _REVIEW_FILE = re.compile(r"^(\d{4}-\d{2}-\d{2})(?:-(\d+))?\.md$")
 _REFLECTION_START = re.compile(
@@ -76,6 +76,36 @@ def reflection_text(path: Path) -> str:
     return re.sub(r"<!--.*?-->", "", content[start.end():], flags=re.DOTALL).strip()
 
 
+#: Encloses the period's entries while someone writes alone. It is a comment, so
+#: it does not count as an answer, and it is removed when they finish.
+_ENTRIES_START = "<!-- memory-tool:entries"
+_ENTRIES_BLOCK = re.compile(r"\n\n" + re.escape(_ENTRIES_START) + r".*?-->", re.DOTALL)
+
+
+def insert_entries(path: Path, lines: List[str]) -> None:
+    """Show the period's entries in a review file, under the reflection heading.
+
+    Args:
+        path: The review file
+        lines: The entries, one per line
+    """
+    content = path.read_text(encoding="utf-8")
+    start = _REFLECTION_START.search(content)
+    if not start:
+        return
+
+    # An entry that holds a comment's end must not close the block early.
+    body = "\n".join(line.replace("-->", "-- >") for line in lines)
+    block = f"\n\n{_ENTRIES_START}\n{body}\n-->"
+    path.write_text(content[: start.end()] + block + content[start.end():], encoding="utf-8")
+
+
+def remove_entries(path: Path) -> None:
+    """Take the entries back out of a review file, leaving what was written."""
+    content = path.read_text(encoding="utf-8")
+    path.write_text(_ENTRIES_BLOCK.sub("", content, count=1), encoding="utf-8")
+
+
 class ReviewError(Exception):
     """Raised when a review cannot go on, with a message for the user.
 
@@ -105,6 +135,8 @@ class Item:
     decided: bool = False
     #: Whether the item came from an earlier review.
     carried: bool = False
+    #: The heading to write under in the target document, as for an open question.
+    heading: Optional[str] = None
 
     @property
     def is_open(self) -> bool:
@@ -125,6 +157,8 @@ class Review:
     entry_count: int = 0
     active_days: int = 0
     reflection: str = REFLECTION_OPEN
+    #: Candidates are still to be asked for, once the reflection is settled.
+    proposals_pending: bool = False
 
     @property
     def name(self) -> str:
@@ -162,6 +196,44 @@ class Review:
         return not self.undecided_items() and not any(
             item.state == STATE_WRITING for item in self.items
         )
+
+
+def add_item(
+    review: Review,
+    title: str,
+    target: Optional[str] = None,
+    doc_type: Optional[str] = None,
+    why: str = "",
+    evidence: Optional[List[str]] = None,
+    heading: Optional[str] = None,
+) -> Item:
+    """Add something to keep.
+
+    Args:
+        review: The review
+        title: What to keep
+        target: The document to update. Without one, a new document.
+        doc_type: Suggested document type
+        why: Why it is worth keeping
+        evidence: Days whose entries it rests on
+        heading: The heading to write under in the target document
+
+    Returns:
+        The new item, not yet saved.
+    """
+    number = max((item.number for item in review.items), default=0) + 1
+    item = Item(
+        number=number,
+        kind=KIND_UPDATE if target else KIND_NEW,
+        title=title,
+        doc_type=doc_type,
+        target=target,
+        why=why,
+        evidence=evidence or [],
+        heading=heading,
+    )
+    review.items.append(item)
+    return item
 
 
 def start_writing(review: Review, number: int) -> Item:
@@ -320,6 +392,7 @@ def load_review(path: Path) -> Review:
             entry_count=int(metadata.get("entry_count", 0)),
             active_days=int(metadata.get("active_days", 0)),
             reflection=metadata.get("reflection", REFLECTION_OPEN),
+            proposals_pending=bool(metadata.get("proposals_pending", False)),
         )
     except (OSError, UnicodeDecodeError, KeyError, TypeError, ValueError, AttributeError) as e:
         raise ReviewError(
@@ -345,7 +418,7 @@ def save_review(review: Review, reflection_comment: str = "") -> None:
     existing = path.read_text(encoding="utf-8") if path.exists() else ""
     _, old_body = Frontmatter.parse(existing)
     start = _REFLECTION_START.search(old_body)
-    heading = say("## Reflection", "## 돌아보기")
+    heading = say("## Reflection", "## 회고")
 
     if start:
         reflection = old_body[start.start():]
@@ -367,6 +440,8 @@ def save_review(review: Review, reflection_comment: str = "") -> None:
         "reflection": review.reflection,
         "items": [asdict(item) for item in review.items],
     }
+    if review.proposals_pending:
+        metadata["proposals_pending"] = True
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         Frontmatter.inject(f"{_render_summary(review)}\n{reflection}", metadata),
@@ -384,12 +459,15 @@ def _render_summary(review: Review) -> str:
             f"기간: {review.start} ~ {review.end}. 활동 {review.active_days}일, 기록 {review.entry_count}건.",
         ),
         "",
-        say("## Moves", "## 옮기기"),
+        say("## To keep", "## 남길 것"),
         "",
     ]
 
     if not review.items:
-        lines.append(say("Nothing proposed.", "제안한 항목이 없습니다."))
+        if review.is_done:
+            lines.append(say("Nothing to keep.", "남길 것이 없습니다."))
+        else:
+            lines.append(say("Not settled yet.", "아직 정하지 않았습니다."))
 
     for item in review.items:
         evidence = ", ".join(item.evidence)
@@ -414,7 +492,8 @@ def _render_summary(review: Review) -> str:
 def item_label(item: Item) -> str:
     """Describe what an item asks for."""
     if item.kind == KIND_UPDATE:
-        return say(f'Update "{item.target}": {item.title}', f'기존 문서 갱신 "{item.target}": {item.title}')
+        where = f"{item.target} > {item.heading}" if item.heading else item.target
+        return say(f'Update "{where}": {item.title}', f'기존 문서 갱신 "{where}": {item.title}')
     return say(f'New document: "{item.title}"', f'새 문서: "{item.title}"')
 
 
@@ -425,7 +504,7 @@ def state_label(item: Item) -> str:
         STATE_WRITING: say("writing", "작성 중"),
         STATE_DEFERRED: say("later", "대기"),
         STATE_WRITTEN: say("written", "썼음"),
-        STATE_REJECTED: say("rejected", "거절"),
+        STATE_REJECTED: say("rejected", "남기지 않음"),
         STATE_CARRIED: say("carried over", "다음 리뷰로 이월"),
     }
     return labels.get(item.state, item.state)
@@ -441,6 +520,7 @@ def start_review(
     entry_count: int = 0,
     active_days: int = 0,
     reflection_comment: str = "",
+    proposals_pending: bool = False,
 ) -> Review:
     """Create a review, carrying open items forward from the previous one.
 
@@ -477,6 +557,7 @@ def start_review(
         dropped=dropped,
         entry_count=entry_count,
         active_days=active_days,
+        proposals_pending=proposals_pending,
     )
     save_review(review, reflection_comment)
 
