@@ -599,15 +599,7 @@ msort today --no-backup
 
 ### `mreview` - Review
 
-A review goes over the entries since the last one, in two steps:
-
-| | Moves | Reflection (optional) |
-|:---|:---|:---|
-| What it asks | What is worth finding again later? | How did this period go? |
-| Who starts | The AI proposes, you choose | You write |
-| Where it ends up | In documents | In the review file |
-
-**Purpose:** Move what is worth keeping from the timeline into documents, and optionally reflect on the period
+**Purpose:** Reflect on the entries since the last review, and settle what to keep. Settling what to keep is the reflection.
 
 **Usage:**
 ```bash
@@ -618,14 +610,20 @@ mreview list                  # Items waiting to be written
 mreview write 2               # Write item 2 now
 mreview write 2 --with solo   # The same, on your own
 mreview done 2                # Mark item 2 as written
+mreview add "Topic" --why "Why"   # Add something to keep
 ```
 
 **What happens:**
 
-1. The entries since the last review go to the configured LLM provider, with document paths and descriptions but no document bodies. A first review reads the last 14 days. If no usable answer comes back, nothing is saved.
-2. Items put off earlier come first, followed by up to five new proposals, updates of existing documents first. Each proposal names the days its entries are from, and any citing a day without entries or a document that does not exist is discarded.
-3. For a proposal, choose **write now**, **write later** or **reject**. For an item put off earlier, choose **written**, **keep for later**, **drop** or **write now**.
-4. Finally, reflect on the period or skip it.
+1. The entries since the last review are gathered. A first review reads the last 14 days.
+2. Choose how to reflect:
+   - **Reflect with a CLI** (default): the AI asks about the entries. What you confirm it adds with `mreview add`, and it writes the reflection in the review file after showing you the wording.
+   - **Reflect on my own:** the review file opens in `EDITOR` with the period's entries as a comment, removed when you close it. The configured LLM then reads what you wrote and the entries, with document paths and descriptions but no document bodies, and proposes up to five things.
+   - **Only see the AI's candidates:** no reflection. The LLM reads the entries and proposes.
+3. If you close a CLI or the editor with nothing written or added, the menu comes back. If you wrote something but listed nothing, you can finish, get the AI's candidates or add one yourself.
+4. For each item, choose **write now**, **write later** or **reject**. For an item put off earlier, which comes first, choose **written**, **keep for later**, **drop** or **write now**. `a` adds another item.
+
+**Where things go:** what you will look up again, or a decision's reasons, goes to a document. A question without an answer goes under `## 열린 질문` in a document, with `--heading`. Things to do belong in a planning tool, so they do not become items. Impressions stay in the reflection.
 
 **The limit:** while more than five items remain open, nothing can be put off. Reject, drop or write items until five remain. An item being written counts until it is marked written.
 
@@ -638,7 +636,7 @@ mreview done 2                # Mark item 2 as written
 
 Choosing **write later** creates no file. A document is created when writing starts, so empty documents do not pile up. Items waiting can be written at any time with `mreview write`.
 
-**Reflection:** on your own, the review file opens with fixed questions as comments. With a CLI, the AI reads the period's entries and asks during the conversation. Either way, you write the answers.
+**Reflection and documents:** the reflection stays in the review file, as a record of that moment. Documents are what you keep updating.
 
 **Files:**
 ```
@@ -647,7 +645,7 @@ Choosing **write later** creates no file. A document is created when writing sta
 └── 2026-11-05-2.md    # A second review on the same day
 ```
 
-The frontmatter is the record, and `## Moves` is rewritten from it. Text under the reflection heading is yours and is never rewritten. Files in `weekly/` and `monthly/` from earlier versions stay where they are, and are not counted as reviews.
+The frontmatter is the record, and `## To keep` is rewritten from it. Text under the reflection heading is yours and is never rewritten. Files in `weekly/` and `monthly/` from earlier versions stay where they are, and are not counted as reviews.
 
 **Notice:** on the day's first entry and in `mcontext`, once 7 days have passed since the last review and 10 entries have gathered. It only counts entries.
 
@@ -655,7 +653,7 @@ The frontmatter is the record, and `## Moves` is rewritten from it. Text under t
 ```yaml
 review:
   writer: codex              # The tool offered by default
-  reflection_questions:      # Fixed questions for writing on your own
+  reflection_questions:      # Fixed questions for reflecting on your own
     - What changed?
   notice:
     enabled: true

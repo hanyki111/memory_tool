@@ -55,12 +55,31 @@ def base(tmp_path, monkeypatch):
     FakeClient.calls = 0
     FakeClient.answer = answer(0)
     monkeypatch.setattr("memory_tool.llm.client.LLMClient", FakeClient)
+
+    # A test must never start a real CLI or editor. FakeTools replaces these.
+    def no_real_process(*args, **kwargs):
+        raise AssertionError(f"A test tried to start a process: {args}")
+
+    monkeypatch.setattr("memory_tool.review.writer.shutil.which", lambda name: None)
+    monkeypatch.setattr("memory_tool.review.writer.subprocess.run", no_real_process)
     yield folder
     clear_cache()
 
 
-def run(*args, input=None):
+def run_raw(*args, input=None):
     return runner.invoke(app, ["review", *args], input=input)
+
+
+def run(*args, input=None):
+    """Run a review, going straight past the reflection menu to the items.
+
+    Only for tests about the items. "s" is simply asked again at any later menu,
+    so it does no harm if the reflection was settled already.
+    """
+    starts_a_review = not args or args[0].startswith("--")
+    if input is not None and starts_a_review:
+        input = "s\n" + input
+    return run_raw(*args, input=input)
 
 
 def states(base):
@@ -69,7 +88,7 @@ def states(base):
 
 def finish_with_deferred(base, count):
     FakeClient.answer = answer(count)
-    result = run(input="2\n" * count + "s\n")
+    result = run(input="2\n" * count)
     assert result.exit_code == 0, result.output
     assert store.latest_review(base).is_done
 
@@ -97,10 +116,10 @@ class TestChoosing:
     def test_each_step_says_what_it_is_for(self, base):
         FakeClient.answer = answer(1)
 
-        result = run(input="3\ns\n")
+        result = run(input="3\n")
 
-        assert "Moves: the AI picked what is worth keeping" in result.output
-        assert "Write about how this period went" in result.output
+        assert "Reflection: go over" in result.output
+        assert "To keep: for each" in result.output
 
     def test_invalid_answer_asks_again(self, base):
         FakeClient.answer = answer(1)
@@ -127,14 +146,31 @@ class TestChoosing:
         assert "No new entries" in result.output
         assert store.review_files(base) == []
 
-    def test_failed_proposal_reports_and_writes_nothing(self, base, monkeypatch):
+    def test_failed_proposal_can_be_tried_again_later(self, base):
         FakeClient.answer = "not json"
 
-        result = run()
+        result = run(input="p\n")
 
-        assert result.exit_code == 1
-        assert "did not start" in result.output
-        assert store.review_files(base) == []
+        assert result.exit_code == 0, result.output
+        assert "Could not get proposals" in result.output
+        assert store.latest_review(base).proposals_pending
+
+        FakeClient.answer = answer(1)
+        result = run(input="3\n")
+
+        assert result.exit_code == 0, result.output
+        assert store.latest_review(base).is_done
+        assert states(base) == [store.STATE_REJECTED]
+
+    def test_going_on_without_candidates_finishes(self, base):
+        FakeClient.answer = "not json"
+
+        result = run(input="c\n")
+
+        assert result.exit_code == 0, result.output
+        review = store.latest_review(base)
+        assert review.is_done
+        assert not review.proposals_pending
 
     def test_invalid_since(self, base):
         result = run("--since", "someday")
@@ -154,7 +190,8 @@ class TestDeferLimit:
     def test_cannot_put_off_until_five_remain(self, base):
         finish_with_deferred(base, 3)
         add_entry_now(base)
-        FakeClient.answer = answer(5)
+        # Three repeat the carried titles, so five of these are new.
+        FakeClient.answer = answer(8)
 
         # Eight are open. The first three go, so the rest may wait.
         result = run(input="2\n2\n1\n2\n2\n2\n2\n2\ns\n")
@@ -208,9 +245,10 @@ class TestCarriedItems:
     def test_carried_items_come_first_with_their_choices(self, base):
         finish_with_deferred(base, 1)
         add_entry_now(base)
-        FakeClient.answer = answer(1)
+        # The first repeats the carried title, so only the second is new.
+        FakeClient.answer = answer(2)
 
-        result = run(input="1\n3\ns\n")
+        result = run(input="1\n3\n")
 
         assert result.exit_code == 0, result.output
         assert "Put off in an earlier review" in result.output
@@ -372,7 +410,8 @@ class TestWriting:
         result = run("--with", "solo", input="1\n1\n")
 
         assert result.exit_code == 0, result.output
-        assert opened[0].name == "server.md"
+        # --with also chooses how to reflect, so the review file opens first.
+        assert opened[-1].name == "server.md"
 
     def test_solo_asks_again_for_an_invalid_path(self, base, monkeypatch):
         monkeypatch.setattr("memory_tool.review.writer.open_in_editor", lambda path: None)
@@ -542,55 +581,11 @@ class TestReflection:
         assert review.reflection == store.REFLECTION_SKIPPED
         assert "<!-- What went well" in review.path.read_text(encoding="utf-8")
 
-    def test_on_my_own_opens_the_review_file_and_keeps_the_text(self, base, monkeypatch):
-        tools = FakeTools(monkeypatch, installed=("claude",))
-
-        def edit(path):
-            with path.open("a", encoding="utf-8") as file:
-                file.write("\nDeploys failed because I skipped the check.\n")
-
-        monkeypatch.setattr("memory_tool.review.writer.open_in_editor", edit)
-
-        result = run(input="2\n")
-
-        assert result.exit_code == 0, result.output
-        review = store.latest_review(base)
-        assert review.is_done
-        assert review.reflection == store.REFLECTION_WRITTEN
-        assert "I skipped the check." in review.path.read_text(encoding="utf-8")
-        assert tools.calls == []
-
-    def test_enter_starts_the_default_tool_with_the_period_and_guide(self, base, monkeypatch):
-        tools = FakeTools(monkeypatch)
-
-        result = run(input="\ns\n")
-
-        assert result.exit_code == 0, result.output
-        path, content = tools.work_files[0]
-        assert "돌아보기 가이드" in content
-        assert "synthetic [entry]" in content
-        assert store.latest_review(base).path.name in content
-        assert not path.exists()
-
     def test_generates_no_questions_in_advance(self, base):
         FakeClient.answer = answer(0)
         run(input="s\n")
 
         assert FakeClient.calls == 1
-
-    def test_pausing_returns_to_the_reflection_without_asking_again(self, base):
-        FakeClient.answer = answer(1)
-
-        first = run(input="3\np\n")
-
-        assert first.exit_code == 0, first.output
-        assert not store.latest_review(base).is_done
-
-        second = run(input="s\n")
-
-        assert second.exit_code == 0, second.output
-        assert "Topic 1" not in second.output
-        assert store.latest_review(base).is_done
 
     def test_not_offered_when_no_entries_were_read(self, base):
         finish_with_deferred(base, 1)
@@ -644,70 +639,380 @@ class TestSinceAfterLastReview:
         assert not self.warned(run())
 
 
-class TestReflectionIsCheckedInTheFile:
+class TestReflectionComesFirst:
     @pytest.fixture
     def tools(self, base, monkeypatch):
-        add_entry_now(base)
         FakeClient.answer = answer(0)
         return FakeTools(monkeypatch, installed=("claude",))
 
-    def test_leaving_a_tool_without_writing_asks_again(self, base, tools):
-        result = run(input="1\ns\n")
+    def test_nothing_is_proposed_before_the_reflection(self, base, tools):
+        run_raw(input="p\n")
+
+        assert FakeClient.calls == 0
+        assert store.latest_review(base).proposals_pending
+
+    def test_pausing_returns_to_the_reflection(self, base, tools):
+        assert run_raw(input="p\n").exit_code == 0
+        assert not store.latest_review(base).is_done
+
+        FakeClient.answer = answer(1)
+        result = run_raw(input="s\n3\n")
+
+        assert result.exit_code == 0, result.output
+        assert store.latest_review(base).is_done
+        assert len(store.review_files(base)) == 1
+
+    def test_json_still_proposes_at_once(self, base):
+        FakeClient.answer = answer(1)
+
+        payload = json.loads(run_raw("--json").output.strip().splitlines()[-1])
+
+        assert [item["title"] for item in payload["review"]["items"]] == ["Topic 1"]
+        assert not store.latest_review(base).proposals_pending
+
+    def test_json_fills_a_review_paused_before_its_candidates(self, base, tools):
+        run_raw(input="p\n")
+        FakeClient.answer = answer(1)
+
+        payload = json.loads(run_raw("--json").output.strip().splitlines()[-1])
+
+        assert [item["title"] for item in payload["review"]["items"]] == ["Topic 1"]
+
+    def test_candidates_only_skips_the_conversation(self, base, tools):
+        FakeClient.answer = answer(1)
+
+        result = run_raw(input="s\n3\n")
+
+        assert result.exit_code == 0, result.output
+        assert tools.calls == []
+        assert FakeClient.calls == 1
+        review = store.latest_review(base)
+        assert review.is_done
+        assert review.reflection == store.REFLECTION_SKIPPED
+        assert states(base) == [store.STATE_REJECTED]
+
+    def test_enter_starts_the_default_tool_with_the_period_and_guide(self, base, tools):
+        result = run_raw(input="\ns\n")
+
+        assert result.exit_code == 0, result.output
+        path, content = tools.work_files[0]
+        assert "회고 가이드" in content
+        assert "mreview add" in content
+        assert "synthetic [entry]" in content
+        assert store.latest_review(base).path.name in content
+        assert not path.exists()
+
+    def test_leaving_a_tool_with_nothing_done_asks_again(self, base, tools):
+        result = run_raw(input="1\ns\n")
 
         assert result.exit_code == 0, result.output
         assert len(tools.calls) == 1
         assert store.latest_review(base).reflection == store.REFLECTION_SKIPPED
 
-    def test_leaving_an_editor_without_writing_asks_again(self, base, tools, monkeypatch):
-        monkeypatch.setattr("memory_tool.review.writer.open_in_editor", lambda path: None)
+    def test_items_added_during_the_conversation_are_asked_about(self, base, monkeypatch, tools):
+        def adds_an_item(arguments, cwd=None, **kwargs):
+            assert run_raw("add", "Kept in conversation", "--why", "reason").exit_code == 0
 
-        result = run(input="2\ns\n")
+        monkeypatch.setattr("memory_tool.review.writer.subprocess.run", adds_an_item)
+
+        result = run_raw(input="1\n3\n")
 
         assert result.exit_code == 0, result.output
-        assert store.latest_review(base).reflection == store.REFLECTION_SKIPPED
+        review = store.latest_review(base)
+        assert [item.title for item in review.items] == ["Kept in conversation"]
+        assert review.items[0].state == store.STATE_REJECTED
+        assert review.reflection == store.REFLECTION_WRITTEN
+        assert FakeClient.calls == 0
+        assert review.is_done
 
-    def test_text_written_by_the_tool_counts(self, base, tools, monkeypatch):
-        def writes(arguments, cwd=None, **kwargs):
+    def test_an_item_added_before_a_crash_stays(self, base, monkeypatch, tools):
+        def adds_then_dies(arguments, cwd=None, **kwargs):
+            run_raw("add", "Kept before the crash")
+            raise KeyboardInterrupt
+
+        monkeypatch.setattr("memory_tool.review.writer.subprocess.run", adds_then_dies)
+
+        run_raw(input="1\n")
+
+        review = store.latest_review(base)
+        assert [item.title for item in review.items] == ["Kept before the crash"]
+        assert not review.is_done
+
+    def writes_text(self, base, monkeypatch):
+        def write(arguments, cwd=None, **kwargs):
             path = store.latest_review(base).path
             with path.open("a", encoding="utf-8") as file:
                 file.write("\nA synthetic reflection.\n")
 
-        monkeypatch.setattr("memory_tool.review.writer.subprocess.run", writes)
+        monkeypatch.setattr("memory_tool.review.writer.subprocess.run", write)
 
-        result = run(input="1\n")
+    def test_text_without_items_can_simply_finish(self, base, monkeypatch, tools):
+        self.writes_text(base, monkeypatch)
+
+        result = run_raw(input="1\n\n")
 
         assert result.exit_code == 0, result.output
         review = store.latest_review(base)
         assert review.is_done
         assert review.reflection == store.REFLECTION_WRITTEN
+        assert review.items == []
+        assert FakeClient.calls == 0
+        assert "A synthetic reflection." in review.path.read_text(encoding="utf-8")
 
-    def test_prepared_questions_are_not_an_answer(self, tmp_path):
-        path = tmp_path / "review.md"
-        path.write_text("# r\n\n## 돌아보기\n\n<!-- 질문 -->\n", encoding="utf-8")
-        assert store.reflection_text(path) == ""
+    def test_text_without_items_can_ask_for_candidates(self, base, monkeypatch, tools):
+        self.writes_text(base, monkeypatch)
+        FakeClient.answer = answer(1)
 
-        path.write_text("# r\n\n## 돌아보기\n\n<!-- 질문 -->\n\n답\n", encoding="utf-8")
-        assert store.reflection_text(path) == "답"
+        result = run_raw(input="1\n2\n3\n")
 
-    def test_a_missing_file_has_no_text(self, tmp_path):
-        assert store.reflection_text(tmp_path / "absent.md") == ""
+        assert result.exit_code == 0, result.output
+        assert FakeClient.calls == 1
+        assert states(base) == [store.STATE_REJECTED]
+
+    def test_text_without_items_can_add_one_by_hand(self, base, monkeypatch, tools):
+        self.writes_text(base, monkeypatch)
+
+        result = run_raw(input="1\na\nBy hand\n\n3\n")
+
+        assert result.exit_code == 0, result.output
+        assert [item.title for item in store.latest_review(base).items] == ["By hand"]
+
+
+class TestReflectingAlone:
+    @pytest.fixture
+    def editor(self, base, monkeypatch):
+        FakeClient.answer = answer(0)
+        seen = {}
+
+        def edit(path):
+            seen["during"] = path.read_text(encoding="utf-8")
+            if seen.get("write"):
+                with path.open("a", encoding="utf-8") as file:
+                    file.write(f"\n{seen['write']}\n")
+
+        monkeypatch.setattr("memory_tool.review.writer.open_in_editor", edit)
+        return seen
+
+    def test_the_entries_are_shown_while_writing_and_gone_afterwards(self, base, editor):
+        editor["write"] = "My own words."
+
+        result = run_raw(input="1\n")
+
+        assert result.exit_code == 0, result.output
+        assert "synthetic [entry]" in editor["during"]
+        content = store.latest_review(base).path.read_text(encoding="utf-8")
+        assert "synthetic [entry]" not in content
+        assert "My own words." in content
+
+    def test_what_was_written_reaches_the_candidates(self, base, editor, monkeypatch):
+        editor["write"] = "My own words."
+        prompts = []
+        original = FakeClient.generate
+
+        def spy(self, prompt, system_prompt=None, **kwargs):
+            prompts.append(prompt)
+            return original(self, prompt, system_prompt, **kwargs)
+
+        monkeypatch.setattr(FakeClient, "generate", spy)
+
+        run_raw(input="1\n")
+
+        assert "<reflection>" in prompts[0]
+        assert "My own words." in prompts[0]
+        assert "synthetic [entry]" in prompts[0]
+
+    def test_closing_with_nothing_written_asks_again(self, base, editor):
+        result = run_raw(input="1\ns\n")
+
+        assert result.exit_code == 0, result.output
+        assert store.latest_review(base).reflection == store.REFLECTION_SKIPPED
+
+    def test_an_entry_holding_a_comment_end_does_not_leak(self, base, editor):
+        store_path = next((base / "timeline").rglob("*.md"))
+        with store_path.open("a", encoding="utf-8") as file:
+            file.write("- 00:01 | odd --> entry\n")
+        editor["write"] = "Mine."
+
+        run_raw(input="1\n")
+
+        content = store.latest_review(base).path.read_text(encoding="utf-8")
+        assert "odd" not in content
+        assert "Mine." in content
+
+    def test_a_failed_request_keeps_the_text_and_comes_back(self, base, editor, monkeypatch):
+        editor["write"] = "Kept through a failure."
+
+        def fails(self, prompt, system_prompt=None, **kwargs):
+            raise RuntimeError("no connection")
+
+        monkeypatch.setattr(FakeClient, "generate", fails)
+
+        result = run_raw(input="1\np\n")
+
+        assert result.exit_code == 0, result.output
+        review = store.latest_review(base)
+        assert not review.is_done
+        assert review.proposals_pending
+        assert "Kept through a failure." in review.path.read_text(encoding="utf-8")
+
+        monkeypatch.undo()
+
+
+class TestWhenThereIsNothingToReflectOn:
+    def test_carried_items_alone_do_not_ask_for_a_reflection(self, base):
+        finish_with_deferred(base, 1)
+        for path in (base / "timeline").rglob("*.md"):
+            path.unlink()
+
+        result = run_raw(input="3\n")
+
+        assert result.exit_code == 0, result.output
+        assert "Reflection" not in result.output
+        assert store.latest_review(base).is_done
+
+
+class TestAddingItems:
+    @pytest.fixture
+    def review(self, base):
+        run_raw(input="p\n")
+        return base
+
+    def test_a_new_document(self, review):
+        result = run_raw("add", "A topic", "--why", "reason", "--type", "판단", "--evidence", "2026-11-09")
+
+        assert result.exit_code == 0, result.output
+        item = store.latest_review(review).items[0]
+        assert (item.kind, item.title, item.why, item.doc_type) == (store.KIND_NEW, "A topic", "reason", "판단")
+        assert item.evidence == ["2026-11-09"]
+
+    def test_an_open_question_in_an_existing_document(self, review):
+        (review / "modules" / "news.md").write_text("# news\n", encoding="utf-8")
+
+        result = run_raw("add", "Split it?", "--target", "news", "--heading", "열린 질문")
+
+        assert result.exit_code == 0, result.output
+        item = store.latest_review(review).items[0]
+        assert (item.kind, item.target, item.heading) == (store.KIND_UPDATE, "news", "열린 질문")
+        assert "news > 열린 질문" in store.item_label(item)
+
+    def test_an_unknown_document_is_refused(self, review):
+        result = run_raw("add", "A topic", "--target", "absent")
+
+        assert result.exit_code == 1
+        assert store.latest_review(review).items == []
+
+    def test_a_heading_needs_a_document(self, review):
+        assert run_raw("add", "A topic", "--heading", "열린 질문").exit_code == 1
+
+    def test_no_review_yet(self, base):
+        assert run_raw("add", "A topic").exit_code == 1
+
+    def test_json_output(self, review):
+        result = run_raw("add", "A topic", "--json")
+
+        payload = json.loads(result.output.strip().splitlines()[-1])
+        assert payload["ok"] is True
+        assert payload["review"]["items"][0]["title"] == "A topic"
+
+    def test_a_finished_review_passes_it_to_the_next_one(self, base):
+        run(input="")
+        assert store.latest_review(base).is_done
+
+        run_raw("add", "Afterwards")
+        add_entry_now(base)
+        FakeClient.answer = answer(0)
+        run(input="3\n")
+
+        latest = store.latest_review(base)
+        assert [item.title for item in latest.items] == ["Afterwards"]
+        assert latest.items[0].carried
+
+    def test_adding_during_the_item_menu(self, base):
+        FakeClient.answer = answer(1)
+
+        result = run(input="a\nBy hand\n\n3\n3\n")
+
+        assert result.exit_code == 0, result.output
+        assert sorted(item.title for item in store.latest_review(base).items) == ["By hand", "Topic 1"]
+
+    def test_the_heading_reaches_the_writing_instructions(self, base):
+        from memory_tool.review import writer
+
+        (base / "modules" / "news.md").write_text("# news\n", encoding="utf-8")
+        item = store.Item(number=1, kind=store.KIND_UPDATE, title="t", target="news", heading="열린 질문")
+
+        assert "열린 질문" in writer._task_text(base, item)
+
+
+class TestOldReviewFiles:
+    OLD = """---
+type: review
+period_start: 2026-10-01T00:00
+period_end: 2026-10-02T00:00
+status: in_progress
+entry_count: 1
+active_days: 1
+dropped: 0
+reflection: written
+items: []
+---
+# 리뷰
+
+## 옮기기
+
+제안한 항목이 없습니다.
+
+## 돌아보기
+
+예전에 쓴 글입니다.
+"""
+
+    def test_the_text_survives_and_stays_under_its_heading(self, base):
+        path = base / "reviews" / "2026-10-02.md"
+        path.parent.mkdir()
+        path.write_text(self.OLD, encoding="utf-8")
+
+        review = store.load_review(path)
+        store.save_review(review)
+
+        content = path.read_text(encoding="utf-8")
+        assert "## 돌아보기\n\n예전에 쓴 글입니다." in content
+        assert store.reflection_text(path) == "예전에 쓴 글입니다."
+        assert not store.load_review(path).proposals_pending
 
 
 class TestWhatTheReviewSays:
-    def test_the_end_message_reports_the_reflection(self, base, monkeypatch):
-        add_entry_now(base)
+    def test_the_end_message_reports_the_reflection(self, base):
         FakeClient.answer = answer(0)
-        FakeTools(monkeypatch, installed=("claude",))
 
-        output = " ".join(run(input="s\n").output.split())
+        output = " ".join(run(input="").output.split())
 
-        assert ("Reflection: skipped" in output) or ("돌아보기: 건너뜀" in output)
+        assert ("Reflection: skipped" in output) or ("회고: 건너뜀" in output)
 
-    def test_no_proposals_are_stated_before_the_reflection(self, base, monkeypatch):
-        add_entry_now(base)
+    def test_no_candidates_are_stated(self, base):
         FakeClient.answer = answer(0)
-        FakeTools(monkeypatch, installed=("claude",))
 
-        output = " ".join(run(input="s\n").output.split())
+        output = " ".join(run(input="").output.split())
 
-        assert ("nothing in this period" in output) or ("문서로 옮길 만한 내용이 없습니다" in output)
+        assert ("Nothing in this period" in output) or ("문서로 남길 만한 내용이 없습니다" in output)
+
+    def test_the_old_words_are_gone_from_a_new_file(self, base):
+        run_raw(input="p\n")
+
+        content = store.latest_review(base).path.read_text(encoding="utf-8")
+        assert ("## To keep" in content) or ("## 남길 것" in content)
+        assert ("## Reflection" in content) or ("## 회고" in content)
+        assert "돌아보기" not in content and "옮기기" not in content
+
+
+def test_inserting_and_removing_entries_leaves_the_file_as_it_was(tmp_path):
+    path = tmp_path / "review.md"
+    original = "# r\n\n## 회고\n\n<!-- 질문 -->\n\n내 글\n"
+    path.write_text(original, encoding="utf-8")
+
+    store.insert_entries(path, ["2026-01-01 09:00 | an entry"])
+    assert "an entry" in path.read_text(encoding="utf-8")
+    assert store.reflection_text(path) == "내 글"
+
+    store.remove_entries(path)
+    assert path.read_text(encoding="utf-8") == original

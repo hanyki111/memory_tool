@@ -1,4 +1,4 @@
-"""Review CLI: move what is worth keeping from the timeline into documents."""
+"""Review CLI: reflect on recent entries and settle what to keep in documents."""
 
 import sys
 from dataclasses import asdict
@@ -231,24 +231,26 @@ def _item_choices(review: Review, item: Item, tool: Optional[str]) -> List[Choic
             (say("Written", "썼음"), written),
             (say("Still writing (pause)", "아직 쓰는 중 (일시정지)"), pause),
             (say("Put off", "미룸"), later) if review.can_defer() else None,
-            (say("Reject", "거절"), rejected),
+            (say("Reject", "남기지 않기"), rejected),
         ]
     elif item.carried:
         options = [
             (say("Written", "썼음"), written),
             (say("Keep for later", "계속 대기"), later) if review.can_defer() else None,
-            (say("Drop", "버림"), rejected),
+            (say("Drop", "남기지 않기"), rejected),
             (say("Write now", "지금 쓰기"), write),
         ]
     else:
         options = [
             (say("Write now", "지금 쓰기"), write),
             (say("Write later", "나중에 쓰기"), later) if review.can_defer() else None,
-            (say("Reject", "거절"), rejected),
+            (say("Reject", "남기지 않기"), rejected),
         ]
 
     available = [option for option in options if option is not None]
     choices: List[Choice] = [(str(i), label, action) for i, (label, action) in enumerate(available, 1)]
+
+    choices.append(("a", say("Add something else to keep", "다른 항목 추가"), lambda: _add_item_by_hand(review)))
 
     if item.state != store.STATE_WRITING:
         choices.append(("p", say("Pause", "일시정지"), pause))
@@ -256,78 +258,208 @@ def _item_choices(review: Review, item: Item, tool: Optional[str]) -> List[Choic
     return choices
 
 
-def _reflect(review: Review) -> bool:
-    """Offer the optional reflection, once the items are settled.
+#: What came of one attempt to reflect.
+_DONE, _AGAIN, _PAUSED = "done", "again", "paused"
+
+
+def _reflect(review: Review, tool: Optional[str]) -> Optional[Review]:
+    """Reflect on the period, which is how what to keep gets settled.
+
+    Args:
+        review: The review
+        tool: How to reflect, skipping the menu the first time
 
     Returns:
-        False if the user paused the review.
+        The review as it now stands, since a tool may have added items, or None
+        if the user paused.
     """
     if review.reflection != store.REFLECTION_OPEN:
-        return True
+        return review
 
     if not review.entry_count:
         review.reflection = store.REFLECTION_SKIPPED
         store.save_review(review)
-        return True
+        return review
 
-    def finish_with(state: str) -> bool:
+    base = get_base_path()
+
+    def settle(state: str) -> None:
+        nonlocal review
         review.reflection = state
         store.save_review(review)
-        return True
 
-    def settle_after_writing(before: str) -> bool:
+    def something_changed(text_before: str, items_before: int) -> bool:
         # Leaving a tool or an editor says nothing about whether anything was
-        # written, for example after Ctrl+C. Only the file can tell.
-        if store.reflection_text(review.path) != before:
-            return finish_with(store.REFLECTION_WRITTEN)
+        # done, for example after Ctrl+C. Only the file can tell.
+        return (
+            store.reflection_text(review.path) != text_before
+            or len(review.items) != items_before
+        )
 
+    def nothing_written() -> str:
         _print()
-        _print(say(
-            "Nothing was written in the reflection.",
-            "돌아보기에 아무것도 적히지 않았습니다.",
-        ))
-        return _reflect(review)
+        _print(say("Nothing was written or added.", "아무것도 적히거나 추가되지 않았습니다."))
+        return _AGAIN
 
-    def with_tool(tool: writer.WritingTool) -> bool:
-        before = store.reflection_text(review.path)
-        _print(say(f"Starting {tool.name}. Leave it when you are done.", f"{tool.name}을(를) 실행합니다. 다 쓰면 종료해 주세요."))
-        writer.reflect_with_tool(tool, get_base_path(), get_project_root(), review)
-        return settle_after_writing(before)
+    def with_tool(selected: writer.WritingTool) -> str:
+        nonlocal review
+        text_before, items_before = store.reflection_text(review.path), len(review.items)
+        _print(say(f"Starting {selected.name}. Leave it when you are done.", f"{selected.name}을(를) 실행합니다. 다 되면 종료해 주세요."))
+        writer.reflect_with_tool(selected, base, get_project_root(), review)
+        # The tool added items through another process.
+        review = store.load_review(review.path)
 
-    def alone() -> bool:
-        before = store.reflection_text(review.path)
+        if not something_changed(text_before, items_before):
+            return nothing_written()
+
+        review.proposals_pending = False
+        settle(store.REFLECTION_WRITTEN)
+        return _DONE
+
+    def alone() -> str:
+        nonlocal review
+        text_before, items_before = store.reflection_text(review.path), len(review.items)
+        entries = collector.collect_entries(
+            base, collector.parse_time(review.start), collector.parse_time(review.end)
+        )
+        store.insert_entries(
+            review.path, [f"{entry.when:%Y-%m-%d %H:%M} | {entry.text}" for entry in entries]
+        )
         _print(f"-> {display_path(review.path)}")
-        writer.open_in_editor(review.path)
-        return settle_after_writing(before)
+        try:
+            writer.open_in_editor(review.path)
+        finally:
+            store.remove_entries(review.path)
+        review = store.load_review(review.path)
+
+        if not something_changed(text_before, items_before):
+            return nothing_written()
+
+        settle(store.REFLECTION_WRITTEN)
+        return _DONE
+
+    def candidates_only() -> str:
+        settle(store.REFLECTION_SKIPPED)
+        return _DONE
 
     _print()
     _print(say(
-        f"Reflection (optional), for this review file: {review.entry_count} entries on {review.active_days} days.",
-        f"돌아보기(선택 사항, 이 리뷰 파일에 씁니다): 활동 {review.active_days}일, 기록 {review.entry_count}건입니다.",
-    ))
-    _print(say(
-        "Write about how this period went, such as problems that repeated or what turned out "
-        "differently. You write the answers.",
-        "이 기간에 일한 방식을 되짚는 글을 씁니다. 예를 들면 반복된 문제나 예상과 달라진 일입니다. "
-        "답은 직접 씁니다.",
+        f"Reflection: go over {review.entry_count} entries on {review.active_days} days, "
+        "and settle what is worth keeping.",
+        f"회고: 활동 {review.active_days}일, 기록 {review.entry_count}건을 살펴보고, 무엇을 남길지 정리합니다.",
     ))
 
-    installed = writer.installed_tools()
-    default = writer.default_tool(installed)
-    # A default-argument binding, so that each choice keeps its own tool.
-    choices: List[Choice] = [
-        (
-            str(number),
-            tool.name + (say(" (default)", " (기본값)") if tool is default else ""),
-            lambda tool=tool: with_tool(tool),
+    outcome = _AGAIN
+    choice = writer.resolve_choice(tool) if tool else None
+
+    if choice == writer.SOLO:
+        outcome = alone()
+    elif choice:
+        outcome = with_tool(next(c for c in writer.TOOLS if c.key == choice))
+
+    while outcome == _AGAIN:
+        installed = writer.installed_tools()
+        default = writer.default_tool(installed)
+        # A default-argument binding, so that each choice keeps its own tool.
+        choices: List[Choice] = [
+            (
+                str(number),
+                say(f"Reflect with {candidate.name}", f"{candidate.name}와 회고")
+                + (say(" (default)", " (기본값)") if candidate is default else ""),
+                lambda candidate=candidate: with_tool(candidate),
+            )
+            for number, candidate in enumerate(installed, 1)
+        ]
+        choices.append((str(len(choices) + 1), say("Reflect on my own", "혼자 회고"), alone))
+        choices.append(("s", say("Only see the AI's candidates", "AI 후보만 보기"), candidates_only))
+        choices.append(("p", say("Pause", "일시정지"), lambda: _PAUSED if not _pause(review) else _PAUSED))
+        outcome = _ask(choices, default="1" if default else None)
+
+    return None if outcome == _PAUSED else review
+
+
+def _ask_for_proposals(review: Review) -> bool:
+    """Ask for candidates, which may fail after the reflection was written.
+
+    Returns:
+        False if the user paused.
+    """
+    while True:
+        _print(say("Asking for candidates...", "후보를 받는 중입니다..."))
+        try:
+            session.fill_proposals(get_base_path(), review)
+            return True
+        except ReviewError as e:
+            _print(str(e))
+            _print(say(
+                "What you wrote is saved in the review file.",
+                "쓰신 글은 리뷰 파일에 저장되어 있습니다.",
+            ))
+
+        def go_on() -> str:
+            review.proposals_pending = False
+            store.save_review(review)
+            return _DONE
+
+        outcome = _ask(
+            [
+                ("r", say("Try again", "다시 시도"), lambda: _AGAIN),
+                ("c", say("Go on without candidates", "후보 없이 계속"), go_on),
+                ("p", say("Pause", "일시정지"), lambda: _PAUSED if not _pause(review) else _PAUSED),
+            ],
+            default="r",
         )
-        for number, tool in enumerate(installed, 1)
-    ]
-    choices.append((str(len(choices) + 1), say("On my own", "혼자 쓰기"), alone))
-    choices.append(("s", say("Skip", "건너뛰기"), lambda: finish_with(store.REFLECTION_SKIPPED)))
-    choices.append(("p", say("Pause", "일시정지"), lambda: _pause(review)))
+        if outcome == _DONE:
+            return True
+        if outcome == _PAUSED:
+            return False
 
-    return _ask(choices, default="1" if default else None)
+
+def _add_item_by_hand(review: Review) -> bool:
+    """Ask what to keep and add it."""
+    from memory_tool.utils.module_docs import resolve_module_document
+
+    title = typer.prompt(say("What to keep", "남길 내용")).strip()
+
+    while True:
+        target = typer.prompt(
+            say("Document to update (Enter: a new document)", "갱신할 문서 (Enter: 새 문서)"),
+            default="",
+            show_default=False,
+        ).strip()
+        if not target or resolve_module_document(get_base_path() / "modules" / target) is not None:
+            break
+        _print(say(f"Document not found: {target}", f"문서를 찾을 수 없습니다: {target}"))
+
+    store.add_item(review, title, target=target or None)
+    store.save_review(review)
+    return True
+
+
+def _offer_when_nothing_to_keep(review: Review) -> bool:
+    """Say that nothing is listed, and offer the ways to add something.
+
+    Returns:
+        False if the user paused.
+    """
+    _print()
+    _print(say(
+        "Nothing is listed to keep from this period.",
+        "이 기간에서 남길 것으로 정한 항목이 없습니다.",
+    ))
+
+    def ask_ai() -> bool:
+        return _ask_for_proposals(review)
+
+    return _ask(
+        [
+            ("1", say("Finish (default)", "끝내기 (기본값)"), lambda: True),
+            ("2", say("Get the AI's candidates", "AI 후보 받기"), ask_ai),
+            ("a", say("Add one myself", "직접 추가"), lambda: _add_item_by_hand(review)),
+            ("p", say("Pause", "일시정지"), lambda: _pause(review)),
+        ],
+        default="1",
+    )
 
 
 def _finish(review: Review) -> None:
@@ -344,13 +476,13 @@ def _finish(review: Review) -> None:
     }.get(review.reflection, say("not done", "하지 않음"))
     # With no entries read, a reflection was never offered.
     reflection_en = f" Reflection: {reflection}." if review.entry_count else ""
-    reflection_ko = f" 돌아보기: {reflection}." if review.entry_count else ""
+    reflection_ko = f" 회고: {reflection}." if review.entry_count else ""
 
     _print()
     _print(say(
-        f"Review finished. Moves: {written} written, {later} for later, {rejected} rejected."
+        f"Review finished. To keep: {written} written, {later} for later, {rejected} rejected."
         f"{reflection_en}",
-        f"리뷰를 마쳤습니다. 옮기기: 썼음 {written}건, 대기 {later}건, 거절 {rejected}건."
+        f"리뷰를 마쳤습니다. 남길 것: 썼음 {written}건, 대기 {later}건, 남기지 않음 {rejected}건."
         f"{reflection_ko}",
     ))
     _print(f"-> {display_path(review.path)}")
@@ -363,26 +495,33 @@ def _work_through(review: Review, tool: Optional[str]) -> None:
         f"{review.entry_count} entries on {review.active_days} days.",
         f"활동 {review.active_days}일, 기록 {review.entry_count}건입니다.",
     ))
+    reflected = review.reflection == store.REFLECTION_OPEN and review.entry_count
+    review = _reflect(review, tool)
+    if review is None:
+        return
+
+    if review.proposals_pending and not _ask_for_proposals(review):
+        return
+
+    if not review.items:
+        if reflected and review.reflection == store.REFLECTION_WRITTEN:
+            if not _offer_when_nothing_to_keep(review):
+                return
+        else:
+            _print()
+            _print(say("Nothing in this period is worth keeping in a document.", "이 기간에는 문서로 남길 만한 내용이 없습니다."))
+
     if review.dropped:
         _print(say(
             f"{review.dropped} more candidates were left out. Their entries stay in the timeline.",
             f"이 밖의 후보 {review.dropped}건은 제외했습니다. 원본은 타임라인에 남아 있습니다.",
         ))
 
-    if not review.items:
-        _print()
-        _print(say(
-            "Moves: nothing in this period is worth moving into a document.",
-            "옮기기: 이 기간에는 문서로 옮길 만한 내용이 없습니다.",
-        ))
-
     if review.undecided_items():
         _print()
         _print(say(
-            "Moves: the AI picked what is worth keeping in a document, to find again later. "
-            "For each, choose whether to write it now, later, or not at all.",
-            "옮기기: 기록 중에서 문서로 남겨 두면 나중에 다시 찾아볼 만한 내용을 AI가 골랐습니다. "
-            "항목마다 지금 쓸지, 나중에 쓸지, 쓰지 않을지 고르세요.",
+            "To keep: for each, choose whether to write it now, later, or not at all.",
+            "남길 것: 항목마다 지금 쓸지, 나중에 쓸지, 남기지 않을지 고르세요.",
         ))
 
     while True:
@@ -393,8 +532,7 @@ def _work_through(review: Review, tool: Optional[str]) -> None:
         if not _ask(_item_choices(review, waiting[0], tool)):
             return
 
-    if _reflect(review):
-        _finish(review)
+    _finish(review)
 
 
 def _emit_json(payload: dict) -> None:
@@ -419,10 +557,67 @@ def _review_as_json(since: Optional[str]) -> None:
 
     try:
         active = session.open_review(base, since=since_date)
+        if active and active.proposals_pending:
+            session.fill_proposals(base, active)
     except ReviewError as e:
         _json_failure(str(e), e.code)
 
     _emit_json({"ok": True, "review": store.review_to_dict(active) if active else None})
+
+
+@review_app.command("add")
+def add_item(
+    title: str = typer.Argument(..., help="What to keep"),
+    target: Optional[str] = typer.Option(None, "--target", help="Document to update. Without it, a new document"),
+    doc_type: Optional[str] = typer.Option(None, "--type", help="Suggested document type: 참고, 이해, 방법, 판단"),
+    why: str = typer.Option("", "--why", help="Why it is worth keeping"),
+    evidence: Optional[List[str]] = typer.Option(None, "--evidence", help="A day whose entries it rests on (YYYY-MM-DD)"),
+    heading: Optional[str] = typer.Option(None, "--heading", help="Heading to write under in the document, such as 열린 질문"),
+    as_json: bool = typer.Option(False, "--json", help="Print the review as JSON"),
+):
+    """Add something to keep to the latest review.
+
+    If that review has finished, the item waits for the next one.
+
+    Examples:
+        mreview add "Why the retry limit is 5" --why "A decision" --type 판단
+        mreview add "Should long records be split?" --target news --heading "열린 질문"
+    """
+    from memory_tool.core.module import ModuleManager
+    from memory_tool.review.proposer import add_split_notes
+    from memory_tool.utils.module_docs import resolve_module_document
+
+    def fail(message: str, code: str) -> None:
+        if as_json:
+            _json_failure(message, code)
+        _fail(message)
+
+    base = get_base_path()
+    latest = store.latest_review(base)
+
+    if latest is None:
+        fail(say("There is no review yet. Run mreview first.", "아직 리뷰가 없습니다. 먼저 mreview를 실행해 주세요."), json_output.NOT_FOUND)
+    if not title.strip():
+        fail(say("What to keep is empty.", "남길 내용이 비어 있습니다."), json_output.INVALID_ARGUMENT)
+    if heading and not target:
+        fail(say("--heading needs --target.", "--heading은 --target과 함께 써야 합니다."), json_output.INVALID_ARGUMENT)
+    if target and resolve_module_document(base / "modules" / target) is None:
+        fail(say(f"Document not found: {target}", f"문서를 찾을 수 없습니다: {target}"), json_output.NOT_FOUND)
+
+    item = store.add_item(
+        latest, title.strip(), target=target, doc_type=doc_type,
+        why=why, evidence=list(evidence or []), heading=heading,
+    )
+    add_split_notes(base, [item])
+    store.save_review(latest)
+
+    if as_json:
+        _emit_json({"ok": True, "review": store.review_to_dict(latest)})
+        return
+
+    _print(say(f"Added item {item.number}: {item.title}", f"{item.number}번 항목을 추가했습니다: {item.title}"))
+    if latest.is_done:
+        _print(say("That review has finished, so it waits for the next one.", "끝난 리뷰이므로 다음 리뷰에서 묻습니다."))
 
 
 @review_app.command("set")
@@ -488,11 +683,11 @@ def review(
     with_tool: Optional[str] = typer.Option(None, "--with", help="How to write, skipping the menu: claude, codex, antigravity or solo"),
     as_json: bool = typer.Option(False, "--json", help="Start or read the review without asking anything, and print it as JSON"),
 ):
-    """Go over the entries since the last review, in two steps.
+    """Reflect on the entries since the last review, and settle what to keep.
 
-    Moves: the AI proposes what is worth keeping in a document, and the result
-    goes into those documents. Reflection (optional): you write about how the
-    period went, and the result stays in the review file.
+    Reflect with an AI CLI or on your own, or only see the AI's candidates. What
+    is worth keeping then goes into documents, which you write yourself or with
+    an AI. The reflection itself stays in the review file.
 
     With no command, starts a review of the entries since the last one, or
     continues the review in progress.
@@ -504,6 +699,7 @@ def review(
         mreview write 2               # Write item 2 now
         mreview write 2 --with codex  # The same, skipping the menu
         mreview done 2                # Mark item 2 as written
+        mreview add "Topic" --why "Why"  # Add something to keep
     """
     if ctx.invoked_subcommand:
         return
@@ -537,10 +733,8 @@ def review(
                 "다음 리뷰는 이번 리뷰가 끝난 곳부터 시작합니다.",
             ))
 
-        if not (current and not current.is_done):
-            _print(say("Reading the timeline and asking for proposals...", "타임라인을 읽고 제안을 받는 중입니다..."))
 
-        active = session.open_review(base, since=since_date)
+        active = session.open_review(base, since=since_date, propose_now=False)
 
         if active is None:
             _print(say("No new entries and nothing waiting.", "새 기록도, 대기 중인 항목도 없습니다."))

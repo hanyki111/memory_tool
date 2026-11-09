@@ -36,6 +36,7 @@ def open_review(
     now: Optional[datetime] = None,
     since: Optional[datetime] = None,
     client: Any = None,
+    propose_now: bool = True,
 ) -> Optional[Review]:
     """Return the review to work on, starting a new one if none is in progress.
 
@@ -48,6 +49,8 @@ def open_review(
         now: The current time
         since: Start of the period, in place of the last review's end
         client: An LLM client. Defaults to the configured provider.
+        propose_now: Ask for candidates at once. Otherwise the review is created
+            without them, to be filled by ``fill_proposals`` after the reflection.
 
     Returns:
         The review, or None if there are neither new entries nor open items.
@@ -74,7 +77,12 @@ def open_review(
     if not entries and not open_items:
         return None
 
-    proposals, left_out = proposer.propose(base, entries, client) if entries else ([], 0)
+    if propose_now:
+        proposals, left_out = proposer.propose(base, entries, client) if entries else ([], 0)
+    else:
+        proposer.check_size(entries)
+        proposals, left_out = [], 0
+
     entry_count, active_days = collector.entry_statistics(entries)
 
     return store.start_review(
@@ -87,4 +95,46 @@ def open_review(
         entry_count=entry_count,
         active_days=active_days,
         reflection_comment=reflection_comment(),
+        proposals_pending=bool(entries) and not propose_now,
     )
+
+
+def fill_proposals(base: Path, review: Review, client: Any = None) -> None:
+    """Ask for candidates, using what was written in the reflection.
+
+    The review stays pending on failure, so that the next run asks again and
+    nothing written is lost.
+
+    Args:
+        base: The knowledge base folder
+        review: The review, which is saved
+        client: An LLM client. Defaults to the configured provider.
+
+    Raises:
+        ReviewError: If candidates cannot be obtained.
+    """
+    entries = collector.collect_entries(
+        base, collector.parse_time(review.start), collector.parse_time(review.end)
+    )
+    proposals, left_out = proposer.propose(
+        base,
+        entries,
+        client,
+        reflection=store.reflection_text(review.path),
+        exclude=[item.title for item in review.items],
+    )
+
+    for proposal in proposals:
+        store.add_item(
+            review,
+            proposal.title,
+            target=proposal.target,
+            doc_type=proposal.doc_type,
+            why=proposal.why,
+            evidence=proposal.evidence,
+        )
+        review.items[-1].split_note = proposal.split_note
+
+    review.dropped += left_out
+    review.proposals_pending = False
+    store.save_review(review)
