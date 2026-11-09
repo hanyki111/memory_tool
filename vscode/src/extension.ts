@@ -188,7 +188,7 @@ class Extension {
   }
 
   /** Run the review in a terminal of its own; it asks questions as it goes. */
-  private review(since: string): void {
+  private review(since: string | null): void {
     const cli = this.session.cli;
     if (!cli) {
       return;
@@ -196,7 +196,7 @@ class Extension {
     const [python, ...args] = cli.reviewCommand(since);
     // Python is the terminal's process, so no shell has to quote anything.
     const terminal = vscode.window.createTerminal({
-      name: `mreview --since ${since}`,
+      name: since ? `mreview --since ${since}` : "mreview",
       shellPath: python,
       shellArgs: args,
       cwd: cli.cwd,

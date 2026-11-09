@@ -53,6 +53,29 @@ _REFLECTION_START = re.compile(
 )
 
 
+def reflection_text(path: Path) -> str:
+    """Read what has been written in a review file's reflection section.
+
+    Comments are left out: the prepared questions are not an answer.
+
+    Args:
+        path: The review file
+
+    Returns:
+        The text, or an empty string if there is none.
+    """
+    try:
+        content = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return ""
+
+    start = _REFLECTION_START.search(content)
+    if not start:
+        return ""
+
+    return re.sub(r"<!--.*?-->", "", content[start.end():], flags=re.DOTALL).strip()
+
+
 class ReviewError(Exception):
     """Raised when a review cannot go on, with a message for the user.
 

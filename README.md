@@ -321,7 +321,7 @@ Obsidian **설정 → Daily Notes**:
 ## VS Code 확장
 
 VS Code 안에서 타임라인에 기록하고, 여러 날의 기록을 이어 보고, 검색할 수 있습니다.
-창에서 연 폴더의 지식 베이스를 쓰며, 리뷰 버튼은 화면에 보이는 기간으로 `mreview`를 실행합니다.
+창에서 연 폴더의 지식 베이스를 쓰며, 리뷰 버튼은 `mreview`로 지난 리뷰 이후를 다루고, 기간 영역의 버튼은 `--since`로 고른 날짜부터 다룹니다.
 설치와 사용법은 [vscode/README.md](vscode/README.md)에 있습니다.
 
 ## 안드로이드 앱
@@ -723,7 +723,7 @@ ms "hybrid search" --with-kb
 | `mweek`    | 이번 주 작업 보기     | `mweek`                     |
 | `mmonth`   | 이번 달 작업 보기     | `mmonth`                    |
 | `mdays`    | 최근 N일 작업 보기    | `mdays 7`                   |
-| `mreview`  | 기록을 문서로 옮기기  | `mreview`                   |
+| `mreview`  | 옮기기와 돌아보기     | `mreview`                   |
 | `mask`     | 메모리 기반 Q&A (RAG) | `mask "최근 결정 사항?"`    |
 | `mbase`    | 기반 폴더 확인/변경   | `mbase show`                |
 | `mconfig`  | 설정 관리             | `mconfig get help.language` |

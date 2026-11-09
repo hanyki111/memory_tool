@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -63,4 +64,21 @@ test("fill", () => {
 
 test("the screen script parses", () => {
   execFileSync(process.execPath, ["--check", path.join(here, "..", "media", "timeline.js")]);
+});
+
+test("the sticky header is opaque, so entries do not show through it", () => {
+  const css = readFileSync(new URL("../media/timeline.css", import.meta.url), "utf8");
+  const header = /header\s*\{([^}]*)\}/.exec(css)[1];
+
+  assert.match(header, /position:\s*sticky/);
+  assert.match(header, /background:\s*var\(--surface\)/);
+  assert.match(css, /--surface:\s*var\(--vscode-sideBar-background/);
+});
+
+test("the plain review button is outside the period controls, the dated one inside", () => {
+  const js = readFileSync(new URL("../media/timeline.js", import.meta.url), "utf8");
+  const period = js.slice(js.indexOf('{ class: "period" }'), js.indexOf('const banner = el'));
+
+  assert.ok(period.includes("reviewFromButton"));
+  assert.ok(!/\breviewButton\b/.test(period));
 });

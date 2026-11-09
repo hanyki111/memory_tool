@@ -156,7 +156,7 @@ export function receive(state: ViewState, range: Range, days: Day[]): ViewState 
   };
 }
 
-/** Where a review of what the screen shows starts: the first day it has loaded. */
+/** Where a review chosen from the period controls starts: the first day loaded. */
 export function reviewSince(state: ViewState): string {
   return state.loaded.from;
 }

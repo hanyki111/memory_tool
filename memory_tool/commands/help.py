@@ -339,8 +339,13 @@ AI를 사용하여 메모리 내용에 대한 질문에 답변합니다.
     "review": {
         "en": {
             "name": "mreview / review",
-            "summary": "Move what is worth keeping from the timeline into documents",
-            "description": """Reads the entries since the last review and proposes up to five things to move into documents, updates of existing documents first.
+            "summary": "Go over recent entries: moves into documents, and an optional reflection",
+            "description": """A review goes over the entries since the last one, in two steps:
+
+- Moves: the AI proposes what is worth finding again later. The result goes into documents. This is about what you know.
+- Reflection (optional): you write about how the period went. The result stays in the review file. This is about how you worked.
+
+Reads the entries since the last review and proposes up to five things to move into documents, updates of existing documents first.
 
 For each proposal choose: write now, write later, or reject. While more than five items remain open, nothing can be put off. Writing opens a menu of the installed AI CLIs (Claude Code, Codex, Antigravity) and writing on your own. At the end you may reflect on the period, or skip it.
 
@@ -371,8 +376,13 @@ Reviews are saved as reviews/YYYY-MM-DD.md. A notice appears on the day's first 
         },
         "ko": {
             "name": "mreview / review",
-            "summary": "타임라인에서 남길 내용을 문서로 옮기기",
-            "description": """지난 리뷰 이후의 기록을 읽고, 문서로 옮길 내용을 다섯 건까지 제안합니다. 기존 문서 갱신을 먼저 제안합니다.
+            "summary": "최근 기록 살펴보기: 문서로 옮기기와 선택 사항인 돌아보기",
+            "description": """리뷰는 지난 리뷰 이후의 기록을 두 단계로 살펴보는 일입니다.
+
+- 옮기기: 나중에 다시 찾아볼 내용을 AI가 제안합니다. 결과는 문서에 남습니다. 무엇을 알게 되었는지를 다룹니다.
+- 돌아보기(선택): 이 기간에 어떻게 일했는지 직접 씁니다. 결과는 리뷰 파일에 남습니다. 어떻게 일했는지를 다룹니다.
+
+지난 리뷰 이후의 기록을 읽고, 문서로 옮길 내용을 다섯 건까지 제안합니다. 기존 문서 갱신을 먼저 제안합니다.
 
 제안마다 지금 쓰기, 나중에 쓰기, 거절 중에서 고릅니다. 남은 항목이 다섯 건을 넘는 동안에는 미룰 수 없습니다. 쓰기를 고르면 설치된 AI CLI(Claude Code, Codex, Antigravity)와 혼자 쓰기를 메뉴로 보여 줍니다. 마지막으로 그 기간을 돌아보거나 건너뜁니다.
 

@@ -2,7 +2,7 @@
   "name": "memory-tool-timeline",
   "displayName": "Memory Tool Timeline",
   "description": "Record to the memory_tool timeline, read back across days, and search, from inside VS Code.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "hanyki111",
   "license": "MIT",
   "repository": {

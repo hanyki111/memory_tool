@@ -599,6 +599,14 @@ msort today --no-backup
 
 ### `mreview` - Review
 
+A review goes over the entries since the last one, in two steps:
+
+| | Moves | Reflection (optional) |
+|:---|:---|:---|
+| What it asks | What is worth finding again later? | How did this period go? |
+| Who starts | The AI proposes, you choose | You write |
+| Where it ends up | In documents | In the review file |
+
 **Purpose:** Move what is worth keeping from the timeline into documents, and optionally reflect on the period
 
 **Usage:**

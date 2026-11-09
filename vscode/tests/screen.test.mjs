@@ -133,8 +133,18 @@ describe("periods and review", () => {
     assert.deepEqual(last().loaded, { from: "2026-10-26", to: "2026-11-01" });
 
     await screen.handle({ type: "older" });
-    await screen.handle({ type: "review" });
+    await screen.handle({ type: "reviewFrom" });
     assert.deepEqual(host.reviews, ["2026-10-19"]);
+  });
+
+  test("the plain review ignores what the screen has loaded", async () => {
+    const { screen, host } = setup([]);
+    await screen.handle({ type: "quick", which: "lastWeek" });
+    await screen.handle({ type: "older" });
+
+    await screen.handle({ type: "review" });
+
+    assert.deepEqual(host.reviews, [null]);
   });
 
   test("a bad period is reported, not loaded", async () => {

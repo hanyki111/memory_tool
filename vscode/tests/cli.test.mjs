@@ -133,3 +133,12 @@ describe("running the CLI", () => {
     await assert.rejects(cli.run(["days", "--json"], 1), (e) => e.code === "timeout");
   });
 });
+
+test("a review starts from the last one unless a date is chosen", () => {
+  const cli = new MemoryToolCli({ python: "python", cwd: "." });
+
+  assert.deepEqual(cli.reviewCommand(), ["python", "-m", "memory_tool", "review"]);
+  assert.deepEqual(cli.reviewCommand("2026-10-19"), [
+    "python", "-m", "memory_tool", "review", "--since", "2026-10-19",
+  ]);
+});
