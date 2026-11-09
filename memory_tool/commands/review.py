@@ -275,20 +275,35 @@ def _reflect(review: Review) -> bool:
         store.save_review(review)
         return True
 
+    def settle_after_writing(before: str) -> bool:
+        # Leaving a tool or an editor says nothing about whether anything was
+        # written, for example after Ctrl+C. Only the file can tell.
+        if store.reflection_text(review.path) != before:
+            return finish_with(store.REFLECTION_WRITTEN)
+
+        _print()
+        _print(say(
+            "Nothing was written in the reflection.",
+            "돌아보기에 아무것도 적히지 않았습니다.",
+        ))
+        return _reflect(review)
+
     def with_tool(tool: writer.WritingTool) -> bool:
+        before = store.reflection_text(review.path)
         _print(say(f"Starting {tool.name}. Leave it when you are done.", f"{tool.name}을(를) 실행합니다. 다 쓰면 종료해 주세요."))
         writer.reflect_with_tool(tool, get_base_path(), get_project_root(), review)
-        return finish_with(store.REFLECTION_WRITTEN)
+        return settle_after_writing(before)
 
     def alone() -> bool:
+        before = store.reflection_text(review.path)
         _print(f"-> {display_path(review.path)}")
         writer.open_in_editor(review.path)
-        return finish_with(store.REFLECTION_WRITTEN)
+        return settle_after_writing(before)
 
     _print()
     _print(say(
-        f"Reflection (optional): {review.entry_count} entries on {review.active_days} days.",
-        f"돌아보기(선택 사항): 활동 {review.active_days}일, 기록 {review.entry_count}건입니다.",
+        f"Reflection (optional), for this review file: {review.entry_count} entries on {review.active_days} days.",
+        f"돌아보기(선택 사항, 이 리뷰 파일에 씁니다): 활동 {review.active_days}일, 기록 {review.entry_count}건입니다.",
     ))
     _print(say(
         "Write about how this period went, such as problems that repeated or what turned out "
@@ -323,10 +338,20 @@ def _finish(review: Review) -> None:
     later = len(review.open_items())
     rejected = sum(item.state == store.STATE_REJECTED for item in review.items)
 
+    reflection = {
+        store.REFLECTION_WRITTEN: say("written", "작성함"),
+        store.REFLECTION_SKIPPED: say("skipped", "건너뜀"),
+    }.get(review.reflection, say("not done", "하지 않음"))
+    # With no entries read, a reflection was never offered.
+    reflection_en = f" Reflection: {reflection}." if review.entry_count else ""
+    reflection_ko = f" 돌아보기: {reflection}." if review.entry_count else ""
+
     _print()
     _print(say(
-        f"Review finished: {written} written, {later} for later, {rejected} rejected.",
-        f"리뷰를 마쳤습니다. 썼음 {written}건, 대기 {later}건, 거절 {rejected}건입니다.",
+        f"Review finished. Moves: {written} written, {later} for later, {rejected} rejected."
+        f"{reflection_en}",
+        f"리뷰를 마쳤습니다. 옮기기: 썼음 {written}건, 대기 {later}건, 거절 {rejected}건."
+        f"{reflection_ko}",
     ))
     _print(f"-> {display_path(review.path)}")
 
@@ -342,6 +367,13 @@ def _work_through(review: Review, tool: Optional[str]) -> None:
         _print(say(
             f"{review.dropped} more candidates were left out. Their entries stay in the timeline.",
             f"이 밖의 후보 {review.dropped}건은 제외했습니다. 원본은 타임라인에 남아 있습니다.",
+        ))
+
+    if not review.items:
+        _print()
+        _print(say(
+            "Moves: nothing in this period is worth moving into a document.",
+            "옮기기: 이 기간에는 문서로 옮길 만한 내용이 없습니다.",
         ))
 
     if review.undecided_items():
@@ -456,7 +488,11 @@ def review(
     with_tool: Optional[str] = typer.Option(None, "--with", help="How to write, skipping the menu: claude, codex, antigravity or solo"),
     as_json: bool = typer.Option(False, "--json", help="Start or read the review without asking anything, and print it as JSON"),
 ):
-    """Find what is worth moving from the timeline into documents.
+    """Go over the entries since the last review, in two steps.
+
+    Moves: the AI proposes what is worth keeping in a document, and the result
+    goes into those documents. Reflection (optional): you write about how the
+    period went, and the result stays in the review file.
 
     With no command, starts a review of the entries since the last one, or
     continues the review in progress.

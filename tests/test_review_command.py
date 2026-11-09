@@ -563,7 +563,7 @@ class TestReflection:
     def test_enter_starts_the_default_tool_with_the_period_and_guide(self, base, monkeypatch):
         tools = FakeTools(monkeypatch)
 
-        result = run(input="\n")
+        result = run(input="\ns\n")
 
         assert result.exit_code == 0, result.output
         path, content = tools.work_files[0]
@@ -571,7 +571,6 @@ class TestReflection:
         assert "synthetic [entry]" in content
         assert store.latest_review(base).path.name in content
         assert not path.exists()
-        assert store.latest_review(base).reflection == store.REFLECTION_WRITTEN
 
     def test_generates_no_questions_in_advance(self, base):
         FakeClient.answer = answer(0)
@@ -643,3 +642,72 @@ class TestSinceAfterLastReview:
         self.finish_a_review(base, "2026-10-01T12:00")
 
         assert not self.warned(run())
+
+
+class TestReflectionIsCheckedInTheFile:
+    @pytest.fixture
+    def tools(self, base, monkeypatch):
+        add_entry_now(base)
+        FakeClient.answer = answer(0)
+        return FakeTools(monkeypatch, installed=("claude",))
+
+    def test_leaving_a_tool_without_writing_asks_again(self, base, tools):
+        result = run(input="1\ns\n")
+
+        assert result.exit_code == 0, result.output
+        assert len(tools.calls) == 1
+        assert store.latest_review(base).reflection == store.REFLECTION_SKIPPED
+
+    def test_leaving_an_editor_without_writing_asks_again(self, base, tools, monkeypatch):
+        monkeypatch.setattr("memory_tool.review.writer.open_in_editor", lambda path: None)
+
+        result = run(input="2\ns\n")
+
+        assert result.exit_code == 0, result.output
+        assert store.latest_review(base).reflection == store.REFLECTION_SKIPPED
+
+    def test_text_written_by_the_tool_counts(self, base, tools, monkeypatch):
+        def writes(arguments, cwd=None, **kwargs):
+            path = store.latest_review(base).path
+            with path.open("a", encoding="utf-8") as file:
+                file.write("\nA synthetic reflection.\n")
+
+        monkeypatch.setattr("memory_tool.review.writer.subprocess.run", writes)
+
+        result = run(input="1\n")
+
+        assert result.exit_code == 0, result.output
+        review = store.latest_review(base)
+        assert review.is_done
+        assert review.reflection == store.REFLECTION_WRITTEN
+
+    def test_prepared_questions_are_not_an_answer(self, tmp_path):
+        path = tmp_path / "review.md"
+        path.write_text("# r\n\n## 돌아보기\n\n<!-- 질문 -->\n", encoding="utf-8")
+        assert store.reflection_text(path) == ""
+
+        path.write_text("# r\n\n## 돌아보기\n\n<!-- 질문 -->\n\n답\n", encoding="utf-8")
+        assert store.reflection_text(path) == "답"
+
+    def test_a_missing_file_has_no_text(self, tmp_path):
+        assert store.reflection_text(tmp_path / "absent.md") == ""
+
+
+class TestWhatTheReviewSays:
+    def test_the_end_message_reports_the_reflection(self, base, monkeypatch):
+        add_entry_now(base)
+        FakeClient.answer = answer(0)
+        FakeTools(monkeypatch, installed=("claude",))
+
+        output = " ".join(run(input="s\n").output.split())
+
+        assert ("Reflection: skipped" in output) or ("돌아보기: 건너뜀" in output)
+
+    def test_no_proposals_are_stated_before_the_reflection(self, base, monkeypatch):
+        add_entry_now(base)
+        FakeClient.answer = answer(0)
+        FakeTools(monkeypatch, installed=("claude",))
+
+        output = " ".join(run(input="s\n").output.split())
+
+        assert ("nothing in this period" in output) or ("문서로 옮길 만한 내용이 없습니다" in output)
