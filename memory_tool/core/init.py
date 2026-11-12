@@ -137,11 +137,9 @@ class MemoryInitializer:
             structure[under(name)] = "dir"
             structure[under(name, ".gitkeep")] = "file"
 
+        # Skill folders are created by create_claude_skills(), one per
+        # template, so they are not listed here.
         structure[".claude"] = "dir"
-        structure[".claude/skills"] = "dir"
-        structure[".claude/skills/mt-publish"] = "dir"
-        structure[".claude/skills/mt-master-module"] = "dir"
-        structure[".claude/skills/mt-write"] = "dir"
 
         return structure
 
@@ -572,42 +570,43 @@ mcheck                   # Verify module paths
 
         return created_files
 
-    def create_claude_skills(self) -> list[Path]:
-        """Copy memory_tool skills to project's .claude/skills/.
+    def skill_dirs(self) -> list[Path]:
+        """The folders that receive the memory_tool skills.
 
-        Copies the KB federation skills (mt-publish, mt-master-module) and the
-        writing support skill (mt-write).
-        Skills are stored inside the package at memory_tool/templates/skills/.
+        Claude Code reads .claude/skills/; Codex and other agents that follow
+        the Agent Skills layout read .agents/skills/.
+        """
+        return [
+            self.claude_path / "skills",
+            self.base_path / ".agents" / "skills",
+        ]
+
+    def create_claude_skills(self) -> list[Path]:
+        """Copy memory_tool skills to every skill folder of the project.
+
+        Every folder under memory_tool/templates/skills/ that holds a SKILL.md
+        is a skill, so a new template is installed without editing this list.
+        Each one is copied to .claude/skills/<name>/ and .agents/skills/<name>/.
 
         Returns:
             List of paths to created skill files
         """
         created_files = []
 
-        # Skills to copy
-        skill_names = ["mt-publish", "mt-master-module", "mt-write"]
+        source_base = Path(__file__).parent.parent / "templates" / "skills"
+        if not source_base.is_dir():
+            return created_files
 
-        # Source: memory_tool package's templates/skills/
-        package_dir = Path(__file__).parent.parent  # memory_tool/
-        source_base = package_dir / "templates" / "skills"
+        sources = sorted(
+            d for d in source_base.iterdir() if (d / "SKILL.md").is_file()
+        )
 
-        for skill_name in skill_names:
-            source_skills_dir = source_base / skill_name
-            # Destination: project's .claude/skills/<skill>/
-            dest_skills_dir = self.claude_path / "skills" / skill_name
-
-            if not source_skills_dir.exists():
-                # If skill doesn't exist in package, skip
-                continue
-
-            # Ensure destination directory exists
-            dest_skills_dir.mkdir(parents=True, exist_ok=True)
-
-            # Copy SKILL.md (the only required file for Claude Skills)
-            source_file = source_skills_dir / "SKILL.md"
-            if source_file.exists():
-                dest_file = dest_skills_dir / "SKILL.md"
-                shutil.copy2(source_file, dest_file)
+        for dest_base in self.skill_dirs():
+            for source_dir in sources:
+                dest_dir = dest_base / source_dir.name
+                dest_dir.mkdir(parents=True, exist_ok=True)
+                dest_file = dest_dir / "SKILL.md"
+                shutil.copy2(source_dir / "SKILL.md", dest_file)
                 created_files.append(dest_file)
 
         return created_files
