@@ -4,15 +4,16 @@
 
 ---
 
-## Context Files
+## Memory Tool
 
-**Always read these files:**
+- At the start of a session, read `.claude/memory-context.md`. If it is missing or stale, run `mcontext`.
+- Record to the timeline only with `m`. Never create or edit timeline files by hand.
+- When to record: at the start and end of each feature (see Development Workflow), and for decisions (`m "Decision: ..."`).
+- Before answering a question about past work, search with `ms`. Do not guess.
+- The knowledge base folder is not always `.memory/`. Run `mbase show` instead of assuming a path.
 
-1. `.claude/memory-context.md` - Current project state (auto-generated)
-2. `.claude/guidelines.md` - memory_tool usage guide
-
-**For module work:**
-- `.memory/docs/MODULE-ORGANIZATION.md` - Module organization principles
+How to do each of these: the `mt-record` skill. Writing documents: `mt-write`
+(rules in `.memory/docs/MODULE-ORGANIZATION.md`). Publishing: `mt-publish`.
 
 ---
 
@@ -30,26 +31,16 @@
 
 ---
 
-## Quick Commands
-
-```bash
-m "message"              # Record to timeline
-ms "query"               # Search
-mcontext                 # Build context for AI
-mcheck                   # Verify module paths
-mtoday                   # Today's timeline
-mweek                    # This week's timeline
-```
-
----
-
 ## Dogfooding Principle
 
 **This project uses its own tools:**
 
 - **Timeline:** Use `m` command (don't edit files directly)
-- **Modules:** Use Edit tool for `current.md`, `decisions.md`
-- **Context:** Run `mcontext` before AI sessions
+- **Small decisions:** Record in the timeline (`m "Decision: ..."`)
+- **Documents:** Use Edit tool, for what someone will look up or need explained later. See `mmodule guide`
+- **Resuming work:** Read the recent timeline and `git log`. Read Goal Loop as well if it is available; it is a separate program and may be absent
+
+There is no status document to maintain.
 
 ---
 
@@ -62,14 +53,16 @@ mweek                    # This week's timeline
 4. Record Start    → m "Starting feature X"
 5. Implement       → Write code
 6. Test            → Verify functionality
-7. Record End      → m "Completed..." + Update modules
-8. Merge           → Commit, push, merge to main
+7. Record End      → m "Completed..." + Update affected documents
+8. Merge           → Commit, push, merge to main; tag a version bump
 ```
 
 **Key Points:**
 - Always get user approval before implementing
 - Record timeline entries with `m` command
-- Update module `current.md` and `decisions.md` after completion
+- After completion, update the documents the work made wrong. Create a new one only if it will be looked up again
+- A merge that raises a version gets an annotated tag: `vX.Y.Z` (memory_tool, on the merge commit) or
+  `android-vX.Y.Z` (the app, on the commit that set `versionName`, which the tested APK was built from)
 
 ---
 
@@ -86,15 +79,18 @@ mweek                    # This week's timeline
 ## Module Structure
 
 ```
-.memory/modules/projects/memory-tool/
-├── core-system/         # Timeline, initialization
-├── search-system/       # Text, vector search
-├── module-system/       # Modules, wiki links
-├── ui-system/           # CLI, TUI
-├── llm-integration/     # LLM features
-└── project-management/  # Architecture, decisions
+.memory/modules/memory-tool/
+├── core-system/             # Timeline, initialization
+├── search-system/           # Text, vector search
+├── module-system/           # Modules, wiki links
+├── knowledge-graph-system/  # Connections
+├── ui-system/               # CLI, TUI
+├── llm-integration/         # LLM features
+└── project-management/      # Architecture, decisions
 ```
 
 ---
 
-**Remember:** Run `mcontext` to get current project state before starting work.
+**Skills are templates:** edit `memory_tool/templates/skills/`, then run
+`minit --update-all` to refresh `.claude/skills/` and `.agents/skills/`. A test
+fails when the copies drift.

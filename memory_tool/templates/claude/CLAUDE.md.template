@@ -1,0 +1,20 @@
+# For AI Agent
+
+> Copy this into your project's `CLAUDE.md` (or `AGENTS.md`) and adjust the rules.
+> Only rules that always apply belong here. How to use the tools is in the skills,
+> which load when a request needs them.
+
+## Memory Tool
+
+- At the start of a session, read `.claude/memory-context.md`. If it is missing or stale, run `mcontext`.
+- Record to the timeline only with `m`. Never create or edit timeline files by hand.
+- When to record: at natural breakpoints. Finish the work, show the result, then ask whether to record it. *(Change this line to suit the project, for example "record every attempt and failure".)*
+- Before answering a question about past work, search with `ms`. Do not guess.
+- Small decisions go in the timeline. Write a document only for what someone will look up or need explained later.
+- The knowledge base folder is not always `.memory/`. Run `mbase show` instead of assuming a path.
+
+How to do each of these: the `mt-record` skill. Writing documents: `mt-write`. Publishing to the knowledge base: `mt-publish`.
+
+## Project
+
+<!-- Purpose, workflow, conventions and other rules for this project -->

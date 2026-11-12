@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ✨ Added
+
+- **`mt-record` 스킬:** 기록, 검색, 타임라인 읽기, 맥락 생성, 작업 재개 방법을 담습니다. 예전에 `.claude/guidelines.md`가 맡던 사용법입니다. 언제 기록할지는 프로젝트의 `CLAUDE.md`가 정합니다.
+
+### 🔄 변경
+
+- **CLAUDE.md 템플릿:** 항상 적용되는 규칙 몇 줄과 스킬 이름만 남겼습니다. 원본은 `memory_tool/templates/claude/CLAUDE.md.template` 하나이며, `minit`이 `<base>/templates/`로 복사합니다. 저장소 루트의 오래된 `CLAUDE.md.template`은 삭제했습니다.
+- **`mt-write`:** 문서 종류 네 가지, 폴더를 직접 만들지 않는 규칙, `sources`로 코드와 연결하는 방법을 추가했습니다.
+- **`minit --update-all`:** 스킬과 CLAUDE.md 템플릿을 갱신합니다. 예전 `.claude/guidelines.md`가 있으면 `guidelines.md.backup`으로 이름을 바꾸고, `CLAUDE.md`에서 지울 줄을 안내합니다.
+
+### 🗑️ 삭제
+
+- **`.claude/guidelines.md`:** `minit`이 더 이상 만들지 않습니다.
+
 ## [1.9.0] - 2026-11-13
 
 ### ✨ Added

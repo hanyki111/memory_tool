@@ -179,9 +179,56 @@ def test_update_all_refreshes_skills_in_both_folders(project):
     stale = project / ".agents" / "skills" / "mt-write" / "SKILL.md"
     stale.write_text("old", encoding="utf-8")
 
-    initializer.update_docs(include_guidelines=True)
+    initializer.update_docs(include_skills=True)
 
     assert "mmodule guide" in stale.read_text(encoding="utf-8")
+
+
+def test_minit_no_longer_writes_guidelines(tmp_path):
+    tmp_path = tmp_path / "fresh"
+    tmp_path.mkdir()
+    MemoryInitializer(tmp_path).initialize()
+
+    assert not (tmp_path / ".claude" / "guidelines.md").exists()
+    assert (tmp_path / ".claude" / "skills" / "mt-record" / "SKILL.md").is_file()
+    assert (tmp_path / ".agents" / "skills" / "mt-record" / "SKILL.md").is_file()
+
+
+def test_claude_template_points_to_the_skills(tmp_path):
+    tmp_path = tmp_path / "fresh"
+    tmp_path.mkdir()
+    initializer = MemoryInitializer(tmp_path)
+    initializer.initialize()
+
+    template = initializer.memory_path / "templates" / "CLAUDE.md.template"
+    text = template.read_text(encoding="utf-8")
+    assert "mt-record" in text and "mt-write" in text
+    assert "guidelines.md" not in text
+
+
+def test_update_all_sets_old_guidelines_aside(project):
+    old = project / ".claude" / "guidelines.md"
+    old.parent.mkdir(parents=True, exist_ok=True)
+    old.write_text("my own notes", encoding="utf-8")
+
+    result = MemoryInitializer(project).update_docs(include_skills=True)
+
+    backup = project / ".claude" / "guidelines.md.backup"
+    assert not old.exists()
+    assert backup.read_text(encoding="utf-8") == "my own notes"
+    assert result["retired_guidelines"] == backup
+
+
+def test_update_all_cli_explains_the_retired_guidelines(project):
+    old = project / ".claude" / "guidelines.md"
+    old.parent.mkdir(parents=True, exist_ok=True)
+    old.write_text("old", encoding="utf-8")
+
+    result = runner.invoke(app, ["init", str(project), "--update-all"])
+
+    assert result.exit_code == 0, result.output
+    assert "no longer used" in result.output
+    assert "mt-record" in result.output
 
 
 def test_this_repository_skill_copies_match_the_templates():
