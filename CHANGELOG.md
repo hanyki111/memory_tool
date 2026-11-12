@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-11-13
+
+### ✨ Added
+
+- **Codex용 스킬 설치:** `minit`과 `minit --update-all`은 스킬을 `.claude/skills/`와 `.agents/skills/`에 함께 설치합니다. Codex처럼 `.agents/skills/`를 읽는 에이전트도 같은 스킬을 사용합니다.
+
+### 🔄 변경
+
+- **설치할 스킬 목록:** 정해 둔 목록 대신, 패키지에 들어 있는 스킬을 모두 설치합니다. 스킬이 추가되면 따로 고치지 않아도 설치됩니다.
+
 ## [1.8.0] - 2026-11-09
 
 ### 🔄 변경

@@ -1,5 +1,7 @@
 """Tests for writing guides, the mt-write skill and from-text."""
 
+from pathlib import Path
+
 import pytest
 from typer.testing import CliRunner
 
@@ -151,6 +153,53 @@ def test_minit_installs_the_writing_skill(project):
     skill = project / ".claude" / "skills" / "mt-write" / "SKILL.md"
     assert skill in created
     assert "mmodule guide" in skill.read_text(encoding="utf-8")
+
+
+def _template_skills():
+    from memory_tool.core import init as init_module
+
+    base = Path(init_module.__file__).parent.parent / "templates" / "skills"
+    return sorted(d.name for d in base.iterdir() if (d / "SKILL.md").is_file())
+
+
+def test_minit_installs_every_skill_for_claude_and_agents(project):
+    created = MemoryInitializer(project).create_claude_skills()
+
+    names = _template_skills()
+    assert {"mt-publish", "mt-master-module", "mt-write"} <= set(names)
+    for folder in (project / ".claude" / "skills", project / ".agents" / "skills"):
+        for name in names:
+            assert folder / name / "SKILL.md" in created
+    assert len(created) == 2 * len(names)
+
+
+def test_update_all_refreshes_skills_in_both_folders(project):
+    initializer = MemoryInitializer(project)
+    initializer.create_claude_skills()
+    stale = project / ".agents" / "skills" / "mt-write" / "SKILL.md"
+    stale.write_text("old", encoding="utf-8")
+
+    initializer.update_docs(include_guidelines=True)
+
+    assert "mmodule guide" in stale.read_text(encoding="utf-8")
+
+
+def test_this_repository_skill_copies_match_the_templates():
+    """The development repository commits its skill copies; keep them in sync."""
+    from memory_tool.core import init as init_module
+
+    repo = Path(init_module.__file__).parent.parent.parent
+    templates = repo / "memory_tool" / "templates" / "skills"
+    if not (repo / ".git").exists():
+        pytest.skip("not running from the development repository")
+
+    for folder in (repo / ".claude" / "skills", repo / ".agents" / "skills"):
+        for name in _template_skills():
+            copy = folder / name / "SKILL.md"
+            assert copy.is_file(), f"missing {copy}; run 'minit --update-all'"
+            assert copy.read_bytes() == (templates / name / "SKILL.md").read_bytes(), (
+                f"{copy} differs from the template; run 'minit --update-all'"
+            )
 
 
 # --- from-text ---------------------------------------------------------------
