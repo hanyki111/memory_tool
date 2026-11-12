@@ -1275,9 +1275,11 @@ your-project/
 │   ├── concepts/                # 개념 문서
 │   └── config.yaml              # 설정
 │
-└── .claude/                     # Claude Code 통합
-    ├── memory-context.md        # 자동 생성 컨텍스트
-    └── guidelines.md            # 사고 지침
+├── .claude/                     # Claude Code 통합
+│   ├── memory-context.md        # 자동 생성 컨텍스트
+│   └── skills/                  # mt-record, mt-write, mt-publish 등
+│
+└── .agents/skills/              # Codex 등 다른 에이전트용 같은 스킬
 ```
 
 ---
@@ -1293,9 +1295,22 @@ your-project/
 ### 설정
 
 ```bash
-# CLAUDE.md 템플릿 복사 (선택)
-cp CLAUDE.md.template CLAUDE.md
+# CLAUDE.md 템플릿 복사 (선택). 기본 폴더가 .memory/가 아니면 mbase show로 확인합니다.
+cp .memory/templates/CLAUDE.md.template CLAUDE.md
 ```
+
+`CLAUDE.md`에는 항상 적용되는 규칙만 둡니다(기록은 `m`으로만, 언제 기록할지 등).
+명령 문법과 절차는 `minit`이 설치하는 스킬에 있으며, 요청에 맞을 때 불러옵니다.
+
+| 스킬 | 맡는 일 |
+|:---|:---|
+| `mt-record` | 기록, 검색, 타임라인 읽기, 맥락 생성, 작업 재개 |
+| `mt-write` | 문서 작성 돕기 (질문하고 지적하며, 요청할 때만 대신 씀) |
+| `mt-publish`, `mt-master-module` | 지식 베이스 발행 |
+
+예전 버전이 만든 `.claude/guidelines.md`는 더 이상 쓰지 않습니다.
+`minit --update-all`을 실행하면 이 파일을 `guidelines.md.backup`으로 바꾸고,
+`CLAUDE.md`에서 지워도 되는 줄을 알려 줍니다.
 
 ---
 

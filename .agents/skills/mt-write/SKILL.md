@@ -28,9 +28,21 @@ The user keeps a knowledge base partly to keep their own reading and writing ski
    mmodule create "<path>" --type <type> --desc "<one sentence>"
    ```
 
-   This writes frontmatter and a title. Do not add headings or placeholders to it.
+   This writes frontmatter and a title. Do not add headings or placeholders to it. Do not create folders with `mkdir`: when a document gets children, the tool moves `topic.md` to `topic/topic.md` itself.
+
+   The four types are 참고 (what was that value or fact?), 이해 (why does this work this way?), 방법 (how do I do this?) and 판단 (why did I see it, or decide it, that way?). The full rules are in `<base>/docs/MODULE-ORGANIZATION.md` (`mbase show` gives the base folder).
 
 5. **Follow the guide's order:** ask, point out problems after they write, offer an outline when they are stuck, and write for them only on request.
+
+## Linking a document to code
+
+List what a document rests on in its frontmatter, and check the paths with `mcheck`. Existing `## Related Files` sections are still read.
+
+```yaml
+sources:
+  - id: source
+    resource: src/feature/
+```
 
 ## When you write the body yourself
 

@@ -2,7 +2,8 @@
 
 - 작성일: 2026-11-12
 - 출처: `memory_notion` 저장소에서 진행한 프로젝트 설정 점검 세션 (`project-setup` 스킬 시험)
-- 상태: 방향만 정했으며, 구현은 시작하지 않았습니다. 같은 방향의 Goal Loop 작업은 `goal_loop_tool/docs/handoff/2026-11-12-skills-over-instructions.md`에 있습니다.
+- 상태: memory_tool 쪽 작업 1~3과 5는 구현했습니다(1.9.0에서 `.agents/skills/` 설치, 이후 `mt-record`와 템플릿 정리). 작업 4는 `memory_notion`의 `CLAUDE.md`를 사용자가 직접 정리하도록 안내했습니다. SessionStart hook은 범위에서 뺐습니다. 같은 방향의 Goal Loop 작업은 `goal_loop_tool/docs/handoff/2026-11-12-skills-over-instructions.md`에 있습니다.
+- 열린 질문의 결론: 새 스킬은 `mt-record` 하나로 정했습니다. `guidelines.md`는 남기지 않고, `minit --update-all`이 `.backup`으로 이름을 바꿉니다.
 
 > 이 문서와 테스트 데이터에 실제 업무 노트를 넣지 마십시오. 회귀 테스트는 합성 데이터로 작성합니다.
 

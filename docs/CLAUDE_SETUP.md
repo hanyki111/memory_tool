@@ -26,9 +26,18 @@ This guide explains how to set up `CLAUDE.md` for your project to provide contex
 ### 1. Copy the Template
 
 ```bash
-# From your project root
-cp CLAUDE.md.template CLAUDE.md
+# From your project root (run `mbase show` if the base folder is not .memory/)
+cp .memory/templates/CLAUDE.md.template CLAUDE.md
 ```
+
+The template holds only the rules that always apply: record only with `m`,
+when to record, search before answering about past work. How to use the
+commands is in the skills that `minit` installs into `.claude/skills/` and
+`.agents/skills/` (`mt-record`, `mt-write`, `mt-publish`). Skills load when a
+request matches them, so keep command references out of `CLAUDE.md`.
+
+A rule that must apply even when nobody asks (for example "record every
+attempt") has to stay in `CLAUDE.md`: a skill alone would not be loaded.
 
 ### 2. Customize CLAUDE.md
 
@@ -391,14 +400,13 @@ mcontext
 2. File is in project root directory
 3. Claude Code is started from project root
 
-### CLAUDE.md vs .claude/guidelines.md?
+### What happened to .claude/guidelines.md?
 
-**Different purposes:**
-
-- **CLAUDE.md** - Project-specific, what to work on
-- **.claude/guidelines.md** - How to think and approach problems
-
-Both are read by Claude Code. Use both for best results.
+Older versions created it as a usage guide that `CLAUDE.md` told agents to
+read every session. Its content now lives in the `mt-record` and `mt-write`
+skills, which load only when needed. `minit --update-all` renames an existing
+file to `guidelines.md.backup`; remove the line that points to it from your
+`CLAUDE.md` or `AGENTS.md`.
 
 ### Should I Commit CLAUDE.md to Git?
 
@@ -493,7 +501,7 @@ sed -e "s/{{DATE}}/$DATE/" \
 
 ## Summary
 
-1. **Copy template:** `cp CLAUDE.md.template CLAUDE.md`
+1. **Copy template:** `cp .memory/templates/CLAUDE.md.template CLAUDE.md`
 2. **Customize** with your project info
 3. **Add to .gitignore:** `echo "CLAUDE.md" >> .gitignore`
 4. **Update regularly** as project evolves

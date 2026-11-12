@@ -19,7 +19,7 @@ def init(
     force: bool = typer.Option(False, "--force", "-f", help="Force reinitialize (overwrites existing)"),
     kb: Optional[str] = typer.Option(None, "--kb", help="Path to knowledge base directory"),
     update_docs: bool = typer.Option(False, "--update-docs", help="Update documentation templates only"),
-    update_all: bool = typer.Option(False, "--update-all", help="Update all templates (creates backups)"),
+    update_all: bool = typer.Option(False, "--update-all", help="Update templates and skills (creates backups)"),
     base: Optional[str] = typer.Option(
         None,
         "--base",
@@ -67,7 +67,7 @@ def init(
     try:
         # Handle --update-docs or --update-all mode
         if update_docs or update_all:
-            result = initializer.update_docs(include_guidelines=update_all)
+            result = initializer.update_docs(include_skills=update_all)
 
             if result["files"]:
                 console.print(f"[green]OK[/green] Updated documentation templates")
@@ -77,6 +77,18 @@ def init(
             if result.get("backed_up"):
                 for f in result["backed_up"]:
                     console.print(f"  [yellow]Backup: {f.relative_to(target_path)}[/yellow]")
+
+            if result.get("retired_guidelines"):
+                console.print(
+                    "\n[cyan].claude/guidelines.md is no longer used.[/cyan] "
+                    "Its guide is now in the mt-record and mt-write skills."
+                )
+                console.print(
+                    "[dim]Your CLAUDE.md / AGENTS.md may still tell agents to read it. "
+                    "Remove that line, and move rules that always apply into CLAUDE.md. "
+                    "See the template: "
+                    f"{(initializer.memory_path / 'templates' / 'CLAUDE.md.template').relative_to(target_path)}[/dim]"
+                )
 
             return
 

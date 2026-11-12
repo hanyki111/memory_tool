@@ -574,7 +574,9 @@ primary 동기화 후 secondary push-only 미러가 실행됩니다.
             "summary": "Initialize .memory/ structure",
             "description": """
 Creates the .memory/ directory structure for a new project.
-Also creates .claude/ directory for Claude Code integration.
+Also installs the mt-* skills into .claude/skills/ (Claude Code) and
+.agents/skills/ (Codex and other agents), and writes a CLAUDE.md template
+to <base>/templates/CLAUDE.md.template.
 
 Run this command once in your project root to start using Memory Tool.
             """,
@@ -583,12 +585,13 @@ Run this command once in your project root to start using Memory Tool.
                 "minit --force              # Reinitialize (overwrites existing)",
                 "minit --kb /path/to/kb     # Set knowledge base path",
                 "minit --update-docs        # Update documentation templates only",
+                "minit --update-all         # Also update the skills and the CLAUDE.md template",
             ],
             "options": [
                 ("--force, -f", "Force reinitialize (overwrites existing)"),
                 ("--kb", "Path to knowledge base directory"),
                 ("--update-docs", "Update documentation templates only"),
-                ("--update-all", "Update all templates (creates backups)"),
+                ("--update-all", "Also update skills and the CLAUDE.md template; sets aside an old .claude/guidelines.md"),
             ],
         },
         "ko": {
@@ -596,7 +599,9 @@ Run this command once in your project root to start using Memory Tool.
             "summary": ".memory/ 구조 초기화",
             "description": """
 새 프로젝트를 위한 .memory/ 디렉토리 구조를 생성합니다.
-Claude Code 연동을 위한 .claude/ 디렉토리도 생성합니다.
+mt-* 스킬을 .claude/skills/(Claude Code)와 .agents/skills/(Codex 등 다른
+에이전트)에 설치하고, CLAUDE.md 템플릿을 <base>/templates/CLAUDE.md.template에
+만듭니다.
 
 Memory Tool 사용을 시작하려면 프로젝트 루트에서 이 명령어를 한 번 실행하세요.
             """,
@@ -605,12 +610,13 @@ Memory Tool 사용을 시작하려면 프로젝트 루트에서 이 명령어를
                 "minit --force              # 재초기화 (기존 파일 덮어쓰기)",
                 "minit --kb /path/to/kb     # 지식 베이스 경로 설정",
                 "minit --update-docs        # 문서 템플릿만 업데이트",
+                "minit --update-all         # 스킬과 CLAUDE.md 템플릿도 업데이트",
             ],
             "options": [
                 ("--force, -f", "강제 재초기화 (기존 파일 덮어쓰기)"),
                 ("--kb", "지식 베이스 디렉토리 경로"),
                 ("--update-docs", "문서 템플릿만 업데이트"),
-                ("--update-all", "모든 템플릿 업데이트 (백업 생성)"),
+                ("--update-all", "스킬과 CLAUDE.md 템플릿도 업데이트하고, 예전 .claude/guidelines.md는 백업으로 바꿈"),
             ],
         },
     },
