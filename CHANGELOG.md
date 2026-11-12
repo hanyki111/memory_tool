@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-11-13
+
 ### ✨ Added
 
 - **`mt-record` 스킬:** 기록, 검색, 타임라인 읽기, 맥락 생성, 작업 재개 방법을 담습니다. 예전에 `.claude/guidelines.md`가 맡던 사용법입니다. 언제 기록할지는 프로젝트의 `CLAUDE.md`가 정합니다.
