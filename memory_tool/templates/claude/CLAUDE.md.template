@@ -1,6 +1,7 @@
 # For AI Agent
 
-> Copy this into your project's `CLAUDE.md` (or `AGENTS.md`) and adjust the rules.
+> Copy this into your project's `AGENTS.md` and adjust the rules. `CLAUDE.md` imports it
+> with one line: `@AGENTS.md`.
 > Only rules that always apply belong here. How to use the tools is in the skills,
 > which load when a request needs them.
 
