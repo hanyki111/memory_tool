@@ -24,7 +24,7 @@ This skill creates a comprehensive project overview document that serves as the 
 **Read project context:**
 ```bash
 cat .claude/memory-context.md
-cat CLAUDE.md
+cat AGENTS.md CLAUDE.md   # AGENTS.md holds the rules; CLAUDE.md may only import it
 mmodule tree
 ```
 

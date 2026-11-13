@@ -245,6 +245,7 @@ def test_update_all_cli_explains_the_retired_guidelines(project):
     assert result.exit_code == 0, result.output
     assert "no longer used" in result.output
     assert "mt-record" in result.output
+    assert "move rules that always apply into AGENTS.md" in " ".join(result.output.split())
 
 
 def test_this_repository_skill_copies_match_the_templates():

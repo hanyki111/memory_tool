@@ -85,7 +85,8 @@ def init(
                 )
                 console.print(
                     "[dim]Your CLAUDE.md / AGENTS.md may still tell agents to read it. "
-                    "Remove that line, and move rules that always apply into CLAUDE.md. "
+                    "Remove that line, and move rules that always apply into AGENTS.md "
+                    "(CLAUDE.md imports it with @AGENTS.md). "
                     "See the template: "
                     f"{(initializer.memory_path / 'templates' / 'CLAUDE.md.template').relative_to(target_path)}[/dim]"
                 )
@@ -126,7 +127,7 @@ def init(
         template_path = initializer.memory_path / "templates" / "CLAUDE.md.template"
         console.print(f"\n[cyan]Claude Code Integration:[/cyan]")
         console.print(f"[dim]Template: {template_path}[/dim]")
-        console.print(f"[dim]Copy sections to your CLAUDE.md to integrate with Claude Code[/dim]")
+        console.print(f"[dim]Copy sections to your AGENTS.md; CLAUDE.md imports it with @AGENTS.md[/dim]")
 
     except AlreadyInitializedError as e:
         console.print(f"[yellow]WARNING[/yellow] {e}")

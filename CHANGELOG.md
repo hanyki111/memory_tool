@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.10.2] - 2026-11-13
+
+### 🐛 수정
+
+- **`AGENTS.md` 기준 안내:** 1.10.1에서 놓친 안내를 `AGENTS.md` 기준으로 맞췄습니다. `minit`과 `minit --update-all`의 안내, `mtutorial setup`의 1·2단계(영어와 한국어)는 이제 규칙을 `AGENTS.md`에 두고 `CLAUDE.md`는 `@AGENTS.md`로 가져오라고 안내합니다.
+- **`mt-master-module`:** 프로젝트 정보를 `CLAUDE.md`만이 아니라 `AGENTS.md`에서도 읽습니다. `CLAUDE.md`가 `@AGENTS.md` 한 줄뿐인 프로젝트에서는 예전 방식으로 프로젝트 정보를 얻지 못했습니다.
+
 ## [1.10.1] - 2026-11-13
 
 ### 🔄 변경
