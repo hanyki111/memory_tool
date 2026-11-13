@@ -204,6 +204,22 @@ def test_claude_template_points_to_the_skills(tmp_path):
     text = template.read_text(encoding="utf-8")
     assert "mt-record" in text and "mt-write" in text
     assert "guidelines.md" not in text
+    assert "Copy this into your project's `AGENTS.md`" in text
+    assert "@AGENTS.md" in text
+
+
+def test_record_skill_counts_a_question_session_as_one_activity():
+    """A 'record everything' rule must not interrupt every question round,
+    yet a project that explicitly records the rounds keeps that choice."""
+    from memory_tool.core import init as init_module
+
+    skill = (
+        Path(init_module.__file__).parent.parent
+        / "templates" / "skills" / "mt-record" / "SKILL.md"
+    ).read_text(encoding="utf-8")
+    assert "is one activity, not one per question" in skill
+    assert "Do not record each round" in skill
+    assert "explicitly says to record question rounds, follow the project rule" in skill
 
 
 def test_update_all_sets_old_guidelines_aside(project):

@@ -285,7 +285,7 @@ class Tutorial:
                     "-----------------------------------------------------------",
                     "",
                     "  [bold]Setup (same for both):[/bold]",
-                    "    1. CLAUDE.md in project root (or AGENTS.md)",
+                    "    1. AGENTS.md in project root (CLAUDE.md imports it: @AGENTS.md)",
                     "    2. Skills installed by minit (.claude/skills/, .agents/skills/)",
                     "    3. Run mcontext before starting",
                     "",

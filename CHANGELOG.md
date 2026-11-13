@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.10.1] - 2026-11-13
+
+### 🔄 변경
+
+- **`mt-record`의 해석 규칙:** "모든 활동을 기록한다" 같은 프로젝트 규칙에서, 질문으로 계획을 검증하는 세션은 하나의 활동으로 봅니다. 라운드마다 기록하지 않고, 사용자가 합의를 확인하면 정해진 결정을 한 번에 기록할지 묻습니다. 프로젝트 규칙이 질문 라운드를 명시적으로 기록 대상으로 정했다면 그 규칙을 따릅니다.
+- **템플릿의 기본 대상:** CLAUDE.md 템플릿은 이제 `AGENTS.md`에 복사하라고 안내하고, `CLAUDE.md`는 `@AGENTS.md` 한 줄로 그 파일을 가져오게 합니다. 템플릿의 이름과 설치 경로(`<base>/templates/CLAUDE.md.template`)는 그대로입니다. `mt-record`, `mtutorial setup`, README, `docs/CLAUDE_SETUP.md`의 안내도 같은 방식으로 바꿨습니다.
+
 ## [1.10.0] - 2026-11-13
 
 ### ✨ Added

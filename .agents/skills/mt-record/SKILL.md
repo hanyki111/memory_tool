@@ -7,7 +7,9 @@ description: Records to the memory_tool timeline, searches past work and builds 
 
 > Capture in the timeline, find it again with search, hand it to the next session with context.
 
-The project's `CLAUDE.md` (or `AGENTS.md`) decides **when** to record and how much. This skill covers **how**. If the project gives no rule, record at natural breakpoints: finish the work, show the result, then ask whether to record it.
+The project's `AGENTS.md` (which `CLAUDE.md` imports) decides **when** to record and how much. This skill covers **how**. If the project gives no rule, record at natural breakpoints: finish the work, show the result, then ask whether to record it.
+
+**Reading a rule such as "record every activity":** a session that tests a plan or decision with questions is one activity, not one per question. Do not record each round. When the user confirms the agreement, list the decisions it settled and ask once whether to record them. If the project rule explicitly says to record question rounds, follow the project rule.
 
 ## Recording
 

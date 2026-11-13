@@ -27,8 +27,13 @@ This guide explains how to set up `CLAUDE.md` for your project to provide contex
 
 ```bash
 # From your project root (run `mbase show` if the base folder is not .memory/)
-cp .memory/templates/CLAUDE.md.template CLAUDE.md
+cp .memory/templates/CLAUDE.md.template AGENTS.md
+echo "@AGENTS.md" > CLAUDE.md
 ```
+
+`AGENTS.md` is the source, so Codex and other agents read the same rules.
+`CLAUDE.md` imports it with `@AGENTS.md`. The rest of this guide says
+`CLAUDE.md` for short; edit `AGENTS.md`.
 
 The template holds only the rules that always apply: record only with `m`,
 when to record, search before answering about past work. How to use the

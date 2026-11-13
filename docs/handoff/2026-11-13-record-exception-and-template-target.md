@@ -2,7 +2,7 @@
 
 - 작성일: 2026-11-13
 - 출처: `memory_notion` 저장소에서 agent-workbench의 `project-setup`(0.1.4)을 처음 적용한 세션
-- 상태: 제안만 정리했으며, 구현은 시작하지 않았습니다. 같은 날의 Goal Loop 쪽 메모는 `goal_loop_tool/docs/handoff/2026-11-13-agents-layout-and-skill-refresh.md`에 있습니다.
+- 상태: 1번과 2번 요청은 memory_tool 1.10.1에 반영했습니다(`mt-record`의 해석 규칙, 템플릿의 기본 대상). 3번 요청은 아직 처리하지 않았습니다. 같은 날의 Goal Loop 쪽 메모는 `goal_loop_tool/docs/handoff/2026-11-13-agents-layout-and-skill-refresh.md`에 있습니다.
 
 > 이 문서와 테스트 데이터에 실제 업무 노트를 넣지 마십시오. 회귀 테스트는 합성 데이터로 작성합니다.
 

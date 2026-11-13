@@ -1295,11 +1295,15 @@ your-project/
 ### 설정
 
 ```bash
-# CLAUDE.md 템플릿 복사 (선택). 기본 폴더가 .memory/가 아니면 mbase show로 확인합니다.
-cp .memory/templates/CLAUDE.md.template CLAUDE.md
+# 템플릿 복사 (선택). 기본 폴더가 .memory/가 아니면 mbase show로 확인합니다.
+cp .memory/templates/CLAUDE.md.template AGENTS.md
+echo "@AGENTS.md" > CLAUDE.md
 ```
 
-`CLAUDE.md`에는 항상 적용되는 규칙만 둡니다(기록은 `m`으로만, 언제 기록할지 등).
+규칙의 원본은 `AGENTS.md`이며, `CLAUDE.md`는 `@AGENTS.md` 한 줄로 그 파일을 가져옵니다.
+그래서 Codex 같은 다른 에이전트도 같은 규칙을 읽습니다.
+
+`AGENTS.md`에는 항상 적용되는 규칙만 둡니다(기록은 `m`으로만, 언제 기록할지 등).
 명령 문법과 절차는 `minit`이 설치하는 스킬에 있으며, 요청에 맞을 때 불러옵니다.
 
 | 스킬 | 맡는 일 |
