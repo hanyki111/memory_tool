@@ -348,7 +348,7 @@ For each proposal choose: write now, write later, or reject. While more than fiv
 
 Choosing creates no file: a document is created when writing starts. Every choice is saved, so you can pause at any time and run mreview to continue. Proposals send the period's entries to the configured LLM provider.
 
-Reviews are saved as reviews/YYYY-MM-DD.md. A notice appears on the day's first entry and in mcontext after 7 days and 10 entries.""",
+Reviews are saved as reviews/YYYY-MM-DD.md. A notice appears on the day's first entry and in mcontext after 7 days and 10 entries. A project that does not need reviews can turn it off with mconfig set review.notice.enabled false.""",
             "examples": [
                 "mreview                       # Start or continue a review",
                 "mreview --since 2026-10-01    # Start a review from a chosen date",
@@ -383,7 +383,7 @@ Reviews are saved as reviews/YYYY-MM-DD.md. A notice appears on the day's first 
 
 고르는 것만으로는 파일이 생기지 않으며, 쓰기를 시작할 때 문서를 만듭니다. 선택은 바로 저장되므로 언제든 멈추고 mreview로 이어 갈 수 있습니다. 제안을 만들 때 그 기간의 기록을 설정된 LLM 제공자로 보냅니다.
 
-리뷰는 reviews/YYYY-MM-DD.md로 저장합니다. 7일이 지나고 기록이 10건 쌓이면 그날의 첫 기록과 mcontext에서 알려 줍니다.""",
+리뷰는 reviews/YYYY-MM-DD.md로 저장합니다. 7일이 지나고 기록이 10건 쌓이면 그날의 첫 기록과 mcontext에서 알려 줍니다. 리뷰가 필요 없는 프로젝트에서는 mconfig set review.notice.enabled false로 알림을 끌 수 있습니다.""",
             "examples": [
                 "mreview                       # 리뷰 시작 또는 이어 가기",
                 "mreview --since 2026-10-01    # 지정한 날짜부터 리뷰 시작",
