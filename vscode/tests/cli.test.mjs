@@ -137,8 +137,9 @@ describe("running the CLI", () => {
 test("a review starts from the last one unless a date is chosen", () => {
   const cli = new MemoryToolCli({ python: "python", cwd: "." });
 
-  assert.deepEqual(cli.reviewCommand(), ["python", "-m", "memory_tool", "review"]);
+  // --wait keeps the terminal open after the review, since it closes with the process.
+  assert.deepEqual(cli.reviewCommand(), ["python", "-m", "memory_tool", "review", "--wait"]);
   assert.deepEqual(cli.reviewCommand("2026-10-19"), [
-    "python", "-m", "memory_tool", "review", "--since", "2026-10-19",
+    "python", "-m", "memory_tool", "review", "--wait", "--since", "2026-10-19",
   ]);
 });

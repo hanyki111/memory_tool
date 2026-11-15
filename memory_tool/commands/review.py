@@ -211,10 +211,25 @@ def _write_item(base: Path, review: Review, item: Item, tool: Optional[str]) -> 
     writer.write_with_tool(selected, base, get_project_root(), review, item)
 
 
+def _write_and_ask(base: Path, review: Review, item: Item, tool: Optional[str]) -> bool:
+    """Write an item, then ask how it went.
+
+    Asking here, rather than showing the item again from the top, makes it
+    clear that this is about the writing just done.
+
+    Returns:
+        False if the user paused.
+    """
+    _write_item(base, review, item, tool)
+
+    _print()
+    _print(say(f'How did writing "{item.title}" go?', f'"{item.title}" 작성은 어떻게 되었나요?'))
+    return _ask(_item_choices(review, item, tool))
+
+
 def _write_now(review: Review, item: Item, tool: Optional[str]) -> bool:
-    """Write an item. The next question asks how it went."""
-    _write_item(get_base_path(), review, item, tool)
-    return True
+    """Write an item from the review's menu."""
+    return _write_and_ask(get_base_path(), review, item, tool)
 
 
 def _item_choices(review: Review, item: Item, tool: Optional[str]) -> List[Choice]:
@@ -682,6 +697,10 @@ def review(
     since: Optional[str] = typer.Option(None, "--since", help="Start of the period (YYYY-MM-DD), for a new review"),
     with_tool: Optional[str] = typer.Option(None, "--with", help="How to write, skipping the menu: claude, codex, antigravity or solo"),
     as_json: bool = typer.Option(False, "--json", help="Start or read the review without asking anything, and print it as JSON"),
+    wait: bool = typer.Option(
+        False, "--wait", hidden=True,
+        help="Wait for a key before leaving, for a terminal that closes when the review ends",
+    ),
 ):
     """Reflect on the entries since the last review, and settle what to keep.
 
@@ -708,6 +727,17 @@ def review(
         _review_as_json(since)
         return
 
+    try:
+        _run_review(since, with_tool)
+    finally:
+        # Also after an error, which exits through here, so it can be read.
+        if wait:
+            _print()
+            click.pause(say("Press any key to close.", "아무 키나 누르면 창을 닫습니다."))
+
+
+def _run_review(since: Optional[str], with_tool: Optional[str]) -> None:
+    """Start or continue a review, asking as it goes."""
     base = _base()
     since_date = _parse_since(since)
 
@@ -793,11 +823,7 @@ def write(
         if with_tool:
             writer.resolve_choice(with_tool)
 
-        _write_item(base, latest, item, with_tool)
-
-        _print()
-        _print(say("How did it go?", "어떻게 되었나요?"))
-        _ask(_item_choices(latest, item, None))
+        _write_and_ask(base, latest, item, with_tool)
     except click.exceptions.Abort:
         _print()
         _print(say("Left as being written.", "작성 중으로 남겨 두었습니다."))
