@@ -939,11 +939,6 @@ Modules:
   Active modules: 3
   Archived modules: 1
 
-Search Index:
-  Indexed files: 45
-  Last indexed: 2025-11-15 17:00
-  Index size: 2.4 MB
-
 Connections:
   Total connections: 23
   Connected modules: 6
@@ -1733,69 +1728,6 @@ mtutorial
 ---
 
 ## Utility Commands
-
-### `mindex` - Manage Search Index
-
-**Purpose:** Maintain search performance
-
-**Usage:**
-```bash
-python -m memory_tool index <action>
-```
-
-**Actions:**
-- `optimize` - Optimize FTS5 index
-- `vacuum` - Reclaim disk space
-- `rebuild` - Full rebuild
-- `stats` - Show statistics
-
-**Examples:**
-
-#### Optimize (Regular Maintenance)
-```bash
-python -m memory_tool index optimize
-```
-
-**When:** After adding many entries (100+)
-
-#### Vacuum (Disk Space)
-```bash
-python -m memory_tool index vacuum
-```
-
-**When:** After large deletions
-
-#### Rebuild (Fix Corruption)
-```bash
-python -m memory_tool index rebuild
-```
-
-**When:** Search results seem wrong
-
-#### Stats
-```bash
-python -m memory_tool index stats
-```
-
-**Output:**
-```
-Search Index Statistics:
-
-Database: .memory/.connections.db
-Size: 2.4 MB
-Last optimized: 2025-11-15 17:00
-
-FTS5 Index:
-  Indexed files: 45
-  Total tokens: 12,483
-  Average tokens per file: 277
-
-Performance:
-  Average search time: 0.05s
-  Cache hit rate: 87%
-```
-
----
 
 ### `marchive` - Archive Completed Documentation
 
@@ -3199,20 +3131,11 @@ commands, and follow the same rules.
 
 ### Search Performance
 
-#### FTS5 Index Optimization
+#### Text Search
 
-```bash
-# After many insertions
-python -m memory_tool index optimize
-
-# Reclaim space after deletions
-python -m memory_tool index vacuum
-```
-
-**When:**
-- After 100+ new entries
-- Weekly maintenance
-- Search feels slow
+Text search reads the timeline and documents directly, so there is no index to
+build or maintain. It takes well under a second even for thousands of files.
+Versions before 1.11 kept a SQLite index in `.index.db`; that file can be deleted.
 
 #### Vector Embedding Cache
 
@@ -3302,26 +3225,13 @@ batch_record(messages)
 find .memory/timeline -name "*.md" -mtime +365 -exec gzip {} \;
 ```
 
-#### Index Maintenance
-
-```bash
-# Reclaim space
-python -m memory_tool index vacuum
-
-# Full rebuild (last resort)
-python -m memory_tool index rebuild
-```
-
 ### Monitoring
 
 ```bash
-# Check stats
-python -m memory_tool index stats
-
 # Timeline size
 du -sh .memory/timeline
 
-# Index size
+# Module graph size
 du -sh .memory/.connections.db
 
 # Module size
@@ -3330,7 +3240,6 @@ du -sh .memory/modules
 
 **Typical sizes:**
 - 1 year timeline: ~1-5 MB
-- Search index: ~2-10 MB
 - Embeddings cache: ~10-100 MB
 - Total: ~15-115 MB
 
@@ -3626,22 +3535,13 @@ export MEMORY_TOOL_DISABLE_HOOKS=1
 
 ### Maintenance
 
-1. **Regular optimization**
-   ```bash
-   # Weekly
-   python -m memory_tool index optimize
-
-   # Monthly
-   python -m memory_tool index vacuum
-   ```
-
-2. **Archive old content**
+1. **Archive old content**
    ```bash
    # Quarterly
    python -m memory_tool archive decisions --keep-recent 10
    ```
 
-3. **Review connections**
+2. **Review connections**
    ```bash
    # Monthly
    python -m memory_tool module check-links

@@ -7,7 +7,6 @@ from .formatter import ResultFormatter, deduplicate_results
 from .hybrid import HybridSearcher
 from .cache import SearchCache
 from .parallel import ParallelSearcher
-from .optimize import IndexOptimizer
 
 __all__ = [
     "BM25Ranker",
@@ -24,5 +23,4 @@ __all__ = [
     "HybridSearcher",
     "SearchCache",
     "ParallelSearcher",
-    "IndexOptimizer",
 ]

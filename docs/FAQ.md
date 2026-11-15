@@ -340,9 +340,6 @@ Knowledge organizes by topic:
 ```bash
 # Re-sort if needed
 msort
-
-# Rebuild search index
-python -m memory_tool index optimize
 ```
 
 **Best practice:**
@@ -714,7 +711,6 @@ rsync -av --delete .memory/ user@remote:~/project/.memory/
 
 **Typical sizes:**
 - 1 year timeline: **~1-5 MB**
-- Search index: **~2-10 MB**
 - Embeddings cache: **~10-100 MB** (if vector search used)
 - Modules: **Varies** (depends on content)
 
@@ -722,16 +718,12 @@ rsync -av --delete .memory/ user@remote:~/project/.memory/
 
 **Large projects (10,000+ entries):**
 - Timeline: ~50-100 MB
-- Search index: ~50-200 MB
 - Embeddings: ~500-1000 MB
 
 **Optimization:**
 ```bash
 # Compress old timelines
 find .memory/timeline -name "*.md" -mtime +365 -exec gzip {} \;
-
-# Vacuum index
-python -m memory_tool index vacuum
 
 # Clear embedding cache (if needed)
 rm -rf .memory/.embeddings-cache
@@ -789,34 +781,19 @@ rm -rf .memory/timeline/2024-01/
 
 **Possible causes:**
 
-1. **Large dataset** (10,000+ entries)
+1. **Semantic or hybrid search** loads an embedding model on the first search.
+   Plain text search reads the files directly and stays well under a second
+   for thousands of files:
    ```bash
-   # Optimize index
-   python -m memory_tool index optimize
+   ms "keyword" --no-hybrid
    ```
 
-2. **First search after boot**
-   - Loading index into memory
-   - Subsequent searches faster
-
-3. **No index optimization**
-   ```bash
-   # Check stats
-   python -m memory_tool index stats
-
-   # Optimize
-   python -m memory_tool index optimize
-   ```
-
-4. **Slow disk** (HDD vs SSD)
+2. **Slow disk** (HDD vs SSD)
    - SSD: ~0.05s
    - HDD: ~0.5-1s
 
 **Solutions:**
 ```bash
-# Weekly optimization
-python -m memory_tool index optimize
-
 # Enable result caching
 # .memory/config.yaml
 search:
@@ -878,15 +855,6 @@ search:
 
 ### How do I optimize performance?
 
-**Regular maintenance:**
-```bash
-# Weekly
-python -m memory_tool index optimize
-
-# Monthly
-python -m memory_tool index vacuum
-```
-
 **Enable caching:**
 ```yaml
 # .memory/config.yaml
@@ -895,7 +863,6 @@ search:
   cache_embeddings: true
 performance:
   batch_embeddings: true
-  incremental_index: true
 ```
 
 **Hardware:**
@@ -903,7 +870,7 @@ performance:
 - **GPU** for vector search: ~10x faster
 - **More RAM:** Helps with large datasets
 
-**Minimize index rebuilds:**
+**Minimize graph rebuilds:**
 ```bash
 # Don't run unnecessarily
 python -m memory_tool module rebuild-graph  # Only when needed
@@ -1044,18 +1011,13 @@ ms "keyword"
    ms -i "keyword"
    ```
 
-2. **Index not built**
-   ```bash
-   python -m memory_tool index rebuild
-   ```
-
-3. **Wrong directory**
+2. **Wrong directory**
    ```bash
    pwd
    # Make sure you're in project root (where .memory/ is)
    ```
 
-4. **Typo in keyword**
+3. **Typo in keyword**
    ```bash
    # Try partial match
    ms "keywor"
@@ -1064,16 +1026,14 @@ ms "keyword"
    ms "ke.*word"
    ```
 
-5. **File not indexed**
+4. **File outside the knowledge base**
    ```bash
-   # Optimize index
-   python -m memory_tool index optimize
+   mbase show   # Shows which folders are searched
    ```
 
 **Solution:**
 ```bash
-# Full reset
-python -m memory_tool index rebuild
+# Rebuild the module graph
 python -m memory_tool module rebuild-graph
 
 # Try again

@@ -6,13 +6,6 @@ from typing import Optional, Tuple, List
 import re
 from memory_tool.utils.paths import base_dir_for_root, get_project_root
 
-# Import db for indexing (optional dependency)
-try:
-    from ..db import IndexManager
-    INDEXING_AVAILABLE = True
-except Exception:
-    INDEXING_AVAILABLE = False
-
 
 #: How a timeline file is named within its YYYY-MM folder.
 #:
@@ -631,15 +624,6 @@ class Timeline:
         # Write back
         self.write_timeline(file_path, header, entries)
 
-        # Index the new entry (if indexing is available)
-        if INDEXING_AVAILABLE and IndexManager.available():
-            try:
-                indexer = IndexManager(self.memory_path)
-                indexer.index_file(file_path)
-            except Exception:
-                # Silent failure - indexing is optional
-                pass
-
         return dt, file_path
 
     def get_today(self) -> Tuple[Optional[Path], Optional[str]]:
@@ -912,11 +896,9 @@ class Timeline:
             _, target_entries, _ = self.parse_entries(target_date) if target_file.exists() else (None, [], None)
             self.save_entries(target_file, target_entries + [{"time": target_time, "message": target_text}], target_day)
             self.save_entries(file_path, [e for i, e in enumerate(entries) if i != position], self._day_date(date_str))
-            self._reindex(target_file, file_path)
         else:
             entries[position] = {**entry, "time": target_time, "message": target_text}
             self.save_entries(file_path, entries, self._day_date(date_str))
-            self._reindex(file_path)
 
         return before, after
 
@@ -935,19 +917,7 @@ class Timeline:
 
         entry = entries[position]
         self.save_entries(file_path, [e for i, e in enumerate(entries) if i != position], self._day_date(date_str))
-        self._reindex(file_path)
         return {"date": date_str, "time": self._normal_time(entry["time"]), "text": entry["message"]}
-
-    def _reindex(self, *paths: Path) -> None:
-        """Update the search index for changed files; it is optional, so failures are ignored."""
-        if not (INDEXING_AVAILABLE and IndexManager.available()):
-            return
-        try:
-            indexer = IndexManager(self.memory_path)
-            for path in paths:
-                indexer.index_file(path)
-        except Exception:
-            pass
 
     def save_entries(self, file_path: Path, entries: List[dict], date: datetime) -> None:
         """Save edited entries back to their file, changing nothing else.
