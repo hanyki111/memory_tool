@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.10.5] - 2026-11-15
+
+### 🐛 수정
+
+- **문서 상태 훅:** pre-commit 문서 상태 훅(`mhooks install document-health`)은 커밋에 포함되는 파일과 관계없이 지식 베이스 전체를 검사했습니다. 그래서 지식 베이스를 커밋하지 않는 저장소에서도 커밋할 때마다 경고하고 5초씩 기다렸습니다. 이제 `mcontext --check-health-only`는 git 저장소 안에서 이번 커밋에 포함된(staged) 모듈 문서만 검사합니다. 이미 설치된 훅도 이 명령을 실행하므로, 훅을 다시 설치하지 않아도 바뀐 동작이 적용됩니다.
+- **문서 상태 기준:** 훅과 명령 뒤의 안내는 단일 파일 문서를 이전 형식인 `current.md`의 기준(200줄 경고, 400줄 긴급)으로 판단했고, `mcontext`는 600줄과 1000줄 기준으로 판단했습니다. 이제 모두 같은 검사기를 사용하며, 단일 파일 문서는 600줄부터 경고하고 1000줄부터 긴급으로 판단합니다. 이전 형식의 `module.md`, `current.md`, `decisions.md`는 기존 기준을 유지합니다.
+- **문서 상태 메시지:** 경고에 실제 파일 이름 대신 `module.md`가 표시되었고, 안내 명령이 존재하지 않는 `marchive module …`이 되는 경우가 있었습니다. 이제 지식 베이스의 modules 폴더 기준 경로를 표시하고, 단일 파일 문서에는 `marchive decisions --module <이름>`과 `mmodule audit`를 안내합니다.
+
 ## [1.10.4] - 2026-11-15
 
 ### 🐛 수정
