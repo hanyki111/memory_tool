@@ -730,6 +730,8 @@ ms "hybrid search" --with-kb
 | `mupdate`  | 업데이트 확인/설치    | `mupdate --check`           |
 | `mhelp`    | 상세 도움말           | `mhelp plan`                |
 
+지난 리뷰 후 7일이 지나고 기록이 10건 쌓이면 그날의 첫 `m` 기록과 `mcontext`에서 `mreview`를 권하는 알림이 나타납니다. 개발 프로젝트처럼 작업하면서 문서를 바로 갱신해서 리뷰가 필요 없다면 `mconfig set review.notice.enabled false`로 알림을 끌 수 있습니다. 기준은 `review.notice.min_days`와 `review.notice.min_entries`로 바꿉니다.
+
 **마이그레이션 명령어**
 
 | 명령어 | 설명 | 예시 |

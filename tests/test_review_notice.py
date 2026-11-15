@@ -58,6 +58,7 @@ class TestConditions:
 
         assert "7 days" in notice
         assert "10 entries" in notice
+        assert "mconfig set review.notice.enabled false" in notice
 
     def test_too_few_days(self, base):
         finished_review(base, NOW - timedelta(days=6))
@@ -74,7 +75,10 @@ class TestConditions:
     def test_first_review_needs_only_entries(self, base):
         add_entries(base, NOW - timedelta(days=3), 10)
 
-        assert "No review yet" in review_notice(base, NOW)
+        notice = review_notice(base, NOW)
+
+        assert "No review yet" in notice
+        assert "mconfig set review.notice.enabled false" in notice
 
     def test_first_review_ignores_entries_outside_its_window(self, base):
         add_entries(base, NOW - timedelta(days=30), 50)
@@ -84,7 +88,10 @@ class TestConditions:
     def test_review_in_progress_is_always_mentioned(self, base):
         store.start_review(base, "2026-10-19", "2026-10-01T00:00", "2026-10-19T09:00", [])
 
-        assert "in progress" in review_notice(base, NOW)
+        notice = review_notice(base, NOW)
+
+        assert "in progress" in notice
+        assert "review.notice.enabled" not in notice
 
     def test_values_can_be_changed(self, base):
         set_config(base, "review:\n  notice:\n    min_days: 1\n    min_entries: 2\n")

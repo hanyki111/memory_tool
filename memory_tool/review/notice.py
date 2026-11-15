@@ -14,6 +14,13 @@ from memory_tool.review.text import say
 DEFAULT_MIN_DAYS = 7
 DEFAULT_MIN_ENTRIES = 10
 
+def _off_hint() -> str:
+    """Say how to turn the notice off, since nothing else says so where it is read."""
+    return say(
+        "If this project does not need reviews: mconfig set review.notice.enabled false",
+        "이 프로젝트에 리뷰가 필요 없으면 mconfig set review.notice.enabled false로 끌 수 있습니다.",
+    )
+
 
 def _setting(base: Path, key: str, default):
     """Read a notice setting, keeping the default if it is not usable."""
@@ -69,12 +76,14 @@ def review_notice(base: Path, now: Optional[datetime] = None) -> Optional[str]:
         return None
 
     if latest:
-        return say(
+        due = say(
             f"{days} days since the last review, with {count} entries. Run mreview to review them.",
             f"지난 리뷰 후 {days}일이 지났고 기록이 {count}건 있습니다. 리뷰하려면 mreview를 실행하세요.",
         )
+    else:
+        due = say(
+            f"No review yet, and {count} recent entries. Run mreview to review them.",
+            f"아직 리뷰가 없고 최근 기록이 {count}건 있습니다. 리뷰하려면 mreview를 실행하세요.",
+        )
 
-    return say(
-        f"No review yet, and {count} recent entries. Run mreview to review them.",
-        f"아직 리뷰가 없고 최근 기록이 {count}건 있습니다. 리뷰하려면 mreview를 실행하세요.",
-    )
+    return f"{due} {_off_hint()}"
