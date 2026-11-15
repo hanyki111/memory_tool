@@ -303,6 +303,8 @@ class TestRecord:
 class TestDocumentHealthNotice:
     class Issue:
         module_name, file_type, line_count = "work", "decisions", 900
+        display_path = "work/decisions.md"
+        archive_command = "marchive decisions --module work"
 
     def test_warning_text(self, tmp_path, monkeypatch):
         monkeypatch.setattr(

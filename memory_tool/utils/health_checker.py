@@ -2,10 +2,14 @@
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Iterable, Optional, Tuple
 
 from memory_tool.context.related_files import resolve_module_document
 from memory_tool.utils.module_docs import is_meta_document
+
+
+#: Files of the legacy layout, which split a module into several files.
+LEGACY_FILES = ("module.md", "current.md", "decisions.md", "dependencies.md", "interface.md")
 
 
 @dataclass
@@ -13,10 +17,22 @@ class HealthIssue:
     """Represents a document health issue."""
 
     module_name: str
-    file_type: str  # "decisions" or "current"
+    file_type: str  # "decisions", "current" (legacy files) or "module" (one document)
     file_path: Path
     line_count: int
     severity: str  # "critical", "warning", "ok"
+    #: The file to show, relative to the modules folder
+    display_path: str = ""
+
+    @property
+    def archive_command(self) -> str:
+        """The marchive command for this file.
+
+        A single document keeps its decisions as sections, which marchive
+        decisions archives, so only a legacy current.md takes "current".
+        """
+        kind = "current" if self.file_type == "current" else "decisions"
+        return f"marchive {kind} --module {self.module_name}"
 
     @property
     def severity_emoji(self) -> str:
@@ -32,11 +48,14 @@ class HealthIssue:
 class DocumentHealthChecker:
     """Check document health across modules."""
 
-    # Thresholds for different file types
+    # Thresholds for different file types. A single document holds what the
+    # legacy layout spread over five files, so it gets the combined budget.
     DECISIONS_WARNING = 300
     DECISIONS_CRITICAL = 600
     CURRENT_WARNING = 200
     CURRENT_CRITICAL = 400
+    MODULE_WARNING = 600
+    MODULE_CRITICAL = 1000
 
     def __init__(self, memory_dir: Path):
         """Initialize health checker.
@@ -47,8 +66,12 @@ class DocumentHealthChecker:
         self.memory_dir = Path(memory_dir)
         self.modules_dir = self.memory_dir / "modules"
 
-    def check_all_modules(self) -> list[HealthIssue]:
+    def check_all_modules(self, only: Optional[Iterable[Path]] = None) -> list[HealthIssue]:
         """Check health of all modules.
+
+        Args:
+            only: Check only these files, for example the ones about to be
+                committed. None checks every document.
 
         Returns:
             List of health issues found, sorted by severity
@@ -56,13 +79,22 @@ class DocumentHealthChecker:
         if not self.modules_dir.exists():
             return []
 
+        wanted = None if only is None else {Path(path).resolve() for path in only}
+
+        def skipped(path: Path) -> bool:
+            return wanted is not None and path.resolve() not in wanted
+
         issues = []
 
         # Recursively find all module files (.md) or legacy directories
         for module_file in self.modules_dir.rglob("*.md"):
             if "archive" in module_file.relative_to(self.modules_dir).parts or is_meta_document(module_file.name):
                 continue
-            if module_file.name in ["module.md", "current.md", "decisions.md", "dependencies.md", "interface.md"]:
+            # A legacy main document is one document too; its other files are
+            # checked with the legacy folders below.
+            if module_file.name in LEGACY_FILES and module_file.name != "module.md":
+                continue
+            if skipped(module_file):
                 continue
 
             module_name = self._module_name_for(module_file)
@@ -75,7 +107,7 @@ class DocumentHealthChecker:
             module_name = self._get_module_name(module_dir)
             for file_type, fname in [("decisions", "decisions.md"), ("current", "current.md")]:
                 fpath = module_dir / fname
-                if fpath.exists():
+                if fpath.exists() and not skipped(fpath):
                     issue = self._check_file(module_name, file_type, fpath)
                     if issue:
                         issues.append(issue)
@@ -89,9 +121,10 @@ class DocumentHealthChecker:
         """Name a module after its folder when the document is named for it.
 
         ``a/b/b.md`` is the module ``a/b``, not ``a/b/b``: repeating the folder
-        name produced a module name that no other command could resolve.
+        name produced a module name that no other command could resolve. The
+        legacy ``a/b/module.md`` is the module ``a/b`` as well.
         """
-        if module_file.stem == module_file.parent.name:
+        if module_file.stem == module_file.parent.name or module_file.name in LEGACY_FILES:
             try:
                 return module_file.parent.relative_to(self.modules_dir).as_posix()
             except ValueError:
@@ -220,7 +253,7 @@ class DocumentHealthChecker:
 
         Args:
             module_name: Name of module
-            file_type: Type of file ("decisions" or "current")
+            file_type: "decisions" or "current" for legacy files, "module" for a document
             file_path: Path to file
 
         Returns:
@@ -231,26 +264,34 @@ class DocumentHealthChecker:
         except Exception:
             return None
 
-        # Determine severity based on file type and line count
-        if file_type == "decisions":
-            if line_count >= self.DECISIONS_CRITICAL:
-                severity = "critical"
-            elif line_count >= self.DECISIONS_WARNING:
-                severity = "warning"
-            else:
-                return None  # Healthy, no issue
-        else:  # current
-            if line_count >= self.CURRENT_CRITICAL:
-                severity = "critical"
-            elif line_count >= self.CURRENT_WARNING:
-                severity = "warning"
-            else:
-                return None  # Healthy, no issue
+        warning_at, critical_at = self.thresholds(file_type, file_path)
+
+        if line_count >= critical_at:
+            severity = "critical"
+        elif line_count >= warning_at:
+            severity = "warning"
+        else:
+            return None  # Healthy, no issue
+
+        try:
+            shown = file_path.relative_to(self.modules_dir).as_posix()
+        except ValueError:
+            shown = file_path.name
 
         return HealthIssue(
             module_name=module_name,
             file_type=file_type,
             file_path=file_path,
             line_count=line_count,
-            severity=severity
+            severity=severity,
+            display_path=shown,
         )
+
+    def thresholds(self, file_type: str, file_path: Path) -> Tuple[int, int]:
+        """The line counts at which a file gets a warning and becomes critical."""
+        if file_type == "decisions":
+            return self.DECISIONS_WARNING, self.DECISIONS_CRITICAL
+        # A legacy main document held only the current state.
+        if file_type == "current" or file_path.name in ("current.md", "module.md"):
+            return self.CURRENT_WARNING, self.CURRENT_CRITICAL
+        return self.MODULE_WARNING, self.MODULE_CRITICAL

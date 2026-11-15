@@ -77,14 +77,14 @@ def document_health_notice(memory_dir: Path, command_name: str, force: bool = Fa
 
     level, issues = found
     if level == "critical":
-        listed = ", ".join(f"{i.module_name}/{i.file_type}.md ({i.line_count} lines)" for i in issues[:3])
+        listed = ", ".join(f"{i.display_path} ({i.line_count} lines)" for i in issues[:3])
         return f"Some documents are very large: {listed}. Run mcontext to see all issues."
 
     if len(issues) == 1:
         issue = issues[0]
         return (
-            f"{issue.module_name}/{issue.file_type}.md is getting large ({issue.line_count} lines). "
-            f"Consider: marchive {issue.file_type} --module {issue.module_name} --suggest"
+            f"{issue.display_path} is getting large ({issue.line_count} lines). "
+            f"Consider: {issue.archive_command} --suggest"
         )
     return f"{len(issues)} documents are getting large. Run mcontext to see them."
 
@@ -100,14 +100,14 @@ def _show_critical_suggestion(issues, context: str):
     console.print("🔴 [bold red]CRITICAL[/bold red] Document Health Alert")
 
     for issue in issues[:3]:  # Show top 3 critical issues
-        console.print(f"   └─ [yellow]{issue.module_name}/{issue.file_type}.md[/yellow]: {issue.line_count} lines")
+        console.print(f"   └─ [yellow]{issue.display_path}[/yellow]: {issue.line_count} lines")
 
     console.print()
     console.print("   [dim]Immediate action recommended:[/dim]")
 
     if len(issues) == 1:
         issue = issues[0]
-        console.print(f"   [cyan]marchive {issue.file_type} --module {issue.module_name} --interactive[/cyan]")
+        console.print(f"   [cyan]{issue.archive_command} --interactive[/cyan]")
     else:
         console.print(f"   [cyan]mcontext[/cyan]  [dim]# View all issues[/dim]")
         console.print(f"   [cyan]marchive decisions --suggest[/cyan]  [dim]# Get recommendations[/dim]")
@@ -125,8 +125,8 @@ def _show_warning_suggestion(issues, context: str):
 
     if len(issues) == 1:
         issue = issues[0]
-        console.print(f"{issue.module_name}/{issue.file_type}.md is getting large ({issue.line_count} lines).")
-        console.print(f"   [dim]Consider:[/dim] [cyan]marchive {issue.file_type} --module {issue.module_name} --suggest[/cyan]")
+        console.print(f"{issue.display_path} is getting large ({issue.line_count} lines).")
+        console.print(f"   [dim]Consider:[/dim] [cyan]{issue.archive_command} --suggest[/cyan]")
     else:
         console.print(f"{len(issues)} documents are getting large.")
         console.print(f"   [dim]Quick check:[/dim] [cyan]mcontext[/cyan] [dim]or[/dim] [cyan]marchive decisions --suggest[/cyan]")

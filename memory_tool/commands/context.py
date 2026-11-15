@@ -1,8 +1,9 @@
 """Context-related CLI commands (context, map)."""
 
+import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 import typer
 
@@ -10,6 +11,66 @@ from memory_tool.commands.common import app, console
 from memory_tool.context.builder import ContextBuilder, ContextError
 from memory_tool.utils.path_checker import PathChecker
 from memory_tool.utils.paths import display_path, get_base_path
+
+
+def _staged_files() -> Optional[List[Path]]:
+    """The files staged for the next commit, or None outside a git repository.
+
+    Paths are absolute, so they can be compared with the knowledge base's.
+    """
+    try:
+        top = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, encoding="utf-8",
+        )
+        if top.returncode != 0:
+            return None
+        staged = subprocess.run(
+            ["git", "diff", "--cached", "--name-only", "-z", "--diff-filter=ACMR"],
+            capture_output=True, text=True, encoding="utf-8", check=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return None
+
+    root = Path(top.stdout.strip())
+    return [root / name for name in staged.stdout.split("\0") if name]
+
+
+def _check_health(quiet: bool) -> int:
+    """Check document health for the pre-commit hook.
+
+    In a git repository only the documents about to be committed are checked:
+    a knowledge base that is not committed, or documents left untouched, are
+    not this commit's concern.
+
+    Returns:
+        0 if healthy, 1 for warnings, 2 for critical issues.
+    """
+    from memory_tool.utils.health_checker import DocumentHealthChecker
+
+    checker = DocumentHealthChecker(get_base_path())
+    issues = checker.check_all_modules(only=_staged_files())
+
+    critical = [issue for issue in issues if issue.severity == "critical"]
+    warning = [issue for issue in issues if issue.severity == "warning"]
+    shown = critical or warning
+
+    if not shown:
+        if not quiet:
+            console.print("[green]OK[/green] Document health OK")
+        return 0
+
+    if not quiet:
+        label = "[red]CRITICAL[/red]" if critical else "[yellow]WARNING[/yellow]"
+        console.print(f"\n{label} Document Health Issues:\n")
+        for issue in shown[:5]:
+            console.print(f"  - {issue.display_path}: [yellow]{issue.line_count}[/yellow] lines")
+        console.print()
+        console.print("  [dim]Archive old decisions, or see whether to split:[/dim]")
+        console.print(f"  [cyan]{shown[0].archive_command} --interactive[/cyan]")
+        console.print("  [cyan]mmodule audit[/cyan]")
+
+    return 2 if critical else 1
 
 
 @app.command()
@@ -28,36 +89,7 @@ def context(
     structure (classes, methods, signatures) for AI-assisted development.
     """
     if check_health_only:
-        from memory_tool.utils.health_checker import DocumentHealthChecker
-
-        memory_dir = get_base_path()
-        checker = DocumentHealthChecker(memory_dir)
-
-        critical_issues = checker.get_critical_issues()
-        warning_issues = checker.get_warning_issues()
-
-        if critical_issues:
-            if not quiet:
-                console.print("\n[red]CRITICAL[/red] Document Health Issues:\n")
-                for issue in critical_issues[:5]:
-                    console.print(f"  - {issue.module_name}/{issue.file_type}.md: [yellow]{issue.line_count}[/yellow] lines")
-                console.print()
-                console.print("  [dim]Recommend archiving before commit:[/dim]")
-                console.print(f"  [cyan]marchive decisions --suggest[/cyan]")
-            sys.exit(2)
-        elif warning_issues:
-            if not quiet:
-                console.print("\n[yellow]WARNING[/yellow] Document Health Issues:\n")
-                for issue in warning_issues[:5]:
-                    console.print(f"  - {issue.module_name}/{issue.file_type}.md: [yellow]{issue.line_count}[/yellow] lines")
-                console.print()
-                console.print("  [dim]Consider archiving:[/dim]")
-                console.print(f"  [cyan]marchive decisions --suggest[/cyan]")
-            sys.exit(1)
-        else:
-            if not quiet:
-                console.print("[green]OK[/green] Document health OK")
-            sys.exit(0)
+        sys.exit(_check_health(quiet))
 
     builder = ContextBuilder()
     output_path = Path(output) if output else None

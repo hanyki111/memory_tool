@@ -256,59 +256,31 @@ class ContextBuilder:
     def get_document_health(self) -> List[Dict[str, any]]:
         """Get document health check for modules with large files.
 
+        The same check as the pre-commit hook and the notices after commands,
+        so they agree on what is large.
+
         Returns:
-            List of dictionaries with module, file, lines, and suggestion
+            List of dictionaries with module, file, lines, severity, suggestion
+            and the archive command
         """
-        health_issues = []
-        modules_path = self.memory_path / "modules"
+        from memory_tool.utils.health_checker import DocumentHealthChecker
 
-        if not modules_path.exists():
-            return health_issues
-
-        for module_name, document in self.get_module_docs().items():
-            # Legacy modules keep a decision log beside their main document.
-            decisions_file = modules_path / module_name / "decisions.md"
-            if decisions_file.is_file():
-                try:
-                    line_count = len(decisions_file.read_text(encoding="utf-8").splitlines())
-                except (OSError, UnicodeDecodeError):
-                    line_count = 0
-
-                if line_count > 300:
-                    health_issues.append({
-                        "module": module_name,
-                        "file": "decisions.md",
-                        "lines": line_count,
-                        "suggestion": (
-                            "⚠️ Very large, should archive soon"
-                            if line_count > 600
-                            else "Consider archiving"
-                        ),
-                    })
-
-            try:
-                line_count = len(document.read_text(encoding="utf-8").splitlines())
-            except (OSError, UnicodeDecodeError):
-                continue
-
-            # A single-file module holds what used to be five files, so judge
-            # it against the combined budget instead of current.md's.
-            is_legacy = document.name in ("current.md", "module.md")
-            warn_at, urgent_at = (200, 400) if is_legacy else (600, 1000)
-
-            if line_count > warn_at:
-                health_issues.append({
-                    "module": module_name,
-                    "file": document.name,
-                    "lines": line_count,
-                    "suggestion": (
-                        "⚠️ Very large, consider archiving"
-                        if line_count > urgent_at
-                        else "Consider reviewing"
-                    ),
-                })
-
-        return health_issues
+        return [
+            {
+                "module": issue.module_name,
+                "file": issue.file_path.name,
+                "path": issue.display_path,
+                "lines": issue.line_count,
+                "severity": issue.severity,
+                "suggestion": (
+                    "Very large, should archive or split soon"
+                    if issue.severity == "critical"
+                    else "Consider reviewing"
+                ),
+                "archive_command": issue.archive_command,
+            }
+            for issue in DocumentHealthChecker(self.memory_path).check_all_modules()
+        ]
 
     def get_module_source_mapping(self) -> List[Dict]:
         """Get module to source path mapping.
@@ -532,32 +504,25 @@ class ContextBuilder:
 
         if doc_health:
             # Group by severity
-            critical = [item for item in doc_health if "⚠️ Very large" in item["suggestion"]]
-            warning = [item for item in doc_health if item not in critical]
+            critical = [item for item in doc_health if item["severity"] == "critical"]
+            warning = [item for item in doc_health if item["severity"] != "critical"]
 
             lines.append("## Document Health")
             lines.append("")
 
             if critical:
-                lines.append("### 🔴 CRITICAL (>600/400 lines)")
+                lines.append("### 🔴 CRITICAL")
                 lines.append("")
                 for item in critical:
-                    module_name = item["module"]
-                    file_name = item["file"]
-                    line_count = item["lines"]
-                    lines.append(f"- **{module_name}/{file_name}**: {line_count} lines - ⚠️ Very large, should archive soon")
-                    lines.append(f"  - Quick action: `marchive {'current' if file_name == 'current.md' else 'decisions'} --module {module_name} --interactive`")
+                    lines.append(f"- **{item['path']}**: {item['lines']} lines - {item['suggestion']}")
+                    lines.append(f"  - Quick action: `{item['archive_command']} --interactive`")
                 lines.append("")
 
             if warning:
-                lines.append("### 🟡 WARNING (300-600/200-400 lines)")
+                lines.append("### 🟡 WARNING")
                 lines.append("")
                 for item in warning:
-                    module_name = item["module"]
-                    file_name = item["file"]
-                    line_count = item["lines"]
-                    suggestion = item["suggestion"]
-                    lines.append(f"- **{module_name}/{file_name}**: {line_count} lines - {suggestion}")
+                    lines.append(f"- **{item['path']}**: {item['lines']} lines - {item['suggestion']}")
                 lines.append("")
 
             lines.append("### ✅ Quick Actions")
@@ -572,7 +537,10 @@ class ContextBuilder:
             lines.append("# 3. LLM-powered analysis (analyze and categorize)")
             lines.append("msummary --module <module-name> --decisions")
             lines.append("")
-            lines.append("# 4. Check health anytime")
+            lines.append("# 4. See whether a document's sections answer different questions")
+            lines.append("mmodule audit")
+            lines.append("")
+            lines.append("# 5. Check health anytime")
             lines.append("mcontext")
             lines.append("```")
             lines.append("")

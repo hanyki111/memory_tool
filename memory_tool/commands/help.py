@@ -1672,6 +1672,10 @@ Supports batch files (Windows), PowerShell, Bash, and Zsh.
             "description": """
 Install and manage git hooks for Memory Tool.
 Includes document health check and graph rebuild hooks.
+
+The document health hook warns only about large module documents staged in the
+commit, so it stays quiet when the knowledge base is not committed. It delays
+the commit for a few seconds and never blocks it.
             """,
             "examples": [
                 "mhooks list                # List installed hooks",
@@ -1691,6 +1695,10 @@ Includes document health check and graph rebuild hooks.
             "description": """
 Memory Tool을 위한 git 훅을 설치하고 관리합니다.
 문서 상태 확인 및 그래프 재빌드 훅이 포함됩니다.
+
+문서 상태 확인 훅은 이번 커밋에 포함된(staged) 모듈 문서 중 큰 문서만 경고합니다.
+따라서 지식 베이스를 커밋하지 않는 저장소에서는 경고하지 않습니다. 경고하면 커밋을
+몇 초 늦추지만 막지는 않습니다.
             """,
             "examples": [
                 "mhooks list                # 설치된 훅 나열",
