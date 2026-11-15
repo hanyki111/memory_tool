@@ -5,7 +5,7 @@ in the memory_tool.commands package:
 - timeline: record, today, week, month, days, sort
 - review: review
 - modules: module, archive, browse
-- search: search, check, index
+- search: search, check, cache
 - planning: plan, summary
 - context: context, map (code_map)
 - notion: nm, nadd, ns, nt, nw, nsi, nsync, nwatch
@@ -228,13 +228,6 @@ def archive_cli():
     """Entry point for 'marchive' command."""
     import sys
     sys.argv = ['memory_tool', 'archive'] + sys.argv[1:]
-    run()
-
-
-def index_cli():
-    """Entry point for 'mindex' command."""
-    import sys
-    sys.argv = ['memory_tool', 'index'] + sys.argv[1:]
     run()
 
 

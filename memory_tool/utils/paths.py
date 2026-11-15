@@ -62,7 +62,8 @@ CONTENT_SUBDIRS: Tuple[str, ...] = (
 )
 
 #: Generated caches and indexes. These live in the base folder and must be
-#: carried along by a rename, but are never search targets.
+#: carried along by a rename, but are never search targets. ``.index`` and
+#: ``.index.db`` are left by versions before 1.11, which kept a search index.
 STATE_ENTRIES: Tuple[str, ...] = (
     "cache",
     ".cache",

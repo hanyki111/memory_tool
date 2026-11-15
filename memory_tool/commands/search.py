@@ -154,7 +154,7 @@ def search(
     to_date: Optional[str] = typer.Option(None, "--to", help="End date (YYYY-MM-DD)"),
     semantic: bool = typer.Option(False, "--semantic", "-s", help="Semantic search using embeddings"),
     threshold: Optional[float] = typer.Option(None, "--threshold", "-t", help="Similarity threshold (0-1, default from config: 0.35)"),
-    no_index: bool = typer.Option(False, "--no-index", help="Force file-based search (skip SQLite index)"),
+    no_index: bool = typer.Option(False, "--no-index", hidden=True, help="Ignored: search always reads the files"),
     rank: Optional[str] = typer.Option(None, "--rank", help="Ranking algorithm: bm25 (default: none)"),
     boost_recent: bool = typer.Option(False, "--boost-recent", help="Boost recent results"),
     decay_days: int = typer.Option(30, "--decay-days", help="Date decay days (for --boost-recent)"),
@@ -345,7 +345,6 @@ def search(
                 max_results=max_results or 50,
                 from_date=parsed_from,
                 to_date=parsed_to,
-                use_index=not no_index,
             )
 
             text_results = []
@@ -520,7 +519,6 @@ def search(
             max_results=None if tag_only_mode else max_results,  # Get all results for tag filtering
             from_date=parsed_from,
             to_date=parsed_to,
-            use_index=not no_index if not tag_only_mode else False,  # Skip index for tag-only mode
         )
 
         from memory_tool.core.search import SearchResult
@@ -712,140 +710,6 @@ def check(
     except Exception as e:
         if not quiet:
             console.print(f"[red]ERROR[/red] {e}")
-        sys.exit(1)
-
-
-@app.command()
-def index(
-    check_flag: bool = typer.Option(False, "--check", help="Check index status"),
-    stats: bool = typer.Option(False, "--stats", help="Show index statistics"),
-    force: bool = typer.Option(False, "--force", "-f", help="Force full reindex"),
-    optimize: bool = typer.Option(False, "--optimize", help="Optimize index for better performance"),
-    vacuum: bool = typer.Option(False, "--vacuum", help="Vacuum database to reclaim space"),
-):
-    """Manage SQLite search index."""
-    try:
-        from memory_tool.db import IndexManager
-
-        memory_path = get_base_path()
-
-        if not memory_path.exists():
-            console.print("[red]ERROR[/red] .memory/ not found. Run 'minit' first.")
-            sys.exit(1)
-
-        if not IndexManager.available():
-            console.print("[red]ERROR[/red] SQLite with FTS5 not available")
-            console.print("Indexing requires SQLite 3.9.0+ with FTS5 support")
-            sys.exit(1)
-
-        indexer = IndexManager(memory_path)
-
-        if check_flag:
-            is_fresh = indexer.is_index_fresh()
-            if is_fresh:
-                console.print("[green]Index is up to date[/green]")
-            else:
-                console.print("[yellow]Index is stale or missing[/yellow]")
-                console.print("Run 'mindex' to rebuild")
-            return
-
-        if stats:
-            stats_data = indexer.get_stats()
-            if stats_data["status"] == "not_created":
-                console.print("[yellow]Index not created yet[/yellow]")
-                console.print("Run 'mindex' to create index")
-            else:
-                console.print(f"[green]Index Status: OK[/green]")
-                console.print(f"Total entries: {stats_data['total_entries']}")
-                console.print(f"Size: {stats_data['size_mb']} MB")
-                console.print("\nEntries by type:")
-                for entry_type, count in stats_data['by_type'].items():
-                    console.print(f"  {entry_type}: {count}")
-            return
-
-        if optimize or vacuum:
-            from memory_tool.search import IndexOptimizer
-
-            db_path = memory_path / ".index" / "search.db"
-            if not db_path.exists():
-                console.print("[red]ERROR[/red] Index database not found")
-                console.print("Run 'mindex' to create index first")
-                sys.exit(1)
-
-            optimizer = IndexOptimizer(db_path)
-
-            if optimize and vacuum:
-                console.print("Running full optimization...")
-                result = optimizer.full_optimize()
-
-                if result.get("overall_success"):
-                    console.print("[green]Optimization complete![/green]")
-
-                    fts_result = result.get("fts5_optimize", {})
-                    if fts_result.get("success"):
-                        console.print(f"  FTS5: {fts_result.get('entries_indexed', 0)} entries optimized")
-
-                    vacuum_result = result.get("vacuum", {})
-                    if vacuum_result.get("success"):
-                        reduced_mb = vacuum_result.get("size_reduced_mb", 0)
-                        percent = vacuum_result.get("percent_reduced", 0)
-                        console.print(f"  Vacuum: {reduced_mb:.2f} MB reclaimed ({percent:.1f}%)")
-                else:
-                    console.print("[yellow]Optimization completed with errors[/yellow]")
-                    for key, res in result.items():
-                        if res.get("error"):
-                            console.print(f"  {key}: {res['error']}")
-
-            elif optimize:
-                console.print("Optimizing FTS5 index...")
-                result = optimizer.optimize_fts5()
-
-                if result.get("success"):
-                    console.print(f"[green]OK[/green] {result.get('message')}")
-                    console.print(f"  Entries: {result.get('entries_indexed', 0)}")
-                else:
-                    console.print(f"[red]ERROR[/red] {result.get('error')}")
-                    sys.exit(1)
-
-            elif vacuum:
-                console.print("Vacuuming database...")
-                result = optimizer.vacuum_database()
-
-                if result.get("success"):
-                    reduced_mb = result.get("size_reduced_mb", 0)
-                    percent = result.get("percent_reduced", 0)
-                    console.print(f"[green]OK[/green] {reduced_mb:.2f} MB reclaimed ({percent:.1f}%)")
-                    console.print(f"  Before: {result.get('size_before_mb', 0):.2f} MB")
-                    console.print(f"  After: {result.get('size_after_mb', 0):.2f} MB")
-                else:
-                    console.print(f"[red]ERROR[/red] {result.get('error')}")
-                    sys.exit(1)
-
-            return
-
-        console.print("Indexing .memory/ content...")
-
-        if not indexer.index_path.exists():
-            console.print("Creating database...")
-            indexer.create_database()
-        elif force:
-            console.print("Force rebuilding database...")
-            indexer.create_database()
-
-        with console.status("[bold green]Indexing files..."):
-            total_entries = indexer.index_all(exclude_archive=True)
-
-        console.print(f"[green]Indexed {total_entries} entries[/green]")
-        console.print(f"Index location: {indexer.index_path}")
-
-    except ImportError:
-        console.print("[red]ERROR[/red] SQLite indexing module not available")
-        console.print("This feature requires the db module")
-        sys.exit(1)
-    except Exception as e:
-        console.print(f"[red]ERROR[/red] Indexing failed: {e}")
-        import traceback
-        console.print(f"[dim]{traceback.format_exc()}[/dim]")
         sys.exit(1)
 
 
