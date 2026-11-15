@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.10.3] - 2026-11-15
+
+### 🔄 변경
+
+- **리뷰 알림:** 리뷰할 때가 되었다고 알리는 문구 끝에 `mconfig set review.notice.enabled false`로 알림을 끄는 방법을 덧붙였습니다. 개발 프로젝트에서는 이 알림을 주로 에이전트가 읽는데, 알림을 끄는 설정이 있다는 사실을 알 방법이 없었습니다. 진행 중인 리뷰를 알리는 문구는 바뀌지 않았습니다. README와 `mhelp review`에도 이 설정을 설명했습니다.
+
 ## [1.10.2] - 2026-11-13
 
 ### 🐛 수정
