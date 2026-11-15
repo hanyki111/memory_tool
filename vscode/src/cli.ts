@@ -246,7 +246,8 @@ export class MemoryToolCli {
    * only way to neither skip entries nor repeat them.
    */
   reviewCommand(since: string | null = null): string[] {
-    const command = [this.python, "-m", "memory_tool", "review"];
+    // The terminal closes with the process, so the CLI waits for a key first.
+    const command = [this.python, "-m", "memory_tool", "review", "--wait"];
     return since ? [...command, "--since", since] : command;
   }
 }

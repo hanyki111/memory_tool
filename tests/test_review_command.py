@@ -384,6 +384,19 @@ class TestWriting:
         assert "You were writing this" in second.output
         assert store.latest_review(base).is_done
 
+    def test_after_writing_it_asks_how_it_went_without_showing_the_item_again(self, base, monkeypatch):
+        FakeTools(monkeypatch)
+        FakeClient.answer = answer(1)
+
+        # Write now with Claude Code, leave it, then say it was written.
+        result = run("--with", "claude", input="1\n1\n")
+
+        assert result.exit_code == 0, result.output
+        assert result.output.count("[1] ") == 1
+        assert 'How did writing "Topic 1" go?' in result.output
+        assert "You were writing this" not in result.output
+        assert states(base) == [store.STATE_WRITTEN]
+
     def test_write_later_makes_no_file_until_writing_starts(self, base, monkeypatch):
         monkeypatch.setattr("memory_tool.review.writer.open_in_editor", lambda path: None)
         FakeTools(monkeypatch)
@@ -471,6 +484,47 @@ class TestWriting:
         assert result.exit_code == 0, result.output
         assert "Left as being written" in result.output
         assert states(base) == [store.STATE_WRITING]
+
+
+class TestWait:
+    """--wait is for a terminal that closes when the review ends (VS Code)."""
+
+    @pytest.fixture
+    def pauses(self, monkeypatch):
+        calls = []
+        monkeypatch.setattr("memory_tool.commands.review.click.pause", lambda info=None, **kwargs: calls.append(info))
+        return calls
+
+    def test_waits_after_the_review_finishes(self, base, pauses):
+        FakeClient.answer = answer(1)
+
+        result = run("--wait", input="3\n")
+
+        assert result.exit_code == 0, result.output
+        assert store.latest_review(base).is_done
+        assert pauses == ["Press any key to close."]
+
+    def test_waits_after_a_pause(self, base, pauses):
+        FakeClient.answer = answer(1)
+
+        result = run("--wait", input="p\n")
+
+        assert "Paused" in result.output
+        assert len(pauses) == 1
+
+    def test_waits_after_an_error(self, base, pauses):
+        result = run("--wait", "--since", "someday")
+
+        assert result.exit_code == 1
+        assert "Invalid date" in result.output
+        assert len(pauses) == 1
+
+    def test_does_not_wait_without_the_option(self, base, pauses):
+        FakeClient.answer = answer(1)
+
+        run(input="3\n")
+
+        assert pauses == []
 
 
 class TestJson:
