@@ -92,7 +92,7 @@ describe("running the CLI", () => {
     const result = await cli.days("2026-03-01", "2026-03-02");
     assert.equal(result.days.length, 1);
     assert.deepEqual(result.days[0].entries, [
-      { date: "2026-03-01", time: "10:00", text: "[작업] 합성 기록 #시험", tags: ["작업", "시험"] },
+      { date: "2026-03-01", time: "10:00", text: "[작업] 합성 기록 #시험", tags: ["작업", "시험"], more: [] },
     ]);
     assert.match(result.days[0].content, /손으로 적은 메모/);
   });
@@ -105,6 +105,17 @@ describe("running the CLI", () => {
     const today = result.entry.date;
     const read = await cli.days(today, today);
     assert.ok(read.days[0].entries.some((entry) => entry.text === message));
+  });
+
+  test("a message of several lines is one entry, and a leading #tag is a tag", async () => {
+    const result = await cli.record("#시험 여러 줄 기록\n둘째 줄\r\n\n셋째 줄");
+    assert.equal(result.entry.text, "[시험] 여러 줄 기록");
+    assert.deepEqual(result.entry.tags, ["시험"]);
+    assert.deepEqual(result.entry.more, ["둘째 줄", "셋째 줄"]);
+
+    const today = result.entry.date;
+    const read = await cli.days(today, today);
+    assert.match(read.days[0].content, /- \d\d:\d\d \| \[시험\] 여러 줄 기록\n  둘째 줄\n  셋째 줄\n/);
   });
 
   test("a message that starts with a dash stays a message", async () => {

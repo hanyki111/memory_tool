@@ -28,19 +28,48 @@ _MONTH_DIR = re.compile(r"^(\d{4})-(\d{2})$")
 #: "- 14:30 | message"
 ENTRY_PATTERN = re.compile(r"^- (\d{1,2}:\d{2})\s*\|\s*(.+)$", re.MULTILINE)
 
-#: Tags written before a message: "[bug][urgent] message" or "[bug] [urgent] message"
-LEADING_TAGS = re.compile(r"^(\[[\w가-힣-]+\]\s*)+")
+#: An entry's later lines: indented under its first.
+#:
+#:   - 14:30 | first line
+#:     second line
+CONTINUATION_INDENT = "  "
+_CONTINUATION = re.compile(r"^[ \t]+\S")
+
+#: Tags written before a message: "[bug][urgent] message", "[bug] [urgent] message"
+#: or "#bug #urgent message". A hashtag of digits alone ("#35 fixed") is a
+#: number, not a tag.
+LEADING_TAGS = re.compile(r"^(?:(?:\[[\w가-힣-]+\]|#(?!\d+(?![\w가-힣-]))[\w가-힣-]+(?=\s|$))\s*)+")
 #: Tags written after a message: "message #bug #auth"
 TRAILING_TAGS = re.compile(r"(\s+#[\w가-힣-]+)+$")
 _BRACKET_TAG = re.compile(r"\[([\w가-힣-]+)\]")
 _HASH_TAG = re.compile(r"#([\w가-힣-]+)")
+_ANY_TAG = re.compile(r"\[([\w가-힣-]+)\]|#([\w가-힣-]+)")
+
+
+def is_continuation(line: str) -> bool:
+    """Whether a line, written right under an entry, is one of its later lines."""
+    return bool(_CONTINUATION.match(line))
+
+
+def clean_message(message: str) -> str:
+    """A message as an entry holds it.
+
+    Empty lines and space at the ends of lines are dropped, and the first line
+    starts with no space. Later lines keep the space they start with, so what
+    was indented under the first line stays indented under it.
+    """
+    lines = [line.rstrip() for line in message.splitlines() if line.strip()]
+    if not lines:
+        return ""
+    return "\n".join([lines[0].strip()] + lines[1:])
 
 
 def split_tags(message: str) -> Tuple[str, List[str], List[str]]:
     """Separate the tags written around a message.
 
-    Only tags at the start (in brackets) or at the end (as hashtags) count, so a
-    "#" or "[...]" in the middle of a sentence stays part of it.
+    Only tags at the start (in brackets or as hashtags) or at the end (as
+    hashtags) count, so a "#" or "[...]" in the middle of a sentence stays part
+    of it.
 
     Args:
         message: An entry's text, or a message about to be recorded
@@ -53,7 +82,7 @@ def split_tags(message: str) -> Tuple[str, List[str], List[str]]:
 
     match = LEADING_TAGS.match(message)
     if match:
-        leading = _BRACKET_TAG.findall(match.group(0))
+        leading = [bracket or hashed for bracket, hashed in _ANY_TAG.findall(match.group(0))]
         message = message[match.end():].strip()
 
     match = TRAILING_TAGS.search(message)
@@ -73,17 +102,48 @@ def entry_tags(text: str) -> List[str]:
 def parse_entry_lines(content: str) -> List[dict]:
     """Read the entries in a timeline file's content.
 
-    Lines that are not "- HH:MM | text" are not entries and are left out; callers
-    that must not lose them keep the content as well.
+    An entry is its "- HH:MM | text" line and the indented lines right under
+    it. Other lines are not part of any entry and are left out; callers that
+    must not lose them keep the content as well.
 
     Returns:
-        Dicts with ``time``, ``text`` (as written) and ``tags``, in file order.
+        Dicts with ``time``, ``text`` (the first line, as written), ``tags``
+        and ``more`` (the later lines, without their indent), in file order.
     """
     entries = []
-    for match in ENTRY_PATTERN.finditer(content):
-        text = match.group(2).strip()
-        entries.append({"time": match.group(1), "text": text, "tags": entry_tags(text)})
+    current = None
+    for line in content.splitlines():
+        match = ENTRY_PATTERN.match(line)
+        if match:
+            text = match.group(2).strip()
+            current = {"time": match.group(1), "text": text, "tags": entry_tags(text), "more": []}
+            entries.append(current)
+        elif current is not None and is_continuation(line):
+            current["more"].append(line.strip())
+        else:
+            current = None
     return entries
+
+
+def entry_at_line(lines: List[str], index: int) -> Optional[dict]:
+    """The entry that line ``index`` of a timeline file belongs to, if any.
+
+    The line may be the entry's first line or one of its later lines. The
+    entry also carries ``line``, the index of its first line.
+    """
+    if not 0 <= index < len(lines):
+        return None
+    start = index
+    while start > 0 and is_continuation(lines[start]):
+        start -= 1
+    if not ENTRY_PATTERN.match(lines[start]):
+        return None
+    end = start + 1
+    while end < len(lines) and is_continuation(lines[end]):
+        end += 1
+    if index >= end:
+        return None
+    return {**parse_entry_lines("\n".join(lines[start:end]))[0], "line": start}
 
 
 def timeline_filename(target_date, layout: str = DEFAULT_FILENAME_LAYOUT) -> str:
@@ -466,8 +526,13 @@ class Timeline:
             Formatted entry string based on config:
             - bracket format: "- 14:30 | [tag1] [tag2] Message here"
             - hashtag format: "- 14:30 | Message here #tag1 #tag2"
+            A message of several lines gives several lines: the later ones
+            are indented under the first, and the tags go on the first.
         """
-        return f"- {dt.strftime('%H:%M')} | {self.format_text(message, tags)}"
+        first, *rest = clean_message(message).split("\n")
+        lines = [f"- {dt.strftime('%H:%M')} | {self.format_text(first, tags)}"]
+        lines.extend(CONTINUATION_INDENT + line for line in rest)
+        return "\n".join(lines)
 
     def format_text(self, message: str, tags: Optional[List[str]] = None) -> str:
         """The text of an entry: the message with its tags in the configured format."""
@@ -773,10 +838,17 @@ class Timeline:
         entries = []
 
         for i, match in enumerate(ENTRY_PATTERN.finditer(content)):
+            more = []
+            for line in content[match.end():].split("\n")[1:]:
+                line = line.rstrip("\r")
+                if not is_continuation(line):
+                    break
+                more.append(line)
             entries.append({
                 'index': i,
                 'time': match.group(1),
                 'message': match.group(2).strip(),
+                'more': more,  # later lines, as written
                 'start': match.start(),
                 'end': match.end(),
                 'raw': match.group(0)
@@ -894,7 +966,8 @@ class Timeline:
             target_day = self._day_date(target_date)
             target_file = self.resolve_existing_file(self.timeline_path, target_day) or self.get_timeline_file(target_day)
             _, target_entries, _ = self.parse_entries(target_date) if target_file.exists() else (None, [], None)
-            self.save_entries(target_file, target_entries + [{"time": target_time, "message": target_text}], target_day)
+            moving = {"time": target_time, "message": target_text, "more": entry.get("more", [])}
+            self.save_entries(target_file, target_entries + [moving], target_day)
             self.save_entries(file_path, [e for i, e in enumerate(entries) if i != position], self._day_date(date_str))
         else:
             entries[position] = {**entry, "time": target_time, "message": target_text}
@@ -903,7 +976,7 @@ class Timeline:
         return before, after
 
     def delete_entry(self, date_str: str, time_str: str, text: str) -> dict:
-        """Delete an entry. Lines written by hand under it are kept.
+        """Delete an entry with its later lines. Lines written by hand under it are kept.
 
         Returns:
             The deleted entry, with date, time and text
@@ -923,36 +996,45 @@ class Timeline:
         """Save edited entries back to their file, changing nothing else.
 
         The heading, lines before the first entry and lines written by hand stay
-        as they are. A hand-written line belongs to the entry above it and moves
-        with it when the entries are put in time order; when that entry is
-        deleted, the line goes to the entry before, so nothing written by hand
-        is lost. An entry whose time and message did not change keeps its line
-        exactly as written.
+        as they are. An entry's later lines (indented, right under it) are part
+        of it: they move with it and are deleted with it. A hand-written line
+        belongs to the entry above it and moves with it when the entries are put
+        in time order; when that entry is deleted, the line goes to the entry
+        before, so nothing written by hand is lost. An entry whose time and
+        message did not change keeps its line exactly as written.
 
         Args:
             file_path: Path to timeline file
             entries: The entries to keep, as ``parse_entries`` gave them, with
                 'time' and 'message' possibly changed. 'index' says which entry
-                of the file each one is.
+                of the file each one is; an entry without one is new here, and
+                its 'more' lines, if any, are written under it.
             date: Date for the timeline
         """
         original = file_path.read_text(encoding="utf-8") if file_path.exists() else ""
 
         head: List[str] = []
         lines_of: dict = {}    # entry index -> its line as written
+        more_of: dict = {}     # entry index -> its later lines, as written
         notes_of: dict = {}    # entry index -> hand-written lines under it
         current = None
+        in_entry = False       # still on the entry's own lines
         count = 0
         for line in original.splitlines():
             match = ENTRY_PATTERN.match(line)
             if match:
                 current = count
                 lines_of[current] = (match.group(1), match.group(2).strip(), line)
+                more_of[current] = []
                 notes_of[current] = []
+                in_entry = True
                 count += 1
             elif current is None:
                 head.append(line)
+            elif in_entry and is_continuation(line):
+                more_of[current].append(line)
             else:
+                in_entry = False
                 notes_of[current].append(line)
 
         if not original:
@@ -982,6 +1064,7 @@ class Timeline:
                 lines.append(written[2])
             else:
                 lines.append(f"- {normal(entry['time'])} | {entry['message']}")
+            lines.extend(more_of[index] if index in more_of else entry.get("more", []))
             lines.extend(notes_of.get(index, []))
 
         content = "\n".join(lines)

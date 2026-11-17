@@ -152,11 +152,16 @@ export function layoutFromFilenames(names: string[]): FilenameLayout | null {
   return day > date ? "day" : "date";
 }
 
+/** How an entry's later lines are indented under its first. Mirrors `CONTINUATION_INDENT`. */
+export const CONTINUATION_INDENT = "  ";
+
 /**
- * Format one entry line. Mirrors `Timeline.format_entry`.
+ * Format one entry. Mirrors `Timeline.format_entry`.
  *
  * Bracket tags are prepended, hashtags appended -- that asymmetry is in the
- * Python and is preserved here so both writers produce identical files.
+ * Python and is preserved here so both writers produce identical files. A
+ * message of several lines (as `sanitizeMessage` leaves it) gives several
+ * lines: the tags go on the first, and the later ones are indented under it.
  */
 export function formatEntry(
   date: Date,
@@ -164,23 +169,35 @@ export function formatEntry(
   tags: string[] = [],
   tagFormat: TagFormat = DEFAULT_TAG_FORMAT
 ): string {
+  const [first, ...rest] = message.split("\n");
+  const later = rest.map((line) => `\n${CONTINUATION_INDENT}${line}`).join("");
   const time = hourMinute(date);
   const clean = tags.map((t) => t.trim()).filter((t) => t.length > 0);
 
-  if (clean.length === 0) return `- ${time} | ${message}`;
+  if (clean.length === 0) return `- ${time} | ${first}${later}`;
 
   if (tagFormat === "hashtag") {
     const tagStr = clean.map((t) => `#${t.replace(/ /g, "-")}`).join(" ");
-    return `- ${time} | ${message} ${tagStr}`;
+    return `- ${time} | ${first} ${tagStr}${later}`;
   }
 
   const tagStr = clean.map((t) => `[${t.replace(/ /g, "-")}]`).join(" ");
-  return `- ${time} | ${tagStr} ${message}`;
+  return `- ${time} | ${tagStr} ${first}${later}`;
 }
 
-/** Collapse a message to the single line an entry must occupy. */
+/**
+ * A message as an entry holds it. Mirrors `clean_message`.
+ *
+ * Empty lines and space at the ends of lines are dropped, and the first line
+ * starts with no space. Later lines keep the space they start with.
+ */
 export function sanitizeMessage(message: string): string {
-  return message.replace(/[\r\n]+/g, " ").trim();
+  const lines = message
+    .split(/\r\n|\r|\n/)
+    .map((line) => line.replace(/\s+$/, ""))
+    .filter((line) => line.trim().length > 0);
+  if (lines.length === 0) return "";
+  return [lines[0].trim(), ...lines.slice(1)].join("\n");
 }
 
 /**

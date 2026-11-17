@@ -206,7 +206,7 @@ export async function resolveFilenameLayout(
  *
  * @param adapter    Vault adapter (raw filesystem view, dot-folders included)
  * @param basePrefix Vault-relative knowledge base prefix ("" = vault root)
- * @param message    Entry text; newlines are collapsed to keep one line per entry
+ * @param message    Entry text; later lines are written indented under the first
  * @param options    Tags, timestamp, and the filename layout setting
  */
 export async function recordDirect(

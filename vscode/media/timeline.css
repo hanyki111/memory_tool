@@ -40,9 +40,15 @@ header {
   padding-top: var(--gap);
 }
 
-.row > input {
+.row > input,
+.row > textarea {
   flex: 1;
   min-width: 0;
+}
+
+/* The record box grows downwards; the button stays by its first line. */
+.row.record {
+  align-items: flex-start;
 }
 
 .tools {
@@ -59,7 +65,8 @@ header {
   font-size: 0.92em;
 }
 
-input {
+input,
+textarea {
   box-sizing: border-box;
   padding: 4px 6px;
   color: var(--vscode-input-foreground);
@@ -69,7 +76,15 @@ input {
   font: inherit;
 }
 
-input:focus {
+textarea {
+  resize: none;
+  overflow-y: auto;
+  max-height: 12em;
+  line-height: inherit;
+}
+
+input:focus,
+textarea:focus {
   outline: 1px solid var(--vscode-focusBorder);
   outline-offset: -1px;
 }
@@ -153,16 +168,16 @@ button.link:hover {
   overflow-wrap: anywhere;
 }
 
-.entry .time {
+.entry .time,
+.note .time {
   flex: none;
   color: var(--vscode-descriptionForeground);
   font-variant-numeric: tabular-nums;
 }
 
-.note {
-  padding-left: 12px;
-  color: var(--vscode-descriptionForeground);
-  font-style: italic;
+/* Lines under an entry: in the entry's style, lined up with its text. */
+.note .spacer {
+  visibility: hidden;
 }
 
 .tag {
@@ -190,6 +205,10 @@ button.link:hover {
 
 .hit:hover {
   background: var(--vscode-list-hoverBackground);
+}
+
+.hit .more {
+  padding-left: 1em;
 }
 
 .hit .where {
@@ -232,7 +251,8 @@ button.more {
     padding: 0 24px 32px;
   }
 
-  .entry {
+  .entry,
+  .note {
     gap: 14px;
   }
 }

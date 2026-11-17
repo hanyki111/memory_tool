@@ -99,7 +99,13 @@ def path_text(path: Optional[Path]) -> Optional[str]:
 
 def entry_dict(day: Any, entry: Dict[str, Any]) -> Dict[str, Any]:
     """One entry, as views and search results carry it."""
-    return {"date": date_text(day), "time": entry["time"], "text": entry["text"], "tags": entry["tags"]}
+    return {
+        "date": date_text(day),
+        "time": entry["time"],
+        "text": entry["text"],
+        "tags": entry["tags"],
+        "more": entry.get("more", []),
+    }
 
 
 def day_dict(day: Any, path: Path, content: str) -> Dict[str, Any]:

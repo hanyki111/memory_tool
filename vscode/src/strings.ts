@@ -2,7 +2,7 @@
 
 const en = {
   tabTitle: "Timeline",
-  recordPlaceholder: "Record to the timeline… ([tag] or #tag)",
+  recordPlaceholder: "Record to the timeline… ([tag] or #tag at the start or end; Shift+Enter for a new line)",
   record: "Record",
   searchPlaceholder: "Search",
   search: "Search",
@@ -46,7 +46,7 @@ type Strings = typeof en;
 
 const ko: Strings = {
   tabTitle: "타임라인",
-  recordPlaceholder: "타임라인에 기록… ([태그] 또는 #태그)",
+  recordPlaceholder: "타임라인에 기록… ([태그]나 #태그는 맨 앞이나 맨 끝에, 줄바꿈은 Shift+Enter)",
   record: "기록",
   searchPlaceholder: "검색",
   search: "검색",

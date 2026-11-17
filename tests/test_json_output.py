@@ -78,8 +78,8 @@ class TestParseEntryLines:
         content = "# T\n- 14:30 | [버그] 로그인 오류 수정\n- 9:05 | 포트 변경 #설정\n"
 
         assert parse_entry_lines(content) == [
-            {"time": "14:30", "text": "[버그] 로그인 오류 수정", "tags": ["버그"]},
-            {"time": "9:05", "text": "포트 변경 #설정", "tags": ["설정"]},
+            {"time": "14:30", "text": "[버그] 로그인 오류 수정", "tags": ["버그"], "more": []},
+            {"time": "9:05", "text": "포트 변경 #설정", "tags": ["설정"], "more": []},
         ]
 
     def test_leaves_out_lines_that_are_not_entries(self):
@@ -144,7 +144,7 @@ class TestEmit:
 
         day = json_output.day_dict(date(2026, 3, 1), tmp_path / "01.md", content)
 
-        assert day["entries"] == [{"date": "2026-03-01", "time": "10:00", "text": "[a] entry", "tags": ["a"]}]
+        assert day["entries"] == [{"date": "2026-03-01", "time": "10:00", "text": "[a] entry", "tags": ["a"], "more": []}]
         assert "hand-written note" in day["content"]
         assert day["path"] == str((tmp_path / "01.md").resolve())
 
@@ -170,7 +170,7 @@ class TestViews:
         assert data["ok"] is True
         assert data["from"] == data["to"] == f"{now:%Y-%m-%d}"
         [day] = data["days"]
-        assert day["entries"] == [{"date": f"{now:%Y-%m-%d}", "time": "08:00", "text": "[작업] 아침 기록", "tags": ["작업"]}]
+        assert day["entries"] == [{"date": f"{now:%Y-%m-%d}", "time": "08:00", "text": "[작업] 아침 기록", "tags": ["작업"], "more": []}]
         assert "손으로 적은 메모" in day["content"]
 
     def test_today_without_entries_is_an_empty_list(self, base):
@@ -255,7 +255,7 @@ class TestRecord:
         assert data["ok"] is True
         assert data["entry"] == {
             "date": f"{datetime.now():%Y-%m-%d}", "time": "00:00",
-            "text": "[버그] [auth] 로그인 오류 수정", "tags": ["버그", "auth"],
+            "text": "[버그] [auth] 로그인 오류 수정", "tags": ["버그", "auth"], "more": [],
         }
         assert data["path"].endswith(".md")
         assert "로그인 오류 수정" in open(data["path"], encoding="utf-8").read()
@@ -361,7 +361,7 @@ class TestSearch:
         by_kind = {item["kind"]: item for item in data["results"]}
         timeline = by_kind["timeline"]
         assert timeline["date"] == "2026-03-01"
-        assert timeline["entry"] == {"date": "2026-03-01", "time": "15:10", "text": "서버 포트를 8443으로 변경 #설정", "tags": ["설정"]}
+        assert timeline["entry"] == {"date": "2026-03-01", "time": "15:10", "text": "서버 포트를 8443으로 변경 #설정", "tags": ["설정"], "more": []}
         assert "entry" not in by_kind["module"]
         assert by_kind["module"]["path"].endswith("server.md")
 
