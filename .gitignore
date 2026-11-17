@@ -78,3 +78,6 @@ obsidian-plugin/node_modules/
 # VS Code extension: dependencies and packaged builds (dist/ is ignored above)
 vscode/node_modules/
 vscode/*.vsix
+
+
+temp.txt

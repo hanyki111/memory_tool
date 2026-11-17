@@ -1,12 +1,13 @@
 # Memory Context
 
-**Generated:** 2026-10-01 23:13
+**Generated:** 2026-11-15 17:31
 
 ---
 
 ## Recent Timeline
 
-- **2026-10-01**: `.memory/timeline/daily/2026-10/2026-10-01.md`
+- **2026-11-15**: `.memory/timeline/daily/2026-11/2026-11-15.md`
+- **2026-11-13**: `.memory/timeline/daily/2026-11/2026-11-13.md`
 
 ---
 
@@ -29,7 +30,6 @@
 - **memory-tool/module-system**: `.memory/modules/memory-tool/module-system/module-system.md`
 - **memory-tool/project-management**: `.memory/modules/memory-tool/project-management/project-management.md`
 - **memory-tool/project-management/MIGRATION-PLAN**: `.memory/modules/memory-tool/project-management/MIGRATION-PLAN/MIGRATION-PLAN.md`
-- **memory-tool/project-management/PLAN-document-consolidation**: `.memory/modules/memory-tool/project-management/PLAN-document-consolidation/PLAN-document-consolidation.md`
 - **memory-tool/project-management/PLAN-external-release**: `.memory/modules/memory-tool/project-management/PLAN-external-release/PLAN-external-release.md`
 - **memory-tool/project-management/PLAN-phase5a-document-management**: `.memory/modules/memory-tool/project-management/PLAN-phase5a-document-management/PLAN-phase5a-document-management.md`
 - **memory-tool/search-system**: `.memory/modules/memory-tool/search-system/search-system.md`
@@ -39,29 +39,16 @@
 
 ## Document Health
 
-### 🔴 CRITICAL (>600/400 lines)
+### 🟡 WARNING
 
-- **memory-tool/memory-tool.md**: 8222 lines - ⚠️ Very large, should archive soon
-  - Quick action: `marchive memory-tool --module memory-tool --interactive`
-- **archive/memory-system/decisions.md**: 692 lines - ⚠️ Very large, should archive soon
-  - Quick action: `marchive decisions --module archive/memory-system --interactive`
-- **memory-tool/core-system/core-system.md**: 1273 lines - ⚠️ Very large, should archive soon
-  - Quick action: `marchive core-system --module memory-tool/core-system --interactive`
-- **memory-tool/knowledge-graph-system/knowledge-graph-system.md**: 1315 lines - ⚠️ Very large, should archive soon
-  - Quick action: `marchive knowledge-graph-system --module memory-tool/knowledge-graph-system --interactive`
-- **memory-tool/project-management/project-management.md**: 2640 lines - ⚠️ Very large, should archive soon
-  - Quick action: `marchive project-management --module memory-tool/project-management --interactive`
-
-### 🟡 WARNING (300-600/200-400 lines)
-
-- **archive/memory-system/current.md**: 234 lines - Consider reviewing
-- **memory-tool/llm-integration/llm-integration.md**: 831 lines - Consider reviewing
-- **memory-tool/module-system/module-system.md**: 853 lines - Consider reviewing
-- **memory-tool/core-system/PLAN-phase3-plan-system/PLAN-phase3-plan-system.md**: 757 lines - Consider reviewing
-- **memory-tool/knowledge-graph-system/discussion/discussion.md**: 608 lines - Consider reviewing
-- **memory-tool/project-management/PLAN-document-consolidation/PLAN-document-consolidation.md**: 879 lines - Consider reviewing
-- **memory-tool/project-management/PLAN-external-release/PLAN-external-release.md**: 785 lines - Consider reviewing
+- **memory-tool/module-system/module-system.md**: 860 lines - Consider reviewing
+- **memory-tool/llm-integration/llm-integration.md**: 838 lines - Consider reviewing
 - **memory-tool/project-management/PLAN-phase5a-document-management/PLAN-phase5a-document-management.md**: 824 lines - Consider reviewing
+- **memory-tool/project-management/PLAN-external-release/PLAN-external-release.md**: 785 lines - Consider reviewing
+- **memory-tool/core-system/core-system.md**: 764 lines - Consider reviewing
+- **memory-tool/core-system/PLAN-phase3-plan-system/PLAN-phase3-plan-system.md**: 757 lines - Consider reviewing
+- **memory-tool/knowledge-graph-system/knowledge-graph-system.md**: 703 lines - Consider reviewing
+- **memory-tool/knowledge-graph-system/discussion/discussion.md**: 608 lines - Consider reviewing
 
 ### ✅ Quick Actions
 
@@ -75,32 +62,18 @@ marchive decisions --module <module-name> --interactive
 # 3. LLM-powered analysis (analyze and categorize)
 msummary --module <module-name> --decisions
 
-# 4. Check health anytime
+# 4. See whether a document's sections answer different questions
+mmodule audit
+
+# 5. Check health anytime
 mcontext
 ```
 
 ---
 
-## Module Organization Quick Reference
+## Review
 
-**When to Split a Module:**
-- `current.md` > 300 lines
-- Total files > 3000 lines
-- More than 20 decisions
-- More than 3 distinct topics
-
-**Decision Flow:**
-```
-Small enhancement (<100 lines)  → Add to existing module
-New feature (>500 lines)        → Create new module
-Unrelated topic                 → Create new module
-Part of existing project        → Child module (projects/parent/child)
-New project                     → New project (projects/new-project)
-```
-
-**Full Documentation:**
-- `.memory/docs/MODULE-ORGANIZATION-PRINCIPLES.md` - Complete principles
-- `.memory/docs/QUICK-REFERENCE-MODULE-ORGANIZATION.md` - Quick decisions
+아직 리뷰가 없고 최근 기록이 121건 있습니다. 리뷰하려면 mreview를 실행하세요. 이 프로젝트에 리뷰가 필요 없으면 mconfig set review.notice.enabled false로 끌 수 있습니다.
 
 ---
 
