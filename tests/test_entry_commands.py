@@ -60,7 +60,8 @@ def run(*args):
 
 BODY = (
     "- 09:00 | [버그] [긴급] 로그인 오류\n"
-    "  손으로 적은 메모\n"
+    "  이어지는 줄\n"
+    "손으로 적은 메모\n"
     "- 10:30 | 회의 정리\n"
     "- 10:30 | 회의 정리\n"
     "- 11:00 | 따옴표 \"큰\" '작은' $HOME\n"
@@ -112,14 +113,14 @@ class TestEdit:
         assert reply["entry"] == {"date": DAY, "time": "09:00", "text": "[버그] 로그인 오류 수정", "tags": ["버그"]}
         assert reply["previous"]["text"] == "[버그] [긴급] 로그인 오류"
         content = path.read_text(encoding="utf-8")
-        assert "- 09:00 | [버그] 로그인 오류 수정\n  손으로 적은 메모\n" in content
+        assert "- 09:00 | [버그] 로그인 오류 수정\n  이어지는 줄\n손으로 적은 메모\n" in content
         assert content.count("회의 정리") == 2
 
     def test_time_change_reorders_and_moves_hand_lines(self, base):
         path = write_day(base, DAY, BODY)
         run("edit", "--date", DAY, "--time", "09:00", "--text", "[버그] [긴급] 로그인 오류", "--new-time", "12:00")
         lines = path.read_text(encoding="utf-8").splitlines()
-        assert lines[-2:] == ["- 12:00 | [버그] [긴급] 로그인 오류", "  손으로 적은 메모"]
+        assert lines[-3:] == ["- 12:00 | [버그] [긴급] 로그인 오류", "  이어지는 줄", "손으로 적은 메모"]
 
     def test_text_starting_with_a_dash(self, base):
         path = write_day(base, DAY, BODY)
@@ -189,14 +190,15 @@ class TestEdit:
 
 
 class TestDelete:
-    def test_deletes_and_keeps_hand_lines(self, base):
+    def test_deletes_its_later_lines_and_keeps_hand_lines(self, base):
         path = write_day(base, DAY, BODY)
         reply, code = run("delete", "--date", DAY, "--time", "09:00", "--text", "로그인 오류 #버그 #긴급")
         assert code == 0
         assert reply["entry"]["text"] == "[버그] [긴급] 로그인 오류"
         content = path.read_text(encoding="utf-8")
         assert "로그인 오류" not in content
-        assert "  손으로 적은 메모" in content
+        assert "이어지는 줄" not in content
+        assert "손으로 적은 메모" in content
 
     def test_not_found(self, base):
         write_day(base, DAY, BODY)

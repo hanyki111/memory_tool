@@ -16,7 +16,7 @@ from memory_tool.commands.common import (
     app, console, sanitize_output, opt_str, arg_str, resolve_module_name
 )
 from memory_tool.commands.common import console as shared_console
-from memory_tool.core.timeline import date_from_timeline_path, parse_entry_lines
+from memory_tool.core.timeline import date_from_timeline_path, entry_at_line, parse_entry_lines
 from memory_tool.core.search import MemorySearcher, SearchError
 from memory_tool.utils.path_checker import PathChecker, format_check_result
 from memory_tool.utils.config import Config
@@ -73,20 +73,23 @@ def _result_kind(path: Path, memory_path: Path) -> str:
 def _entry_at(path: Path, line_number: int, line: str) -> Optional[dict]:
     """Read the entry a timeline hit points at.
 
-    Semantic search keeps only an entry's text, so the line is read again from
-    the file when the hit itself does not carry the time.
+    The hit may be on the entry's first line or on one of its later lines, and
+    semantic search keeps only an entry's text, so the entry is read from the
+    file. The hit's own line is the fallback when the file says otherwise.
     """
     entries = parse_entry_lines(line)
-    if not entries:
-        try:
-            lines = path.read_text(encoding="utf-8").splitlines()
-            entries = parse_entry_lines(lines[line_number - 1]) if 0 < line_number <= len(lines) else []
-        except (OSError, UnicodeDecodeError):
-            entries = []
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeDecodeError):
+        lines = []
+    found = entry_at_line(lines, line_number - 1)
+    if found is not None and (not entries or found["text"] == entries[0]["text"]):
+        return found
     return entries[0] if entries else None
 
 
-def _result_dict(result, memory_path: Path) -> dict:
+def _result_dict(result, memory_path: Path):
+    """One result for --json, and the line its timeline entry starts on (or None)."""
     path = Path(result.file_path)
     kind = _result_kind(path, memory_path)
     day = date_from_timeline_path(path) if kind == "timeline" else None
@@ -104,12 +107,14 @@ def _result_dict(result, memory_path: Path) -> dict:
         "project": result.origin_project,
     }
 
+    first_line = None
     if kind == "timeline":
         entry = _entry_at(path, result.line_number, result.line_content)
         if entry is not None:
             item["entry"] = json_output.entry_dict(day, entry)
+            first_line = entry.get("line")
 
-    return item
+    return item, first_line
 
 
 def _distinct(results):
@@ -129,13 +134,32 @@ def _distinct(results):
     return kept
 
 
+def _one_per_entry(results, memory_path: Path) -> list:
+    """The results for --json, with only the first hit of each timeline entry.
+
+    An entry of several lines can match on more than one of them; a program
+    reading --json shows entries, so it gets each entry once.
+    """
+    seen = set()
+    kept = []
+    for result in results:
+        item, first_line = _result_dict(result, memory_path)
+        if first_line is not None:
+            key = (item["path"], first_line)
+            if key in seen:
+                continue
+            seen.add(key)
+        kept.append(item)
+    return kept
+
+
 def _emit_results(query: str, mode: str, results, cached: bool = False, notices=None) -> None:
     memory_path = get_base_path()
     json_output.succeed(
         query=query,
         mode=mode,
         cached=cached,
-        results=[_result_dict(result, memory_path) for result in results],
+        results=_one_per_entry(results, memory_path),
         notices=notices or [],
     )
 

@@ -3055,12 +3055,19 @@ instead of the text meant for people. Add `--json` to:
 
 ### Entries
 
-Views and search results carry an entry the same way. `text` is the line as
-written; `tags` are the `[tag]`s at its start and the `#tag`s at its end.
+Views and search results carry an entry the same way. `text` is its first line
+as written; `tags` are the `[tag]`s and `#tag`s at its start and the `#tag`s
+at its end (a `#` followed by digits alone, such as `#35`, is a number, not a
+tag). `more` holds the entry's later lines, without their indent: the lines
+right under the first that start with a space. A message of several lines is
+recorded that way, each later line indented by two spaces.
 
 ```json
-{"date": "2026-11-06", "time": "14:30", "text": "[bug] Fixed login #auth", "tags": ["bug", "auth"]}
+{"date": "2026-11-06", "time": "14:30", "text": "[bug] Fixed login #auth", "tags": ["bug", "auth"], "more": ["Cause: the session expired"]}
 ```
+
+A search hit on a later line carries its entry, and each entry appears once in
+the results, at its first hit.
 
 ### Results
 

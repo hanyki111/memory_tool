@@ -16,6 +16,7 @@ from memory_tool.core.timeline import (
     TimelineError,
     FutureTimeError,
     DistantPastWarning,
+    clean_message,
     parse_entry_lines,
     split_tags,
 )
@@ -59,13 +60,15 @@ def record(
         m "[버그][긴급] Critical auth fix #sprint-1"
         m "Fixed auth bug #bug #auth #urgent"
     """
-    message = arg_str(message)
+    # Lines of a message of several lines are kept; empty lines and the space
+    # around it go first, so a tag typed before a trailing space still counts.
+    message = clean_message(arg_str(message))
     date = opt_str(date)
     time = opt_str(time)
     tags_str = opt_str(tags)
 
-    # 1-2. Bracket tags at the start ("[버그][긴급] message") and hashtags at the
-    # end ("message #tag1 #tag2"). The same rule reads them back for --json views.
+    # 1-2. Tags at the start ("[버그][긴급] message", "#버그 message") and hashtags
+    # at the end ("message #tag1 #tag2"). The same rule reads them back for --json views.
     message, bracket_tags, inline_tags = split_tags(message)
 
     # 3. Parse --tags option

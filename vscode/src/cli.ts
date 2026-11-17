@@ -14,9 +14,11 @@ import * as path from "node:path";
 export interface Entry {
   date: string;
   time: string;
-  /** The line as written, tags included */
+  /** The first line as written, tags included */
   text: string;
   tags: string[];
+  /** The entry's later lines, without their indent (absent before memory_tool 1.12) */
+  more?: string[];
 }
 
 export interface Day {

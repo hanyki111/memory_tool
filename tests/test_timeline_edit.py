@@ -17,12 +17,13 @@ runner = CliRunner()
 DAY = """# 2026-03-01 Timeline
 Written before the first entry
 - 09:00 | first
-  a note about first
+  a later line of first
+a note about first
 - 9:30 | second, written without a leading zero
 - 13:00 | third
-  a note about third
+  a later line of third
 
-  after a blank line, still about third
+  after a blank line, a note about third
 """
 
 
@@ -82,23 +83,24 @@ def test_a_new_time_moves_the_entry_with_its_notes(day_file):
         "Written before the first entry\n"
         "- 9:30 | second, written without a leading zero\n"
         "- 13:00 | third\n"
-        "  a note about third\n"
+        "  a later line of third\n"
         "\n"
-        "  after a blank line, still about third\n"
+        "  after a blank line, a note about third\n"
         "- 14:00 | first\n"
-        "  a note about first\n"
+        "  a later line of first\n"
+        "a note about first\n"
     )
 
 
-def test_deleting_an_entry_keeps_its_notes_under_the_entry_before(day_file):
+def test_deleting_an_entry_drops_its_later_lines_and_keeps_its_notes_under_the_entry_before(day_file):
     text = save(day_file, lambda entries: [e for e in entries if e["message"] != "third"])
 
     assert "- 13:00 | third" not in text
+    assert "a later line of third" not in text
     assert text.endswith(
         "- 9:30 | second, written without a leading zero\n"
-        "  a note about third\n"
         "\n"
-        "  after a blank line, still about third\n"
+        "  after a blank line, a note about third\n"
     )
 
 
@@ -106,8 +108,9 @@ def test_deleting_the_first_entry_keeps_its_notes_above_the_rest(day_file):
     text = save(day_file, lambda entries: entries[1:])
 
     assert text.startswith(
-        "# 2026-03-01 Timeline\nWritten before the first entry\n  a note about first\n- 9:30 | second"
+        "# 2026-03-01 Timeline\nWritten before the first entry\na note about first\n- 9:30 | second"
     )
+    assert "a later line of first" not in text
 
 
 def test_the_editor_deletes_with_confirmation_and_keeps_the_rest(day_file):
@@ -117,6 +120,7 @@ def test_the_editor_deletes_with_confirmation_and_keeps_the_rest(day_file):
     text = day_file.read_text(encoding="utf-8")
     assert text.startswith("# 2026-03-01 Timeline\n")
     assert "- 13:00 | third" not in text
+    assert "a later line of third" not in text
     assert "a note about third" in text
     assert "Written before the first entry" in text
 

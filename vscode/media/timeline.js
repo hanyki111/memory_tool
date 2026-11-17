@@ -33,18 +33,28 @@
 
   const app = document.getElementById("app");
 
-  const recordInput = el("input", {
-    type: "text",
+  // Enter records; Shift+Enter starts a new line, which the CLI writes as a
+  // later line of the same entry. A composing Enter is ignored: with a Korean
+  // IME it carries a syllable the box has not committed yet.
+  const recordInput = el("textarea", {
     class: "record-input",
+    rows: "1",
     placeholder: t.recordPlaceholder,
     "aria-label": t.recordPlaceholder,
     onkeydown: (event) => {
-      if (event.key === "Enter" && !event.isComposing) {
+      if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
         event.preventDefault();
         record();
       }
     },
+    oninput: () => fitRecordInput(),
   });
+
+  // The box grows with what is typed, up to a limit set in the stylesheet.
+  function fitRecordInput() {
+    recordInput.style.height = "auto";
+    recordInput.style.height = `${recordInput.scrollHeight + recordInput.offsetHeight - recordInput.clientHeight}px`;
+  }
   const recordButton = el("button", { class: "primary", text: t.record, onclick: () => record() });
 
   const searchInput = el("input", {
@@ -103,7 +113,7 @@
     el(
       "header",
       {},
-      el("div", { class: "row" }, recordInput, recordButton),
+      el("div", { class: "row record" }, recordInput, recordButton),
       el("div", { class: "row" }, searchInput, searchButton, semanticButton),
       period,
       el("div", { class: "row tools" }, status, reviewButton, widenButton)
@@ -207,16 +217,31 @@
       )
     );
 
-    // Newest entry first; hand-written lines stay under the entry they follow.
+    // Newest entry first; an entry's later lines, and lines written by hand,
+    // stay under the entry they follow, lined up with its text.
+    let time = "00:00"; // lines before the first entry line up as if under one
     for (const item of dayItems(day)) {
       if (item.kind === "entry") {
         const entry = item.entry;
+        time = entry.time;
         block.append(entryRow(entry, `${day.date} ${entry.time} ${entry.text}`));
       } else {
-        block.append(el("div", { class: "note", text: item.text }));
+        block.append(noteRow(time, item.text));
       }
     }
     return block;
+  }
+
+  // A line under an entry. An invisible copy of the entry's time in front of
+  // it takes the same width, so the text starts where the entry's text does
+  // in any font.
+  function noteRow(time, text) {
+    return el(
+      "div",
+      { class: "note" },
+      el("span", { class: "time spacer", text: time, "aria-hidden": "true" }),
+      el("span", { class: "text", text })
+    );
   }
 
   function hitRow(hit, index) {
@@ -228,7 +253,8 @@
       "button",
       { class: "hit", onclick: () => vscode.postMessage({ type: "openHit", index }) },
       el("span", { class: "where", text: where }),
-      hit.entry ? tagged(hit.entry.text, hit.entry.tags) : el("span", { class: "text", text: hit.text.trim() })
+      hit.entry ? tagged(hit.entry.text, hit.entry.tags) : el("span", { class: "text", text: hit.text.trim() }),
+      ...(hit.entry?.more || []).map((line) => el("span", { class: "text more", text: line }))
     );
   }
 
@@ -344,6 +370,7 @@
       afterRender(previous);
     } else if (message.type === "recorded") {
       recordInput.value = "";
+      fitRecordInput();
       recordInput.focus();
     } else if (message.type === "focusRecord") {
       recordInput.focus();

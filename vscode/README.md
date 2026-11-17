@@ -6,12 +6,13 @@ found by the same rules as the CLI.
 
 ## What it does
 
-- **Record:** type in the box at the top and press Enter. Tags go in the text as `[tag]` at the start or `#tag`
-  at the end, as with `m`. Notices such as the review reminder appear as VS Code notifications.
+- **Record:** type in the box at the top and press Enter; Shift+Enter starts a new line, which is written as a
+  later line of the same entry, indented under its first. Tags go in the text as `[tag]` or `#tag` at the start,
+  or `#tag` at the end, as with `m`. Notices such as the review reminder appear as VS Code notifications.
 - **Read across days:** the timeline opens on the last seven days, newest first, and within a day too. Scroll to
   the end, or press the button there, for the seven days before, and so on back to the first entries. The screen
-  never goes back on its own, so a quiet week shows as a quiet week. Lines written into a timeline file by hand
-  are shown in italics under the entry they follow.
+  never goes back on its own, so a quiet week shows as a quiet week. An entry's later lines, and lines written
+  into a timeline file by hand, are shown under the entry they follow, lined up with its text.
 - **Choose a period:** under **Period**, pick dates, or use This week, Last week, This month. The screen shows the
   period from its last day and keeps going back as you scroll. **Latest** returns to today.
 - **Search:** Enter searches by keyword (about two seconds). **Search by meaning** runs hybrid search, which also

@@ -52,7 +52,7 @@ function oneLine(text) {
   return text.replace(/[\r\n]+/g, " ").trim();
 }
 function recordArgs(message) {
-  return ["record", "--", oneLine(message)];
+  return ["record", "--", message];
 }
 function createModuleArgs(name, description = "", tags = "", docType = "") {
   const args = ["module", "create"];
@@ -846,20 +846,27 @@ function layoutFromFilenames(names) {
     return null;
   return day > date ? "day" : "date";
 }
+var CONTINUATION_INDENT = "  ";
 function formatEntry(date, message, tags = [], tagFormat = DEFAULT_TAG_FORMAT) {
+  const [first, ...rest] = message.split("\n");
+  const later = rest.map((line) => `
+${CONTINUATION_INDENT}${line}`).join("");
   const time = hourMinute(date);
   const clean = tags.map((t) => t.trim()).filter((t) => t.length > 0);
   if (clean.length === 0)
-    return `- ${time} | ${message}`;
+    return `- ${time} | ${first}${later}`;
   if (tagFormat === "hashtag") {
     const tagStr2 = clean.map((t) => `#${t.replace(/ /g, "-")}`).join(" ");
-    return `- ${time} | ${message} ${tagStr2}`;
+    return `- ${time} | ${first} ${tagStr2}${later}`;
   }
   const tagStr = clean.map((t) => `[${t.replace(/ /g, "-")}]`).join(" ");
-  return `- ${time} | ${tagStr} ${message}`;
+  return `- ${time} | ${tagStr} ${first}${later}`;
 }
 function sanitizeMessage(message) {
-  return message.replace(/[\r\n]+/g, " ").trim();
+  const lines = message.split(/\r\n|\r|\n/).map((line) => line.replace(/\s+$/, "")).filter((line) => line.trim().length > 0);
+  if (lines.length === 0)
+    return "";
+  return [lines[0].trim(), ...lines.slice(1)].join("\n");
 }
 function appendEntry(existing, entry) {
   return `${existing.replace(/\n+$/, "")}

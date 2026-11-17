@@ -32,13 +32,14 @@ function splitWords(text: string): string[] {
   return text.split(/\s+/).filter(Boolean);
 }
 
-/** A timeline entry is one line; line breaks in the text become spaces. */
+/** Line breaks in the text become spaces, for arguments that are one line. */
 export function oneLine(text: string): string {
   return text.replace(/[\r\n]+/g, " ").trim();
 }
 
+/** The message goes as typed: `record` writes later lines indented under the first. */
 export function recordArgs(message: string): string[] {
-  return ["record", "--", oneLine(message)];
+  return ["record", "--", message];
 }
 
 export function createModuleArgs(name: string, description = "", tags = "", docType = ""): string[] {

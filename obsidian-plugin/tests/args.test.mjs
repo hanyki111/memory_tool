@@ -45,6 +45,10 @@ test("line breaks become spaces", () => {
   assert.equal(oneLine("a\r\nb\n\nc "), "a b c");
 });
 
+test("a recorded message keeps its line breaks for the CLI to indent", () => {
+  assert.deepEqual(recordArgs("a\nb"), ["record", "--", "a\nb"]);
+});
+
 test("any characters reach the timeline as written", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "mt-obsidian-"));
   try {

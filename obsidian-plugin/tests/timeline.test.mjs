@@ -149,9 +149,14 @@ test("appending to a file with no trailing newline still separates entries", () 
 // Message sanitizing
 // ---------------------------------------------------------------------------
 
-test("newlines collapse so one entry stays one line", () => {
-  // A raw newline would be read back as a separate, malformed entry.
-  assert.equal(sanitizeMessage("first\nsecond\r\nthird"), "first second third");
+test("lines are kept, without empty lines or trailing space", () => {
+  assert.equal(sanitizeMessage("first  \nsecond\r\n\r\n  third\r"), "first\nsecond\n  third");
+});
+
+test("later lines are indented under the first, tags on the first", () => {
+  assert.equal(formatEntry(AUG_17, "Hello\nmore\n  nested"), "- 14:30 | Hello\n  more\n    nested");
+  assert.equal(formatEntry(AUG_17, "Hello\nmore", ["work"], "bracket"), "- 14:30 | [work] Hello\n  more");
+  assert.equal(formatEntry(AUG_17, "Hello\nmore", ["work"], "hashtag"), "- 14:30 | Hello #work\n  more");
 });
 
 test("surrounding whitespace is trimmed", () => {
