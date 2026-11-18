@@ -9,7 +9,7 @@ from datetime import datetime, date
 from pathlib import Path
 from typing import Optional
 import re
-from memory_tool.utils.paths import get_base_path
+from memory_tool.utils.paths import base_dir_for_root, get_base_path
 
 
 class PlanTimelineIntegration:
@@ -36,6 +36,23 @@ class PlanTimelineIntegration:
         """
         return get_base_path()
 
+    def timeline(self):
+        """The Timeline of this knowledge base.
+
+        Timeline takes the project root. The base folder is usually a folder
+        in it, but it may be the root itself (base "."), so the root is the
+        folder whose base folder this is.
+        """
+        from ..core.timeline import Timeline
+
+        base = Path(self.base_path)
+        root = base.parent if base_dir_for_root(base.parent) == base else base
+        return Timeline(root)
+
+    def completion_message(self, task: str, plan_type: str, plan_date: date) -> str:
+        """The timeline entry a completed task gets: "✓ task (Daily Plan)"."""
+        return f"\u2713 {task} ({self._format_plan_label(plan_type, plan_date)})"
+
     def record_task_completion(
         self,
         task: str,
@@ -57,17 +74,8 @@ class PlanTimelineIntegration:
         if completion_time is None:
             completion_time = datetime.now()
 
-        # Import Timeline here to avoid circular imports
-        from ..core.timeline import Timeline
-
-        # Timeline expects base_path to be the project root (parent of .memory)
-        # But self.base_path is already .memory/ directory
-        project_root = self.base_path.parent
-        timeline = Timeline(project_root)
-
-        # Format message with plan context
-        plan_label = self._format_plan_label(plan_type, plan_date)
-        message = f"\u2713 {task} ({plan_label})"
+        timeline = self.timeline()
+        message = self.completion_message(task, plan_type, plan_date)
 
         # Record to timeline
         try:
@@ -80,6 +88,37 @@ class PlanTimelineIntegration:
         except Exception:
             # Silent failure - timeline recording is optional
             return None
+
+    def remove_task_completion(
+        self,
+        task: str,
+        plan_type: str,
+        plan_date: date,
+        completion_time: str,
+    ) -> bool:
+        """Delete the timeline entry ``record_task_completion`` wrote.
+
+        Args:
+            task: Task description
+            plan_type: Type of plan ('daily', 'weekly', 'monthly')
+            plan_date: Date of the plan, which is the day it was completed
+            completion_time: Time it was completed (HH:MM)
+
+        Returns:
+            True if the entry was found and deleted, False if it was not there
+            (changed or deleted since)
+        """
+        from ..core.timeline import EntryNotFound
+
+        try:
+            self.timeline().delete_entry(
+                plan_date.strftime("%Y-%m-%d"),
+                completion_time,
+                self.completion_message(task, plan_type, plan_date),
+            )
+        except (EntryNotFound, ValueError):
+            return False
+        return True
 
     def add_timeline_reference_to_plan(
         self,
@@ -155,9 +194,11 @@ class PlanTimelineIntegration:
         if existing is not None:
             return existing
 
-        # Nothing on disk yet: return where a new file would be written.
+        # Nothing on disk yet: return where a new file would be written, named
+        # as this knowledge base names its timeline files.
         year_month = target_date.strftime("%Y-%m")
-        return self.timeline_path / "daily" / year_month / timeline_filename(target_date)
+        layout = self.timeline().filename_layout
+        return self.timeline_path / "daily" / year_month / timeline_filename(target_date, layout)
 
     def get_relative_path(self, from_path: Path, to_path: Path) -> str:
         """Get relative path from one file to another.

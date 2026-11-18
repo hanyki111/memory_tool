@@ -1,13 +1,29 @@
 /* Colours come from the VS Code theme, so light, dark and high contrast all work. */
 
+/* Elements given their own display (flex rows, the plan) still hide. */
+[hidden] {
+  display: none !important;
+}
+
 :root {
   --gap: 6px;
   --surface: var(--vscode-sideBar-background, var(--vscode-editor-background));
 }
 
+/* Three parts fill the view: the controls, the timeline, which scrolls on its
+   own, and today's plan. The page itself never scrolls. */
+html,
 body {
+  height: 100%;
+}
+
+body {
+  box-sizing: border-box;
   margin: 0;
-  padding: 0 12px 24px;
+  padding: 0 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   color: var(--vscode-foreground);
   background: var(--surface);
   font-family: var(--vscode-font-family);
@@ -15,10 +31,15 @@ body {
   line-height: 1.5;
 }
 
+#app {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 header {
-  position: sticky;
-  top: 0;
-  z-index: 1;
+  flex: none;
   padding: 10px 0 8px;
   /* Not "inherit": its parent is transparent, and entries would show through. */
   background: var(--surface);
@@ -226,6 +247,151 @@ h2.group {
   font-weight: 600;
 }
 
+.timeline {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 12px;
+}
+
+/* ---- today's plan ------------------------------------------------------- */
+
+.splitter {
+  flex: none;
+  height: 5px;
+  margin: 0 -12px;
+  cursor: ns-resize;
+  border-top: 1px solid var(--vscode-panel-border, var(--vscode-widget-border, transparent));
+  touch-action: none;
+}
+
+.splitter:hover,
+.splitter.dragging {
+  background: var(--vscode-sash-hoverBorder, var(--vscode-focusBorder));
+}
+
+.splitter:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.plan {
+  box-sizing: border-box;
+  flex: none;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 6px;
+}
+
+.plan.closed {
+  border-top: 1px solid var(--vscode-panel-border, var(--vscode-widget-border, transparent));
+  margin: 0 -12px;
+  padding: 0 12px;
+}
+
+.plan-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  padding: 4px 0;
+}
+
+button.plan-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  color: var(--vscode-foreground);
+  background: none;
+  font-weight: 600;
+}
+
+button.plan-toggle:hover {
+  background: none;
+}
+
+.plan-toggle .chevron::before {
+  content: "\25BE"; /* ▾ */
+  display: inline-block;
+  width: 1em;
+  color: var(--vscode-descriptionForeground);
+}
+
+.plan.closed .plan-toggle .chevron::before {
+  content: "\25B8"; /* ▸ */
+}
+
+.plan-progress {
+  font-weight: normal;
+  color: var(--vscode-descriptionForeground);
+  font-variant-numeric: tabular-nums;
+}
+
+.plan-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.plan-message {
+  margin: 0;
+}
+
+.plan-tasks {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.plan-task label {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 1px 0;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.plan-task input {
+  flex: none;
+  margin: 0;
+  position: relative;
+  top: 2px;
+}
+
+.plan-task .text {
+  flex: 1;
+}
+
+.plan-task.done .text {
+  text-decoration: line-through;
+  color: var(--vscode-descriptionForeground);
+}
+
+.plan-task .time {
+  flex: none;
+  color: var(--vscode-descriptionForeground);
+  font-variant-numeric: tabular-nums;
+}
+
+.plan-links {
+  gap: 12px;
+}
+
+.plan-recurring summary {
+  cursor: pointer;
+  color: var(--vscode-descriptionForeground);
+}
+
+.plan-recurring-text {
+  white-space: pre-wrap;
+  padding: 4px 0 0 1em;
+}
+
 .sentinel {
   padding: 12px 0;
 }
@@ -248,7 +414,16 @@ button.more {
 /* Wide screens: the entries get more room between time and text. */
 @media (min-width: 560px) {
   body {
-    padding: 0 24px 32px;
+    padding: 0 24px;
+  }
+
+  .splitter,
+  .plan.closed {
+    margin: 0 -24px;
+  }
+
+  .plan.closed {
+    padding: 0 24px;
   }
 
   .entry,

@@ -65,6 +65,42 @@ export interface SearchResult {
   notices: Notice[];
 }
 
+/** A task in a daily plan. */
+export interface PlanTask {
+  /** Its line in the plan file, 1-based, which done and undo check */
+  line: number;
+  text: string;
+  done: boolean;
+  /** When it was completed, HH:MM */
+  time: string | null;
+}
+
+/** A day's plan, as `mplan daily --json` gives it. */
+export interface DailyPlan {
+  date: string;
+  path: string;
+  /** False when the day has no plan file yet */
+  exists: boolean;
+  tasks: PlanTask[];
+  progress: { done: number; total: number };
+  /** The text of plans/recurring.md, or null */
+  recurring: string | null;
+}
+
+export interface PlanChange {
+  task: PlanTask | null;
+  plan: DailyPlan;
+  notices?: Notice[];
+}
+
+export interface CarryoverResult {
+  from: string;
+  carried: string[];
+  skipped: string[];
+  missing: string[];
+  plan: DailyPlan;
+}
+
 export interface BaseInfo {
   root: string;
   base: string;
@@ -75,6 +111,8 @@ export interface BaseInfo {
 export const PYTHON_NOT_FOUND = "python_not_found";
 export const TIMEOUT = "timeout";
 export const BAD_OUTPUT = "bad_output";
+/** The CLI is older than what was asked of it (no `mplan daily --json` before 1.13) */
+export const OUTDATED = "outdated";
 
 export class CliError extends Error {
   readonly code: string;
@@ -239,6 +277,50 @@ export class MemoryToolCli {
     // --no-cache: the CLI keeps results for an hour, which would hide entries
     // recorded since.
     return (await this.run(["search", mode, "--no-cache", "--json", "--", query], timeout)) as unknown as SearchResult;
+  }
+
+  // ---- daily plan (memory_tool 1.13 and later) ---------------------------
+
+  /** A day's plan, YYYY-MM-DD; today when no date is given. Reading changes nothing. */
+  async plan(date: string | null = null): Promise<DailyPlan> {
+    const args = ["plan", "daily", "show", "--json"];
+    if (date) args.push("--", date);
+    return (await this.planRun(args)) as unknown as DailyPlan;
+  }
+
+  /** Add a task to today's plan. */
+  async planAdd(text: string): Promise<PlanChange> {
+    return (await this.planRun(["plan", "daily", "add", "--json", "--", text])) as unknown as PlanChange;
+  }
+
+  /**
+   * Complete a task of today's plan, or undo its completion.
+   *
+   * The task is named by its line and text as last read, so a plan changed
+   * since fails with not_found instead of changing another task.
+   */
+  async planSet(task: { line: number; text: string }, done: boolean): Promise<PlanChange> {
+    const action = done ? "done" : "undo";
+    const args = ["plan", "daily", action, "--line", String(task.line), "--json", "--", task.text];
+    return (await this.planRun(args)) as unknown as PlanChange;
+  }
+
+  /** Copy the named tasks from yesterday's plan into today's. */
+  async planCarryover(tasks: string[]): Promise<CarryoverResult> {
+    const args = ["plan", "daily", "carryover", "--json", ...tasks.map((task) => `--task=${task}`)];
+    return (await this.planRun(args)) as unknown as CarryoverResult;
+  }
+
+  /** Run a plan command; a CLI without `mplan daily --json` fails with OUTDATED. */
+  private async planRun(args: string[]): Promise<Record<string, unknown>> {
+    try {
+      return await this.run(args);
+    } catch (error) {
+      if (error instanceof CliError && error.code === BAD_OUTPUT && /No such option|Got unexpected extra argument/.test(error.message)) {
+        throw new CliError(OUTDATED, "This memory_tool has no mplan daily --json; update to 1.13 or later.");
+      }
+      throw error;
+    }
   }
 
   /**

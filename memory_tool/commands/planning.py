@@ -8,6 +8,7 @@ from typing import List, NoReturn, Optional
 
 import typer
 from rich.console import Console
+from rich.markup import escape
 
 from memory_tool.commands import json_output
 from memory_tool.commands.common import app, console, opt_str, arg_str, resolve_module_name, print_llm_unavailable
@@ -270,6 +271,259 @@ Provide a clear, structured summary in markdown format."""
         sys.exit(1)
 
 
+# ---------------------------------------------------------------------------
+# mplan daily
+# ---------------------------------------------------------------------------
+
+
+def _daily_task_dict(task: dict) -> dict:
+    """One task for --json. ``line`` is 1-based, as --line takes it."""
+    return {
+        "line": task["line_num"] + 1,
+        "text": task["text"],
+        "done": task["completed"],
+        "time": task["time"],
+    }
+
+
+def _daily_plan_dict(plan_mgr, target_date: date) -> dict:
+    """A day's plan for --json, read without changing anything."""
+    plan_path = plan_mgr.get_plan_path(target_date)
+    tasks = plan_mgr.get_tasks(target_date)
+    return {
+        "date": target_date.strftime("%Y-%m-%d"),
+        "path": json_output.path_text(plan_path),
+        "exists": plan_path.exists(),
+        "tasks": [_daily_task_dict(task) for task in tasks],
+        "progress": {"done": sum(1 for t in tasks if t["completed"]), "total": len(tasks)},
+        "recurring": plan_mgr._get_recurring_content(),
+    }
+
+
+def _daily_task_at(plan_mgr, text: str, target_date: date, completed: bool) -> Optional[dict]:
+    """The first task with this exact text, done or not."""
+    for task in plan_mgr.get_tasks(target_date):
+        if task["text"] == text and task["completed"] == completed:
+            return task
+    return None
+
+
+def _daily_plan(
+    plan_mgr,
+    name: Optional[str],
+    title: Optional[str],
+    as_json: bool,
+    line: Optional[int],
+    carry: List[str],
+) -> None:
+    """mplan daily [show|add|done|undo|carryover|<date>] for people and, with --json, programs."""
+    from datetime import timedelta
+    import os
+    import subprocess
+    from rich.markup import escape
+
+    today = date.today()
+    yesterday = today - timedelta(days=1)
+
+    def failed(code: str, message: str, hint: Optional[str] = None, **fields) -> NoReturn:
+        if as_json:
+            json_output.fail(code, message, **fields)
+        console.print(f"[red]ERROR[/red] {escape(message)}")
+        if hint:
+            console.print(f"[dim]{escape(hint)}[/dim]")
+        sys.exit(1)
+
+    def show(target_date: date) -> None:
+        if as_json:
+            json_output.succeed(**_daily_plan_dict(plan_mgr, target_date))
+        else:
+            console.print(plan_mgr.show_plan(target_date), markup=False)
+
+    def list_choices(completed: bool) -> None:
+        choices = [t for t in plan_mgr.get_tasks() if t["completed"] == completed]
+        if choices and not as_json:
+            console.print("\n[dim]Available tasks:[/dim]")
+            for t in choices:
+                console.print(f"  {t['index']}. {escape(t['text'])}")
+
+    if name is None or name == "show":
+        target_date = today
+        if title:
+            target_date = plan_mgr.parse_date_keyword(title)
+            if target_date is None:
+                failed(json_output.INVALID_ARGUMENT, f"Invalid date: {title}", "Use YYYY-MM-DD, 'today' or 'yesterday'")
+        show(target_date)
+        return
+
+    if name == "yesterday":
+        show(yesterday)
+        return
+
+    if name == "add":
+        if not title or not title.strip():
+            failed(json_output.INVALID_ARGUMENT, "Task title required", "Usage: mplan daily add <task>")
+        plan_mgr.add_task(title)
+        text = " ".join(title.split())
+        if as_json:
+            task = _daily_task_at(plan_mgr, text, today, completed=False)
+            json_output.succeed(task=_daily_task_dict(task), plan=_daily_plan_dict(plan_mgr, today))
+            return
+        console.print("[green]OK[/green] Task added to today's plan")
+        console.print(escape(f"  - [ ] {text}"))
+        return
+
+    if name in ("done", "undo"):
+        completing = name == "done"
+        if not title:
+            failed(
+                json_output.INVALID_ARGUMENT,
+                "Task title or index required",
+                f"Usage: mplan daily {name} <task|index>   e.g. mplan daily {name} 1, mplan daily {name} \"Write\"",
+            )
+
+        if completing:
+            success, result = plan_mgr.mark_done(title, line=line)
+            removed = None
+        else:
+            success, result, removed = plan_mgr.mark_undone(title, line=line)
+
+        if not success:
+            if result == "ambiguous":
+                if not as_json:
+                    console.print(f"[yellow]Multiple tasks match '{escape(title)}':[/yellow]")
+                    for t in plan_mgr.get_tasks():
+                        if t["completed"] != completing and title.lower() in t["text"].lower():
+                            console.print(f"  {t['index']}. {escape(t['text'])}")
+                    console.print(f"\n[dim]Use index number: mplan daily {name} <number>[/dim]")
+                    sys.exit(1)
+                failed(json_output.INVALID_ARGUMENT, f"Several tasks match: {title}")
+            where = f" on line {line}" if line is not None else ""
+            state = "incomplete" if completing else "completed"
+            if not as_json:
+                console.print(f"[red]ERROR[/red] No {state} task{escape(where)}: {escape(title)}")
+                list_choices(completed=not completing)
+                sys.exit(1)
+            failed(
+                json_output.NOT_FOUND,
+                f"No {state} task{where}: {title}. The plan may have been changed since.",
+            )
+
+        task = _daily_task_at(plan_mgr, result, today, completed=completing)
+
+        if completing:
+            entry = None
+            if task and task["time"]:
+                from memory_tool.planner.integration import PlanTimelineIntegration
+
+                integration = PlanTimelineIntegration(plan_mgr.base_path)
+                message = integration.completion_message(result, "daily", today)
+                _, _, position = integration.timeline().find_entry(today.strftime("%Y-%m-%d"), task["time"], message)
+                if position is not None:
+                    entry = {"date": today.strftime("%Y-%m-%d"), "time": task["time"], "text": message}
+            if as_json:
+                json_output.succeed(
+                    task=_daily_task_dict(task) if task else None,
+                    timeline=entry,
+                    plan=_daily_plan_dict(plan_mgr, today),
+                )
+                return
+            console.print("[green]OK[/green] Task marked as completed")
+            console.print(escape(f"  - [x] {result}"))
+            return
+
+        notices = []
+        if not removed:
+            notices.append(json_output.notice(
+                "plan",
+                "The task's timeline entry was not found (changed or deleted since), so it was left as it is.",
+            ))
+        if as_json:
+            json_output.succeed(
+                task=_daily_task_dict(task) if task else None,
+                timeline_removed=bool(removed),
+                plan=_daily_plan_dict(plan_mgr, today),
+                notices=notices,
+            )
+            return
+        console.print("[green]OK[/green] Task marked as not done")
+        console.print(escape(f"  - [ ] {result}"))
+        if removed:
+            console.print("[dim]Its timeline entry was deleted.[/dim]")
+        else:
+            console.print("[yellow]Its timeline entry was not found and was left as it is.[/yellow]")
+        return
+
+    if name == "carryover":
+        incomplete = plan_mgr.get_incomplete_tasks(yesterday)
+
+        if carry:
+            # Without asking: only the tasks named, and only if yesterday left them undone.
+            missing = [t for t in carry if t not in incomplete]
+            wanted = [t for t in carry if t in incomplete]
+            present = {t["text"] for t in plan_mgr.get_tasks(today)}
+            skipped = [t for t in dict.fromkeys(wanted) if t in present]
+            carried = [t for t in dict.fromkeys(wanted) if t not in present]
+            plan_mgr.carryover_tasks(carried, yesterday, today)
+            if as_json:
+                json_output.succeed(
+                    **{"from": yesterday.strftime("%Y-%m-%d")},
+                    carried=carried,
+                    skipped=skipped,
+                    missing=missing,
+                    plan=_daily_plan_dict(plan_mgr, today),
+                )
+                return
+            console.print(f"[green]OK[/green] Carried over {len(carried)} task(s) to today's plan")
+            for task in carried:
+                console.print(f"  - {escape(task)}")
+            for task in skipped:
+                console.print(f"  [dim]already in today's plan: {escape(task)}[/dim]")
+            for task in missing:
+                console.print(f"  [yellow]not an incomplete task yesterday: {escape(task)}[/yellow]")
+            return
+
+        if as_json:
+            failed(
+                json_output.INVALID_ARGUMENT,
+                "Name the tasks to carry over with --task; mplan daily show yesterday --json lists them.",
+            )
+
+        if not incomplete:
+            console.print(f"[yellow]No incomplete tasks from yesterday ({yesterday.strftime('%Y-%m-%d')})[/yellow]")
+            return
+
+        console.print(f"[cyan]Yesterday's incomplete tasks ({yesterday.strftime('%Y-%m-%d')}):[/cyan]")
+        selected = _interactive_carryover(incomplete, "task")
+
+        if not selected:
+            console.print("[dim]No tasks selected[/dim]")
+            return
+
+        count = plan_mgr.carryover_tasks(selected, yesterday, today)
+        console.print(f"\n[green]OK[/green] Carried over {count} task(s) to today's plan")
+        for task in selected:
+            console.print(f"  - {escape(task)}")
+        return
+
+    # mplan daily 2026-01-15
+    target_date = plan_mgr.parse_date_keyword(name)
+    if target_date:
+        show(target_date)
+        return
+
+    if as_json:
+        failed(json_output.INVALID_ARGUMENT, f"Unknown daily action: {name}")
+
+    # Default: create plan
+    plan_path = plan_mgr.create_plan()
+    console.print("[green]OK[/green] Daily plan ready")
+    console.print(f"  → {display_path(plan_path)}")
+
+    editor = os.environ.get('EDITOR')
+    if editor:
+        subprocess.run([editor, str(plan_path)])
+
+
 @app.command()
 def plan(
     action: str = typer.Argument(..., help="Action: create, list, show, add, done, delete, daily, weekly, monthly"),
@@ -278,6 +532,9 @@ def plan(
     description: str = typer.Option("", "--desc", "-d", help="Plan description"),
     due_date: Optional[str] = typer.Option(None, "--due", help="Due date (YYYY-MM-DD)"),
     tags: List[str] = typer.Option([], "--tag", "-t", help="Tags"),
+    as_json: bool = typer.Option(False, "--json", help="mplan daily only: print the result as one line of JSON"),
+    line: Optional[int] = typer.Option(None, "--line", help="mplan daily done/undo: the task's line (from --json); the text must match it"),
+    carry: List[str] = typer.Option([], "--task", help="mplan daily carryover: a task to carry over, without asking (repeatable)"),
 ):
     """Manage plans and tasks (mplan command).
 
@@ -308,7 +565,10 @@ def plan(
         mplan daily show 2026-01-15  # Show specific date
         mplan daily add "Task"   # Add task to today
         mplan daily done "Task"  # Mark task as done
+        mplan daily undo "Task"  # Mark a done task as not done (deletes its timeline entry)
         mplan daily carryover    # Move yesterday's incomplete to today
+        mplan daily carryover --task "Task"   # ... without asking
+        mplan daily show --json  # For programs: tasks with their lines
 
         mplan weekly             # Show this week's plan
         mplan weekly lastweek    # Show last week's plan
@@ -331,116 +591,19 @@ def plan(
 
         memory_path = get_base_path()
 
+        if as_json and action != "daily":
+            json_output.fail(json_output.INVALID_ARGUMENT, "--json is supported by mplan daily only")
+
         if not memory_path.exists():
+            if as_json:
+                json_output.fail(json_output.NOT_INITIALIZED, "No knowledge base. Run 'minit' first.")
             console.print("[red]ERROR[/red] .memory/ not found. Run 'minit' first.")
             sys.exit(1)
 
         if action in ["daily", "weekly", "monthly"]:
             if action == "daily":
-                plan_mgr = DailyPlan(base_path=memory_path)
-
-                if name is None or name == "show":
-                    # mplan daily OR mplan daily show [date]
-                    target_date = None
-                    if title:
-                        # mplan daily show 2026-01-15 OR mplan daily show yesterday
-                        target_date = plan_mgr.parse_date_keyword(title)
-                        if target_date is None:
-                            console.print(f"[red]ERROR[/red] Invalid date: {title}")
-                            console.print("[dim]Use YYYY-MM-DD or 'yesterday'[/dim]")
-                            sys.exit(1)
-                    content = plan_mgr.show_plan(target_date)
-                    console.print(content)
-
-                elif name == "yesterday":
-                    # mplan daily yesterday
-                    from datetime import timedelta
-                    yesterday = date.today() - timedelta(days=1)
-                    content = plan_mgr.show_plan(yesterday)
-                    console.print(content)
-
-                elif name == "add":
-                    if not title:
-                        console.print("[red]ERROR[/red] Task title required")
-                        console.print("[dim]Usage: mplan daily add <task>[/dim]")
-                        sys.exit(1)
-
-                    plan_mgr.add_task(title)
-                    console.print(f"[green]OK[/green] Task added to today's plan")
-                    console.print(f"  - [ ] {title}")
-
-                elif name == "done":
-                    if not title:
-                        console.print("[red]ERROR[/red] Task title or index required")
-                        console.print("[dim]Usage: mplan daily done <task|index>[/dim]")
-                        console.print("[dim]Examples:[/dim]")
-                        console.print("[dim]  mplan daily done 1          # Complete 1st task[/dim]")
-                        console.print("[dim]  mplan daily done \"Write\"    # Prefix match[/dim]")
-                        sys.exit(1)
-
-                    success, result = plan_mgr.mark_done(title)
-                    if success:
-                        console.print(f"[green]OK[/green] Task marked as completed")
-                        console.print(f"  - [x] {result}")
-                    elif result == "ambiguous":
-                        # Show matching tasks for user to choose
-                        console.print(f"[yellow]Multiple tasks match '{title}':[/yellow]")
-                        tasks = plan_mgr.get_tasks(incomplete_only=True)
-                        for t in tasks:
-                            if title.lower() in t['text'].lower():
-                                console.print(f"  {t['index']}. {t['text']}")
-                        console.print(f"\n[dim]Use index number: mplan daily done <number>[/dim]")
-                        sys.exit(1)
-                    else:
-                        console.print(f"[red]ERROR[/red] Task not found: {title}")
-                        # Show available tasks
-                        tasks = plan_mgr.get_tasks(incomplete_only=True)
-                        if tasks:
-                            console.print(f"\n[dim]Available tasks:[/dim]")
-                            for t in tasks:
-                                console.print(f"  {t['index']}. {t['text']}")
-                        sys.exit(1)
-
-                elif name == "carryover":
-                    # mplan daily carryover
-                    from datetime import timedelta
-                    yesterday = date.today() - timedelta(days=1)
-                    incomplete = plan_mgr.get_incomplete_tasks(yesterday)
-
-                    if not incomplete:
-                        console.print(f"[yellow]No incomplete tasks from yesterday ({yesterday.strftime('%Y-%m-%d')})[/yellow]")
-                        return
-
-                    console.print(f"[cyan]Yesterday's incomplete tasks ({yesterday.strftime('%Y-%m-%d')}):[/cyan]")
-                    selected = _interactive_carryover(incomplete, "task")
-
-                    if not selected:
-                        console.print("[dim]No tasks selected[/dim]")
-                        return
-
-                    count = plan_mgr.carryover_tasks(selected, yesterday, date.today())
-                    console.print(f"\n[green]OK[/green] Carried over {count} task(s) to today's plan")
-                    for task in selected:
-                        console.print(f"  - {task}")
-
-                else:
-                    # Try to parse name as date keyword (mplan daily 2026-01-15)
-                    target_date = plan_mgr.parse_date_keyword(name)
-                    if target_date:
-                        content = plan_mgr.show_plan(target_date)
-                        console.print(content)
-                        return
-
-                    # Default: create plan
-                    plan_path = plan_mgr.create_plan()
-                    console.print(f"[green]OK[/green] Daily plan ready")
-                    console.print(f"  → {display_path(plan_path)}")
-
-                    editor = os.environ.get('EDITOR')
-                    if editor:
-                        subprocess.run([editor, str(plan_path)])
-
-                    return
+                _daily_plan(DailyPlan(base_path=memory_path), name, title, as_json, line, carry)
+                return
 
             elif action == "weekly":
                 plan_mgr = WeeklyPlan(base_path=memory_path)
@@ -449,12 +612,12 @@ def plan(
                     # mplan weekly OR mplan weekly show [W03|lastweek]
                     week_id = title if title else None
                     content = plan_mgr.show_plan(week_id)
-                    console.print(content)
+                    console.print(content, markup=False)
 
                 elif name == "lastweek":
                     # mplan weekly lastweek
                     content = plan_mgr.show_plan("lastweek")
-                    console.print(content)
+                    console.print(content, markup=False)
 
                 elif name == "add":
                     if not title:
@@ -464,7 +627,7 @@ def plan(
 
                     plan_mgr.add_goal(title)
                     console.print(f"[green]OK[/green] Goal added to this week's plan")
-                    console.print(f"  - [ ] {title}")
+                    console.print(escape(f"  - [ ] {title}"))
 
                 elif name == "done":
                     if not title:
@@ -478,7 +641,7 @@ def plan(
                     success, result = plan_mgr.mark_done(title)
                     if success:
                         console.print(f"[green]OK[/green] Goal marked as completed")
-                        console.print(f"  - [x] {result}")
+                        console.print(escape(f"  - [x] {result}"))
                     elif result == "ambiguous":
                         # Show matching goals for user to choose
                         console.print(f"[yellow]Multiple goals match '{title}':[/yellow]")
@@ -526,7 +689,7 @@ def plan(
                     # Try as week ID (W03, lastweek, etc.)
                     if name.lower().startswith("w") or name.lower() == "lastweek":
                         content = plan_mgr.show_plan(name)
-                        console.print(content)
+                        console.print(content, markup=False)
                         return
 
                     plan_path = plan_mgr.create_plan()
@@ -545,7 +708,7 @@ def plan(
                 if name is None or name == "show":
                     month_id = title if title else None
                     content = plan_mgr.show_plan(month_id)
-                    console.print(content)
+                    console.print(content, markup=False)
 
                 elif name == "add":
                     if not title:
@@ -555,7 +718,7 @@ def plan(
 
                     plan_mgr.add_goal(title)
                     console.print(f"[green]OK[/green] Goal added to this month's plan")
-                    console.print(f"  - [ ] {title}")
+                    console.print(escape(f"  - [ ] {title}"))
 
                 elif name == "done":
                     if not title:
@@ -565,7 +728,7 @@ def plan(
 
                     if plan_mgr.mark_done(title):
                         console.print(f"[green]OK[/green] Goal marked as completed")
-                        console.print(f"  - [x] {title}")
+                        console.print(escape(f"  - [x] {title}"))
                     else:
                         console.print(f"[red]ERROR[/red] Goal not found: {title}")
                         sys.exit(1)
@@ -670,7 +833,7 @@ def plan(
 
             manager.save_plan(plan_obj, filename=plan_file)
             console.print(f"[green]OK[/green] Task added to '{plan_obj.name}'")
-            console.print(f"  - [ ] {title}")
+            console.print(escape(f"  - [ ] {title}"))
 
         elif action == "done":
             if not name or not title:
@@ -755,7 +918,7 @@ def plan(
             target_task.mark_completed()
             manager.save_plan(plan_obj, filename=plan_file)
             console.print(f"[green]OK[/green] Task completed in '{plan_obj.name}'")
-            console.print(f"  - [x] {matched_text}")
+            console.print(escape(f"  - [x] {matched_text}"))
 
         elif action == "delete":
             if not name:
@@ -783,6 +946,8 @@ def plan(
             sys.exit(1)
 
     except Exception as e:
+        if as_json:
+            json_output.fail(json_output.FAILED, f"Unexpected error: {e}")
         console.print(f"[red]ERROR[/red] Unexpected error: {e}")
         import traceback
         console.print(f"[dim]{traceback.format_exc()}[/dim]")

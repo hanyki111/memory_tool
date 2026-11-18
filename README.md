@@ -1209,6 +1209,15 @@ mplan daily done 1               # 인덱스로 첫 번째 작업 완료
 mplan daily done 2               # 인덱스로 두 번째 작업 완료
 mplan daily done "Write"         # Prefix 매칭 (유니크하면 매칭)
 mplan weekly done 1              # 주간 목표 인덱스로 완료
+# 번호는 목록에 보이는 번호로, 미완료 작업 중의 순서입니다
+
+# 완료 취소 (타임라인의 "✓ 작업 (Daily Plan)" 엔트리도 지움)
+mplan daily undo "작업"
+mplan daily undo 1               # 완료한 작업 중의 순서
+
+# 프로그램용 JSON (VS Code 확장이 사용)
+mplan daily --json
+mplan daily done "작업" --line 6 --json
 
 # Weekly/Monthly Plan
 mplan weekly
@@ -1216,6 +1225,7 @@ mplan monthly
 
 # 미완료 작업 이관
 mplan daily carryover            # 어제 미완료 → 오늘
+mplan daily carryover --task "작업"   # 묻지 않고 지정한 작업만
 mplan weekly carryover           # 지난주 미완료 → 이번 주
 
 # Recurring Items (반복 항목)

@@ -69,10 +69,8 @@ class WeeklyPlan:
         """
         year, week, _, _ = self.get_week_info(target_date)
 
-        plan_dir = self.plans_path / str(year)
-        plan_dir.mkdir(parents=True, exist_ok=True)
-
-        return plan_dir / f"W{week:02d}.md"
+        # Only the path: reading a plan must not create its folder.
+        return self.plans_path / str(year) / f"W{week:02d}.md"
 
     def create_plan(self, target_date: Optional[date] = None) -> Path:
         """Create weekly plan from template.
@@ -135,6 +133,7 @@ class WeeklyPlan:
         )
 
         # Write to file
+        plan_path.parent.mkdir(parents=True, exist_ok=True)
         plan_path.write_text(content, encoding='utf-8')
 
         return plan_path
@@ -179,17 +178,10 @@ class WeeklyPlan:
                     year, week, _, _ = self.get_week_info(target_date)
                     return f"No weekly plan found for W{week:02d}\nCreate one with: mplan weekly"
 
+                content = plan_path.read_text(encoding='utf-8')
                 if auto_update:
-                    try:
-                        content = plan_path.read_text(encoding='utf-8')
-                        updated_content = self._update_progress(content)
-                        if updated_content != content:
-                            plan_path.write_text(updated_content, encoding='utf-8')
-                        return self._format_for_display(updated_content)
-                    except Exception:
-                        return self._format_for_display(plan_path.read_text(encoding='utf-8'))
-
-                return self._format_for_display(plan_path.read_text(encoding='utf-8'))
+                    content = self._update_progress(content)
+                return self._format_for_display(content)
 
         if week_id:
             # Parse W## format
@@ -219,20 +211,12 @@ class WeeklyPlan:
         if not plan_path.exists():
             return f"No weekly plan found\nCreate one with: mplan weekly"
 
-        # Auto-update progress if requested
+        # Showing changes nothing on disk: the progress is shown as the goals
+        # stand, and written the next time a goal changes.
+        content = plan_path.read_text(encoding='utf-8')
         if auto_update:
-            try:
-                content = plan_path.read_text(encoding='utf-8')
-                updated_content = self._update_progress(content)
-                # Save if changed
-                if updated_content != content:
-                    plan_path.write_text(updated_content, encoding='utf-8')
-                return self._format_for_display(updated_content)
-            except Exception:
-                # If update fails, just return original content
-                return self._format_for_display(plan_path.read_text(encoding='utf-8'))
-
-        return self._format_for_display(plan_path.read_text(encoding='utf-8'))
+            content = self._update_progress(content)
+        return self._format_for_display(content)
 
     def add_goal(self, goal: str, target_date: Optional[date] = None) -> bool:
         """Add goal to weekly plan.
@@ -280,6 +264,10 @@ class WeeklyPlan:
             target_date: Target date (today if None)
             incomplete_only: Only return incomplete goals
 
+        Goals are numbered as ``done`` takes them: an incomplete goal by its
+        place among the incomplete ones, a completed goal by its place among
+        the completed ones.
+
         Returns:
             List of goal dicts with 'index', 'text', 'completed', 'line_num'
         """
@@ -294,31 +282,36 @@ class WeeklyPlan:
         content = plan_path.read_text(encoding='utf-8')
         lines = content.split('\n')
         goals = []
-        index = 1
+        open_count = 0
+        done_count = 0
 
         for line_num, line in enumerate(lines):
             stripped = line.strip()
             if stripped.startswith('- [ ]'):
                 # Incomplete goal
                 text = stripped[5:].strip()
+                if not text:
+                    continue
+                open_count += 1
                 goals.append({
-                    'index': index,
+                    'index': open_count,
                     'text': text,
                     'completed': False,
                     'line_num': line_num
                 })
-                index += 1
             elif stripped.startswith('- [x]'):
                 # Completed goal
+                text = re.sub(r'\s*\[\d{1,2}:\d{2}\]$', '', stripped[5:].strip())
+                if not text:
+                    continue
+                done_count += 1
                 if not incomplete_only:
-                    text = stripped[5:].strip()
                     goals.append({
-                        'index': index,
+                        'index': done_count,
                         'text': text,
                         'completed': True,
                         'line_num': line_num
                     })
-                index += 1
 
         return goals
 
