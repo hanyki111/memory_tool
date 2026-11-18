@@ -1,13 +1,13 @@
 # Memory Context
 
-**Generated:** 2026-11-17 11:28
+**Generated:** 2026-11-18 10:49
 
 ---
 
 ## Recent Timeline
 
+- **2026-11-18**: `.memory/timeline/daily/2026-11/2026-11-18.md`
 - **2026-11-17**: `.memory/timeline/daily/2026-11/2026-11-17.md`
-- **2026-11-15**: `.memory/timeline/daily/2026-11/2026-11-15.md`
 
 ---
 
@@ -73,7 +73,7 @@ mcontext
 
 ## Review
 
-아직 리뷰가 없고 최근 기록이 123건 있습니다. 리뷰하려면 mreview를 실행하세요. 이 프로젝트에 리뷰가 필요 없으면 mconfig set review.notice.enabled false로 끌 수 있습니다.
+아직 리뷰가 없고 최근 기록이 124건 있습니다. 리뷰하려면 mreview를 실행하세요. 이 프로젝트에 리뷰가 필요 없으면 mconfig set review.notice.enabled false로 끌 수 있습니다.
 
 ---
 

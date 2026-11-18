@@ -50,10 +50,8 @@ class MonthlyPlan:
         year = target_date.year
         month = target_date.month
 
-        plan_dir = self.plans_path / str(year)
-        plan_dir.mkdir(parents=True, exist_ok=True)
-
-        return plan_dir / f"{month:02d}.md"
+        # Only the path: reading a plan must not create its folder.
+        return self.plans_path / str(year) / f"{month:02d}.md"
 
     def get_weeks_in_month(self, year: int, month: int) -> List[Tuple[int, str]]:
         """Get ISO week numbers for a month.
@@ -174,6 +172,7 @@ class MonthlyPlan:
         )
 
         # Write to file
+        plan_path.parent.mkdir(parents=True, exist_ok=True)
         plan_path.write_text(content, encoding='utf-8')
 
         return plan_path
@@ -205,20 +204,12 @@ class MonthlyPlan:
         if not plan_path.exists():
             return f"No monthly plan found\nCreate one with: mplan monthly"
 
-        # Auto-update progress if requested
+        # Showing changes nothing on disk: the progress is shown as the goals
+        # stand, and written the next time a goal changes.
+        content = plan_path.read_text(encoding='utf-8')
         if auto_update:
-            try:
-                content = plan_path.read_text(encoding='utf-8')
-                updated_content = self._update_progress(content)
-                # Save if changed
-                if updated_content != content:
-                    plan_path.write_text(updated_content, encoding='utf-8')
-                return self._format_for_display(updated_content)
-            except Exception:
-                # If update fails, just return original content
-                return self._format_for_display(plan_path.read_text(encoding='utf-8'))
-
-        return self._format_for_display(plan_path.read_text(encoding='utf-8'))
+            content = self._update_progress(content)
+        return self._format_for_display(content)
 
     def add_goal(self, goal: str, target_date: Optional[date] = None) -> bool:
         """Add goal to monthly plan.

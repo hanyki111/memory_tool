@@ -1927,7 +1927,22 @@ mplan daily add "Write unit tests"
 mplan daily done "API endpoint"
 # → Timeline: "✓ Implement API endpoint (Daily Plan)"
 # → Progress: 1/2 (50%) auto-updated
+
+# Complete by number: the numbers mplan lists, counted among incomplete tasks
+mplan daily done 1
+
+# Undo: the task is not done again, and its "✓ ..." timeline entry is deleted
+mplan daily undo "API endpoint"
+mplan daily undo 1               # numbered among the completed tasks
+
+# Carry yesterday's incomplete tasks over
+mplan daily carryover                       # asks which
+mplan daily carryover --task "Write unit tests"   # without asking
 ```
+
+Showing a plan changes nothing on disk; the progress line is brought up to date
+when a task is added, completed or undone. A daily template can link the day's
+timeline file with `{timeline}`, which follows `timeline.filename`.
 
 #### Weekly Plan
 ```bash
@@ -1976,9 +1991,9 @@ mplan monthly done "v1.0"
 **Key Features:**
 
 1. **Progress Auto-Update**
-   - Progress calculated automatically when viewing plan
+   - Progress shown as the tasks stand when viewing a plan (the file is not changed)
    - Format: `**Progress:** 2/5 (40%)`
-   - Updates on add/done actions
+   - Written to the file on add/done/undo actions
 
 2. **Timeline Auto-Integration**
    - `done` command automatically records to Timeline
@@ -3128,6 +3143,32 @@ came from the cache without calling the LLM.
 ```
 
 With `--preview`, `saved` is false, `path` is null and `document` has `body`.
+
+**Daily plan** (`mplan daily --json`, `mplan daily show 2026-11-06 --json`, `mplan daily yesterday --json`):
+
+```json
+{"ok": true, "date": "2026-11-06", "path": "...", "exists": true,
+ "tasks": [{"line": 5, "text": "Write tests", "done": true, "time": "14:30"},
+           {"line": 6, "text": "Review PR", "done": false, "time": null}],
+ "progress": {"done": 1, "total": 2}, "recurring": null}
+```
+
+Showing changes nothing on disk. `line` is 1-based; `recurring` is the text of
+`plans/recurring.md`, or null. The other actions work on today's plan and return
+it as `plan`:
+
+- `mplan daily add "task" --json`: `{"task": {...}, "plan": {...}}`
+- `mplan daily done "task" --line 6 --json`: `{"task": {...}, "timeline": {"date", "time", "text"} | null, "plan": {...}}`
+- `mplan daily undo "task" --line 5 --json`: `{"task": {...}, "timeline_removed": true, "plan": {...}, "notices": [...]}`.
+  When the timeline entry is no longer there, the task is still undone,
+  `timeline_removed` is false and a `plan` notice says so.
+- `mplan daily carryover --task "a" --task "b" --json`: `{"from": "2026-11-05", "carried": [...], "skipped": [...], "missing": [...], "plan": {...}}`.
+  `skipped` were already in today's plan; `missing` were not incomplete yesterday.
+
+With `--line`, `done` and `undo` change the task only if that line still holds
+it with exactly that text; otherwise they fail with `not_found` and change
+nothing, so a plan edited since is never changed in the wrong place. Several
+matches fail with `invalid_argument`. `--json` is for `mplan daily` only.
 
 `mask --json` and `mreview --json` keep their own fields, described with those
 commands, and follow the same rules.
