@@ -143,6 +143,79 @@ describe("running the CLI", () => {
   test("a call that takes too long is timeout", async () => {
     await assert.rejects(cli.run(["days", "--json"], 1), (e) => e.code === "timeout");
   });
+
+  describe("today's plan", () => {
+    const iso = (date) =>
+      `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    const now = new Date();
+    const today = iso(now);
+    const yesterday = iso(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1));
+
+    test("reading a day with no plan creates nothing", async () => {
+      const plan = await cli.plan(null);
+      assert.equal(plan.date, today);
+      assert.equal(plan.exists, false);
+      assert.deepEqual(plan.tasks, []);
+      assert.equal(fs.existsSync(path.join(root, ".memory", "plans")), false);
+    });
+
+    test("add, complete and undo, with the timeline entry coming and going", async () => {
+      const added = await cli.planAdd("-로 시작하는 작업");
+      assert.equal(added.task.text, "-로 시작하는 작업");
+      assert.equal(added.plan.exists, true);
+
+      const done = await cli.planSet(added.task, true);
+      assert.equal(done.task.done, true);
+      assert.match(done.task.time, /^\d\d:\d\d$/);
+      let read = await cli.days(today, today);
+      assert.ok(read.days[0].entries.some((entry) => entry.text === "✓ -로 시작하는 작업 (Daily Plan)"));
+
+      const undone = await cli.planSet(done.task, false);
+      assert.equal(undone.task.done, false);
+      read = await cli.days(today, today);
+      assert.ok(!(read.days[0]?.entries ?? []).some((entry) => entry.text.includes("Daily Plan")));
+    });
+
+    test("a task named by a line that no longer holds it is not_found", async () => {
+      const { task } = await cli.planAdd("줄 확인");
+      await assert.rejects(cli.planSet({ line: task.line + 1, text: task.text }, true), (e) => e.code === "not_found");
+    });
+
+    test("carrying over yesterday's tasks", async () => {
+      const folder = path.join(root, ".memory", "plans", "daily", yesterday.slice(0, 7));
+      fs.mkdirSync(folder, { recursive: true });
+      fs.writeFileSync(
+        path.join(folder, `${yesterday.slice(8)}.md`),
+        `# Daily Plan: ${yesterday}\n\n## Today's Goals\n\n- [ ] 어제 남은 일\n- [ ] --task처럼 보이는 일\n`
+      );
+
+      const before = await cli.plan(yesterday);
+      assert.deepEqual(before.tasks.map((t) => t.text), ["어제 남은 일", "--task처럼 보이는 일"]);
+
+      const result = await cli.planCarryover(["어제 남은 일", "--task처럼 보이는 일"]);
+      assert.deepEqual(result.carried, ["어제 남은 일", "--task처럼 보이는 일"]);
+      assert.ok(result.plan.tasks.some((t) => t.text === "--task처럼 보이는 일"));
+    });
+  });
+});
+
+test("a CLI without mplan daily --json is outdated", async () => {
+  // A stand-in for memory_tool before 1.13: it rejects --json as click does.
+  const old = fs.mkdtempSync(path.join(os.tmpdir(), "mt-vscode-old-"));
+  try {
+    fs.mkdirSync(path.join(old, "memory_tool"));
+    fs.writeFileSync(path.join(old, "memory_tool", "__init__.py"), "");
+    fs.writeFileSync(
+      path.join(old, "memory_tool", "__main__.py"),
+      'import sys\nsys.stderr.write("Usage: memory_tool plan [OPTIONS] ACTION\\nError: No such option: --json\\n")\nsys.exit(2)\n'
+    );
+    const cli = new MemoryToolCli({ python, cwd: old });
+    await assert.rejects(cli.plan(null), (e) => e instanceof CliError && e.code === "outdated");
+    // Only plan commands are read this way.
+    await assert.rejects(cli.days("2026-03-01", "2026-03-01"), (e) => e.code === "bad_output");
+  } finally {
+    fs.rmSync(old, { recursive: true, force: true });
+  }
 });
 
 test("a review starts from the last one unless a date is chosen", () => {

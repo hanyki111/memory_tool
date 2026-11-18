@@ -66,13 +66,30 @@ test("the screen script parses", () => {
   execFileSync(process.execPath, ["--check", path.join(here, "..", "media", "timeline.js")]);
 });
 
-test("the sticky header is opaque, so entries do not show through it", () => {
+test("only the timeline and the plan scroll; the controls stay above them", () => {
   const css = readFileSync(new URL("../media/timeline.css", import.meta.url), "utf8");
-  const header = /header\s*\{([^}]*)\}/.exec(css)[1];
+  // Every rule that names the selector, joined ("html, body { … }" and "body { … }").
+  const rule = (selector) =>
+    [...css.matchAll(new RegExp(`(?:^|[\\n,])\\s*${selector}\\s*(?:,[^{]*)?\\{([^}]*)\\}`, "g"))].map((m) => m[1]).join("\n");
 
-  assert.match(header, /position:\s*sticky/);
-  assert.match(header, /background:\s*var\(--surface\)/);
+  assert.match(rule("body"), /overflow:\s*hidden/);
+  assert.match(rule("header"), /flex:\s*none/);
+  assert.match(rule("header"), /background:\s*var\(--surface\)/);
+  assert.match(rule("\\.timeline"), /overflow-y:\s*auto/);
+  assert.match(rule("\\.timeline"), /min-height:\s*0/);
+  assert.match(rule("\\.plan-body"), /overflow-y:\s*auto/);
   assert.match(css, /--surface:\s*var\(--vscode-sideBar-background/);
+  // Flex rows and the folded plan body are hidden with the hidden attribute.
+  assert.match(css, /\[hidden\]\s*\{\s*display:\s*none\s*!important;?\s*\}/);
+});
+
+test("the timeline's own scroll box, not the page, drives loading older days and restoring the place", () => {
+  const js = readFileSync(new URL("../media/timeline.js", import.meta.url), "utf8");
+
+  assert.ok(!js.includes("document.scrollingElement"));
+  assert.ok(!/window\.addEventListener\(\s*"scroll"/.test(js));
+  assert.match(js, /timeline\.addEventListener\(\s*"scroll"/);
+  assert.match(js, /timelineScroll = timeline\.scrollTop/);
 });
 
 test("the plain review button is outside the period controls, the dated one inside", () => {

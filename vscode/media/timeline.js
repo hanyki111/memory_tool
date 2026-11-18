@@ -108,20 +108,221 @@
   const status = el("div", { class: "status", "aria-live": "polite" });
   const list = el("div", { class: "list" });
   const sentinel = el("div", { class: "sentinel" });
+  // The timeline scrolls on its own, between the controls above and the plan below.
+  const timeline = el("main", { class: "timeline" }, list, sentinel);
 
-  app.append(
-    el(
-      "header",
-      {},
-      el("div", { class: "row record" }, recordInput, recordButton),
-      el("div", { class: "row" }, searchInput, searchButton, semanticButton),
-      period,
-      el("div", { class: "row tools" }, status, reviewButton, widenButton)
-    ),
-    banner,
-    list,
-    sentinel
+  // ---- today's plan ---------------------------------------------------------
+
+  const layout = (() => {
+    try {
+      return vscode.getState() || {};
+    } catch {
+      return {};
+    }
+  })();
+  let planOpen = layout.planOpen !== false;
+  let planHeight = Number(layout.planHeight) || 220;
+
+  function saveLayout() {
+    try {
+      vscode.setState({ ...(vscode.getState() || {}), planOpen, planHeight });
+    } catch {
+      // The layout is a convenience; losing it is fine.
+    }
+  }
+
+  const planProgress = el("span", { class: "plan-progress" });
+  const planToggle = el(
+    "button",
+    { class: "plan-toggle", title: t.planToggle, onclick: () => setPlanOpen(!planOpen) },
+    el("span", { class: "chevron", "aria-hidden": "true" }),
+    el("span", { text: t.planTitle }),
+    planProgress
   );
+  const planCarryButton = el("button", {
+    class: "link",
+    text: t.planCarryover,
+    onclick: () => vscode.postMessage({ type: "planCarryover" }),
+  });
+  const planOpenButton = el("button", {
+    class: "link",
+    text: t.planOpen,
+    onclick: () => vscode.postMessage({ type: "planOpen" }),
+  });
+  const planMessage = el("p", { class: "plan-message muted", hidden: true });
+  const planError = el("div", { class: "banner", role: "alert", hidden: true });
+  const planList = el("ul", { class: "plan-tasks" });
+  const planInput = el("input", {
+    type: "text",
+    placeholder: t.planAddPlaceholder,
+    "aria-label": t.planAddPlaceholder,
+    onkeydown: (event) => {
+      if (event.key === "Enter" && !event.isComposing) {
+        event.preventDefault();
+        addTask();
+      }
+    },
+  });
+  const planAddButton = el("button", { text: t.planAdd, onclick: () => addTask() });
+  const planAddRow = el("div", { class: "row" }, planInput, planAddButton);
+  const planRecurringText = el("div", { class: "plan-recurring-text" });
+  const planRecurring = el("details", { class: "plan-recurring", hidden: true }, el("summary", { text: t.planRecurring }), planRecurringText);
+  const planBody = el(
+    "div",
+    { class: "plan-body", id: "plan-body" },
+    planError,
+    planMessage,
+    planList,
+    planAddRow,
+    el("div", { class: "row plan-links" }, planCarryButton, planOpenButton),
+    planRecurring
+  );
+  planToggle.setAttribute("aria-controls", "plan-body");
+  const planSection = el(
+    "section",
+    { class: "plan", "aria-label": t.planTitle, hidden: true },
+    el("div", { class: "plan-head" }, planToggle),
+    planBody
+  );
+
+  // The edge between the timeline and the plan: drag it, or use the arrow keys.
+  const splitter = el("div", {
+    class: "splitter",
+    role: "separator",
+    tabindex: "0",
+    "aria-orientation": "horizontal",
+    "aria-label": t.planResize,
+    title: t.planResize,
+  });
+
+  const header = el(
+    "header",
+    {},
+    el("div", { class: "row record" }, recordInput, recordButton),
+    el("div", { class: "row" }, searchInput, searchButton, semanticButton),
+    period,
+    el("div", { class: "row tools" }, status, reviewButton, widenButton)
+  );
+
+  app.append(header, banner, timeline, splitter, planSection);
+
+  const PLAN_MIN = 72;
+  const TIMELINE_MIN = 80;
+
+  /** The plan's height, kept between its minimum and what leaves the timeline room. */
+  function clampPlan(height) {
+    const room = window.innerHeight - header.offsetHeight - banner.offsetHeight - splitter.offsetHeight - TIMELINE_MIN;
+    return Math.round(Math.max(PLAN_MIN, Math.min(height, Math.max(PLAN_MIN, room))));
+  }
+
+  function fitPlan() {
+    planSection.classList.toggle("closed", !planOpen);
+    planToggle.setAttribute("aria-expanded", String(planOpen));
+    planBody.hidden = !planOpen;
+    splitter.hidden = !planOpen || planSection.hidden;
+    if (planOpen) {
+      const height = clampPlan(planHeight);
+      planSection.style.height = `${height}px`;
+      splitter.setAttribute("aria-valuenow", String(height));
+    } else {
+      planSection.style.height = "";
+    }
+  }
+
+  function setPlanOpen(open) {
+    planOpen = open;
+    fitPlan();
+    saveLayout();
+  }
+
+  function setPlanHeight(height) {
+    planHeight = clampPlan(height);
+    fitPlan();
+  }
+
+  let drag = null;
+  splitter.addEventListener("pointerdown", (event) => {
+    drag = { y: event.clientY, height: planSection.offsetHeight };
+    splitter.setPointerCapture(event.pointerId);
+    splitter.classList.add("dragging");
+    event.preventDefault();
+  });
+  splitter.addEventListener("pointermove", (event) => {
+    if (drag) setPlanHeight(drag.height + (drag.y - event.clientY));
+  });
+  const endDrag = () => {
+    if (!drag) return;
+    drag = null;
+    splitter.classList.remove("dragging");
+    saveLayout();
+  };
+  splitter.addEventListener("pointerup", endDrag);
+  splitter.addEventListener("pointercancel", endDrag);
+  splitter.addEventListener("keydown", (event) => {
+    const step = event.shiftKey ? 64 : 16;
+    if (event.key === "ArrowUp") setPlanHeight(planSection.offsetHeight + step);
+    else if (event.key === "ArrowDown") setPlanHeight(planSection.offsetHeight - step);
+    else if (event.key === "Enter") setPlanOpen(!planOpen);
+    else return;
+    event.preventDefault();
+    saveLayout();
+  });
+  window.addEventListener("resize", () => fitPlan());
+  fitPlan();
+
+  function addTask() {
+    const text = planInput.value.trim();
+    if (!text || model.plan?.busy) return;
+    vscode.postMessage({ type: "planAdd", text });
+  }
+
+  function renderPlan() {
+    const view = model.plan;
+    planSection.hidden = model.status !== "ready" || !view;
+    splitter.hidden = planSection.hidden || !planOpen;
+    if (planSection.hidden) return;
+
+    const plan = view.plan;
+    const busy = Boolean(view.busy);
+    planError.textContent = view.error || "";
+    planError.hidden = !view.error;
+    planList.replaceChildren();
+
+    let message = "";
+    if (view.status === "outdated") message = t.planOutdated;
+    else if (!plan) message = view.error ? "" : t.planLoading;
+    else if (!plan.tasks.length) message = t.planEmpty;
+    planMessage.textContent = message;
+    planMessage.hidden = !message;
+
+    const usable = view.status === "ready" && Boolean(plan);
+    planAddRow.hidden = !usable;
+    planCarryButton.hidden = !usable;
+    planOpenButton.hidden = !usable || !plan.exists;
+    planInput.disabled = busy;
+    planAddButton.disabled = busy;
+    planCarryButton.disabled = busy;
+    planProgress.textContent = plan && plan.progress.total ? `${plan.progress.done}/${plan.progress.total}` : "";
+
+    for (const task of plan ? plan.tasks : []) {
+      const box = el("input", {
+        type: "checkbox",
+        checked: task.done,
+        disabled: busy,
+        onchange: () => vscode.postMessage({ type: "planSet", line: task.line, text: task.text, done: box.checked }),
+      });
+      planList.append(
+        el(
+          "li",
+          { class: "plan-task" + (task.done ? " done" : "") },
+          el("label", {}, box, el("span", { class: "text", text: task.text }), task.done && task.time ? el("span", { class: "time", text: task.time }) : null)
+        )
+      );
+    }
+
+    planRecurring.hidden = !(plan && plan.recurring);
+    planRecurringText.textContent = (plan && plan.recurring) || "";
+  }
 
   // A wide screen shows the period controls; a narrow one folds them away.
   const wide = window.matchMedia("(min-width: 560px)");
@@ -165,7 +366,7 @@
   let lastHighlight = null;
 
   function rememberScroll() {
-    if (!model.search) timelineScroll = document.scrollingElement.scrollTop;
+    if (!model.search) timelineScroll = timeline.scrollTop;
   }
 
   function showBanner(message) {
@@ -262,6 +463,8 @@
     list.replaceChildren();
     sentinel.replaceChildren();
     showBanner(model.error);
+    renderPlan();
+    fitPlan();
 
     if (model.status === "nofolder" || model.status === "nobase") {
       const empty = el("div", { class: "empty" });
@@ -325,11 +528,11 @@
 
   function afterRender(previous) {
     if (model.search) {
-      if (!previous.search) document.scrollingElement.scrollTop = 0;
+      if (!previous.search) timeline.scrollTop = 0;
       return;
     }
     if (previous.search) {
-      document.scrollingElement.scrollTop = timelineScroll;
+      timeline.scrollTop = timelineScroll;
     }
     if (model.highlight && model.highlight !== lastHighlight) {
       const target = list.querySelector(`[data-key="${CSS.escape(model.highlight)}"]`);
@@ -344,11 +547,11 @@
   // screen never loads older days on its own: a quiet week would otherwise
   // make it run back until something filled the screen.
 
-  window.addEventListener(
+  timeline.addEventListener(
     "scroll",
     () => {
       if (model.search || model.busy || !model.hasOlder) return;
-      if (sentinel.getBoundingClientRect().top < window.innerHeight + 80) {
+      if (sentinel.getBoundingClientRect().top < timeline.getBoundingClientRect().bottom + 80) {
         vscode.postMessage({ type: "older" });
       }
     },
@@ -374,6 +577,9 @@
       recordInput.focus();
     } else if (message.type === "focusRecord") {
       recordInput.focus();
+    } else if (message.type === "planAdded") {
+      planInput.value = "";
+      planInput.focus();
     }
   });
 

@@ -22,6 +22,10 @@ class FakeCli {
     this.failRecord = null;
     this.searchResults = [];
     this.searchGate = null;
+    this.plans = {};
+    this.planCalls = [];
+    this.planFailure = null;
+    this.planSetGate = null;
   }
 
   async days(from, to) {
@@ -44,6 +48,56 @@ class FakeCli {
     if (this.searchGate) await this.searchGate;
     return { query, mode: semantic ? "hybrid" : "keyword", cached: false, results: this.searchResults, notices: [] };
   }
+
+  // ---- daily plans, kept apart from `calls` so the timeline tests stay as they were
+
+  planOf(date) {
+    const tasks = this.plans[date] ?? [];
+    return {
+      date,
+      path: `/kb/plans/${date}.md`,
+      exists: date in this.plans,
+      tasks: tasks.map((task) => ({ ...task })),
+      progress: { done: tasks.filter((t) => t.done).length, total: tasks.length },
+      recurring: null,
+    };
+  }
+
+  async plan(date) {
+    this.planCalls.push(["plan", date]);
+    if (this.planFailure) throw this.planFailure;
+    return this.planOf(date ?? TODAY);
+  }
+
+  addTask(text) {
+    const tasks = (this.plans[TODAY] ??= []);
+    tasks.unshift({ line: 5, text, done: false, time: null });
+    tasks.forEach((task, i) => (task.line = 5 + i));
+    return tasks[0];
+  }
+
+  async planAdd(text) {
+    this.planCalls.push(["add", text]);
+    const task = this.addTask(text);
+    return { task, plan: this.planOf(TODAY) };
+  }
+
+  async planSet(task, done) {
+    this.planCalls.push([done ? "done" : "undo", task.line, task.text]);
+    if (this.planSetGate) await this.planSetGate;
+    const found = (this.plans[TODAY] ?? []).find((t) => t.line === task.line && t.text === task.text);
+    if (!found) throw new CliError("not_found", "No task on that line");
+    found.done = done;
+    found.time = done ? "10:30" : null;
+    const notices = done ? [] : [{ kind: "plan", message: "엔트리를 찾지 못했습니다" }];
+    return { task: found, plan: this.planOf(TODAY), notices };
+  }
+
+  async planCarryover(tasks) {
+    this.planCalls.push(["carryover", ...tasks]);
+    for (const text of [...tasks].reverse()) this.addTask(text);
+    return { from: "2026-11-05", carried: tasks, skipped: [], missing: [], plan: this.planOf(TODAY) };
+  }
 }
 
 function setup(days, earliest = "2026-01-01") {
@@ -60,6 +114,9 @@ function setup(days, earliest = "2026-01-01") {
     review(since) { this.reviews.push(since); },
     widen() {},
     recorded() { this.recordedCount++; },
+    picks: [],
+    pickAnswer: undefined,
+    async pickMany(items, title) { this.picks.push([items, title]); return this.pickAnswer; },
   };
   const screen = new Screen(host, { status: "ready", cli, earliest }, stringsFor("ko"), () => TODAY);
   const last = () => host.posts.filter((m) => m.type === "render").at(-1).model;
@@ -220,5 +277,151 @@ describe("refresh", () => {
     await loading;
 
     assert.equal(cli.calls.filter((call) => call[0] === "days").length, 2);
+  });
+});
+
+describe("today's plan", () => {
+  const task = (line, text, done = false) => ({ line, text, done, time: done ? "09:00" : null });
+
+  test("opening reads today's plan along with the timeline", async () => {
+    const { screen, cli, last } = setup([]);
+    cli.plans[TODAY] = [task(5, "문서 쓰기"), task(6, "리뷰", true)];
+    await screen.handle({ type: "ready" });
+
+    assert.deepEqual(cli.planCalls, [["plan", null]]);
+    assert.equal(last().plan.status, "ready");
+    assert.deepEqual(last().plan.plan.tasks.map((t) => t.text), ["문서 쓰기", "리뷰"]);
+    assert.deepEqual(last().plan.plan.progress, { done: 1, total: 2 });
+  });
+
+  test("adding a task shows it and clears the box", async () => {
+    const { screen, cli, host, last } = setup([]);
+    await screen.handle({ type: "ready" });
+    await screen.handle({ type: "planAdd", text: "새 작업" });
+
+    assert.deepEqual(cli.planCalls.at(-1), ["add", "새 작업"]);
+    assert.deepEqual(last().plan.plan.tasks.map((t) => t.text), ["새 작업"]);
+    assert.ok(host.posts.some((m) => m.type === "planAdded"));
+  });
+
+  test("checking a task completes it by line and text, and reloads the timeline", async () => {
+    const { screen, cli, host, last } = setup([]);
+    cli.plans[TODAY] = [task(5, "문서 쓰기")];
+    await screen.handle({ type: "ready" });
+    const daysBefore = cli.calls.filter((c) => c[0] === "days").length;
+
+    await screen.handle({ type: "planSet", line: 5, text: "문서 쓰기", done: true });
+
+    assert.deepEqual(cli.planCalls[1], ["done", 5, "문서 쓰기"]);
+    assert.equal(last().plan.plan.tasks[0].done, true);
+    assert.equal(last().plan.busy, false);
+    assert.equal(cli.calls.filter((c) => c[0] === "days").length, daysBefore + 1);
+    assert.equal(host.recordedCount, 1);
+  });
+
+  test("unchecking undoes it and passes on what the CLI says", async () => {
+    const { screen, cli, host, last } = setup([]);
+    cli.plans[TODAY] = [task(5, "문서 쓰기", true)];
+    await screen.handle({ type: "ready" });
+
+    await screen.handle({ type: "planSet", line: 5, text: "문서 쓰기", done: false });
+
+    assert.deepEqual(cli.planCalls[1], ["undo", 5, "문서 쓰기"]);
+    assert.equal(last().plan.plan.tasks[0].done, false);
+    assert.deepEqual(host.notices.map((n) => n.kind), ["plan"]);
+  });
+
+  test("the controls wait while a change is made", async () => {
+    const { screen, cli, last } = setup([]);
+    cli.plans[TODAY] = [task(5, "가"), task(6, "나")];
+    await screen.handle({ type: "ready" });
+    let release;
+    cli.planSetGate = new Promise((resolve) => (release = resolve));
+
+    const first = screen.handle({ type: "planSet", line: 5, text: "가", done: true });
+    assert.equal(last().plan.busy, true);
+    await screen.handle({ type: "planSet", line: 6, text: "나", done: true });
+    release();
+    await first;
+
+    assert.deepEqual(cli.planCalls.filter((c) => c[0] === "done"), [["done", 5, "가"]]);
+  });
+
+  test("a plan changed on disk since is read again instead of changing another task", async () => {
+    const { screen, cli, last } = setup([]);
+    cli.plans[TODAY] = [task(5, "가")];
+    await screen.handle({ type: "ready" });
+    cli.plans[TODAY] = [task(5, "다른 일"), task(6, "가")];
+
+    await screen.handle({ type: "planSet", line: 5, text: "가", done: true });
+
+    assert.ok(last().plan.error);
+    assert.deepEqual(
+      last().plan.plan.tasks.map((t) => [t.line, t.text, t.done]),
+      [[5, "다른 일", false], [6, "가", false]]
+    );
+  });
+
+  test("carrying over offers yesterday's unfinished tasks that today lacks", async () => {
+    const { screen, cli, host, last } = setup([]);
+    cli.plans["2026-11-05"] = [task(5, "가"), task(6, "나"), task(7, "다", true)];
+    cli.plans[TODAY] = [task(5, "나")];
+    await screen.handle({ type: "ready" });
+    host.pickAnswer = ["가"];
+
+    await screen.handle({ type: "planCarryover" });
+
+    assert.deepEqual(host.picks.map(([items]) => items), [["가"]]);
+    assert.deepEqual(cli.planCalls.at(-1), ["carryover", "가"]);
+    assert.deepEqual(last().plan.plan.tasks.map((t) => t.text), ["가", "나"]);
+  });
+
+  test("nothing to carry over, or nothing chosen, changes nothing", async () => {
+    const { screen, cli, host } = setup([]);
+    await screen.handle({ type: "ready" });
+    await screen.handle({ type: "planCarryover" });
+    assert.deepEqual(host.picks, []);
+    assert.deepEqual(host.notices.map((n) => n.kind), ["plan"]);
+
+    cli.plans["2026-11-05"] = [task(5, "가")];
+    host.pickAnswer = undefined;
+    await screen.handle({ type: "planCarryover" });
+    assert.equal(host.picks.length, 1);
+    assert.ok(!cli.planCalls.some((c) => c[0] === "carryover"));
+  });
+
+  test("a refresh reads the plan again", async () => {
+    const { screen, cli, last } = setup([]);
+    await screen.handle({ type: "ready" });
+    cli.plans[TODAY] = [task(5, "터미널에서 추가")];
+
+    await screen.refresh();
+
+    assert.deepEqual(last().plan.plan.tasks.map((t) => t.text), ["터미널에서 추가"]);
+  });
+
+  test("open file opens the plan, when there is one", async () => {
+    const { screen, cli, host } = setup([]);
+    await screen.handle({ type: "ready" });
+    await screen.handle({ type: "planOpen" });
+    assert.deepEqual(host.opened, []);
+
+    cli.plans[TODAY] = [task(5, "가")];
+    await screen.refresh();
+    await screen.handle({ type: "planOpen" });
+    assert.deepEqual(host.opened, [[`/kb/plans/${TODAY}.md`, 1]]);
+  });
+
+  test("an older CLI is told apart, and the timeline still works", async () => {
+    const { screen, cli, last } = setup([day("2026-11-06", "a")]);
+    cli.planFailure = new CliError("outdated", "update");
+    await screen.handle({ type: "ready" });
+
+    assert.equal(last().plan.status, "outdated");
+    assert.equal(last().plan.error, null);
+    assert.deepEqual(last().days.map((d) => d.date), ["2026-11-06"]);
+
+    await screen.handle({ type: "planAdd", text: "가" });
+    assert.ok(!cli.planCalls.some((c) => c[0] === "add"));
   });
 });

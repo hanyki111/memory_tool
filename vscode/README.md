@@ -23,6 +23,13 @@ found by the same rules as the CLI.
 - **Review:** the **Review** button opens a terminal and runs `mreview`, which covers the entries since the last
   review. To review from another date, open **Period** and use **Review from <date>**. It runs
   `mreview --since <first day on screen>`, from that day until now.
+- **Today's plan:** below the timeline, today's daily plan (`mplan daily`). Check a task to complete it, which
+  records "✓ task (Daily Plan)" in the timeline; uncheck it to undo, which deletes that entry again. Add tasks in
+  the box there, and **Carry over from yesterday** lets you choose among yesterday's unfinished tasks. **Open
+  file** opens the plan; `plans/recurring.md`, if there is one, is shown under **Recurring**. Fold the plan with
+  its title, and drag the edge above it (or focus it and use the arrow keys) to change its height; both are
+  remembered. A task changed in the file since the screen read it is not changed in its place: the plan is read
+  again instead.
 - **Side bar and editor tab:** the Memory Tool icon in the activity bar opens the side bar view; **Open wide** (or
   **Memory Tool: Open Timeline in Editor**) opens the same screen as an editor tab. Both stay in step: an entry
   recorded in one, in a terminal with `m`, or by an agent appears in all of them.
@@ -31,7 +38,8 @@ The screen follows VS Code's colours and its display language (Korean or English
 
 ## Requirements
 
-- memory_tool 1.4 or later, for the `--json` output this extension reads.
+- memory_tool 1.4 or later, for the `--json` output this extension reads; 1.13 or later for today's plan. With an
+  older memory_tool the plan says so and the rest works.
 - A knowledge base in the open folder: run `minit` there first. A folder counts only if its knowledge base holds
   `config.yaml`, which `minit` writes.
 
@@ -42,7 +50,7 @@ With several folders in one window, the first folder is used.
 
 ## Not in this version
 
-Editing or deleting entries, recording at another date or time, choosing review items on the screen (the review
+Weekly, monthly and project plans, other days' plans, editing or deleting entries, recording at another date or time, choosing review items on the screen (the review
 runs in the terminal), and Remote SSH, which has not been tried.
 
 ## Build

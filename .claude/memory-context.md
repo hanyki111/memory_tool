@@ -1,6 +1,6 @@
 # Memory Context
 
-**Generated:** 2026-11-18 10:49
+**Generated:** 2026-11-18 11:15
 
 ---
 
@@ -42,9 +42,9 @@
 ### 🟡 WARNING
 
 - **memory-tool/module-system/module-system.md**: 860 lines - Consider reviewing
+- **memory-tool/core-system/core-system.md**: 850 lines - Consider reviewing
 - **memory-tool/llm-integration/llm-integration.md**: 838 lines - Consider reviewing
 - **memory-tool/project-management/PLAN-phase5a-document-management/PLAN-phase5a-document-management.md**: 824 lines - Consider reviewing
-- **memory-tool/core-system/core-system.md**: 808 lines - Consider reviewing
 - **memory-tool/project-management/PLAN-external-release/PLAN-external-release.md**: 785 lines - Consider reviewing
 - **memory-tool/core-system/PLAN-phase3-plan-system/PLAN-phase3-plan-system.md**: 757 lines - Consider reviewing
 - **memory-tool/knowledge-graph-system/knowledge-graph-system.md**: 703 lines - Consider reviewing
@@ -73,7 +73,7 @@ mcontext
 
 ## Review
 
-아직 리뷰가 없고 최근 기록이 124건 있습니다. 리뷰하려면 mreview를 실행하세요. 이 프로젝트에 리뷰가 필요 없으면 mconfig set review.notice.enabled false로 끌 수 있습니다.
+아직 리뷰가 없고 최근 기록이 125건 있습니다. 리뷰하려면 mreview를 실행하세요. 이 프로젝트에 리뷰가 필요 없으면 mconfig set review.notice.enabled false로 끌 수 있습니다.
 
 ---
 

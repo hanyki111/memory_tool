@@ -65,9 +65,9 @@ class Extension {
     }
   }
 
-  /** Redraw every screen when a timeline file changes, whoever changed it. */
+  /** Redraw every screen when a timeline or daily plan file changes, whoever changed it. */
   private watch(base: string): void {
-    const pattern = new vscode.RelativePattern(vscode.Uri.file(path.join(base, "timeline")), "**/*.md");
+    const pattern = new vscode.RelativePattern(vscode.Uri.file(base), "{timeline/**/*.md,plans/daily/**/*.md}");
     this.watcher = vscode.workspace.createFileSystemWatcher(pattern);
     const changed = () => this.scheduleRefresh(base);
     this.watcher.onDidChange(changed);
@@ -132,6 +132,10 @@ class Extension {
         for (const other of this.screens) {
           if (other !== screen) void other.refresh();
         }
+      },
+      pickMany: async (items, title) => {
+        const picked = await vscode.window.showQuickPick(items, { canPickMany: true, title, placeHolder: title });
+        return picked ?? undefined;
       },
     };
     screen = new Screen(host, this.session, this.strings);
